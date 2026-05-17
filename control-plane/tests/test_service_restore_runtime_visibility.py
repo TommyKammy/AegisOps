@@ -11,6 +11,7 @@ if str(TESTS_ROOT) not in sys.path:
 
 from _restore_readiness_test_support import (
     AegisOpsControlPlaneService,
+    ActionRequestRecord,
     ApprovalDecisionRecord,
     CaseRecord,
     EvidenceRecord,
@@ -22,9 +23,1161 @@ from _restore_readiness_test_support import (
     timedelta,
     timezone,
 )
+from aegisops.control_plane.actions.review.action_review_visibility import (
+    action_review_runtime_visibility,
+)
 
 
 class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
+    def test_manual_fallback_runtime_write_uses_phase62_validation(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep legacy manual fallback timestamps auditable after restore.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Manual fallback must preserve the authority boundary.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-manual-fallback-runtime-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-manual-fallback-runtime-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "operator_note_promotes_authority",
+        ):
+            service.record_action_review_manual_fallback(
+                action_request_id=action_request.action_request_id,
+                fallback_at=reviewed_at + timedelta(minutes=45),
+                fallback_actor_identity="analyst-003",
+                authority_boundary="approved_human_fallback",
+                reason="The reviewed automation path was unavailable after approval.",
+                action_taken="Manual fallback note proves execution.",
+                verification_evidence_ids=(evidence_id,),
+                residual_uncertainty="Awaiting written owner acknowledgement.",
+            )
+
+        case_after_rejection = service.get_record(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(case_after_rejection)
+        assert case_after_rejection is not None
+        action_review_visibility = dict(
+            case_after_rejection.reviewed_context.get("action_review_visibility", {})
+        )
+        scoped_visibility = dict(
+            action_review_visibility.get(action_request.action_request_id, {})
+        )
+        self.assertNotIn("manual_fallback", scoped_visibility)
+
+    def test_manual_fallback_rejects_ambiguous_failure_reason(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep manual fallback classification explicit.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Manual fallback classification must not infer a missing receipt.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-manual-fallback-ambiguous-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-manual-fallback-ambiguous-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "blocked_reason_missing_failure_category",
+        ):
+            service.record_action_review_manual_fallback(
+                action_request_id=action_request.action_request_id,
+                fallback_at=reviewed_at + timedelta(minutes=45),
+                fallback_actor_identity="analyst-003",
+                authority_boundary="approved_human_fallback",
+                reason="Investigate later with the operator on duty.",
+                action_taken="Documented manual follow-up under the approved procedure.",
+                verification_evidence_ids=(evidence_id,),
+                residual_uncertainty="Awaiting reconciliation review.",
+            )
+
+        case_after_rejection = service.get_record(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(case_after_rejection)
+        assert case_after_rejection is not None
+        action_review_visibility = dict(
+            case_after_rejection.reviewed_context.get("action_review_visibility", {})
+        )
+        scoped_visibility = dict(
+            action_review_visibility.get(action_request.action_request_id, {})
+        )
+        self.assertNotIn("manual_fallback", scoped_visibility)
+
+    def test_manual_fallback_rejects_standalone_timed_scheduling_note(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep scheduling notes from masquerading as Shuffle outages.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Manual fallback classification must require a real failure category.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-manual-fallback-timed-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-manual-fallback-timed-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "blocked_reason_missing_failure_category",
+        ):
+            service.record_action_review_manual_fallback(
+                action_request_id=action_request.action_request_id,
+                fallback_at=reviewed_at + timedelta(minutes=45),
+                fallback_actor_identity="analyst-003",
+                authority_boundary="approved_human_fallback",
+                reason="Manual follow-up timed for Monday with the operator on duty.",
+                action_taken="Documented manual follow-up under the approved procedure.",
+                verification_evidence_ids=(evidence_id,),
+                residual_uncertainty="Awaiting reconciliation review.",
+            )
+
+        case_after_rejection = service.get_record(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(case_after_rejection)
+        assert case_after_rejection is not None
+        action_review_visibility = dict(
+            case_after_rejection.reviewed_context.get("action_review_visibility", {})
+        )
+        scoped_visibility = dict(
+            action_review_visibility.get(action_request.action_request_id, {})
+        )
+        self.assertNotIn("manual_fallback", scoped_visibility)
+
+    def test_manual_fallback_state_uses_failure_reason_not_uncertainty(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep manual fallback classification tied to the reason.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Manual fallback classification must not be inferred from notes.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-manual-fallback-state-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-manual-fallback-state-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed Shuffle execution was rejected by the approved route.",
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty=(
+                "A later stale receipt warning remains unresolved for reconciliation."
+            ),
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "repo-owner-001",
+        )
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_actor_identity"],
+            "analyst-003",
+        )
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_state"],
+            "execution_rejected",
+        )
+        self.assertIn(
+            "execution rejected",
+            scoped_visibility["manual_fallback"]["blocked_reason"],
+        )
+        refreshed_action_request = service.get_record(
+            ActionRequestRecord,
+            action_request.action_request_id,
+        )
+        self.assertIsNotNone(refreshed_action_request)
+        assert refreshed_action_request is not None
+        runtime_visibility = action_review_runtime_visibility(
+            service,
+            action_request=refreshed_action_request,
+            approval_decision=approval,
+            review_state="unresolved",
+        )
+        self.assertIsNotNone(runtime_visibility)
+        assert runtime_visibility is not None
+        runtime_manual_fallback = runtime_visibility["manual_fallback"]
+        for required_key in (
+            "fallback_owner_id",
+            "operator_note",
+            "affected_action",
+            "fallback_state",
+            "blocked_reason",
+            "expected_evidence",
+            "follow_up_state",
+        ):
+            with self.subTest(required_key=required_key):
+                self.assertIn(required_key, runtime_manual_fallback)
+        self.assertEqual(
+            runtime_manual_fallback["fallback_state"],
+            "execution_rejected",
+        )
+        inspected_manual_fallback = service.inspect_case_detail(
+            promoted_case.case_id
+        ).current_action_review["runtime_visibility"]["manual_fallback"]
+        for required_key in (
+            "fallback_owner_id",
+            "operator_note",
+            "affected_action",
+            "fallback_state",
+            "blocked_reason",
+            "expected_evidence",
+            "follow_up_state",
+        ):
+            with self.subTest(inspected_required_key=required_key):
+                self.assertIn(required_key, inspected_manual_fallback)
+
+    def test_manual_fallback_owner_defaults_to_declared_action_target(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep manual fallback ownership tied to the action target.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-fallback-target-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Manual fallback ownership must not come from the logging actor.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-manual-fallback-owner-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-manual-fallback-owner-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed automation path was unavailable after approval.",
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting written owner acknowledgement.",
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "repo-owner-fallback-target-001",
+        )
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_actor_identity"],
+            "analyst-003",
+        )
+
+    def test_manual_fallback_owner_uses_payload_when_requester_identity_is_blank(
+        self,
+    ) -> None:
+        from aegisops.control_plane.actions.review.action_review_write_surface import (
+            _phase62_declared_fallback_owner_for_request,
+        )
+
+        requested_at = datetime.now(timezone.utc)
+        action_request = ActionRequestRecord(
+            action_request_id=(
+                "action-request-phase62-blank-requester-payload-owner-001"
+            ),
+            approval_decision_id=None,
+            case_id="case-phase62-blank-requester-payload-owner-001",
+            alert_id=None,
+            finding_id=None,
+            idempotency_key="phase62-blank-requester-payload-owner-001",
+            target_scope={
+                "case_id": "case-phase62-blank-requester-payload-owner-001",
+            },
+            payload_hash="payload-hash-phase62-blank-requester-payload-owner-001",
+            requested_at=requested_at,
+            expires_at=requested_at + timedelta(hours=4),
+            lifecycle_state="pending_approval",
+            requester_identity="   ",
+            requested_payload={
+                "action_type": "operator_notification",
+                "case_id": "case-phase62-blank-requester-payload-owner-001",
+                "recipient_identity": "payload-recipient-owner-001",
+            },
+            policy_evaluation={"approval_requirement": "human_required"},
+        )
+
+        self.assertEqual(
+            _phase62_declared_fallback_owner_for_request(
+                action_request=action_request,
+                catalog_action="operator_notification",
+            ),
+            "payload-recipient-owner-001",
+        )
+
+    def test_manual_fallback_owner_prefers_reviewed_target_scope_over_payload(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep fallback owner attribution anchored to reviewed scope.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="reviewed-recipient-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Manual fallback owner must follow the reviewed target.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-manual-fallback-target-owner-001",
+        )
+        action_request = service.persist_record(
+            replace(
+                action_request,
+                requested_payload={
+                    **dict(action_request.requested_payload),
+                    "recipient_identity": "payload-recipient-stale-001",
+                },
+            )
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-manual-fallback-target-owner-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed automation path was unavailable after approval.",
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting written owner acknowledgement.",
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "reviewed-recipient-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "payload-recipient-stale-001",
+        )
+
+    def test_tracking_ticket_manual_fallback_owner_uses_requester_before_reference(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+            observation_id=observation.observation_id,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before ticket coordination.",
+            lead_id=lead.lead_id,
+        )
+        action_request = service.create_reviewed_tracking_ticket_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            coordination_reference_id="coordination-ref-phase62-fallback-owner-001",
+            coordination_target_type="zammad",
+            ticket_title="Review repository owner change",
+            ticket_description="Coordinate reviewed follow-up without making ticket state authoritative.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-ticket-fallback-owner-001",
+        )
+        action_request = service.persist_record(
+            replace(
+                action_request,
+                requested_payload={
+                    **dict(action_request.requested_payload),
+                    "fallback_owner_id": "stale-payload-fallback-owner-001",
+                    "fallback_owner_identity": (
+                        "stale-payload-fallback-owner-identity-001"
+                    ),
+                    "requester_identity": "stale-payload-requester-001",
+                },
+            )
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-ticket-fallback-owner-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed Shuffle execution was rejected by the approved route.",
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting ticket requester follow-up.",
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "analyst-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "coordination-ref-phase62-fallback-owner-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "stale-payload-fallback-owner-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "stale-payload-fallback-owner-identity-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "stale-payload-requester-001",
+        )
+
+    def test_manual_escalation_fallback_owner_uses_reviewed_target_scope(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-phase62-escalation-fallback-owner-001",
+                approval_decision_id=None,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="manual-escalation-fallback-owner-001",
+                target_scope={
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "escalation_owner_ref": "reviewed-escalation-owner-001",
+                },
+                payload_hash="payload-hash-phase62-escalation-fallback-owner-001",
+                requested_at=reviewed_at,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                lifecycle_state="pending_approval",
+                requester_identity="analyst-001",
+                requested_payload={
+                    "action_type": "manual_escalation_request",
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "escalation_owner_id": "payload-escalation-owner-stale-001",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required_for_protected_follow_up",
+                },
+            ),
+            transitioned_at=reviewed_at,
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-escalation-fallback-owner-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed Shuffle execution was rejected by the approved route.",
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting escalation owner follow-up.",
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "reviewed-escalation-owner-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "payload-escalation-owner-stale-001",
+        )
+
+    def test_enrichment_lookup_fallback_owner_uses_reviewed_lookup_owner(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-phase62-lookup-fallback-owner-001",
+                approval_decision_id=None,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="lookup-fallback-owner-001",
+                target_scope={
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "lookup_owner_id": "reviewed-lookup-owner-001",
+                },
+                payload_hash="payload-hash-phase62-lookup-fallback-owner-001",
+                requested_at=reviewed_at,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                lifecycle_state="pending_approval",
+                requester_identity=None,
+                requested_payload={
+                    "action_type": "enrichment_only_lookup",
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "lookup_subject_id": "payload-lookup-subject-stale-001",
+                },
+                policy_evaluation={"approval_requirement": "policy_not_required"},
+            ),
+            transitioned_at=reviewed_at,
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-lookup-fallback-owner-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The bound AegisOps execution receipt was missing after handoff.",
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting lookup reconciliation review.",
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "reviewed-lookup-owner-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "payload-lookup-subject-stale-001",
+        )
+
+    def test_manual_fallback_owner_rejects_reference_identifier_as_owner(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-phase62-ticket-fallback-missing-owner-001",
+                approval_decision_id=None,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="ticket-fallback-missing-owner-001",
+                target_scope={
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "coordination_reference_id": "coordination-ref-not-owner-001",
+                    "coordination_target_type": "zammad",
+                },
+                payload_hash="payload-hash-phase62-ticket-fallback-missing-owner-001",
+                requested_at=reviewed_at,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                lifecycle_state="pending_approval",
+                requester_identity=None,
+                requested_payload={
+                    "action_type": "create_tracking_ticket",
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "coordination_reference_id": "payload-ref-not-owner-001",
+                },
+                policy_evaluation={"approval_requirement": "human_required"},
+            ),
+            transitioned_at=reviewed_at,
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-ticket-fallback-missing-owner-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "missing_fallback_owner_id"):
+            service.record_action_review_manual_fallback(
+                action_request_id=action_request.action_request_id,
+                fallback_at=reviewed_at + timedelta(minutes=45),
+                fallback_actor_identity="analyst-003",
+                authority_boundary="approved_human_fallback",
+                reason="The reviewed Shuffle execution was rejected by the approved route.",
+                action_taken="Documented manual follow-up under the approved procedure.",
+                verification_evidence_ids=(evidence_id,),
+                residual_uncertainty="Awaiting ticket requester follow-up.",
+            )
+
+        case_after_rejection = service.get_record(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(case_after_rejection)
+        assert case_after_rejection is not None
+        action_review_visibility = dict(
+            case_after_rejection.reviewed_context.get("action_review_visibility", {})
+        )
+        scoped_visibility = dict(
+            action_review_visibility.get(action_request.action_request_id, {})
+        )
+        self.assertNotIn("manual_fallback", scoped_visibility)
+
+    def test_manual_fallback_state_ignores_negated_failure_terms(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep negated failure terms out of fallback classification.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Manual fallback classification must reject negated failure hints.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-manual-fallback-negation-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-manual-fallback-negation-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason=(
+                "The reviewed route was not unavailable but receipt missing "
+                "after approved dispatch."
+            ),
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting reconciliation review.",
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_state"],
+            "missing_receipt",
+        )
+        self.assertIn(
+            "receipt missing",
+            scoped_visibility["manual_fallback"]["blocked_reason"],
+        )
+
+    def test_manual_fallback_state_limits_negation_at_conjunction_boundary(
+        self,
+    ) -> None:
+        from aegisops.control_plane.actions.review.action_review_write_surface import (
+            _phase62_fallback_state_from_text,
+        )
+
+        for reason in (
+            "The reviewed route was not unavailable but receipt missing after dispatch.",
+            "The reviewed route was not unavailable. receipt missing after dispatch.",
+            "The reviewed route was not unavailable, receipt missing after dispatch.",
+            "The reviewed route was not unavailable or receipt missing after dispatch.",
+            "The reviewed route wasn\u2019t unavailable but receipt missing after dispatch.",
+            (
+                "The reviewed route was not under exceptionally constrained "
+                "external conditions unavailable but receipt missing after dispatch."
+            ),
+            "The reviewed route was not unavailable whereas receipt missing after dispatch.",
+            "The reviewed route was not unavailable while receipt missing after dispatch.",
+        ):
+            with self.subTest(reason=reason):
+                self.assertEqual(
+                    _phase62_fallback_state_from_text(reason),
+                    "missing_receipt",
+                )
+
+        self.assertEqual(
+            _phase62_fallback_state_from_text(
+                "The reviewed route was not only unavailable after dispatch."
+            ),
+            "shuffle_unavailable",
+        )
+        self.assertEqual(
+            _phase62_fallback_state_from_text(
+                "The reviewed route was not only rejected before receipt emission."
+            ),
+            "execution_rejected",
+        )
+        self.assertIsNone(
+            _phase62_fallback_state_from_text(
+                "The reviewed route was not unavailable, rejected, or timed out."
+            )
+        )
+
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome=(
+                "Keep conjunction-separated failure terms available for fallback "
+                "classification."
+            ),
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Manual fallback classification must respect conjunction boundaries.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-manual-fallback-and-negation-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-manual-fallback-and-negation-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason=(
+                "The reviewed route was not unavailable and receipt missing "
+                "after approved dispatch."
+            ),
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting reconciliation review.",
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_state"],
+            "missing_receipt",
+        )
+        self.assertIn(
+            "receipt missing",
+            scoped_visibility["manual_fallback"]["blocked_reason"],
+        )
+
+    def test_manual_fallback_state_requires_receipt_context_for_absent_terms(
+        self,
+    ) -> None:
+        from aegisops.control_plane.actions.review.action_review_write_surface import (
+            _phase62_fallback_state_from_text,
+        )
+
+        for reason in (
+            "missing owner acknowledgement after handoff",
+            "operator missed handoff window",
+            "fallback owner absent from calendar rotation",
+            "stale owner roster blocked manual follow-up",
+            "mismatched owner roster blocked manual follow-up",
+            "fallback owner unavailable for handoff",
+            "fallback owner rejected handoff window",
+            "fallback owner unavailable, reviewed route remains available",
+            "receipt not missing, but owner mismatch",
+            "receipt available, missing owner acknowledgement",
+            "receipt isnt missing after dispatch",
+            "route isnt unavailable",
+        ):
+            with self.subTest(generic_absent_reason=reason):
+                self.assertIsNone(_phase62_fallback_state_from_text(reason))
+
+        for reason in (
+            "bound AegisOps receipt missing after dispatch",
+            "bound AegisOps receipt was absolutely and completely missing after dispatch",
+            "bound AegisOps receipt absent after dispatch",
+            "bound AegisOps receipt was missed after dispatch",
+            "bound AegisOps receipt stale after dispatch",
+            "bound AegisOps receipt mismatched after dispatch",
+            "mismatch in bound AegisOps receipt after dispatch",
+        ):
+            with self.subTest(receipt_absent_reason=reason):
+                expected_state = (
+                    "stale_receipt"
+                    if "stale" in reason
+                    else "mismatched_receipt"
+                    if "mismatch" in reason or "mismatched" in reason
+                    else "missing_receipt"
+                )
+                self.assertEqual(_phase62_fallback_state_from_text(reason), expected_state)
+
+    def test_manual_fallback_state_recognizes_rejection_variants(self) -> None:
+        from aegisops.control_plane.actions.review.action_review_write_surface import (
+            _phase62_fallback_state_from_text,
+        )
+
+        for reason in (
+            "The reviewed Shuffle execution was canceled before receipt emission.",
+            "The reviewed Shuffle execution was cancelled before receipt emission.",
+            "The reviewed Shuffle execution cancellation blocked the route.",
+        ):
+            with self.subTest(reason=reason):
+                self.assertEqual(
+                    _phase62_fallback_state_from_text(reason),
+                    "execution_rejected",
+                )
+
+    def test_manual_fallback_state_covers_unresolved_connector_thread_cluster(
+        self,
+    ) -> None:
+        from aegisops.control_plane.actions.review.action_review_write_surface import (
+            _phase62_fallback_state_from_text,
+        )
+
+        self.assertEqual(
+            _phase62_fallback_state_from_text("route was not only unavailable"),
+            "shuffle_unavailable",
+        )
+        self.assertEqual(
+            _phase62_fallback_state_from_text(
+                "route was not only rejected before receipt emission"
+            ),
+            "execution_rejected",
+        )
+        self.assertIsNone(
+            _phase62_fallback_state_from_text("fallback owner rejected handoff window")
+        )
+        self.assertIsNone(
+            _phase62_fallback_state_from_text("receipt not missing, but owner mismatch")
+        )
+
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Manual fallback classification must cover rejection variants.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-manual-fallback-rejection-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-manual-fallback-rejection-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed Shuffle execution was canceled before receipt emission.",
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting reconciliation review.",
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_state"],
+            "execution_rejected",
+        )
+        self.assertIn(
+            "execution rejected",
+            scoped_visibility["manual_fallback"]["blocked_reason"],
+        )
+
     def test_service_phase21_restore_prefers_canonical_manual_fallback_timestamp(
         self,
     ) -> None:
@@ -396,6 +1549,22 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
         self.assertEqual(
             runtime_visibility["manual_fallback"]["fallback_actor_identity"],
             "analyst-003",
+        )
+        self.assertEqual(
+            runtime_visibility["manual_fallback"]["fallback_owner_id"],
+            "repo-owner-001",
+        )
+        self.assertEqual(
+            runtime_visibility["manual_fallback"]["fallback_state"],
+            "shuffle_unavailable",
+        )
+        self.assertIn(
+            "shuffle unavailable",
+            runtime_visibility["manual_fallback"]["blocked_reason"],
+        )
+        self.assertEqual(
+            runtime_visibility["manual_fallback"]["follow_up_state"],
+            "manual_follow_up_pending",
         )
         self.assertEqual(
             runtime_visibility["escalation_notes"]["escalated_to"],

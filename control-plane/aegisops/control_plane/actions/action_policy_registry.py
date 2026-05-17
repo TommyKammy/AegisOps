@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from typing import Mapping
 
 
+ManualFallbackValidationErrors = tuple[str, ...]
+
 _ROLE_ALIASES = {
     "read-only-auditor": "read_only_auditor",
     "readonly-auditor": "read_only_auditor",
@@ -50,6 +52,23 @@ class ShuffleWorkflowMapping:
     policy_registry_id: str
     review_status: str = "reviewed"
     import_eligible: bool = True
+
+
+@dataclass(frozen=True)
+class ManualFallbackRequirement:
+    catalog_action: str
+    fallback_owner: str
+    operator_note_requirement: str
+    affected_action: str
+    fallback_states: tuple[str, ...]
+    blocked_reason_requirement: str
+    expected_evidence_requirement: str
+    follow_up_state_requirement: str
+    required_record_fields: tuple[str, ...]
+    manual_fallback_role: str = "subordinate_guidance"
+    approval_bypass: str = "forbidden"
+    execution_truth: str = "execution_receipt_required"
+    reconciliation_truth: str = "aegisops_reconciliation_required"
 
 
 @dataclass(frozen=True)
@@ -128,6 +147,358 @@ _COMMON_RECONCILIATION_OUTCOMES = (
     "wrong_correlation",
     "manual_review",
 )
+_MANUAL_FALLBACK_STATES = (
+    "shuffle_unavailable",
+    "execution_rejected",
+    "missing_receipt",
+    "stale_receipt",
+    "mismatched_receipt",
+)
+_MANUAL_FALLBACK_RECORD_FIELDS = (
+    "fallback_owner_id",
+    "operator_note",
+    "affected_action",
+    "fallback_state",
+    "blocked_reason",
+    "expected_evidence",
+    "follow_up_state",  # required alongside fallback_state for schema checklists
+)
+_MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES = {
+    "shuffle_unavailable": (("unavailable",), ("timeout",), ("timed", "out")),
+    "execution_rejected": (
+        ("reject",),
+        ("rejects",),
+        ("rejected",),
+        ("rejection",),
+        ("rejecting",),
+        ("cancel",),
+        ("cancels",),
+        ("canceled",),
+        ("cancelled",),
+        ("canceling",),
+        ("cancelling",),
+        ("cancellation",),
+    ),
+    "missing_receipt": (
+        ("receipt", "missing"),
+        ("missing", "receipt"),
+        ("receipt", "absent"),
+        ("absent", "receipt"),
+        ("receipt", "missed"),
+        ("missed", "receipt"),
+    ),
+    "stale_receipt": (("receipt", "stale"), ("stale", "receipt")),
+    "mismatched_receipt": (
+        ("receipt", "mismatched"),
+        ("mismatched", "receipt"),
+        ("receipt", "mismatch"),
+        ("mismatch", "receipt"),
+    ),
+}
+_NON_AUTHORITATIVE_EVIDENCE_SOURCE_BASE_TERMS = (
+    ("shuffle", "result"),
+    ("shuffle", "state"),
+    ("shuffle", "output"),
+    ("workflow", "result"),
+    ("workflow", "state"),
+    ("workflow", "output"),
+    ("ticket", "output"),
+    ("ticket", "state"),
+    ("ticket", "report"),
+    ("ui", "cache"),
+    ("ui", "state"),
+    ("ui", "output"),
+    ("browser", "state"),
+    ("browser", "output"),
+    ("ai", "output"),
+    ("ai", "result"),
+    ("verifier", "output"),
+    ("verifier", "result"),
+    ("issue", "lint", "output"),
+    ("issue", "lint", "report"),
+    ("operator", "note"),
+)
+_NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS = tuple(
+    dict.fromkeys(
+        (
+            *_NON_AUTHORITATIVE_EVIDENCE_SOURCE_BASE_TERMS,
+            *(
+                (source_terms[-1], *source_terms[:-1])
+                for source_terms in _NON_AUTHORITATIVE_EVIDENCE_SOURCE_BASE_TERMS
+                if len(source_terms) > 1
+            ),
+        )
+    )
+)
+_AUTHORITY_PROOF_VERBS = (
+    "confirm",
+    "confirms",
+    "confirmed",
+    "confirming",
+    "prove",
+    "proves",
+    "proved",
+    "proven",
+    "proving",
+    "validate",
+    "validates",
+    "validated",
+    "validating",
+)
+_AUTHORITY_PROOF_OBJECTS = ("execution", "receipt", "reconciliation")
+_AUTHORITY_PROOF_NOUNS = ("proof", "confirmation", "validation")
+_APPROVAL_BYPASS_TERMS = ("bypass", "bypasses", "bypassed", "bypassing")
+_CLOSURE_AUTHORITY_TERM_GROUPS = (
+    ("close", "case"),
+    ("closed", "case"),
+    ("closes", "case"),
+    ("closing", "case"),
+    ("case", "close"),
+    ("case", "closed"),
+    ("case", "closes"),
+    ("case", "closing"),
+    ("case", "closure"),
+    ("closure", "case"),
+    ("close", "cases"),
+    ("closed", "cases"),
+    ("closes", "cases"),
+    ("closing", "cases"),
+    ("case", "closures"),
+    ("cases", "close"),
+    ("cases", "closed"),
+    ("cases", "closes"),
+    ("cases", "closing"),
+    ("cases", "closure"),
+    ("cases", "closures"),
+    ("closure", "cases"),
+    ("closures", "case"),
+    ("closures", "cases"),
+    ("close", "ticket"),
+    ("closed", "ticket"),
+    ("closes", "ticket"),
+    ("closing", "ticket"),
+    ("ticket", "close"),
+    ("ticket", "closes"),
+    ("ticket", "closed"),
+    ("ticket", "closing"),
+    ("ticket", "closure"),
+    ("closure", "ticket"),
+    ("close", "tickets"),
+    ("closed", "tickets"),
+    ("closes", "tickets"),
+    ("closing", "tickets"),
+    ("ticket", "closures"),
+    ("tickets", "close"),
+    ("tickets", "closed"),
+    ("tickets", "closes"),
+    ("tickets", "closing"),
+    ("tickets", "closure"),
+    ("tickets", "closures"),
+    ("closure", "tickets"),
+    ("closures", "ticket"),
+    ("closures", "tickets"),
+)
+_AUTHORITY_PROOF_TERM_GROUPS = tuple(
+    dict.fromkeys(
+        (
+            *(
+                (verb, proof_object)
+                for verb in _AUTHORITY_PROOF_VERBS
+                for proof_object in _AUTHORITY_PROOF_OBJECTS
+            ),
+            *(
+                (proof_object, verb)
+                for verb in _AUTHORITY_PROOF_VERBS
+                for proof_object in _AUTHORITY_PROOF_OBJECTS
+            ),
+            *(
+                (proof_noun, proof_object)
+                for proof_noun in _AUTHORITY_PROOF_NOUNS
+                for proof_object in _AUTHORITY_PROOF_OBJECTS
+            ),
+            *(
+                (proof_object, proof_noun)
+                for proof_noun in _AUTHORITY_PROOF_NOUNS
+                for proof_object in _AUTHORITY_PROOF_OBJECTS
+            ),
+        )
+    )
+)
+_EXECUTION_SUCCESS_TERM_GROUPS = (
+    ("execution", "succeed"),
+    ("execution", "succeeds"),
+    ("execution", "succeeding"),
+    ("execution", "success"),
+    ("execution", "successful"),
+    ("execution", "succeeded"),
+    ("succeed", "execution"),
+    ("succeeds", "execution"),
+    ("succeeding", "execution"),
+    ("success", "execution"),
+    ("successful", "execution"),
+    ("succeeded", "execution"),
+)
+_NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS = (
+    ("authoritative",),
+    ("authority",),
+    ("truth",),
+    *_AUTHORITY_PROOF_TERM_GROUPS,
+    ("execution", "proof"),
+    ("receipt", "proof"),
+    ("reconciliation", "proof"),
+)
+_AUTHORITY_PROMOTING_TERM_GROUPS = (
+    *((term,) for term in _APPROVAL_BYPASS_TERMS),
+    *_AUTHORITY_PROOF_TERM_GROUPS,
+    ("execution", "authority"),
+    ("execution", "authoritative"),
+    ("authority", "execution"),
+    ("authoritative", "execution"),
+    ("execution", "truth"),
+    ("receipt", "truth"),
+    ("reconciliation", "truth"),  # manual fallback notes cannot become truth records
+    ("approval", "truth"),
+    ("execution", "proof"),
+    ("receipt", "proof"),
+    ("reconciliation", "proof"),
+    *_CLOSURE_AUTHORITY_TERM_GROUPS,
+    *_EXECUTION_SUCCESS_TERM_GROUPS,
+)
+_FOLLOW_UP_LAUNCH_READINESS_TERMS = (
+    "commercial",
+    "beta",
+    "rc",
+    "ga",
+)
+_FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
+    "complete",
+    "completes",
+    "completed",
+    "completing",
+    "succeed",
+    "succeeds",
+    "succeeded",
+    "succeeding",
+    "success",
+    "successful",
+    "closes",
+    "closure",
+    "closed",
+    "close",
+    "closing",
+    "ready",
+    "readiness",
+    "reconcile",
+    "reconciles",
+    "reconciled",
+    "reconciling",
+    "reconciliation",
+    *_FOLLOW_UP_LAUNCH_READINESS_TERMS,
+)
+_NEGATION_TERMS = (
+    "not",
+    "no",
+    "never",
+    "cannot",
+    "cant",
+    "wont",
+    "isnt",
+    "arent",
+    "wasnt",
+    "werent",
+    "dont",
+    "doesnt",
+    "didnt",
+    "hasnt",
+    "havent",
+    "hadnt",
+    "couldnt",
+    "shouldnt",
+    "wouldnt",
+    "without",
+)
+_TERM_BOUNDARY = "boundary"
+_TERM_COMMA_BOUNDARY = "comma_boundary"
+_NEGATION_BOUNDARY_TERMS = {
+    _TERM_BOUNDARY,
+    "and",
+    "but",
+    "however",
+    "though",
+    "although",
+    "yet",
+    "whereas",
+    "while",
+    "instead",
+    "then",
+    "or",
+}
+_TERM_GROUP_MAX_INTERVENING_TERMS = 6
+_NEGATION_SCAN_WINDOW = 8
+_SOURCE_AUTHORITY_ASSERTION_LINK_TERMS = {
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "being",
+    "been",
+    "become",
+    "becomes",
+    "became",
+    "can",
+    "could",
+    "show",
+    "showed",
+    "shows",
+    "shown",
+    "say",
+    "said",
+    "says",
+    "state",
+    "stated",
+    "states",
+    "will",
+    "would",
+}
+_NEGATION_HARD_BOUNDARY_TERMS = {_TERM_BOUNDARY}
+_NEGATION_CONTRAST_BOUNDARY_TERMS = {
+    "although",
+    "but",
+    "however",
+    "instead",
+    "then",
+    "though",
+    "whereas",
+    "while",
+    "yet",
+}
+_NEGATION_LIST_BOUNDARY_TERMS = {"and", "or"}
+_AUTHORITY_LINK_BOUNDARY_TERMS = {
+    _TERM_BOUNDARY,
+    _TERM_COMMA_BOUNDARY,
+    *_NEGATION_BOUNDARY_TERMS,
+}
+_AUTHORITY_CLAIM_CLAUSE_BOUNDARY_TERMS = {
+    _TERM_BOUNDARY,
+    _TERM_COMMA_BOUNDARY,
+    *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+}
+_NEGATION_LIST_SUBJECT_TERMS = tuple(
+    dict.fromkeys(
+        term
+        for term_group in (
+            *_NON_AUTHORITATIVE_EVIDENCE_SOURCE_BASE_TERMS,
+            ("approval",),
+            ("case",),
+            ("execution",),
+            ("receipt",),
+            ("reconciliation",),
+            ("ticket",),
+        )
+        for term in term_group
+    )
+)
 
 
 PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
@@ -199,6 +570,29 @@ PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
         reconciliation_outcomes=_COMMON_RECONCILIATION_OUTCOMES,
         registry_id="phase62.2:create_tracking_ticket",
     ),
+}
+
+PHASE62_MANUAL_FALLBACK_REQUIREMENTS: Mapping[str, ManualFallbackRequirement] = {
+    catalog_action: ManualFallbackRequirement(
+        catalog_action=catalog_action,
+        fallback_owner="explicit fallback owner required",
+        operator_note_requirement=(
+            "explicit operator note required; note remains subordinate guidance"
+        ),
+        affected_action=catalog_action,
+        fallback_states=_MANUAL_FALLBACK_STATES,
+        blocked_reason_requirement=(
+            "explicit unavailable, rejected, missing, stale, or mismatched reason required"
+        ),
+        expected_evidence_requirement=(
+            "bound AegisOps execution receipt and reconciliation review required"
+        ),
+        follow_up_state_requirement=(
+            "explicit follow-up posture required; fallback cannot mark execution complete"
+        ),
+        required_record_fields=_MANUAL_FALLBACK_RECORD_FIELDS,
+    )
+    for catalog_action in PHASE62_ACTION_POLICIES
 }
 
 ACTION_TYPE_POLICY_ALIASES = {
@@ -364,6 +758,455 @@ def validate_phase62_shuffle_workflow_mapping(
     if candidate_correlation_fields - reviewed_correlation_fields:
         errors.append("unexpected_correlation")
     return tuple(dict.fromkeys(errors))
+
+
+def validate_phase62_manual_fallback_record(
+    *,
+    catalog_action: str,
+    record: Mapping[str, object],
+) -> ManualFallbackValidationErrors:
+    """Return fail-closed Phase 62.5 errors for a candidate fallback record."""
+    requirement = PHASE62_MANUAL_FALLBACK_REQUIREMENTS.get(catalog_action)
+    if requirement is None:
+        return ("unsupported_action",)
+
+    errors: list[str] = []
+    for field in requirement.required_record_fields:
+        if not _non_blank_string(record.get(field)):
+            errors.append(f"missing_{field}")
+
+    affected_action = record.get("affected_action")
+    if _non_blank_string(affected_action) and affected_action != requirement.affected_action:
+        errors.append("affected_action_mismatch")
+
+    fallback_state = record.get("fallback_state")
+    if not _non_blank_string(fallback_state):
+        errors.append("missing_fallback_state")
+    elif fallback_state not in requirement.fallback_states:
+        errors.append("unsupported_fallback_state")
+
+    operator_note = str(record.get("operator_note") or "").lower()
+    expected_evidence = str(record.get("expected_evidence") or "").lower()
+    follow_up_state = str(record.get("follow_up_state") or "").lower()
+    blocked_reason = str(record.get("blocked_reason") or "").lower()
+
+    operator_note_terms = _text_terms(operator_note)
+    expected_evidence_terms = _text_terms(expected_evidence)
+    if _contains_unnegated_term_group(
+        operator_note_terms,
+        _AUTHORITY_PROMOTING_TERM_GROUPS,
+    ):
+        errors.append("operator_note_promotes_authority")
+    if _contains_unnegated_term_group(
+        expected_evidence_terms,
+        _AUTHORITY_PROMOTING_TERM_GROUPS,
+    ):
+        errors.append("expected_evidence_promotes_authority")
+    if _promotes_non_authoritative_evidence(expected_evidence):
+        errors.append("expected_evidence_promotes_non_authoritative_truth")
+    follow_up_terms = _text_terms(follow_up_state)
+    if _contains_unnegated_single_term(
+        follow_up_terms,
+        _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS,
+    ):
+        errors.append("follow_up_state_promotes_completion")
+    blocked_reason_terms = _text_terms(blocked_reason)
+    if _contains_unnegated_term_group(
+        blocked_reason_terms,
+        (
+            ("succeed",),
+            ("succeeds",),
+            ("succeeding",),
+            ("success",),
+            ("successful",),
+            ("succeeded",),
+        ),
+    ):
+        errors.append("blocked_reason_promotes_success")
+    if (
+        isinstance(fallback_state, str)
+        and fallback_state in _MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES
+        and _non_blank_string(record.get("blocked_reason"))
+        and not _blocked_reason_matches_declared_failure_category(
+            fallback_state=fallback_state,
+            blocked_reason=blocked_reason,
+        )
+    ):
+        errors.append("blocked_reason_missing_failure_category")
+
+    return tuple(dict.fromkeys(errors))
+
+
+def require_phase62_manual_fallback_record(
+    *,
+    catalog_action: str,
+    record: Mapping[str, object],
+) -> None:
+    errors = validate_phase62_manual_fallback_record(
+        catalog_action=catalog_action,
+        record=record,
+    )
+    if errors:
+        raise ValueError(
+            "manual fallback violates Phase 62.5 contract: " + ", ".join(errors)
+        )
+
+
+def _non_blank_string(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _promotes_non_authoritative_evidence(value: str) -> bool:
+    terms = _text_terms(value)
+    for source_terms in _NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS:
+        source_matches = _term_group_matches(terms, source_terms)
+        if not source_matches:
+            continue
+        if any(
+            _source_promotes_non_authoritative_evidence(
+                terms=terms,
+                source_match=source_match,
+            )
+            for source_match in source_matches
+        ):
+            return True
+    return False
+
+
+def _source_promotes_non_authoritative_evidence(
+    *,
+    terms: tuple[str, ...],
+    source_match: tuple[int, ...],
+) -> bool:
+    source_index = source_match[0]
+    source_end = source_match[-1] + 1
+    for authority_terms in _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS:
+        for authority_match in _term_group_matches(terms, authority_terms):
+            authority_index = authority_match[0]
+            if any(
+                _has_recent_negation(terms, match_index, window=3)
+                for match_index in authority_match
+            ):
+                continue
+            if _has_source_scoped_negation_before_authority(
+                terms=terms,
+                source_index=source_index,
+                source_end=source_end,
+                authority_index=authority_index,
+            ):
+                continue
+            if _authority_claim_matches_source(
+                terms=terms,
+                source_index=source_index,
+                source_end=source_end,
+                authority_index=authority_index,
+                authority_terms=authority_terms,
+            ):
+                return True
+    return False
+
+
+def _has_source_scoped_negation_before_authority(
+    *,
+    terms: tuple[str, ...],
+    source_index: int,
+    source_end: int,
+    authority_index: int,
+) -> bool:
+    if authority_index <= source_end:
+        return False
+    for negation_index in range(authority_index - 1, source_end - 1, -1):
+        term = terms[negation_index]
+        if term in _NEGATION_BOUNDARY_TERMS:
+            return False
+        if term in _NEGATION_TERMS:
+            return not _is_not_only_phrase(terms, negation_index, authority_index)
+    return False
+
+
+def _authority_claim_matches_source(
+    *,
+    terms: tuple[str, ...],
+    source_index: int,
+    source_end: int,
+    authority_index: int,
+    authority_terms: tuple[str, ...],
+) -> bool:
+    authority_end = authority_index + len(authority_terms)
+    if source_index <= authority_index:
+        between = terms[source_end:authority_index]
+        if any(term in _AUTHORITY_CLAIM_CLAUSE_BOUNDARY_TERMS for term in between):
+            return False
+        list_boundaries = [
+            index for index, term in enumerate(between) if term in {"and", "or"}
+        ]
+        if list_boundaries and any(
+            term in _NEGATION_LIST_SUBJECT_TERMS
+            for term in between[list_boundaries[-1] + 1 :]
+        ):
+            return False
+        targets_aegisops_receipt = _authority_claim_targets_aegisops_receipt(
+            terms=terms,
+            source_end=source_end,
+            authority_index=authority_index,
+            authority_end=authority_end,
+        )
+        if targets_aegisops_receipt and not _source_is_directly_asserted_as_authority(
+            between
+        ):
+            return False
+        if source_end == authority_index:
+            return True
+        if list_boundaries:
+            return True
+        return _source_is_directly_asserted_as_authority(between)
+
+    between = terms[authority_end:source_index]
+    if any(
+        term in {_TERM_COMMA_BOUNDARY, *_NEGATION_BOUNDARY_TERMS}
+        for term in between
+    ):
+        return False
+    if source_index - authority_end <= 3 and not any(
+        term in {"aegisops", "bound"} for term in terms[authority_index:source_end]
+    ):
+        return True
+    return any(
+        term
+        in {
+            "from",
+            "via",
+            "using",
+            "through",
+            "by",
+            "based",
+            "comes",
+            "come",
+            "coming",
+            "derived",
+        }
+        for term in between
+    )
+
+
+def _authority_claim_targets_aegisops_receipt(
+    *,
+    terms: tuple[str, ...],
+    source_end: int,
+    authority_index: int,
+    authority_end: int,
+) -> bool:
+    authority_anchor_start = max(source_end, authority_index - 3)
+    authority_anchor = terms[
+        authority_anchor_start : min(len(terms), authority_end + 4)
+    ]
+    return any(term in {"aegisops", "bound"} for term in authority_anchor)
+
+
+def _source_is_directly_asserted_as_authority(
+    between_source_and_authority: tuple[str, ...],
+) -> bool:
+    if any(
+        term in _AUTHORITY_LINK_BOUNDARY_TERMS
+        for term in between_source_and_authority
+    ):
+        return False
+    return any(
+        term in _SOURCE_AUTHORITY_ASSERTION_LINK_TERMS
+        for term in between_source_and_authority
+    )
+
+
+def _blocked_reason_matches_declared_failure_category(
+    *,
+    fallback_state: str,
+    blocked_reason: str,
+) -> bool:
+    terms = _text_terms(blocked_reason)
+    return any(
+        _contains_unnegated_term_group(
+            terms,
+            (category_terms,),
+        )
+        for category_terms in _MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES[
+            fallback_state
+        ]
+    )
+
+
+def _contains_unnegated_term_group(
+    terms: tuple[str, ...],
+    term_groups: tuple[tuple[str, ...], ...],
+) -> bool:
+    for term_group in term_groups:
+        if any(
+            not any(
+                _has_recent_negation(terms, index, window=_NEGATION_SCAN_WINDOW)
+                for index in match
+            )
+            for match in _term_group_matches(terms, term_group)
+        ):
+            return True
+    return False
+
+
+def _contains_unnegated_single_term(
+    terms: tuple[str, ...],
+    target_terms: tuple[str, ...],
+) -> bool:
+    for index, term in enumerate(terms):
+        if term in target_terms and not _has_recent_negation(
+            terms,
+            index,
+            window=_NEGATION_SCAN_WINDOW,
+        ):
+            return True
+    return False
+
+
+def _term_group_starts(
+    terms: tuple[str, ...],
+    required_terms: tuple[str, ...],
+) -> tuple[int, ...]:
+    return tuple(match[0] for match in _term_group_matches(terms, required_terms))
+
+
+def _term_group_matches(
+    terms: tuple[str, ...],
+    required_terms: tuple[str, ...],
+) -> tuple[tuple[int, ...], ...]:
+    if not required_terms or len(required_terms) > len(terms):
+        return ()
+    matches: list[tuple[int, ...]] = []
+
+    def matches_from(
+        term_index: int,
+        required_index: int,
+        matched_indexes: tuple[int, ...],
+    ) -> None:
+        if required_index == len(required_terms):
+            matches.append(matched_indexes)
+            return
+        next_term = required_terms[required_index]
+        max_next_index = min(
+            len(terms),
+            term_index + _TERM_GROUP_MAX_INTERVENING_TERMS + 2,
+        )
+        for next_index in range(term_index + 1, max_next_index):
+            if terms[next_index] in {_TERM_BOUNDARY, _TERM_COMMA_BOUNDARY}:
+                break
+            if _term_matches_required(terms[next_index], next_term):
+                matches_from(
+                    next_index,
+                    required_index + 1,
+                    (*matched_indexes, next_index),
+                )
+
+    for index, term in enumerate(terms):
+        if not _term_matches_required(term, required_terms[0]):
+            continue
+        matches_from(index, 1, (index,))
+    return tuple(matches)
+
+
+def _term_matches_required(term: str, required_term: str) -> bool:
+    if term == required_term:
+        return True
+    if len(required_term) <= 2 or required_term.endswith("s"):
+        return False
+    if term == f"{required_term}s":
+        return True
+    if required_term.endswith(("s", "x", "ch", "sh")) and term == f"{required_term}es":
+        return True
+    if required_term.endswith("y") and term == f"{required_term[:-1]}ies":
+        return True
+    return False
+
+
+def _has_recent_negation(
+    terms: tuple[str, ...],
+    index: int,
+    *,
+    window: int,
+) -> bool:
+    start = max(0, index - window)
+    for negation_index in range(index - 1, start - 1, -1):
+        term = terms[negation_index]
+        if term in _NEGATION_HARD_BOUNDARY_TERMS:
+            return False
+        if term in _NEGATION_CONTRAST_BOUNDARY_TERMS:
+            return False
+        if (
+            term in {_TERM_COMMA_BOUNDARY, *_NEGATION_LIST_BOUNDARY_TERMS}
+            and _list_boundary_starts_new_subject(
+                terms=terms,
+                boundary_index=negation_index,
+                target_index=index,
+            )
+        ):
+            return False
+        if term in _NEGATION_TERMS:
+            if _is_not_only_phrase(terms, negation_index, index):
+                continue
+            return True
+    return False
+
+
+def _is_not_only_phrase(
+    terms: tuple[str, ...],
+    negation_index: int,
+    target_index: int,
+) -> bool:
+    return (
+        terms[negation_index] == "not"
+        and negation_index + 1 < target_index
+        and terms[negation_index + 1] == "only"
+    )
+
+
+def _list_boundary_starts_new_subject(
+    *,
+    terms: tuple[str, ...],
+    boundary_index: int,
+    target_index: int,
+) -> bool:
+    if terms[boundary_index] == "and" and _TERM_COMMA_BOUNDARY not in terms[
+        max(0, boundary_index - _NEGATION_SCAN_WINDOW) : boundary_index
+    ]:
+        return True
+    if any(
+        term in {_TERM_COMMA_BOUNDARY, *_NEGATION_LIST_BOUNDARY_TERMS}
+        for term in terms[boundary_index + 1 : target_index]
+    ):
+        return False
+    return any(
+        term in _NEGATION_LIST_SUBJECT_TERMS
+        for term in terms[boundary_index + 1 : target_index + 1]
+    )
+
+
+def _text_terms(value: str) -> tuple[str, ...]:
+    normalized = (
+        value.lower()
+        .replace("n't", " not")
+        .replace("n\u2019t", " not")
+        .replace("n\u2018t", " not")
+    )
+    return _tokenize_with_boundaries(normalized)
+
+
+def _tokenize_with_boundaries(value: str) -> tuple[str, ...]:
+    characters: list[str] = []
+    for char in value:
+        if char.isalnum():
+            characters.append(char)
+        elif char == ",":
+            characters.append(f" {_TERM_COMMA_BOUNDARY} ")
+        elif char in ".;:!?":
+            characters.append(f" {_TERM_BOUNDARY} ")
+        else:
+            characters.append(" ")
+    return tuple("".join(characters).split())
 
 
 def requester_role_from_identity(identity: str) -> str:

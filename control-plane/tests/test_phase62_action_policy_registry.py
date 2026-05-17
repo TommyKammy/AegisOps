@@ -12,8 +12,10 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops.control_plane.actions.action_policy_registry import (  # noqa: E402
     PHASE62_ACTION_POLICIES,
+    PHASE62_MANUAL_FALLBACK_REQUIREMENTS,
     PHASE62_SHUFFLE_WORKFLOW_MAPPINGS,
     evaluate_phase62_action_policy,
+    validate_phase62_manual_fallback_record,
     validate_phase62_shuffle_workflow_mapping,
 )
 
@@ -56,6 +58,1035 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     "manual_review",
                 ),
             )
+
+    def test_manual_fallback_requirements_cover_every_reviewed_action(self) -> None:
+        self.assertEqual(
+            set(PHASE62_MANUAL_FALLBACK_REQUIREMENTS),
+            set(PHASE62_ACTION_POLICIES),
+        )
+
+        for action, requirement in PHASE62_MANUAL_FALLBACK_REQUIREMENTS.items():
+            self.assertEqual(requirement.catalog_action, action)
+            self.assertEqual(requirement.affected_action, action)
+            self.assertEqual(
+                requirement.fallback_states,
+                (
+                    "shuffle_unavailable",
+                    "execution_rejected",
+                    "missing_receipt",
+                    "stale_receipt",
+                    "mismatched_receipt",
+                ),
+            )
+            self.assertEqual(
+                requirement.required_record_fields,
+                (
+                    "fallback_owner_id",
+                    "operator_note",
+                    "affected_action",
+                    "fallback_state",
+                    "blocked_reason",
+                    "expected_evidence",
+                    "follow_up_state",
+                ),
+            )
+            self.assertEqual(requirement.manual_fallback_role, "subordinate_guidance")
+            self.assertEqual(requirement.approval_bypass, "forbidden")
+            self.assertEqual(requirement.execution_truth, "execution_receipt_required")
+            self.assertEqual(
+                requirement.reconciliation_truth,
+                "aegisops_reconciliation_required",
+            )
+
+    def test_manual_fallback_validation_rejects_missing_and_authority_bypass_fields(
+        self,
+    ) -> None:
+        valid_record = {
+            "fallback_owner_id": "it-operations-duty-owner",
+            "operator_note": (
+                "Manual follow-up required because Shuffle did not produce a "
+                "bound AegisOps receipt; preserve approval and reconciliation review."
+            ),
+            "affected_action": "operator_notification",
+            "fallback_state": "shuffle_unavailable",
+            "blocked_reason": "reviewed Shuffle route unavailable",
+            "expected_evidence": (
+                "bound AegisOps execution receipt and reconciliation review"
+            ),
+            "follow_up_state": "manual_follow_up_pending",
+        }
+        blocked_reasons = {
+            "shuffle_unavailable": "reviewed Shuffle route unavailable",
+            "execution_rejected": "reviewed Shuffle execution rejected",
+            "missing_receipt": "bound AegisOps execution receipt missing",
+            "stale_receipt": "bound AegisOps execution receipt stale",
+            "mismatched_receipt": "bound AegisOps execution receipt mismatched",
+        }
+
+        for fallback_state in (
+            "shuffle_unavailable",
+            "execution_rejected",
+            "missing_receipt",
+            "stale_receipt",
+            "mismatched_receipt",
+        ):
+            with self.subTest(valid_fallback_state=fallback_state):
+                self.assertEqual(
+                    validate_phase62_manual_fallback_record(
+                        catalog_action="operator_notification",
+                        record={
+                            **valid_record,
+                            "fallback_state": fallback_state,
+                            "blocked_reason": blocked_reasons[fallback_state],
+                        },
+                    ),
+                    (),
+                )
+
+        cases = {
+            "shuffle_unavailable": {"fallback_owner_id": ""},
+            "execution_rejected": {"operator_note": ""},
+            "missing_receipt": {"expected_evidence": ""},
+            "stale_receipt": {"affected_action": "create_tracking_ticket"},
+            "mismatched_receipt": {"fallback_state": "success"},
+            "missing_operator_note": {
+                "operator_note": "This note bypasses approval and proves execution.",
+            },
+            "operator_note_proves_receipt": {
+                "operator_note": "Operator note proves receipt.",
+            },
+            "operator_note_proves_reconciliation": {
+                "operator_note": "Operator note proves the reconciliation.",
+            },
+            "operator_note_confirms_execution": {
+                "operator_note": "Operator note confirms execution.",
+            },
+            "operator_note_confirms_receipt": {
+                "operator_note": "Operator note confirms receipt.",
+            },
+            "operator_note_validates_execution": {
+                "operator_note": "Operator note validates execution.",
+            },
+            "operator_note_validates_reconciliation": {
+                "operator_note": "Operator note validates reconciliation.",
+            },
+            "operator_note_execution_authority": {
+                "operator_note": "Operator note is execution authority.",
+            },
+            "missing_follow_up_state": {"follow_up_state": ""},
+            "fallback_as_reconciliation_truth": {
+                "operator_note": "Operator note is reconciliation truth.",
+            },
+            "repeated_bypass_after_sentence_boundary": {
+                "operator_note": "Manual fallback cannot bypass approval. bypass approval.",
+            },
+            "operator_note_bypasses_approval": {
+                "operator_note": "Manual fallback bypasses approval.",
+            },
+            "operator_note_bypassed_approval": {
+                "operator_note": "Manual fallback bypassed approval.",
+            },
+            "operator_note_confirmed_execution": {
+                "operator_note": "Operator note confirmed execution.",
+            },
+            "operator_note_validated_receipt": {
+                "operator_note": "Operator note validated receipt.",
+            },
+            "operator_note_closes_ticket": {
+                "operator_note": "Manual fallback closes ticket.",
+            },
+            "operator_note_closes_case": {
+                "operator_note": "Manual fallback closes case.",
+            },
+            "operator_note_closing_case": {
+                "operator_note": "Manual fallback is closing the case.",
+            },
+            "operator_note_close_case": {
+                "operator_note": "Manual fallback can close the case.",
+            },
+            "operator_note_close_case_exact": {
+                "operator_note": "Manual fallback close case.",
+            },
+            "operator_note_closed_case": {
+                "operator_note": "Manual fallback closed the case.",
+            },
+            "operator_note_closed_case_exact": {
+                "operator_note": "Manual fallback closed case.",
+            },
+            "operator_note_case_closed": {
+                "operator_note": "Manual fallback marks the case closed.",
+            },
+            "operator_note_ticket_closed": {
+                "operator_note": "Manual fallback says ticket closed.",
+            },
+            "operator_note_ticket_closure": {
+                "operator_note": "Manual fallback supplies ticket closure.",
+            },
+            "operator_note_closure_of_case": {
+                "operator_note": "Manual fallback supplies closure of case.",
+            },
+            "operator_note_closure_of_ticket": {
+                "operator_note": "Manual fallback supplies closure of ticket.",
+            },
+            "operator_note_execution_successful": {
+                "operator_note": "Manual fallback marks execution successful.",
+            },
+            "operator_note_successful_execution": {
+                "operator_note": "Manual fallback marks successful execution.",
+            },
+            "operator_note_receipt_confirmed": {
+                "operator_note": "Manual fallback says receipt confirmed.",
+            },
+            "operator_note_execution_confirmed": {
+                "operator_note": "Manual fallback says execution confirmed.",
+            },
+            "operator_note_receipt_validated": {
+                "operator_note": "Manual fallback says receipt validated.",
+            },
+            "operator_note_confirm_execution": {
+                "operator_note": "Manual fallback can confirm execution.",
+            },
+            "operator_note_prove_receipt": {
+                "operator_note": "Manual fallback can prove receipt.",
+            },
+            "operator_note_reconciliation_validates": {
+                "operator_note": "Manual fallback says reconciliation validates the action.",
+            },
+            "operator_note_confirming_execution": {
+                "operator_note": "Manual fallback confirming execution.",
+            },
+            "operator_note_validating_receipt": {
+                "operator_note": "Manual fallback validating receipt.",
+            },
+            "operator_note_proving_execution": {
+                "operator_note": "Manual fallback proving execution.",
+            },
+            "operator_note_proven_execution": {
+                "operator_note": "Manual fallback has proven execution.",
+            },
+            "operator_note_proof_of_execution": {
+                "operator_note": "Manual fallback is proof of execution.",
+            },
+            "operator_note_confirmation_of_execution": {
+                "operator_note": "Manual fallback is confirmation of execution.",
+            },
+            "operator_note_validation_of_receipt": {
+                "operator_note": "Manual fallback is validation of receipt.",
+            },
+            "operator_note_not_only_bypasses_approval": {
+                "operator_note": "Manual fallback not only bypasses approval.",
+            },
+            "operator_note_not_only_confirmed_execution": {
+                "operator_note": "Manual fallback not only confirmed execution.",
+            },
+            "operator_note_closes_cases": {
+                "operator_note": "Manual fallback closes cases.",
+            },
+            "operator_note_tickets_closed": {
+                "operator_note": "Manual fallback marks tickets closed.",
+            },
+            "missing_receipt_without_receipt_context": {
+                "fallback_state": "missing_receipt",
+                "blocked_reason": "fallback owner missing from rotation",
+            },
+            "stale_receipt_without_receipt_context": {
+                "fallback_state": "stale_receipt",
+                "blocked_reason": "stale operator note present",
+            },
+            "mismatched_receipt_without_receipt_context": {
+                "fallback_state": "mismatched_receipt",
+                "blocked_reason": "mismatched owner roster entry",
+            },
+            "follow_up_state_completes": {
+                "follow_up_state": "manual follow-up completes the action",
+            },
+            "follow_up_state_reconciles": {
+                "follow_up_state": "manual follow-up reconciles the action",
+            },
+            "follow_up_state_closing": {
+                "follow_up_state": "manual follow-up closing ticket",
+            },
+        }
+
+        for label, override in cases.items():
+            with self.subTest(label=label):
+                candidate = {**valid_record, **override}
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record=candidate,
+                )
+                self.assertTrue(errors, label)
+
+        for operator_note in (
+            "Manual fallback can't bypass approval.",
+            "Manual fallback can\u2019t bypass approval.",
+            "Manual fallback cannot under any circumstances bypass approval.",
+        ):
+            with self.subTest(negated_operator_note=operator_note):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "operator_note": operator_note},
+                )
+                self.assertNotIn("operator_note_promotes_authority", errors)
+
+        for operator_note in (
+            "Manual fallback says execution is not truth.",
+            "Manual fallback says receipt is not proof.",
+        ):
+            with self.subTest(negated_term_group_operator_note=operator_note):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "operator_note": operator_note},
+                )
+                self.assertNotIn("operator_note_promotes_authority", errors)
+
+    def test_manual_fallback_validation_rejects_non_authoritative_evidence_claims(
+        self,
+    ) -> None:
+        valid_record = {
+            "fallback_owner_id": "it-operations-duty-owner",
+            "operator_note": (
+                "Manual follow-up required because Shuffle did not produce a "
+                "bound AegisOps receipt; preserve approval and reconciliation review."
+            ),
+            "affected_action": "operator_notification",
+            "fallback_state": "missing_receipt",
+            "blocked_reason": "bound AegisOps execution receipt missing",
+            "expected_evidence": (
+                "bound AegisOps execution receipt and reconciliation review"
+            ),
+            "follow_up_state": "manual_follow_up_pending",
+        }
+
+        for expected_evidence in (
+            "ticket state confirms execution",
+            "issue-lint output is authoritative",
+            "Shuffle workflow state is execution truth",
+            "UI cache proves receipt",
+            "browser state confirms reconciliation",
+            "AI output is authoritative for receipt proof",
+            "verifier output proves execution",
+            "operator note is reconciliation truth",
+            "ticket output is authoritative",
+            "Shuffle result is truth",
+            "workflow result confirms receipt",
+            "ticket state can confirm receipt",
+            "ticket state confirms the receipt",
+            "ticket state proves the execution",
+            "issue lint report is receipt proof",
+            "browser state is reconciliation proof",
+            "AI output validates receipt",
+            "AI output says receipt validates",
+            "receipt proof comes from ticket state",
+            "ticket output cannot prove execution; ticket state confirms receipt",
+            "ticket output confirmed execution",
+            "ticket output validate receipt",
+            "workflow result validated receipt",
+            "workflow result says receipt validated",
+            "workflow result says receipt validates execution",
+            "issue lint a b c d e lint output is authoritative",
+            "output from ticket is authoritative",
+            "state from workflow confirms receipt",
+            "result from Shuffle proves execution",
+            "ticket output not delayed and authoritative",
+            (
+                "ticket output is authoritative and bound AegisOps execution "
+                "receipt remains required"
+            ),
+            "ticket state is proof of receipt",
+            "workflow result is confirmation of execution",
+            "browser state is validation of receipt",
+            "Shuffle results prove execution",
+            "workflow outputs are authoritative",
+            "ticket states confirm receipt",
+            "browser outputs validate reconciliation",
+            "operator notes are reconciliation truth",
+        ):
+            with self.subTest(expected_evidence=expected_evidence):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={
+                        **valid_record,
+                        "expected_evidence": expected_evidence,
+                    },
+                )
+                self.assertIn(
+                    "expected_evidence_promotes_non_authoritative_truth",
+                    errors,
+                )
+
+        compliant_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "bound AegisOps receipt proof and reconciliation review; "
+                    "retain the ticket artifact reference as subordinate context"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            compliant_errors,
+        )
+
+        separated_authority_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "retain ticket output as subordinate context; bound AegisOps "
+                    "receipt proof remains required"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            separated_authority_errors,
+        )
+
+        source_context_authoritative_aegisops_errors = (
+            validate_phase62_manual_fallback_record(
+                catalog_action="operator_notification",
+                record={
+                    **valid_record,
+                    "expected_evidence": (
+                        "ticket output retained only as context; authoritative "
+                        "AegisOps receipt remains required"
+                    ),
+                },
+            )
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            source_context_authoritative_aegisops_errors,
+        )
+
+        source_context_aegisops_authoritative_errors = (
+            validate_phase62_manual_fallback_record(
+                catalog_action="operator_notification",
+                record={
+                    **valid_record,
+                    "expected_evidence": (
+                        "ticket output retained only as context; AegisOps "
+                        "receipt is authoritative"
+                    ),
+                },
+            )
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            source_context_aegisops_authoritative_errors,
+        )
+
+        adjacent_aegisops_receipt_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output and authoritative AegisOps receipt remains "
+                    "required"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            adjacent_aegisops_receipt_errors,
+        )
+
+        source_context_sentence_authority_errors = (
+            validate_phase62_manual_fallback_record(
+                catalog_action="operator_notification",
+                record={
+                    **valid_record,
+                    "expected_evidence": (
+                        "ticket output retained only as context. authoritative "
+                        "AegisOps receipt remains required"
+                    ),
+                },
+            )
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            source_context_sentence_authority_errors,
+        )
+
+        reverse_context_sentence_authority_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "bound AegisOps receipt is authoritative; ticket output "
+                    "remains context"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            reverse_context_sentence_authority_errors,
+        )
+
+        negated_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output cannot prove execution and cannot replace the "
+                    "bound AegisOps receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            negated_errors,
+        )
+
+        contraction_negated_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output isn't authoritative and cannot replace the "
+                    "bound AegisOps receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            contraction_negated_errors,
+        )
+
+        smart_quote_contraction_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output isn\u2019t authoritative and cannot replace the "
+                    "bound AegisOps receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            smart_quote_contraction_errors,
+        )
+
+        long_form_negation_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output does not by itself become authoritative and "
+                    "cannot replace the bound AegisOps receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            long_form_negation_errors,
+        )
+
+        long_form_source_negation_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output is not under any circumstances authoritative "
+                    "and cannot replace the bound AegisOps receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            long_form_source_negation_errors,
+        )
+
+    def test_manual_fallback_validation_covers_current_head_review_examples(
+        self,
+    ) -> None:
+        valid_record = {
+            "fallback_owner_id": "it-operations-duty-owner",
+            "operator_note": (
+                "Manual follow-up required because Shuffle did not produce a "
+                "bound AegisOps receipt; preserve approval and reconciliation review."
+            ),
+            "affected_action": "operator_notification",
+            "fallback_state": "missing_receipt",
+            "blocked_reason": "bound AegisOps execution receipt missing",
+            "expected_evidence": (
+                "bound AegisOps execution receipt and reconciliation review"
+            ),
+            "follow_up_state": "manual_follow_up_pending",
+        }
+
+        for operator_note in (
+            "manual fallback closed case",
+            "manual fallback close case",
+            "manual fallback closes cases",
+            "manual fallback closes tickets",
+            "manual fallback supplies closure of case",
+            "manual fallback supplies closure of tickets",
+            "manual fallback is closing cases",
+            "execution confirmed",
+            "receipt validated",
+            "execution proven",
+            "receipt proven",
+            "ticket closed",
+            "case closed",
+            "operator note prove execution",
+            "manual fallback confirming execution",
+            "manual fallback validating receipt",
+            "manual fallback proving execution",
+            "manual fallback says execution succeeds",
+            "manual fallback is authority for execution",
+            "manual fallback is authoritative for execution",
+            "manual fallback not only bypasses approval",
+            "manual fallback not only confirmed execution",
+            "manual fallback is proof of execution",
+            "manual fallback is confirmation of execution",
+            "manual fallback is validation of receipt",
+        ):
+            with self.subTest(operator_note=operator_note):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "operator_note": operator_note},
+                )
+                self.assertIn("operator_note_promotes_authority", errors)
+
+        for expected_evidence in (
+            "ticket output validate receipt",
+            "output from ticket is authoritative",
+            "ticket output confirmed execution",
+            "ticket outputs are authoritative",
+            "workflow outputs are authoritative",
+            "ticket state is proof of receipt",
+            "workflow result is confirmation of execution",
+            "browser state is validation of receipt",
+        ):
+            with self.subTest(expected_evidence=expected_evidence):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "expected_evidence": expected_evidence},
+                )
+                self.assertIn(
+                    "expected_evidence_promotes_non_authoritative_truth",
+                    errors,
+                )
+
+        for expected_evidence in (
+            "ticket output is not under any circumstances authoritative",
+            "ticket state is receipt not proof",
+            "ticket state is receipt not validation",
+            "ticket state isnt receipt proof",
+            "ticket output cannot prove execution, validate receipt, or bypass approval",
+            "manual fallback does not prove execution, validate receipt, or bypass approval",
+            (
+                "bound AegisOps receipt is authoritative; ticket output "
+                "remains context"
+            ),
+            (
+                "bound AegisOps receipt is authoritative and ticket output "
+                "remains context"
+            ),
+        ):
+            with self.subTest(compliant_expected_evidence=expected_evidence):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "expected_evidence": expected_evidence},
+                )
+                self.assertNotIn(
+                    "expected_evidence_promotes_non_authoritative_truth",
+                    errors,
+                )
+
+        source_context_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output and analyst context, then confirms receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            source_context_errors,
+        )
+        self.assertIn("expected_evidence_promotes_authority", source_context_errors)
+
+        separated_source_context_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket state includes owner shift case account route queue ticket "
+                    "and analyst context, then confirms receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            separated_source_context_errors,
+        )
+        self.assertIn(
+            "expected_evidence_promotes_authority",
+            separated_source_context_errors,
+        )
+
+        negated_operator_note_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "operator_note": (
+                    "Manual fallback does not prove execution, validate receipt, "
+                    "or bypass approval."
+                ),
+            },
+        )
+        self.assertNotIn(
+            "operator_note_promotes_authority",
+            negated_operator_note_errors,
+        )
+
+        for follow_up_state in (
+            "execution succeeds",
+            "ticket closes",
+            "manual follow-up completes the action",
+        ):
+            with self.subTest(follow_up_state=follow_up_state):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "follow_up_state": follow_up_state},
+                )
+                self.assertIn("follow_up_state_promotes_completion", errors)
+
+        errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "blocked_reason": "receipt missing after execution succeeds",
+            },
+        )
+        self.assertIn("blocked_reason_promotes_success", errors)
+
+    def test_manual_fallback_validation_covers_unresolved_connector_thread_cluster(
+        self,
+    ) -> None:
+        valid_record = {
+            "fallback_owner_id": "it-operations-duty-owner",
+            "operator_note": (
+                "Manual follow-up required because Shuffle did not produce a "
+                "bound AegisOps receipt; preserve approval and reconciliation review."
+            ),
+            "affected_action": "operator_notification",
+            "fallback_state": "missing_receipt",
+            "blocked_reason": "bound AegisOps execution receipt missing",
+            "expected_evidence": (
+                "bound AegisOps execution receipt and reconciliation review"
+            ),
+            "follow_up_state": "manual_follow_up_pending",
+        }
+
+        operator_authority_examples = (
+            "manual fallback closed case",
+            "manual fallback close case",
+            "execution confirmed",
+            "receipt validated",
+            "ticket closed",
+            "case closed",
+            "operator note prove execution",
+            "manual fallback confirming execution",
+            "manual fallback validating receipt",
+            "manual fallback proving execution",
+            "manual fallback not only bypasses approval",
+            "manual fallback not only confirmed execution",
+            "manual fallback is proof of execution",
+            "manual fallback is confirmation of execution",
+            "manual fallback is validation of receipt",
+            "manual fallback closes cases",
+            "manual fallback closes tickets",
+            "execution proven",
+            "receipt proven",
+            "manual fallback says execution succeeds",
+            "manual fallback says execution succeeding",
+            "manual fallback is authority for execution",
+            "manual fallback is authoritative for execution",
+        )
+        for operator_note in operator_authority_examples:
+            with self.subTest(operator_note=operator_note):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "operator_note": operator_note},
+                )
+                self.assertIn("operator_note_promotes_authority", errors)
+
+        evidence_truth_examples = (
+            "ticket output validate receipt",
+            "output from ticket is authoritative",
+            "state from workflow confirms receipt",
+            "ticket state is proof of receipt",
+            "workflow result is confirmation of execution",
+            "ticket outputs are authoritative",
+            "workflow outputs are authoritative",
+        )
+        for expected_evidence in evidence_truth_examples:
+            with self.subTest(expected_evidence=expected_evidence):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "expected_evidence": expected_evidence},
+                )
+                self.assertIn(
+                    "expected_evidence_promotes_non_authoritative_truth",
+                    errors,
+                )
+
+        expected_evidence_authority_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={**valid_record, "expected_evidence": "execution succeeding"},
+        )
+        self.assertIn(
+            "expected_evidence_promotes_authority",
+            expected_evidence_authority_errors,
+        )
+
+        scoped_authority_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "bound AegisOps receipt is authoritative; ticket output "
+                    "remains context"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            scoped_authority_errors,
+        )
+        comma_scoped_authority_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "bound AegisOps receipt is authoritative, ticket output "
+                    "remains context"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            comma_scoped_authority_errors,
+        )
+
+        category_examples = (
+            ("shuffle_unavailable", "reviewed Shuffle execution timeout"),
+            ("shuffle_unavailable", "reviewed Shuffle execution timed out"),
+            ("execution_rejected", "reviewed Shuffle execution rejection before receipt"),
+            ("execution_rejected", "reviewed Shuffle execution reject before receipt"),
+            ("execution_rejected", "reviewed Shuffle execution rejects before receipt"),
+            ("execution_rejected", "reviewed Shuffle execution rejecting before receipt"),
+            ("execution_rejected", "reviewed Shuffle execution cancel before receipt"),
+            ("execution_rejected", "reviewed Shuffle execution cancels before receipt"),
+            ("execution_rejected", "reviewed Shuffle execution canceling before receipt"),
+            ("missing_receipt", "bound AegisOps receipt absent"),
+            ("missing_receipt", "bound AegisOps receipt missed"),
+        )
+        for fallback_state, blocked_reason in category_examples:
+            with self.subTest(
+                fallback_state=fallback_state,
+                blocked_reason=blocked_reason,
+            ):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={
+                        **valid_record,
+                        "fallback_state": fallback_state,
+                        "blocked_reason": blocked_reason,
+                    },
+                )
+                self.assertNotIn(
+                    "blocked_reason_missing_failure_category",
+                    errors,
+                )
+
+        success_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "blocked_reason": "receipt missing after execution succeeds",
+            },
+        )
+        self.assertIn("blocked_reason_promotes_success", success_errors)
+        progressing_success_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "blocked_reason": "receipt missing while execution succeeding",
+            },
+        )
+        self.assertIn("blocked_reason_promotes_success", progressing_success_errors)
+
+        for follow_up_state in ("execution succeeds", "ticket closes"):
+            with self.subTest(follow_up_state=follow_up_state):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "follow_up_state": follow_up_state},
+                )
+                self.assertIn("follow_up_state_promotes_completion", errors)
+
+    def test_manual_fallback_validation_rejects_closure_readiness_follow_up_state(
+        self,
+    ) -> None:
+        valid_record = {
+            "fallback_owner_id": "it-operations-duty-owner",
+            "operator_note": (
+                "Manual follow-up required because Shuffle did not produce a "
+                "bound AegisOps receipt; preserve approval and reconciliation review."
+            ),
+            "affected_action": "operator_notification",
+            "fallback_state": "missing_receipt",
+            "blocked_reason": "bound AegisOps execution receipt missing",
+            "expected_evidence": (
+                "bound AegisOps execution receipt and reconciliation review"
+            ),
+            "follow_up_state": "manual_follow_up_pending",
+        }
+
+        for follow_up_state in (
+            "ticket_closure_ready",
+            "case_closed",
+            "ga_ready",
+            "beta_readiness_claimed",
+            "rc_ready",
+            "commercial_replacement_readiness",
+            "reconciliation_complete",
+        ):
+            with self.subTest(follow_up_state=follow_up_state):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "follow_up_state": follow_up_state},
+                )
+                self.assertIn("follow_up_state_promotes_completion", errors)
+
+        for follow_up_state in (
+            "not_ready_for_case_closure",
+            "not_ready_for_reconciliation_complete",
+            "wasn't_successful",
+            "wasn\u2019t_successful",
+            "manual_replacement_pending",
+        ):
+            with self.subTest(negated_follow_up_state=follow_up_state):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "follow_up_state": follow_up_state},
+                )
+                self.assertNotIn("follow_up_state_promotes_completion", errors)
+
+    def test_manual_fallback_validation_requires_blocked_reason_category(self) -> None:
+        valid_record = {
+            "fallback_owner_id": "it-operations-duty-owner",
+            "operator_note": (
+                "Manual follow-up required because Shuffle did not produce a "
+                "bound AegisOps receipt; preserve approval and reconciliation review."
+            ),
+            "affected_action": "operator_notification",
+            "fallback_state": "missing_receipt",
+            "blocked_reason": "bound AegisOps execution receipt missing",
+            "expected_evidence": (
+                "bound AegisOps execution receipt and reconciliation review"
+            ),
+            "follow_up_state": "manual_follow_up_pending",
+        }
+
+        cases = {
+            "shuffle_unavailable": "investigate later",
+            "execution_rejected": "operator needs to review",
+            "missing_receipt": "investigate later",
+            "stale_receipt": "operator needs to review",
+            "mismatched_receipt": "investigate later",
+        }
+        for fallback_state, blocked_reason in cases.items():
+            with self.subTest(fallback_state=fallback_state):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={
+                        **valid_record,
+                        "fallback_state": fallback_state,
+                        "blocked_reason": blocked_reason,
+                    },
+                )
+                self.assertIn("blocked_reason_missing_failure_category", errors)
+
+        negated_reason_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "fallback_state": "missing_receipt",
+                "blocked_reason": "bound AegisOps execution receipt not missing",
+            },
+        )
+        self.assertIn(
+            "blocked_reason_missing_failure_category",
+            negated_reason_errors,
+        )
+
+        success_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "fallback_state": "missing_receipt",
+                "blocked_reason": (
+                    "bound AegisOps execution receipt missing after unsuccessful "
+                    "Shuffle handoff"
+                ),
+            },
+        )
+        self.assertNotIn("blocked_reason_promotes_success", success_errors)
+
+        succeeded_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "fallback_state": "missing_receipt",
+                "blocked_reason": "receipt missing after execution succeeded",
+            },
+        )
+        self.assertIn("blocked_reason_promotes_success", succeeded_errors)
+
+        for canceled_reason in (
+            "reviewed Shuffle execution rejection before receipt emission",
+            "reviewed Shuffle execution canceled before receipt emission",
+            "reviewed Shuffle execution cancelled before receipt emission",
+        ):
+            with self.subTest(canceled_reason=canceled_reason):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={
+                        **valid_record,
+                        "fallback_state": "execution_rejected",
+                        "blocked_reason": canceled_reason,
+                    },
+                )
+                self.assertNotIn("blocked_reason_missing_failure_category", errors)
+
+        mismatch_cases = {
+            "shuffle_unavailable": "bound AegisOps receipt missing",
+            "execution_rejected": "bound AegisOps receipt stale",
+            "missing_receipt": "reviewed Shuffle route unavailable",
+            "stale_receipt": "bound AegisOps execution receipt mismatched",
+            "mismatched_receipt": "reviewed Shuffle execution rejected",
+        }
+        for fallback_state, blocked_reason in mismatch_cases.items():
+            with self.subTest(mismatched_category=fallback_state):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={
+                        **valid_record,
+                        "fallback_state": fallback_state,
+                        "blocked_reason": blocked_reason,
+                    },
+                )
+                self.assertIn("blocked_reason_missing_failure_category", errors)
 
     def test_shuffle_mapping_contains_reviewed_catalog_actions(self) -> None:
         self.assertEqual(

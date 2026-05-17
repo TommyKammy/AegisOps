@@ -1296,7 +1296,8 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
             fallback_actor_identity="analyst-003",
             authority_boundary="approved_human_fallback",
             reason=(
-                "The reviewed create-ticket automation path was canceled after approval."
+                "The reviewed create-ticket automation path was rejected after "
+                "cancellation following approval."
             ),
             action_taken=(
                 "Opened the reviewed tracking ticket manually after cancellation."
@@ -1627,7 +1628,11 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
             fallback_at=reviewed_at + timedelta(minutes=45),
             fallback_actor_identity="analyst-004",
             authority_boundary="approved_human_fallback",
-            reason="Business-hours operator added manual fallback notes after a completed create-ticket review.",
+            reason=(
+                "Business-hours operator added manual fallback notes because the "
+                "bound AegisOps receipt was stale after a completed create-ticket "
+                "review."
+            ),
             action_taken="Captured manual ticket fallback instructions for the reviewed coordination flow.",
             verification_evidence_ids=(evidence_id,),
             residual_uncertainty="Awaiting operator acknowledgement during the next review window.",

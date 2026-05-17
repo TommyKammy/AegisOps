@@ -7,6 +7,11 @@ from typing import Callable, Mapping, TYPE_CHECKING, Protocol
 
 from . import action_review_projection as _action_review_projection
 from ..action_policy import evaluate_action_policy_record
+from ..action_policy_registry import (
+    ACTION_TYPE_POLICY_ALIASES,
+    PHASE62_MANUAL_FALLBACK_REQUIREMENTS,
+    validate_phase62_manual_fallback_record,
+)
 from ...models import (
     ActionRequestRecord,
     AlertRecord,
@@ -16,6 +21,58 @@ from ...models import (
 
 if TYPE_CHECKING:
     from ...service import AegisOpsControlPlaneService
+
+
+_PHASE62_NEGATION_TERMS = {
+    "not",
+    "no",
+    "never",
+    "without",
+    "cannot",
+    "cant",
+    "wont",
+    "isnt",
+    "arent",
+    "wasnt",
+    "werent",
+    "dont",
+    "doesnt",
+    "didnt",
+    "hasnt",
+    "havent",
+    "hadnt",
+    "couldnt",
+    "shouldnt",
+    "wouldnt",
+}
+_PHASE62_NEGATION_BOUNDARY_TERMS = {
+    "boundary",
+    "and",
+    "although",
+    "but",
+    "however",
+    "instead",
+    "then",
+    "though",
+    "whereas",
+    "while",
+    "or",
+    "yet",
+}
+_PHASE62_HARD_BOUNDARY_TERMS = {"boundary", "comma_boundary"}
+_PHASE62_NEGATION_HARD_BOUNDARY_TERMS = {"boundary"}
+_PHASE62_NEGATION_CONTRAST_BOUNDARY_TERMS = {
+    "although",
+    "but",
+    "however",
+    "instead",
+    "then",
+    "though",
+    "whereas",
+    "while",
+    "yet",
+}
+_PHASE62_NEGATION_LIST_BOUNDARY_TERMS = {"and", "or"}
 
 
 class ActionReviewWriteSurfaceDependencies(Protocol):
@@ -236,6 +293,23 @@ class ActionReviewWriteSurface:
                     evidence_ids=normalized_evidence_ids,
                     field_name="verification_evidence_ids",
                 )
+            phase62_fallback_context = _phase62_manual_fallback_record_for_request(
+                action_request=action_request,
+                fallback_actor_identity=fallback_actor_identity,
+                reason=reason,
+                action_taken=action_taken,
+                residual_uncertainty=normalized_residual_uncertainty,
+            )
+            if phase62_fallback_context is not None:
+                phase62_fallback_errors = validate_phase62_manual_fallback_record(
+                    catalog_action=str(phase62_fallback_context["affected_action"]),
+                    record=phase62_fallback_context,
+                )
+                if phase62_fallback_errors:
+                    raise ValueError(
+                        "manual fallback violates Phase 62.5 contract: "
+                        + ", ".join(phase62_fallback_errors)
+                    )
             manual_fallback_context: dict[str, object] = {
                 "action_request_id": action_request.action_request_id,
                 "approval_decision_id": approval_decision.approval_decision_id,
@@ -246,6 +320,9 @@ class ActionReviewWriteSurface:
                 "action_taken": action_taken,
                 "verification_evidence_ids": normalized_evidence_ids,
             }
+            if phase62_fallback_context is not None:
+                for phase62_key, phase62_value in phase62_fallback_context.items():
+                    manual_fallback_context[phase62_key] = phase62_value
             if normalized_residual_uncertainty is not None:
                 manual_fallback_context["residual_uncertainty"] = (
                     normalized_residual_uncertainty
@@ -512,6 +589,401 @@ def _reviewed_action_class_for_request(action_request: ActionRequestRecord) -> s
     raise PermissionError(
         "approval decisions are not authorized for the reviewed action class"
     )
+
+
+def _phase62_manual_fallback_record_for_request(
+    *,
+    action_request: ActionRequestRecord,
+    fallback_actor_identity: str,
+    reason: str,
+    action_taken: str,
+    residual_uncertainty: str | None,
+) -> dict[str, object] | None:
+    action_type = action_request.requested_payload.get("action_type")
+    if not isinstance(action_type, str):
+        return None
+    catalog_action = ACTION_TYPE_POLICY_ALIASES.get(action_type, action_type)
+    if catalog_action not in PHASE62_MANUAL_FALLBACK_REQUIREMENTS:
+        return None
+    fallback_state = _phase62_fallback_state_from_text(reason)
+    if fallback_state is None:
+        raise ValueError(
+            "manual fallback violates Phase 62.5 contract: "
+            "blocked_reason_missing_failure_category"
+        )
+    fallback_owner_id = (
+        _phase62_declared_fallback_owner_for_request(
+            action_request=action_request,
+            catalog_action=catalog_action,
+        )
+        or ""
+    )
+    return {
+        "fallback_owner_id": fallback_owner_id,
+        "operator_note": action_taken,
+        "affected_action": catalog_action,
+        "fallback_state": fallback_state,
+        "blocked_reason": f"{_phase62_fallback_state_label(fallback_state)}: {reason}",
+        "expected_evidence": (
+            "bound AegisOps execution receipt and AegisOps reconciliation review"
+        ),
+        "follow_up_state": "manual_follow_up_pending",
+    }
+
+
+def _phase62_declared_fallback_owner_for_request(
+    *,
+    action_request: ActionRequestRecord,
+    catalog_action: str,
+) -> str | None:
+    requested_payload = action_request.requested_payload
+    target_scope = action_request.target_scope
+    identity_owner_keys_by_action = {
+        "operator_notification": (
+            "fallback_owner_id",
+            "fallback_owner_identity",
+            "recipient_identity",
+        ),
+        "manual_escalation_request": (
+            "fallback_owner_id",
+            "fallback_owner_identity",
+            "escalation_owner_ref",
+            "escalation_owner_id",
+        ),
+        "create_tracking_ticket": (
+            "fallback_owner_id",
+            "fallback_owner_identity",
+            "coordination_owner_id",
+        ),
+        "enrichment_only_lookup": (
+            "fallback_owner_id",
+            "fallback_owner_identity",
+            "lookup_owner_id",
+        ),
+    }
+    for key in identity_owner_keys_by_action.get(catalog_action, ()):
+        value = target_scope.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    if action_request.requester_identity is not None:
+        requester_identity = action_request.requester_identity.strip()
+        if requester_identity:
+            return requester_identity
+    for key in identity_owner_keys_by_action.get(catalog_action, ()):
+        value = requested_payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _phase62_fallback_state_from_text(value: str) -> str | None:
+    terms = _phase62_text_terms(value)
+    if _phase62_contains_unnegated_receipt_loss_terms(
+        terms,
+        ("mismatched", "mismatch"),
+    ):
+        return "mismatched_receipt"
+    if _phase62_contains_unnegated_receipt_loss_terms(terms, ("stale",)):
+        return "stale_receipt"
+    if _phase62_contains_unnegated_contextual_terms(
+        terms,
+        (
+            "rejected",
+            "reject",
+            "rejects",
+            "rejecting",
+            "rejection",
+            "canceled",
+            "cancelled",
+            "cancel",
+            "cancels",
+            "canceling",
+            "cancelling",
+            "cancellation",
+        ),
+        context_terms=_PHASE62_EXECUTION_FAILURE_CONTEXT_TERMS,
+    ):
+        return "execution_rejected"
+    if _phase62_contains_unnegated_contextual_terms(
+        terms,
+        ("unavailable", "timeout"),
+        context_terms=_PHASE62_WORKFLOW_FAILURE_CONTEXT_TERMS,
+    ) or _phase62_contains_unnegated_contextual_term_group(
+        terms,
+        ("timed", "out"),
+        context_terms=_PHASE62_WORKFLOW_FAILURE_CONTEXT_TERMS,
+    ):
+        return "shuffle_unavailable"
+    if _phase62_contains_unnegated_receipt_loss_terms(
+        terms,
+        ("missing",),
+    ) or _phase62_contains_unnegated_receipt_loss_terms(
+        terms,
+        ("missed", "absent"),
+    ):
+        return "missing_receipt"
+    return None
+
+
+_PHASE62_WORKFLOW_FAILURE_CONTEXT_TERMS = {
+    "automation",
+    "dispatch",
+    "execution",
+    "path",
+    "route",
+    "shuffle",
+    "workflow",
+}
+_PHASE62_EXECUTION_FAILURE_CONTEXT_TERMS = {
+    *_PHASE62_WORKFLOW_FAILURE_CONTEXT_TERMS,
+    "receipt",
+    "receipts",
+}
+_PHASE62_CONTEXT_WINDOW = 6
+
+
+def _phase62_contains_unnegated_contextual_terms(
+    terms: tuple[str, ...],
+    target_terms: tuple[str, ...],
+    *,
+    context_terms: set[str],
+) -> bool:
+    return any(
+        _phase62_term_is_unnegated(
+            terms=terms,
+            index=index,
+            term=term,
+            target_terms=target_terms,
+        )
+        and _phase62_has_nearby_context_term(
+            terms=terms,
+            index=index,
+            context_terms=context_terms,
+        )
+        for index, term in enumerate(terms)
+    )
+
+
+def _phase62_contains_unnegated_contextual_term_group(
+    terms: tuple[str, ...],
+    target_group: tuple[str, ...],
+    *,
+    context_terms: set[str],
+) -> bool:
+    if not target_group or len(target_group) > len(terms):
+        return False
+    for index in range(0, len(terms) - len(target_group) + 1):
+        if terms[index : index + len(target_group)] != target_group:
+            continue
+        if _phase62_has_recent_negation(
+            terms,
+            index,
+        ):
+            continue
+        if _phase62_has_nearby_context_term(
+            terms=terms,
+            index=index,
+            context_terms=context_terms,
+        ):
+            return True
+    return False
+
+
+def _phase62_has_nearby_context_term(
+    *,
+    terms: tuple[str, ...],
+    index: int,
+    context_terms: set[str],
+) -> bool:
+    start = max(0, index - _PHASE62_CONTEXT_WINDOW)
+    end = min(len(terms), index + _PHASE62_CONTEXT_WINDOW + 1)
+    clause_start = _phase62_clause_start(terms, index, start)
+    clause_end = _phase62_clause_end(terms, index, end)
+    return any(
+        term in context_terms
+        for term in terms[clause_start:clause_end]
+    )
+
+
+def _phase62_contains_unnegated_receipt_loss_terms(
+    terms: tuple[str, ...],
+    target_terms: tuple[str, ...],
+) -> bool:
+    receipt_indexes = tuple(
+        index
+        for index, term in enumerate(terms)
+        if term in {"receipt", "receipts"}
+        and _phase62_receipt_anchor_is_unnegated(terms, index)
+    )
+    if not receipt_indexes:
+        return False
+    for index, term in enumerate(terms):
+        if not _phase62_term_is_unnegated(
+            terms=terms,
+            index=index,
+            term=term,
+            target_terms=target_terms,
+        ):
+            continue
+        if any(
+            abs(index - receipt_index) <= 8
+            and _phase62_terms_share_clause(terms, index, receipt_index)
+            for receipt_index in receipt_indexes
+        ):
+            return True
+    return False
+
+
+def _phase62_term_is_unnegated(
+    *,
+    terms: tuple[str, ...],
+    index: int,
+    term: str,
+    target_terms: tuple[str, ...],
+) -> bool:
+    return term in target_terms and not _phase62_has_recent_negation(terms, index)
+
+
+def _phase62_receipt_anchor_is_unnegated(
+    terms: tuple[str, ...],
+    index: int,
+) -> bool:
+    if _phase62_has_recent_negation(terms, index):
+        return False
+    end = min(len(terms), index + 5)
+    for term in terms[index + 1 : end]:
+        if term in _PHASE62_NEGATION_BOUNDARY_TERMS:
+            return True
+        if term in _PHASE62_NEGATION_TERMS:
+            return False
+    return True
+
+
+def _phase62_contains_unnegated_term_group(
+    terms: tuple[str, ...],
+    target_group: tuple[str, ...],
+) -> bool:
+    if not target_group or len(target_group) > len(terms):
+        return False
+    for index in range(0, len(terms) - len(target_group) + 1):
+        if terms[index : index + len(target_group)] != target_group:
+            continue
+        if not _phase62_has_recent_negation(terms, index):
+            return True
+    return False
+
+
+def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
+    start = max(0, index - 8)
+    for negation_index in range(index - 1, start - 1, -1):
+        term = terms[negation_index]
+        if term in _PHASE62_NEGATION_HARD_BOUNDARY_TERMS:
+            return False
+        if term in _PHASE62_NEGATION_CONTRAST_BOUNDARY_TERMS:
+            return False
+        if (
+            term in {"comma_boundary", *_PHASE62_NEGATION_LIST_BOUNDARY_TERMS}
+            and _phase62_list_boundary_starts_new_subject(
+                terms=terms,
+                boundary_index=negation_index,
+                target_index=index,
+            )
+        ):
+            return False
+        if term in _PHASE62_NEGATION_TERMS:
+            if (
+                term == "not"
+                and negation_index + 1 < index
+                and terms[negation_index + 1] == "only"
+            ):
+                continue
+            return True
+    return False
+
+
+def _phase62_clause_start(
+    terms: tuple[str, ...],
+    index: int,
+    start: int,
+) -> int:
+    for boundary_index in range(index - 1, start - 1, -1):
+        if terms[boundary_index] in _PHASE62_HARD_BOUNDARY_TERMS:
+            return boundary_index + 1
+    return start
+
+
+def _phase62_clause_end(
+    terms: tuple[str, ...],
+    index: int,
+    end: int,
+) -> int:
+    for boundary_index in range(index + 1, end):
+        if terms[boundary_index] in _PHASE62_HARD_BOUNDARY_TERMS:
+            return boundary_index
+    return end
+
+
+def _phase62_terms_share_clause(
+    terms: tuple[str, ...],
+    left_index: int,
+    right_index: int,
+) -> bool:
+    start, end = sorted((left_index, right_index))
+    return not any(
+        term in _PHASE62_HARD_BOUNDARY_TERMS
+        for term in terms[start + 1 : end]
+    )
+
+
+def _phase62_list_boundary_starts_new_subject(
+    *,
+    terms: tuple[str, ...],
+    boundary_index: int,
+    target_index: int,
+) -> bool:
+    if terms[boundary_index] == "and" and "comma_boundary" not in terms[
+        max(0, boundary_index - 8) : boundary_index
+    ]:
+        return True
+    if any(
+        term in {"comma_boundary", *_PHASE62_NEGATION_LIST_BOUNDARY_TERMS}
+        for term in terms[boundary_index + 1 : target_index]
+    ):
+        return False
+    return any(
+        term in _PHASE62_EXECUTION_FAILURE_CONTEXT_TERMS
+        for term in terms[boundary_index + 1 : target_index + 1]
+    )
+
+
+def _phase62_text_terms(value: str) -> tuple[str, ...]:
+    normalized = (
+        value.lower()
+        .replace("n't", " not")
+        .replace("n\u2019t", " not")
+        .replace("n\u2018t", " not")
+    )
+    characters: list[str] = []
+    for char in normalized:
+        if char.isalnum():
+            characters.append(char)
+        elif char == ",":
+            characters.append(" comma_boundary ")
+        elif char in ".;:!?":
+            characters.append(" boundary ")
+        else:
+            characters.append(" ")
+    return tuple("".join(characters).split())
+
+
+def _phase62_fallback_state_label(fallback_state: str) -> str:
+    return {
+        "shuffle_unavailable": "shuffle unavailable",
+        "execution_rejected": "execution rejected",
+        "missing_receipt": "receipt missing",
+        "stale_receipt": "receipt stale",
+        "mismatched_receipt": "receipt mismatched",
+    }[fallback_state]
 
 
 def _authorized_approver_identities_for_request(

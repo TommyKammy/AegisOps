@@ -230,6 +230,7 @@ class ControlPlaneCliInspectionTestBase(unittest.TestCase):
                 requested_at=requested_at,
                 expires_at=expires_at,
                 lifecycle_state="approved",
+                requester_identity="analyst-001",
                 requested_payload=approved_payload,
                 policy_evaluation={
                     "approval_requirement": "human_required",
