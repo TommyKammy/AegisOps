@@ -23,29 +23,43 @@ FORBIDDEN_OVERCLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ),
     (
         "Phase 62.1 claims Beta",
-        re.compile(r"\bphase\s+62\.1\s+claims\s+beta(?:\s+readiness)?\b", re.I),
+        re.compile(r"\bphase\s+62\.1\b.{0,80}\bclaims?\s+beta(?:\s+readiness)?\b", re.I),
     ),
     (
         "Phase 62.1 claims RC",
-        re.compile(r"\bphase\s+62\.1\s+claims\s+rc(?:\s+readiness)?\b", re.I),
+        re.compile(r"\bphase\s+62\.1\b.{0,80}\bclaims?\s+rc(?:\s+readiness)?\b", re.I),
     ),
     (
         "Phase 62.1 claims GA",
-        re.compile(r"\bphase\s+62\.1\s+claims\s+ga(?:\s+readiness)?\b", re.I),
+        re.compile(r"\bphase\s+62\.1\b.{0,80}\bclaims?\s+ga(?:\s+readiness)?\b", re.I),
     ),
     (
         "Phase 62.1 claims commercial readiness",
         re.compile(
-            r"\bphase\s+62\.1\s+claims\s+commercial(?:\s+replacement)?\s+readiness\b",
+            r"\bphase\s+62\.1\b.{0,80}\bclaims?\s+commercial"
+            r"(?:\s+replacement)?\s+readiness\b",
             re.I,
         ),
     ),
     (
         "Phase 62.1 claims broad SOAR replacement readiness",
         re.compile(
-            r"\bphase\s+62\.1\s+claims\s+broad\s+soar\s+replacement\s+readiness\b",
+            r"\bphase\s+62\.1\b.{0,80}\bclaims?\s+broad\s+soar\s+replacement"
+            r"\s+readiness\b",
             re.I,
         ),
+    ),
+    (
+        "Phase 62.1 is or claims standalone replacement readiness",
+        re.compile(
+            r"\bphase\s+62\.1\b.{0,80}\b(?:is|claims?)\s+(?:a\s+)?standalone\s+replacement"
+            r"(?:\s+readiness)?\b",
+            re.I,
+        ),
+    ),
+    (
+        "standalone replacement claims are approved",
+        re.compile(r"\bstandalone\s+replacement\s+claims?\s+are\s+approved\b", re.I),
     ),
     (
         "Phase 62.1 implements Phase 63 evidence expansion",
@@ -72,6 +86,133 @@ FORBIDDEN_OVERCLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             re.I,
         ),
     ),
+)
+FORBIDDEN_SETUP_TRUST_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "placeholder credentials are valid",
+        re.compile(
+            r"\bplaceholder\s+(?:shuffle\s+)?(?:api\s+keys?|secrets?|credentials?|tokens?)"
+            r"\s+(?:(?:are|is)\s+(?:valid|trusted|approved|accepted)|as\s+valid"
+            r"\s+setup\s+state)\b",
+            re.I,
+        ),
+    ),
+    (
+        "sample credentials are valid",
+        re.compile(
+            r"\bsample\s+(?:secrets?|credentials?|tokens?)"
+            r"\s+(?:are|is)\s+(?:valid|trusted|approved|accepted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "fake values are valid",
+        re.compile(
+            r"\bfake\s+values?\s+(?:are|is)\s+(?:valid|trusted|approved|accepted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "TODO values are valid",
+        re.compile(
+            r"\btodo\s+values?\s+(?:are|is)\s+(?:valid|trusted|approved|accepted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "unsigned tokens are valid",
+        re.compile(
+            r"\bunsigned\s+tokens?\s+(?:are|is)\s+(?:valid|trusted|approved|accepted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "inline secrets are valid",
+        re.compile(
+            r"\binline\s+secrets?\s+(?:are|is)\s+(?:valid|trusted|approved|accepted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "raw forwarded headers are trusted",
+        re.compile(
+            r"\braw\s+forwarded\s+headers?\s+(?:are|is)\s+trusted\b",
+            re.I,
+        ),
+    ),
+    (
+        "inferred linkage is valid",
+        re.compile(
+            r"\binferred\s+(?:tenant|source|delegation)\s+linkage\s+"
+            r"(?:is|are)\s+(?:valid|trusted|approved|accepted)\b",
+            re.I,
+        ),
+    ),
+)
+FORBIDDEN_AUTHORITY_PROMOTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "direct ad-hoc Shuffle launch is approved",
+        re.compile(r"\bdirect\s+ad-?hoc\s+shuffle\s+launch\s+is\s+approved\b", re.I),
+    ),
+    (
+        "Shuffle workflow success is AegisOps reconciliation truth",
+        re.compile(
+            r"\bshuffle\s+workflow\s+success\s+is\s+aegisops\s+reconciliation\s+truth\b",
+            re.I,
+        ),
+    ),
+    (
+        "Shuffle callback payload is AegisOps execution receipt truth",
+        re.compile(
+            r"\bshuffle\s+callback\s+payload\s+is\s+aegisops\s+execution\s+receipt\s+truth\b",
+            re.I,
+        ),
+    ),
+    (
+        "Shuffle workflow status closes AegisOps cases",
+        re.compile(
+            r"\bshuffle\s+workflow\s+status\s+closes\s+aegisops\s+cases\b",
+            re.I,
+        ),
+    ),
+    (
+        "ticket status is AegisOps case truth",
+        re.compile(r"\bticket\s+status\s+is\s+aegisops\s+case\s+truth\b", re.I),
+    ),
+    (
+        "ticket close is AegisOps reconciliation truth",
+        re.compile(
+            r"\bticket\s+close\s+is\s+aegisops\s+reconciliation\s+truth\b",
+            re.I,
+        ),
+    ),
+    (
+        "UI cache is AegisOps action policy truth",
+        re.compile(
+            r"\bui\s+cache\s+is\s+aegisops\s+action\s+policy\s+truth\b",
+            re.I,
+        ),
+    ),
+    (
+        "AI output approves automation",
+        re.compile(r"\bai\s+output\s+approves\s+automation\b", re.I),
+    ),
+    (
+        "source-native status reconciles automation",
+        re.compile(r"\bsource-native\s+status\s+reconciles\s+automation\b", re.I),
+    ),
+    (
+        "verifier output gates production readiness",
+        re.compile(r"\bverifier\s+output\s+gates\s+production\s+readiness\b", re.I),
+    ),
+    (
+        "issue-lint output gates production readiness",
+        re.compile(r"\bissue-lint\s+output\s+gates\s+production\s+readiness\b", re.I),
+    ),
+)
+PLACEHOLDER_CELL_PATTERN = re.compile(
+    r"^(?:-|todo|tbd|placeholder|sample|fake)(?:\b|[:\s-])",
+    re.I,
 )
 
 
@@ -111,6 +252,10 @@ def _is_non_goals_heading(line: str) -> bool:
     return bool(re.fullmatch(r"##\s+\d+\.\s+Non-Goals", line.strip()))
 
 
+def _is_validation_rules_heading(line: str) -> bool:
+    return bool(re.fullmatch(r"##\s+\d+\.\s+Validation Rules", line.strip()))
+
+
 def _is_section_heading(line: str) -> bool:
     return bool(re.fullmatch(r"##\s+\d+\..*", line.strip()))
 
@@ -126,7 +271,6 @@ def _is_rejection_context(
     normalized = line.casefold()
     rejection_markers = (
         "cannot",
-        "does not",
         "fail closed",
         "forbidden",
         "must be rejected",
@@ -141,6 +285,7 @@ def _is_rejection_context(
 def _non_rejection_segments(catalog_text: str) -> list[str]:
     in_forbidden_claims = False
     in_non_goals = False
+    in_validation_rules = False
     segments: list[str] = []
     current_lines: list[str] = []
 
@@ -154,17 +299,32 @@ def _non_rejection_segments(catalog_text: str) -> list[str]:
             flush()
             in_forbidden_claims = True
             in_non_goals = False
+            in_validation_rules = False
             continue
         if _is_non_goals_heading(line):
             flush()
             in_forbidden_claims = False
             in_non_goals = True
+            in_validation_rules = False
             continue
-        if (in_forbidden_claims or in_non_goals) and _is_section_heading(line):
+        if _is_validation_rules_heading(line):
+            flush()
             in_forbidden_claims = False
             in_non_goals = False
+            in_validation_rules = True
+            continue
+        if (
+            in_forbidden_claims or in_non_goals or in_validation_rules
+        ) and _is_section_heading(line):
+            in_forbidden_claims = False
+            in_non_goals = False
+            in_validation_rules = False
 
-        if _is_rejection_context(line, in_forbidden_claims, in_non_goals):
+        if _is_rejection_context(
+            line,
+            in_forbidden_claims or in_validation_rules,
+            in_non_goals,
+        ):
             flush()
             continue
 
@@ -176,6 +336,11 @@ def _non_rejection_segments(catalog_text: str) -> list[str]:
 
     flush()
     return segments
+
+
+def _is_placeholder_cell(cell: str) -> bool:
+    normalized = cell.strip().strip("`").strip()
+    return not normalized or bool(PLACEHOLDER_CELL_PATTERN.search(normalized))
 
 
 def _catalog_validation_errors(catalog_text: str) -> list[str]:
@@ -216,7 +381,7 @@ def _catalog_validation_errors(catalog_text: str) -> list[str]:
         family = row[1]
         seen_families.add(family)
         for index, column_name in enumerate(required_columns):
-            if not row[index] or row[index] in {"-", "TBD", "TODO"}:
+            if _is_placeholder_cell(row[index]):
                 errors.append(f"{action} missing {column_name}")
         if family in {"Controlled Write", "Hard Write"}:
             errors.append(f"{action} uses disallowed default family {family}")
@@ -244,6 +409,14 @@ def _catalog_validation_errors(catalog_text: str) -> list[str]:
         for claim, pattern in FORBIDDEN_OVERCLAIM_PATTERNS:
             if pattern.search(segment):
                 errors.append(f"forbidden overclaim outside rejection context: {claim}")
+        for claim, pattern in FORBIDDEN_SETUP_TRUST_PATTERNS:
+            if pattern.search(segment):
+                errors.append(f"forbidden setup trust outside rejection context: {claim}")
+        for claim, pattern in FORBIDDEN_AUTHORITY_PROMOTION_PATTERNS:
+            if pattern.search(segment):
+                errors.append(
+                    f"forbidden authority promotion outside rejection context: {claim}"
+                )
     return errors
 
 
@@ -410,6 +583,34 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             _catalog_validation_errors(missing_limitation),
         )
 
+    def test_rejects_placeholder_required_columns_case_insensitively(self) -> None:
+        catalog_text = self.catalog_doc.read_text(encoding="utf-8")
+        missing_owner = catalog_text.replace(
+            "| `enrichment_only_lookup` | Read | AegisOps maintainers and IT Operations, Information Systems Department |",
+            "| `enrichment_only_lookup` | Read | todo owner to wire later |",
+        )
+        missing_receipt = catalog_text.replace(
+            "AegisOps execution receipt with `action_request_id`, `catalog_action`, `family`, `reviewed_template_version`, `correlation_id`, `idempotency_key`, `started_at`, `finished_at`, `status`, and subordinate lookup evidence reference.",
+            "ToDo: add receipt shape after implementation",
+        )
+        missing_limitation = catalog_text.replace(
+            "Read-only enrichment context. No protected target mutation, credential change, ticket mutation, case closure, detector activation, suppression activation, direct source actioning, or marketplace expansion.",
+            "tbd - add explicit limitation text",
+        )
+
+        self.assertIn(
+            "enrichment_only_lookup missing owner",
+            _catalog_validation_errors(missing_owner),
+        )
+        self.assertIn(
+            "enrichment_only_lookup missing receipt shape",
+            _catalog_validation_errors(missing_receipt),
+        )
+        self.assertIn(
+            "enrichment_only_lookup missing explicit limitations",
+            _catalog_validation_errors(missing_limitation),
+        )
+
     def test_rejects_marketplace_and_readiness_overclaim_outside_forbidden_context(
         self,
     ) -> None:
@@ -430,6 +631,11 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             "## 8. Non-Goals",
             "Phase 62.1 claims RC, not just Beta\n## 8. Non-Goals",
         )
+        does_not_marker_text = catalog_text.replace(
+            "## 8. Non-Goals",
+            "Phase 62.1 does not just claim RC readiness; it claims GA readiness\n"
+            "## 8. Non-Goals",
+        )
         wrapped_text = catalog_text.replace(
             "## 8. Non-Goals",
             "Phase 62.1 claims\nRC readiness\n## 8. Non-Goals",
@@ -437,6 +643,7 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
 
         expected = "forbidden overclaim outside rejection context: Phase 62.1 claims RC"
         self.assertIn(expected, _catalog_validation_errors(not_marker_text))
+        self.assertIn(expected, _catalog_validation_errors(does_not_marker_text))
         self.assertIn(expected, _catalog_validation_errors(wrapped_text))
 
     def test_rejects_case_insensitive_readiness_and_later_phase_overclaims(
@@ -465,6 +672,103 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             "forbidden overclaim outside rejection context: Phase 62.1 claims commercial readiness",
             "forbidden overclaim outside rejection context: Phase 62.1 implements Phase 63 evidence expansion",
             "forbidden overclaim outside rejection context: Phase 62.1 implements Phase 66 RC proof",
+        ):
+            self.assertIn(expected, validation_errors)
+
+    def test_rejects_standalone_replacement_claims_outside_rejection_context(
+        self,
+    ) -> None:
+        catalog_text = self.catalog_doc.read_text(encoding="utf-8")
+        overclaim_text = catalog_text.replace(
+            "## 8. Non-Goals",
+            "\n".join(
+                (
+                    "Phase 62.1 is a standalone replacement.",
+                    "Phase 62.1 claims standalone replacement readiness",
+                    "Standalone replacement claims are approved",
+                    "## 8. Non-Goals",
+                )
+            ),
+        )
+        validation_errors = _catalog_validation_errors(overclaim_text)
+
+        self.assertIn(
+            "forbidden overclaim outside rejection context: Phase 62.1 is or claims standalone replacement readiness",
+            validation_errors,
+        )
+        self.assertIn(
+            "forbidden overclaim outside rejection context: standalone replacement claims are approved",
+            validation_errors,
+        )
+
+    def test_rejects_setup_trust_claims_outside_rejection_context(self) -> None:
+        catalog_text = self.catalog_doc.read_text(encoding="utf-8")
+        trust_claim_text = catalog_text.replace(
+            "## 8. Non-Goals",
+            "\n".join(
+                (
+                    "Phase 62.1 treats placeholder Shuffle API keys as valid setup state.",
+                    "Placeholder Shuffle API keys are valid credentials.",
+                    "Sample credentials are accepted.",
+                    "Fake values are valid setup state.",
+                    "TODO values are valid setup state.",
+                    "Unsigned tokens are trusted.",
+                    "Inline secrets are approved.",
+                    "Raw forwarded headers are trusted callback identity.",
+                    "Inferred tenant linkage is valid.",
+                    "## 8. Non-Goals",
+                )
+            ),
+        )
+        validation_errors = _catalog_validation_errors(trust_claim_text)
+
+        for expected in (
+            "forbidden setup trust outside rejection context: placeholder credentials are valid",
+            "forbidden setup trust outside rejection context: sample credentials are valid",
+            "forbidden setup trust outside rejection context: fake values are valid",
+            "forbidden setup trust outside rejection context: TODO values are valid",
+            "forbidden setup trust outside rejection context: unsigned tokens are valid",
+            "forbidden setup trust outside rejection context: inline secrets are valid",
+            "forbidden setup trust outside rejection context: raw forwarded headers are trusted",
+            "forbidden setup trust outside rejection context: inferred linkage is valid",
+        ):
+            self.assertIn(expected, validation_errors)
+
+    def test_rejects_authority_promotion_claims_outside_rejection_context(self) -> None:
+        catalog_text = self.catalog_doc.read_text(encoding="utf-8")
+        authority_claim_text = catalog_text.replace(
+            "## 8. Non-Goals",
+            "\n".join(
+                (
+                    "Direct ad-hoc Shuffle launch is approved.",
+                    "Shuffle workflow success is AegisOps reconciliation truth.",
+                    "Shuffle callback payload is AegisOps execution receipt truth.",
+                    "Shuffle workflow status closes AegisOps cases.",
+                    "Ticket status is AegisOps case truth.",
+                    "Ticket close is AegisOps reconciliation truth.",
+                    "UI cache is AegisOps action policy truth.",
+                    "AI output approves automation.",
+                    "Source-native status reconciles automation.",
+                    "Verifier output gates production readiness.",
+                    "Issue-lint output gates production readiness.",
+                    "## 8. Non-Goals",
+                )
+            ),
+        )
+        validation_errors = _catalog_validation_errors(authority_claim_text)
+
+        for expected in (
+            "forbidden authority promotion outside rejection context: direct ad-hoc Shuffle launch is approved",
+            "forbidden authority promotion outside rejection context: Shuffle workflow success is AegisOps reconciliation truth",
+            "forbidden authority promotion outside rejection context: Shuffle callback payload is AegisOps execution receipt truth",
+            "forbidden authority promotion outside rejection context: Shuffle workflow status closes AegisOps cases",
+            "forbidden authority promotion outside rejection context: ticket status is AegisOps case truth",
+            "forbidden authority promotion outside rejection context: ticket close is AegisOps reconciliation truth",
+            "forbidden authority promotion outside rejection context: UI cache is AegisOps action policy truth",
+            "forbidden authority promotion outside rejection context: AI output approves automation",
+            "forbidden authority promotion outside rejection context: source-native status reconciles automation",
+            "forbidden authority promotion outside rejection context: verifier output gates production readiness",
+            "forbidden authority promotion outside rejection context: issue-lint output gates production readiness",
         ):
             self.assertIn(expected, validation_errors)
 
