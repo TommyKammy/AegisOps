@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from collections import Counter
 import pathlib
 import re
 import unittest
-from collections import Counter
 
 
 EXPECTED_CATALOG_COLUMNS = 10
+CATALOG_SECTION_HEADING = "## 3. Approved Default Catalog Entries"
+CATALOG_SECTION_END_HEADING = "## 4. Catalog Boundedness Rules"
 FORBIDDEN_OVERCLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "broad SOAR marketplace coverage is implemented",
@@ -78,17 +80,21 @@ def _doc_path(relative_path: str) -> pathlib.Path:
 
 
 def _catalog_rows(catalog_text: str) -> list[list[str]]:
-    in_table = False
+    in_section = False
+    seen_header = False
     rows: list[list[str]] = []
     for line in catalog_text.splitlines():
+        if line == CATALOG_SECTION_HEADING:
+            in_section = True
+            continue
+        if line == CATALOG_SECTION_END_HEADING:
+            break
+        if not in_section:
+            continue
         if line.startswith("| Catalog action | Family | Owner |"):
-            in_table = True
+            seen_header = True
             continue
-        if not in_table:
-            continue
-        if not line.startswith("|"):
-            if rows:
-                break
+        if not seen_header or not line.startswith("|"):
             continue
         if re.fullmatch(r"\|[ \-:|]+\|", line):
             continue
@@ -101,12 +107,20 @@ def _is_forbidden_claims_heading(line: str) -> bool:
     return bool(re.fullmatch(r"##\s+\d+\.\s+Forbidden Claims", line.strip()))
 
 
+def _is_non_goals_heading(line: str) -> bool:
+    return bool(re.fullmatch(r"##\s+\d+\.\s+Non-Goals", line.strip()))
+
+
 def _is_section_heading(line: str) -> bool:
     return bool(re.fullmatch(r"##\s+\d+\..*", line.strip()))
 
 
-def _is_rejection_context(line: str, in_forbidden_claims: bool) -> bool:
-    if in_forbidden_claims:
+def _is_rejection_context(
+    line: str,
+    in_forbidden_claims: bool,
+    in_non_goals: bool,
+) -> bool:
+    if in_forbidden_claims or in_non_goals:
         return True
 
     normalized = line.casefold()
@@ -116,15 +130,52 @@ def _is_rejection_context(line: str, in_forbidden_claims: bool) -> bool:
         "fail closed",
         "forbidden",
         "must be rejected",
-        "no ",
-        "not ",
         "non-goal",
         "out of scope",
         "rejected",
         "remain blocked",
-        "without ",
     )
     return any(marker in normalized for marker in rejection_markers)
+
+
+def _non_rejection_segments(catalog_text: str) -> list[str]:
+    in_forbidden_claims = False
+    in_non_goals = False
+    segments: list[str] = []
+    current_lines: list[str] = []
+
+    def flush() -> None:
+        if current_lines:
+            segments.append(" ".join(current_lines))
+            current_lines.clear()
+
+    for line in catalog_text.splitlines():
+        if _is_forbidden_claims_heading(line):
+            flush()
+            in_forbidden_claims = True
+            in_non_goals = False
+            continue
+        if _is_non_goals_heading(line):
+            flush()
+            in_forbidden_claims = False
+            in_non_goals = True
+            continue
+        if (in_forbidden_claims or in_non_goals) and _is_section_heading(line):
+            in_forbidden_claims = False
+            in_non_goals = False
+
+        if _is_rejection_context(line, in_forbidden_claims, in_non_goals):
+            flush()
+            continue
+
+        stripped = line.strip()
+        if not stripped:
+            flush()
+            continue
+        current_lines.append(stripped)
+
+    flush()
+    return segments
 
 
 def _catalog_validation_errors(catalog_text: str) -> list[str]:
@@ -189,19 +240,9 @@ def _catalog_validation_errors(catalog_text: str) -> list[str]:
     for family in required_families - seen_families:
         errors.append(f"missing required family {family}")
 
-    in_forbidden_claims = False
-    for line in catalog_text.splitlines():
-        if _is_forbidden_claims_heading(line):
-            in_forbidden_claims = True
-            continue
-        if in_forbidden_claims and _is_section_heading(line):
-            in_forbidden_claims = False
-
-        if _is_rejection_context(line, in_forbidden_claims):
-            continue
-
+    for segment in _non_rejection_segments(catalog_text):
         for claim, pattern in FORBIDDEN_OVERCLAIM_PATTERNS:
-            if pattern.search(line):
+            if pattern.search(segment):
                 errors.append(f"forbidden overclaim outside rejection context: {claim}")
     return errors
 
@@ -254,6 +295,33 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
         self.assertEqual("Notify", by_action["operator_notification"][1])
         self.assertEqual("Notify", by_action["manual_escalation_request"][1])
         self.assertEqual("Soft Write", by_action["create_tracking_ticket"][1])
+
+    def test_catalog_parser_uses_approved_section_and_all_section_rows(self) -> None:
+        catalog_text = self.catalog_doc.read_text(encoding="utf-8")
+        fake_table = "\n".join(
+            (
+                "| Catalog action | Family | Owner | Substrate mapping need | Required approval posture | Expected receipt shape | Reconciliation expectation | Allowed roles | Idempotency posture | Explicit limitations |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| `fake_pre_section_action` | Hard Write | Fake owner | Fake mapping | Fake approval | Fake receipt | Fake reconciliation | Fake role | Fake idempotency | Fake limitation |",
+                "",
+            )
+        )
+        prefixed_text = catalog_text.replace(CATALOG_SECTION_HEADING, fake_table + CATALOG_SECTION_HEADING)
+        operator_notification_row = next(
+            line
+            for line in catalog_text.splitlines()
+            if line.startswith("| `operator_notification` |")
+        )
+        extra_section_row = catalog_text.replace(
+            CATALOG_SECTION_END_HEADING,
+            f"{operator_notification_row}\n\n{CATALOG_SECTION_END_HEADING}",
+        )
+
+        self.assertEqual(4, len(_catalog_rows(prefixed_text)))
+        self.assertIn(
+            "operator_notification duplicate catalog action",
+            _catalog_validation_errors(extra_section_row),
+        )
 
     def test_catalog_rows_have_required_contract_fields(self) -> None:
         catalog_text = self.catalog_doc.read_text(encoding="utf-8")
@@ -355,6 +423,21 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             "forbidden overclaim outside rejection context: broad SOAR marketplace coverage is implemented",
             _catalog_validation_errors(overclaim_text),
         )
+
+    def test_rejects_overclaims_with_not_marker_and_line_wrapping(self) -> None:
+        catalog_text = self.catalog_doc.read_text(encoding="utf-8")
+        not_marker_text = catalog_text.replace(
+            "## 8. Non-Goals",
+            "Phase 62.1 claims RC, not just Beta\n## 8. Non-Goals",
+        )
+        wrapped_text = catalog_text.replace(
+            "## 8. Non-Goals",
+            "Phase 62.1 claims\nRC readiness\n## 8. Non-Goals",
+        )
+
+        expected = "forbidden overclaim outside rejection context: Phase 62.1 claims RC"
+        self.assertIn(expected, _catalog_validation_errors(not_marker_text))
+        self.assertIn(expected, _catalog_validation_errors(wrapped_text))
 
     def test_rejects_case_insensitive_readiness_and_later_phase_overclaims(
         self,

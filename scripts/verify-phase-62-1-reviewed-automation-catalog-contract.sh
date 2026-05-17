@@ -71,10 +71,19 @@ catalog_table="$(
   ' "${catalog_path}"
 )"
 
-if grep -Eq 'Controlled Write|Hard Write' <<<"${catalog_table}"; then
-  echo "Controlled Write or Hard Write appeared in the default Phase 62.1 catalog table" >&2
-  exit 1
-fi
+while IFS= read -r catalog_line; do
+  if [[ ! "${catalog_line}" =~ ^\|[[:space:]]+\` ]]; then
+    continue
+  fi
+  family="$(
+    awk -F'|' '{ gsub(/^[[:space:]]+|[[:space:]]+$/, "", $3); print $3 }' \
+      <<<"${catalog_line}"
+  )"
+  if [[ "${family}" == "Controlled Write" || "${family}" == "Hard Write" ]]; then
+    echo "Disallowed default Phase 62.1 catalog family for row: ${catalog_line}" >&2
+    exit 1
+  fi
+done <<<"${catalog_table}"
 
 require_catalog_row_field() {
   local action="$1"
