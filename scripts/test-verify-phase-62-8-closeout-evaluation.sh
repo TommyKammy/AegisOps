@@ -256,6 +256,13 @@ assert_fails_with \
   "${aegisops_has_entered_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+aegisops_has_become_repo="${workdir}/aegisops-has-become"
+copy_valid_repo "${aegisops_has_become_repo}"
+printf '%s\n' "AegisOps has become GA." >>"${aegisops_has_become_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_has_become_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 production_secret_repo="${workdir}/production-secret"
 copy_valid_repo "${production_secret_repo}"
 printf '%s\n' "Production secrets are valid evidence for Phase 62." >>"${production_secret_repo}/docs/phase-62-closeout-evaluation.md"
@@ -317,6 +324,34 @@ assert_fails_with \
   "${phase62_has_become_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+phase62_hyphen_ready_repo="${workdir}/phase62-hyphen-ready"
+copy_valid_repo "${phase62_hyphen_ready_repo}"
+printf '%s\n' "Phase 62 is RC-ready." >>"${phase62_hyphen_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_hyphen_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_without_prefix_repo="${workdir}/phase62-without-prefix"
+copy_valid_repo "${phase62_without_prefix_repo}"
+printf '%s\n' "Without delay, Phase 62 is commercially ready." >>"${phase62_without_prefix_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_without_prefix_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase66_delivered_repo="${workdir}/phase66-delivered"
+copy_valid_repo "${phase66_delivered_repo}"
+printf '%s\n' "Phase 66 RC proof is delivered." >>"${phase66_delivered_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase66_delivered_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+ticket_source_of_truth_repo="${workdir}/ticket-source-of-truth"
+copy_valid_repo "${ticket_source_of_truth_repo}"
+printf '%s\n' "Ticket state is AegisOps source-of-truth for closure." >>"${ticket_source_of_truth_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ticket_source_of_truth_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
 absolute_path_repo="${workdir}/absolute-path"
 copy_valid_repo "${absolute_path_repo}"
 printf 'Run /%s/example/Dev/codex-supervisor/dist/index.js.\n' "Users" >>"${absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
@@ -350,6 +385,13 @@ copy_valid_repo "${opt_absolute_path_repo}"
 printf 'Run /opt/dev/aegisops/phase-62-closeout.\n' >>"${opt_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${opt_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+file_uri_opt_absolute_path_repo="${workdir}/file-uri-opt-absolute-path"
+copy_valid_repo "${file_uri_opt_absolute_path_repo}"
+printf 'Use file:///opt/dev/aegisops/phase-62-closeout.\n' >>"${file_uri_opt_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${file_uri_opt_absolute_path_repo}" \
   "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
 
 echo "Phase 62 closeout verifier negative tests pass."
