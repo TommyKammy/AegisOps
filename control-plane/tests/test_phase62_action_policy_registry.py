@@ -842,6 +842,45 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 },
                 "production_exclusion_promotes_production_truth",
             ),
+            "PRRT_kwDOR2iDUc6CtAOq_comma_delegates_production_workflow": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and delegates, production workflow."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CtAOq_comma_production_workflow_launch": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production workflow, launch."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CtAOt_sandbox_workflow_production_review": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and launch sandbox workflow and "
+                        "production data review."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6CtAOw_long_padded_production_workflow_launch": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production alpha beta gamma delta "
+                        "epsilon zeta eta theta iota kappa lambda mu nu xi omicron "
+                        "workflow launch."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
         }
 
         for thread_id, (override, expected_error) in cases.items():

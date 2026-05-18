@@ -871,6 +871,14 @@ _SIMULATOR_EXCLUSION_CLAIM_BOUNDARY_TERMS = {
     "therefore",
     "thus",
 }
+_SIMULATOR_CONTEXT_CLAUSE_BOUNDARY_TERMS = {
+    _TERM_BOUNDARY,
+    *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+}
+_SIMULATOR_WORKFLOW_CONTEXT_CLAUSE_BOUNDARY_TERMS = {
+    *_SIMULATOR_CONTEXT_CLAUSE_BOUNDARY_TERMS,
+    *_NEGATION_LIST_BOUNDARY_TERMS,
+}
 _SIMULATOR_CONTEXT_SCAN_WINDOW = _NEGATION_SCAN_WINDOW * 2
 
 PHASE62_SHUFFLE_WORKFLOW_MAPPINGS: Mapping[str, ShuffleWorkflowMapping] = {
@@ -1428,6 +1436,8 @@ def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bo
     if _contains_simulator_contextual_truth_overclaim(terms):
         return True
     for term_group in _SIMULATOR_PRODUCTION_TRUTH_TERMS:
+        if term_group in _SIMULATOR_WORKFLOW_TRUTH_TERMS:
+            continue
         for match in _term_group_matches(terms, term_group):
             if any(
                 _has_recent_negation(terms, index, window=_NEGATION_SCAN_WINDOW)
@@ -1455,13 +1465,8 @@ def _contains_simulator_contextual_truth_overclaim(
     terms: tuple[str, ...],
 ) -> bool:
     return (
-        _contains_simulator_contextual_claim(
+        _contains_simulator_workflow_contextual_claim(
             terms,
-            anchor_terms=_SIMULATOR_WORKFLOW_ACTION_TERMS,
-            required_context_terms=(
-                _SIMULATOR_WORKFLOW_CONTEXT_TERMS,
-                _SIMULATOR_PRODUCTION_CONTEXT_TERMS,
-            ),
         )
         or _contains_simulator_contextual_claim(
             terms,
@@ -1515,6 +1520,66 @@ def _contains_simulator_contextual_claim(
     return False
 
 
+def _contains_simulator_workflow_contextual_claim(
+    terms: tuple[str, ...],
+) -> bool:
+    for start, stop in _simulator_context_spans(
+        terms,
+        boundary_terms=_SIMULATOR_WORKFLOW_CONTEXT_CLAUSE_BOUNDARY_TERMS,
+    ):
+        production_indexes = tuple(
+            index
+            for index in range(start, stop)
+            if terms[index] in _SIMULATOR_PRODUCTION_CONTEXT_TERMS
+        )
+        if not production_indexes:
+            continue
+        workflow_indexes = tuple(
+            index
+            for index in range(start, stop)
+            if terms[index] in _SIMULATOR_WORKFLOW_CONTEXT_TERMS
+        )
+        if not workflow_indexes:
+            continue
+
+        for anchor_index in range(start, stop):
+            if terms[anchor_index] not in _SIMULATOR_WORKFLOW_ACTION_TERMS:
+                continue
+            workflow_index = min(
+                workflow_indexes,
+                key=lambda index: abs(index - anchor_index),
+            )
+            if abs(workflow_index - anchor_index) > _SIMULATOR_CONTEXT_SCAN_WINDOW:
+                continue
+            production_index = min(
+                production_indexes,
+                key=lambda index: abs(index - anchor_index),
+            )
+            match = tuple(sorted({anchor_index, workflow_index, production_index}))
+            if _simulator_contextual_match_is_negated(terms, match):
+                continue
+            return True
+    return False
+
+
+def _simulator_context_spans(
+    terms: tuple[str, ...],
+    *,
+    boundary_terms: set[str],
+) -> tuple[tuple[int, int], ...]:
+    spans: list[tuple[int, int]] = []
+    start = 0
+    for index, term in enumerate(terms):
+        if term not in boundary_terms:
+            continue
+        if start < index:
+            spans.append((start, index))
+        start = index + 1
+    if start < len(terms):
+        spans.append((start, len(terms)))
+    return tuple(spans)
+
+
 def _nearest_simulator_context_index(
     terms: tuple[str, ...],
     *,
@@ -1545,9 +1610,7 @@ def _simulator_context_boundary_between(
     lower = min(anchor_index, context_index)
     upper = max(anchor_index, context_index)
     boundary_terms = {
-        _TERM_BOUNDARY,
-        _TERM_COMMA_BOUNDARY,
-        *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+        *_SIMULATOR_CONTEXT_CLAUSE_BOUNDARY_TERMS,
     }
     return any(
         term in boundary_terms
