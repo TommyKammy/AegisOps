@@ -742,8 +742,25 @@ _SIMULATOR_AD_HOC_EXECUTION_TRUTH_TERMS = (
 _SIMULATOR_READINESS_TRUTH_TERMS = (
     ("ready",),
     ("readied",),
+    ("readying",),
     ("readiness",),
 )
+_SIMULATOR_POST_TERM_CLAIM_DENIAL_TERMS = {
+    "asserted",
+    "claim",
+    "claimed",
+    "included",
+    "part",
+    "used",
+}
+_SIMULATOR_POST_TERM_CLAIM_DENIAL_FILLER_TERMS = {
+    "a",
+    "an",
+    "of",
+    "output",
+    "simulator",
+    "the",
+}
 _SIMULATOR_PRODUCTION_CONTEXT_TERMS = {"production"}
 _SIMULATOR_WORKFLOW_CONTEXT_TERMS = {"workflow", "workflows"}
 _SIMULATOR_WORKFLOW_ACTION_TERMS = {
@@ -1563,7 +1580,32 @@ def _has_local_post_term_negation(
         if term in _NEGATION_TERMS:
             if _is_not_only_phrase(terms, index, stop):
                 continue
-            return True
+            return _post_term_negation_denies_claim(
+                terms,
+                negation_index=index,
+                stop=stop,
+            )
+    return False
+
+
+def _post_term_negation_denies_claim(
+    terms: tuple[str, ...],
+    *,
+    negation_index: int,
+    stop: int,
+) -> bool:
+    if terms[negation_index] != "not":
+        return True
+    for term in terms[negation_index + 1 : stop]:
+        if term in {
+            _TERM_BOUNDARY,
+            _TERM_COMMA_BOUNDARY,
+            *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+        }:
+            return False
+        if term in _SIMULATOR_POST_TERM_CLAIM_DENIAL_FILLER_TERMS:
+            continue
+        return term in _SIMULATOR_POST_TERM_CLAIM_DENIAL_TERMS
     return False
 
 
@@ -1651,39 +1693,44 @@ def _match_falls_within_required_exclusion_span(
     match: tuple[int, ...],
     context_index: int,
 ) -> bool:
-    spans: tuple[tuple[int, int], ...] = ()
-
-    def append_ordered_spans(
-        term_groups: tuple[tuple[str, ...], ...],
-        group_index: int,
-        previous_end: int,
-        span_start: int | None,
-    ) -> None:
-        nonlocal spans
-        if group_index == len(term_groups):
-            if span_start is not None:
-                spans = (*spans, (span_start, previous_end))
-            return
-        term_group = term_groups[group_index]
-        for group_match in _term_group_matches(terms, term_group):
-            if group_match[0] <= previous_end:
-                continue
-            append_ordered_spans(
-                term_groups,
-                group_index + 1,
-                group_match[-1],
-                group_match[0] if span_start is None else span_start,
-            )
-
     required_group_orders = (
         _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS,
         tuple(reversed(_SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS)),
     )
-    for term_groups in required_group_orders:
-        append_ordered_spans(term_groups, 0, context_index, None)
+    for first_group, second_group in required_group_orders:
+        for first_match in _term_group_matches(terms, first_group):
+            if first_match[0] <= context_index:
+                continue
+            if _required_exclusion_group_between_context_and_span_start(
+                terms=terms,
+                context_index=context_index,
+                span_start=first_match[0],
+            ):
+                continue
+            for second_match in _term_group_matches(terms, second_group):
+                if second_match[0] <= first_match[-1]:
+                    continue
+                if not _required_exclusion_matches_are_conjoined(
+                    terms,
+                    first_match=first_match,
+                    second_match=second_match,
+                ):
+                    continue
+                if first_match[0] <= match[0] and match[-1] <= second_match[-1]:
+                    return True
+    return False
+
+
+def _required_exclusion_group_between_context_and_span_start(
+    *,
+    terms: tuple[str, ...],
+    context_index: int,
+    span_start: int,
+) -> bool:
     return any(
-        span_start <= match[0] and match[-1] <= span_end
-        for span_start, span_end in spans
+        context_index < group_match[0] < span_start
+        for term_group in _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS
+        for group_match in _term_group_matches(terms, term_group)
     )
 
 
