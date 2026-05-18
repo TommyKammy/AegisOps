@@ -389,6 +389,20 @@ assert_fails_with \
   "${aegisops_comma_is_ga_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+aegisops_parenthetical_now_ga_repo="${workdir}/aegisops-parenthetical-now-ga"
+copy_valid_repo "${aegisops_parenthetical_now_ga_repo}"
+printf '%s\n' "AegisOps is (now) GA." >>"${aegisops_parenthetical_now_ga_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_parenthetical_now_ga_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_quoted_ga_repo="${workdir}/aegisops-quoted-ga"
+copy_valid_repo "${aegisops_quoted_ga_repo}"
+printf '%s\n' 'AegisOps is "GA".' >>"${aegisops_quoted_ga_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_quoted_ga_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 aegisops_comma_has_entered_repo="${workdir}/aegisops-comma-has-entered"
 copy_valid_repo "${aegisops_comma_has_entered_repo}"
 printf '%s\n' "AegisOps, has entered GA." >>"${aegisops_comma_has_entered_repo}/docs/phase-62-closeout-evaluation.md"
@@ -511,6 +525,18 @@ copy_valid_repo "${phase62_direct_ga_repo}"
 printf '%s\n' "Phase 62 is GA." >>"${phase62_direct_ga_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase62_direct_ga_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_not_ga_ready_repo="${workdir}/phase62-not-ga-ready"
+copy_valid_repo "${phase62_not_ga_ready_repo}"
+printf '%s\n' "Phase 62 is not GA ready." >>"${phase62_not_ga_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_passes "${phase62_not_ga_ready_repo}"
+
+phase62_quoted_ga_ready_repo="${workdir}/phase62-quoted-ga-ready"
+copy_valid_repo "${phase62_quoted_ga_ready_repo}"
+printf '%s\n' "Phase 62 is 'GA' ready." >>"${phase62_quoted_ga_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_quoted_ga_ready_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 phase62_can_be_ga_ready_repo="${workdir}/phase62-can-be-ga-ready"
@@ -740,6 +766,13 @@ assert_fails_with \
   "${phase63_comma_complete_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+phase63_quoted_complete_repo="${workdir}/phase63-quoted-complete"
+copy_valid_repo "${phase63_quoted_complete_repo}"
+printf '%s\n' 'Phase 63 evidence expansion is "complete".' >>"${phase63_quoted_complete_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase63_quoted_complete_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 phase63_will_ship_repo="${workdir}/phase63-will-ship"
 copy_valid_repo "${phase63_will_ship_repo}"
 printf '%s\n' "Phase 63 evidence expansion will ship." >>"${phase63_will_ship_repo}/docs/phase-62-closeout-evaluation.md"
@@ -836,6 +869,13 @@ copy_valid_repo "${ui_cache_approved_repo}"
 printf '%s\n' "UI cache approved actions." >>"${ui_cache_approved_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${ui_cache_approved_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ui_cache_quoted_approves_repo="${workdir}/ui-cache-quoted-approves"
+copy_valid_repo "${ui_cache_quoted_approves_repo}"
+printf '%s\n' 'UI cache "approves" actions.' >>"${ui_cache_quoted_approves_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ui_cache_quoted_approves_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
 
 ui_cache_comma_approved_repo="${workdir}/ui-cache-comma-approved"

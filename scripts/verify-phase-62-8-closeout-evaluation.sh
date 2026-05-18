@@ -327,6 +327,11 @@ if claim_scan_text "${absolute_doc_path}" | awk -v allowed_non_claim_line="${all
       next
     }
     gsub(/,/, " ", line)
+    gsub(/[(){}"]/, " ", line)
+    gsub(/\047/, " ", line)
+    if (line ~ /(^|[^[:alnum:]_])phase[- ]62([^.]*[[:space:]])?(is|are|was|were|be|been|becomes|became|has been|have been|had been)[[:space:]]+not([[:space:]]+yet)?([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|production|commercial|commercially|commercial readiness|commercial replacement|self-service commercial)([^.]*[[:space:]])?(ready|readiness|complete|accepted|verified|proven)?([^[:alnum:]_]|$)/) {
+      next
+    }
     positive_assertion = line ~ /(^|[^[:alnum:]_])phase[- ]62([^.]*[[:space:]])?(is|are|becomes|became|reached|reaches|achieved|achieves|proves|ships|includes|validates|establishes|satisfies|confirms|certifies|has|have|had)([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|production)/ ||
       line ~ /(^|[^[:alnum:]_])phase[- ]62([^.]*[[:space:]])?(can|could|may|might|will|would|should)([^.]*[[:space:]])?(be|reach|reaches|reached|enter|enters|entered|achieve|achieves|achieved|become|becomes|became|ship|ships|shipped)([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|production|commercial|commercially|commercial readiness|commercial replacement|self-service commercial)([^.]*[[:space:]])?(ready|readiness|complete|accepted|verified|proven)?/ ||
       line ~ /(^|[^[:alnum:]_])phase[- ]62([^.]*[[:space:]])?(is|are|was|were|becomes|became|reached|reaches|achieved|achieves|remains|remained|proves|ships|includes|validates|establishes|satisfies|confirms|certifies|has been|have been|had been)([^.]*[[:space:]])?(commercial|commercially|commercial replacement|self-service commercial)([^.]*[[:space:]])?(ready|readiness|complete|accepted|verified|proven)/ ||
