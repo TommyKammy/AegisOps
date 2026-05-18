@@ -13,9 +13,11 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 from aegisops.control_plane.actions.action_policy_registry import (  # noqa: E402
     PHASE62_ACTION_POLICIES,
     PHASE62_MANUAL_FALLBACK_REQUIREMENTS,
+    PHASE62_SIMULATOR_CONTRACTS,
     PHASE62_SHUFFLE_WORKFLOW_MAPPINGS,
     evaluate_phase62_action_policy,
     validate_phase62_manual_fallback_record,
+    validate_phase62_simulator_output,
     validate_phase62_shuffle_workflow_mapping,
 )
 
@@ -23,6 +25,31 @@ from aegisops.control_plane.actions.action_policy_registry import (  # noqa: E40
 class Phase62ActionPolicyRegistryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.now = datetime(2026, 5, 17, 8, 30, tzinfo=timezone.utc)
+
+    def _valid_simulator_output(
+        self,
+        catalog_action: str = "operator_notification",
+    ) -> dict[str, object]:
+        return {
+            "mode": "demo",
+            "catalog_action": catalog_action,
+            "action_request_id": "action-request-phase62-sim-001",
+            "simulation_run_id": "simulation-run-phase62-001",
+            "reviewed_template_version": "operator_notification-v1-reviewed-2026-05-03",
+            "correlation_id": "correlation-phase62-sim-001",
+            "simulated_started_at": "2026-05-17T08:30:00Z",
+            "simulated_finished_at": "2026-05-17T08:30:05Z",
+            "simulated_status": "simulated_success",
+            "demo_test_label": "demo/test evidence only",
+            "production_exclusion": (
+                "Simulator output is excluded from production execution receipt "
+                "and reconciliation truth."
+            ),
+            "authority_posture": "non_authoritative_demo_test_evidence",
+            "live_secret_ref": "not_used",
+            "customer_data_classification": "synthetic_only",
+            "simulated_evidence_ref": "synthetic-demo-evidence-001",
+        }
 
     def test_registry_contains_reviewed_phase62_actions(self) -> None:
         self.assertEqual(
@@ -58,6 +85,853 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     "manual_review",
                 ),
             )
+
+    def test_simulator_contract_covers_reviewed_actions_in_demo_test_mode_only(
+        self,
+    ) -> None:
+        self.assertEqual(
+            set(PHASE62_SIMULATOR_CONTRACTS),
+            set(PHASE62_ACTION_POLICIES),
+        )
+
+        for action, contract in PHASE62_SIMULATOR_CONTRACTS.items():
+            with self.subTest(action=action):
+                self.assertEqual(contract.catalog_action, action)
+                self.assertEqual(contract.allowed_modes, ("demo", "test"))
+                self.assertEqual(
+                    contract.authority_posture,
+                    "non_authoritative_demo_test_evidence",
+                )
+                self.assertEqual(
+                    contract.production_exclusion,
+                    "excluded_from_production_execution_receipt_and_reconciliation_truth",
+                )
+                self.assertIn("demo_test_label", contract.required_output_fields)
+                self.assertIn("production_exclusion", contract.required_output_fields)
+                self.assertIn("authority_posture", contract.required_output_fields)
+
+    def test_simulator_validation_accepts_labeled_demo_test_output(self) -> None:
+        self.assertEqual(
+            validate_phase62_simulator_output(
+                catalog_action="operator_notification",
+                output=self._valid_simulator_output(),
+            ),
+            (),
+        )
+
+        self.assertEqual(
+            validate_phase62_simulator_output(
+                catalog_action="operator_notification",
+                output={**self._valid_simulator_output(), "mode": "test"},
+            ),
+            (),
+        )
+
+        self.assertEqual(
+            validate_phase62_simulator_output(
+                catalog_action="operator_notification",
+                output={
+                    **self._valid_simulator_output(),
+                    "production_exclusion": (
+                        "Simulator output excludes production execution receipt "
+                        "and reconciliation truth."
+                    ),
+                },
+            ),
+            (),
+        )
+
+    def test_simulator_validation_rejects_production_truth_overclaims(self) -> None:
+        cases = {
+            "production_mode": ({"mode": "production"}, "unsupported_mode"),
+            "missing_demo_label": ({"demo_test_label": ""}, "missing_demo_test_label"),
+            "demo_label_production_truth": (
+                {
+                    "demo_test_label": (
+                        "demo/test evidence only and production execution receipt truth"
+                    ),
+                },
+                "demo_test_label_promotes_production_truth",
+            ),
+            "receipt_truth": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is production execution receipt truth."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "reconciliation_truth": (
+                {
+                    "production_exclusion": (
+                        "Simulator state is production reconciliation truth."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "excluded_then_truth": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth. It is production reconciliation truth."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "excluded_preamble_then_truth": (
+                {
+                    "production_exclusion": (
+                        "excluded from production execution receipt truth therefore "
+                        "production reconciliation truth"
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "unrelated_exclusion": (
+                {"production_exclusion": "excluded for audit cleanup"},
+                "missing_production_exclusion",
+            ),
+            "case_closed": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "truth and case closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "ticket_closed": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "truth and ticket closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "production_workflow_delegation": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "truth and delegates production workflow launch."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "authoritative": (
+                {"authority_posture": "authoritative_execution_receipt"},
+                "authority_posture_mismatch",
+            ),
+            "live_secret": (
+                {"live_secret_ref": "shuffle-prod-secret"},
+                "live_secret_ref_forbidden",
+            ),
+            "customer_data": (
+                {"customer_data_classification": "customer_private"},
+                "customer_data_forbidden",
+            ),
+            "direct_execution": (
+                {"simulated_status": "production_execution_success"},
+                "unsupported_simulated_status",
+            ),
+            "catalog_mismatch": (
+                {"catalog_action": "create_tracking_ticket"},
+                "catalog_action_mismatch",
+            ),
+            "unsupported_action": (
+                {"catalog_action": "disable_account"},
+                "unsupported_action",
+            ),
+        }
+
+        for label, (override, expected_error) in cases.items():
+            with self.subTest(label=label):
+                catalog_action = (
+                    "disable_account"
+                    if label == "unsupported_action"
+                    else "operator_notification"
+                )
+                errors = validate_phase62_simulator_output(
+                    catalog_action=catalog_action,
+                    output={**self._valid_simulator_output(), **override},
+                )
+                self.assertIn(expected_error, errors)
+
+    def test_simulator_validation_covers_unresolved_connector_thread_cluster(
+        self,
+    ) -> None:
+        cases = {
+            "PRRT_kwDOR2iDUc6Cr1WG": (
+                {
+                    "demo_test_label": (
+                        "demo test evidence only; production execution receipt truth"
+                    ),
+                },
+                "demo_test_label_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V3": (
+                {"production_exclusion": "excluded for audit cleanup"},
+                "missing_production_exclusion",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V5_case": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "truth and case closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V5_ticket": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "truth and ticket closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V7": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "truth and delegates production workflow launch."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+        }
+
+        for thread_id, (override, expected_error) in cases.items():
+            with self.subTest(thread_id=thread_id):
+                errors = validate_phase62_simulator_output(
+                    catalog_action="operator_notification",
+                    output={**self._valid_simulator_output(), **override},
+                )
+                self.assertIn(expected_error, errors)
+
+        self.assertEqual(
+            validate_phase62_simulator_output(
+                catalog_action="operator_notification",
+                output={
+                    **self._valid_simulator_output(),
+                    "production_exclusion": (
+                        "Simulator output excludes production execution receipt "
+                        "and reconciliation truth."
+                    ),
+                },
+            ),
+            (),
+        )
+
+    def test_simulator_validation_covers_current_head_connector_followups(
+        self,
+    ) -> None:
+        cases = {
+            "PRRT_kwDOR2iDUc6Cr1WG_demo_label_production_truth": (
+                {
+                    "demo_test_label": (
+                        "demo test evidence only; production execution receipt truth"
+                    ),
+                },
+                "demo_test_label_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V5_case_closed": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and case closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V5_ticket_closed": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and ticket closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V7_delegates_production_workflow": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and delegates production workflow launch."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr6vQ_partial_exclusion": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution."
+                    ),
+                },
+                "missing_production_exclusion",
+            ),
+            "PRRT_kwDOR2iDUc6Cr6vS_delegated": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production workflow delegated."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr6vU_direct_ad_hoc": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and uses direct ad hoc execution."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr6vW_not_excluded": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is not excluded from production execution "
+                        "receipt and reconciliation truth."
+                    ),
+                },
+                "missing_production_exclusion",
+            ),
+            "PRRT_kwDOR2iDUc6Cr6vX_authoritative_truth": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and simulator state is authoritative truth."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr838_case_closure": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and case closure."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr838_ticket_closure": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and ticket closure."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr83__production_receipts": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and writes production receipts."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr83__production_reconciliation_state": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and sets production reconciliation state."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr84B_standalone_authority": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and simulator output has authority."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr84E_ready_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and is ready for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CsBlB_contract_default": (
+                {
+                    "production_exclusion": PHASE62_SIMULATOR_CONTRACTS[
+                        "operator_notification"
+                    ].production_exclusion,
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6CsBlE_standalone_authoritative": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and simulator output is authoritative."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CsBlF_delegation_of_production_workflow": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and delegation of production workflow."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CsBlF_delegates_workflow_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and delegates workflow for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CsBlH_launch_workflow_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and launch workflow for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CsBlJ_execution_ad_hoc": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and execution ad hoc."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CseaP_demo_label_non_authoritative": (
+                {"demo_test_label": "demo/test non-authoritative evidence"},
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6CseaS_authoritatively": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and authoritatively confirms."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CseaU_standalone_closure": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and closure."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CseaV_non_authority": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and non-authority evidence."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6CseaW_comma_after_excluded": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded, from production execution "
+                        "receipt and reconciliation truth."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6CseaW_comma_then_truth_claim": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded, this is production execution "
+                        "receipt truth."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cskjz_launching_production_workflow": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and launching production workflow."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cskj0_post_term_negated_launch": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth; production workflow launch is not used."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6Cskj6_non_authoritatively_exclusion": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and non-authoritatively described."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6Cskj6_non_authoritatively_label": (
+                {"demo_test_label": "demo/test non-authoritatively described evidence"},
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6Cskj9_delegating_production_workflow": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and delegating production workflow."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Csn1__production_workflow_launched": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production workflow launched."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Csn1__launched_production_workflow": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and launched production workflow."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Csn1__launched_workflow_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and launched workflow for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_workflow_delegation_with_filler": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and workflow is delegated for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_workflow_launch_with_filler": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and workflow was triggered for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_workflow_start_synonym": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and started production workflow."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_workflow_invoke_synonym": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production workflow invoked."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_case_closure_with_filler": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and the case is now closing."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_ticket_closure_with_filler": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and the ticket is already closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_receipt_generated_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and receipt generated for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_reconciliation_state_set_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and reconciliation state set for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Css0x_production_receipt_generated": (
+                {
+                    "production_exclusion": (
+                        "Simulator output excludes production execution receipt "
+                        "and reconciliation truth and production receipt generated."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Css00_case_closing": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and case closing."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Css04_workflow_delegating_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and workflow delegating for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Css06_production_readied": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production readied."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_negated_workflow_launch_with_filler": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth; workflow was triggered for production "
+                        "is not the simulator claim."
+                    ),
+                },
+                None,
+            ),
+            "root_cause_negated_receipt_generation_with_filler": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth; receipt generated for production "
+                        "is not part of the simulator output."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6Csyef_or_between_required_exclusions": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "or reconciliation truth."
+                    ),
+                },
+                "missing_production_exclusion",
+            ),
+            "PRRT_kwDOR2iDUc6Csyeh_not_only_is_not_negation": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth; production workflow launch not only "
+                        "planned but executed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Csyei_padded_workflow_launch": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth; production alpha beta gamma delta "
+                        "epsilon zeta eta workflow launch."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Csyek_long_required_exclusion": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded after demo labels and sanitized "
+                        "test-mode evidence from production execution receipt and "
+                        "reconciliation truth."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6Csyem_reversed_required_exclusion": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from reconciliation truth and "
+                        "production execution receipt."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6Cs34O_repeated_receipt_truth": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production execution receipt exists."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cs34R_launch_not_deferred": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production workflow launch not deferred."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cs34R_launch_not_blocked": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production workflow launch not blocked."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cs34S_production_readying": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production readying."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CtAOq_comma_delegates_production_workflow": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and delegates, production workflow."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CtAOq_comma_production_workflow_launch": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production workflow, launch."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CtAOt_sandbox_workflow_production_review": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and launch sandbox workflow and "
+                        "production data review."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6CtAOw_long_padded_production_workflow_launch": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production alpha beta gamma delta "
+                        "epsilon zeta eta theta iota kappa lambda mu nu xi omicron "
+                        "workflow launch."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CtGI6_production_workflow_and_launch": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production workflow and launch "
+                        "are complete."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CtGI8_launch_never_blocked": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production workflow launch "
+                        "never blocked."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CtGI8_launch_without_approval": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production workflow launch "
+                        "without approval."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CtGI9_production_truth_asserted": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production truth is asserted."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+        }
+
+        for thread_id, (override, expected_error) in cases.items():
+            with self.subTest(thread_id=thread_id):
+                errors = validate_phase62_simulator_output(
+                    catalog_action="operator_notification",
+                    output={**self._valid_simulator_output(), **override},
+                )
+                if expected_error is None:
+                    self.assertEqual(errors, ())
+                else:
+                    self.assertIn(expected_error, errors)
 
     def test_manual_fallback_requirements_cover_every_reviewed_action(self) -> None:
         self.assertEqual(

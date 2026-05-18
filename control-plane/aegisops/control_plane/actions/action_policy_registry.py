@@ -6,6 +6,7 @@ from typing import Mapping
 
 
 ManualFallbackValidationErrors = tuple[str, ...]
+SimulatorValidationErrors = tuple[str, ...]
 
 _ROLE_ALIASES = {
     "read-only-auditor": "read_only_auditor",
@@ -69,6 +70,21 @@ class ManualFallbackRequirement:
     approval_bypass: str = "forbidden"
     execution_truth: str = "execution_receipt_required"
     reconciliation_truth: str = "aegisops_reconciliation_required"
+
+
+@dataclass(frozen=True)
+class SimulatorContract:
+    catalog_action: str
+    allowed_modes: tuple[str, ...]
+    reviewed_template_version: str
+    required_output_fields: tuple[str, ...]
+    allowed_statuses: tuple[str, ...]
+    authority_posture: str = "non_authoritative_demo_test_evidence"
+    production_exclusion: str = (
+        "excluded_from_production_execution_receipt_and_reconciliation_truth"
+    )
+    secret_posture: str = "live_secrets_forbidden"
+    data_posture: str = "synthetic_or_sanitized_only"
 
 
 @dataclass(frozen=True)
@@ -620,6 +636,251 @@ _COMMON_SHUFFLE_EXPECTED_OUTPUTS = (
     "execution_finished_at",
 )
 
+_SIMULATOR_OUTPUT_FIELDS = (
+    "mode",
+    "catalog_action",
+    "action_request_id",
+    "simulation_run_id",
+    "reviewed_template_version",
+    "correlation_id",
+    "simulated_started_at",
+    "simulated_finished_at",
+    "simulated_status",
+    "demo_test_label",
+    "production_exclusion",
+    "authority_posture",
+    "live_secret_ref",
+    "customer_data_classification",
+    "simulated_evidence_ref",
+)
+_SIMULATOR_ALLOWED_STATUSES = (
+    "simulated_success",
+    "simulated_failure",
+    "simulated_missing_receipt",
+    "simulated_stale_receipt",
+    "simulated_mismatched_receipt",
+    "simulated_manual_review",
+)
+_SIMULATOR_ALLOWED_DATA_CLASSIFICATIONS = (
+    "synthetic_only",
+    "sanitized_demo_only",
+)
+_SIMULATOR_PRODUCTION_ARTIFACT_TRUTH_TERMS = (
+    ("production", "execution", "receipt", "truth"),
+    ("production", "execution", "receipt"),
+    ("production", "reconciliation", "truth"),
+    ("production", "receipt"),
+    ("production", "reconciliation", "state"),
+    ("execution", "receipt", "truth"),
+    ("reconciliation", "truth"),
+    ("production", "truth"),
+)
+_SIMULATOR_AUTHORITY_TRUTH_TERMS = (
+    ("authority",),
+    ("authoritative",),
+    ("authoritatively",),
+    ("authoritative", "execution"),
+    ("authoritative", "receipt"),
+    ("authoritative", "reconciliation"),
+    ("authoritative", "truth"),
+)
+_SIMULATOR_CLOSURE_TRUTH_TERMS = (
+    ("closure",),
+    ("closed",),
+    ("closing",),
+    ("case", "truth"),
+    ("case", "closure"),
+    ("close", "case"),
+    ("closes", "case"),
+    ("closed", "case"),
+    ("closing", "case"),
+    ("case", "closed"),
+    ("case", "closing"),
+    ("ticket", "truth"),
+    ("ticket", "closure"),
+    ("close", "ticket"),
+    ("closes", "ticket"),
+    ("closed", "ticket"),
+    ("closing", "ticket"),
+    ("ticket", "closed"),
+    ("ticket", "closing"),
+)
+_SIMULATOR_WORKFLOW_TRUTH_TERMS = (
+    ("production", "workflow", "delegation"),
+    ("production", "workflow", "delegate"),
+    ("production", "workflow", "delegated"),
+    ("delegation", "production", "workflow"),
+    ("delegate", "production", "workflow"),
+    ("delegate", "workflow", "production"),
+    ("delegated", "production", "workflow"),
+    ("delegated", "workflow", "production"),
+    ("delegating", "production", "workflow"),
+    ("delegating", "workflow", "production"),
+    ("workflow", "delegation", "production"),
+    ("workflow", "delegate", "production"),
+    ("workflow", "delegated", "production"),
+    ("workflow", "delegating", "production"),
+    ("production", "workflow", "launch"),
+    ("production", "workflow", "launched"),
+    ("production", "workflow", "launching"),
+    ("launch", "production", "workflow"),
+    ("launch", "workflow", "production"),
+    ("launched", "production", "workflow"),
+    ("launched", "workflow", "production"),
+    ("launching", "production", "workflow"),
+    ("launching", "workflow", "production"),
+    ("workflow", "launch", "production"),
+    ("workflow", "launched", "production"),
+    ("workflow", "launching", "production"),
+)
+_SIMULATOR_AD_HOC_EXECUTION_TRUTH_TERMS = (
+    ("direct", "ad", "hoc", "execution"),
+    ("ad", "hoc", "execution"),
+    ("execution", "ad", "hoc"),
+    ("direct", "execution"),
+)
+_SIMULATOR_READINESS_TRUTH_TERMS = (
+    ("ready",),
+    ("readied",),
+    ("readying",),
+    ("readiness",),
+)
+_SIMULATOR_POST_TERM_CLAIM_DENIAL_TERMS = {
+    "asserted",
+    "claim",
+    "claimed",
+    "included",
+    "part",
+    "used",
+}
+_SIMULATOR_POST_TERM_CLAIM_DENIAL_FILLER_TERMS = {
+    "a",
+    "an",
+    "of",
+    "output",
+    "simulator",
+    "the",
+}
+_SIMULATOR_PRODUCTION_CONTEXT_TERMS = {"production"}
+_SIMULATOR_WORKFLOW_CONTEXT_TERMS = {"workflow", "workflows"}
+_SIMULATOR_WORKFLOW_ACTION_TERMS = {
+    "delegate",
+    "delegates",
+    "delegated",
+    "delegating",
+    "delegation",
+    "launch",
+    "launches",
+    "launched",
+    "launching",
+    "start",
+    "starts",
+    "started",
+    "starting",
+    "trigger",
+    "triggers",
+    "triggered",
+    "triggering",
+    "initiate",
+    "initiates",
+    "initiated",
+    "initiating",
+    "invoke",
+    "invokes",
+    "invoked",
+    "invoking",
+    "run",
+    "runs",
+    "ran",
+    "running",
+}
+_SIMULATOR_CLOSURE_CONTEXT_TERMS = {
+    "case",
+    "cases",
+    "ticket",
+    "tickets",
+}
+_SIMULATOR_CLOSURE_ACTION_TERMS = {
+    "close",
+    "closes",
+    "closed",
+    "closing",
+    "closure",
+}
+_SIMULATOR_RECEIPT_CONTEXT_TERMS = {
+    "receipt",
+    "receipts",
+}
+_SIMULATOR_RECONCILIATION_CONTEXT_TERMS = {
+    "reconciliation",
+    "reconciliations",
+}
+_SIMULATOR_STATE_CONTEXT_TERMS = {
+    "state",
+    "states",
+}
+_SIMULATOR_ARTIFACT_ASSERTION_TERMS = {
+    "create",
+    "creates",
+    "created",
+    "creating",
+    "generate",
+    "generates",
+    "generated",
+    "generating",
+    "set",
+    "sets",
+    "setting",
+    "write",
+    "writes",
+    "wrote",
+    "writing",
+}
+_SIMULATOR_PRODUCTION_TRUTH_TERMS = (
+    *_SIMULATOR_PRODUCTION_ARTIFACT_TRUTH_TERMS,
+    *_SIMULATOR_AUTHORITY_TRUTH_TERMS,
+    *_SIMULATOR_CLOSURE_TRUTH_TERMS,
+    *_SIMULATOR_WORKFLOW_TRUTH_TERMS,
+    *_SIMULATOR_AD_HOC_EXECUTION_TRUTH_TERMS,
+    *_SIMULATOR_READINESS_TRUTH_TERMS,
+)
+_SIMULATOR_EXCLUDABLE_PRODUCTION_TRUTH_TERMS = (
+    ("production", "execution", "receipt", "truth"),
+    ("production", "execution", "receipt"),
+    ("production", "reconciliation", "truth"),
+    ("production", "receipt"),
+    ("execution", "receipt", "truth"),
+    ("reconciliation", "truth"),
+    ("production", "truth"),
+)
+_SIMULATOR_EXCLUSION_CONTEXT_TERMS = (
+    "exclude",
+    "excludes",
+    "excluded",
+    "excluding",
+    "exclusion",
+)
+_SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS = (
+    ("production", "execution", "receipt"),
+    ("reconciliation", "truth"),
+)
+_SIMULATOR_EXCLUSION_CLAIM_BOUNDARY_TERMS = {
+    _TERM_BOUNDARY,
+    _TERM_COMMA_BOUNDARY,
+    *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+    "therefore",
+    "thus",
+}
+_SIMULATOR_CONTEXT_CLAUSE_BOUNDARY_TERMS = {
+    _TERM_BOUNDARY,
+    *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+}
+_SIMULATOR_WORKFLOW_CONTEXT_CLAUSE_BOUNDARY_TERMS = {
+    *_SIMULATOR_CONTEXT_CLAUSE_BOUNDARY_TERMS,
+    *_NEGATION_LIST_BOUNDARY_TERMS,
+}
+_SIMULATOR_CONTEXT_SCAN_WINDOW = _NEGATION_SCAN_WINDOW * 2
+
 PHASE62_SHUFFLE_WORKFLOW_MAPPINGS: Mapping[str, ShuffleWorkflowMapping] = {
     "enrichment_only_lookup": ShuffleWorkflowMapping(
         catalog_action="enrichment_only_lookup",
@@ -681,6 +942,17 @@ PHASE62_SHUFFLE_WORKFLOW_MAPPINGS: Mapping[str, ShuffleWorkflowMapping] = {
         ].correlation_fields,
         policy_registry_id="phase62.2:create_tracking_ticket",
     ),
+}
+
+PHASE62_SIMULATOR_CONTRACTS: Mapping[str, SimulatorContract] = {
+    catalog_action: SimulatorContract(
+        catalog_action=catalog_action,
+        allowed_modes=("demo", "test"),
+        reviewed_template_version=mapping.reviewed_template_version,
+        required_output_fields=_SIMULATOR_OUTPUT_FIELDS,
+        allowed_statuses=_SIMULATOR_ALLOWED_STATUSES,
+    )
+    for catalog_action, mapping in PHASE62_SHUFFLE_WORKFLOW_MAPPINGS.items()
 }
 
 _LEGACY_ACTION_TYPE_SHUFFLE_MAPPINGS: Mapping[str, ShuffleWorkflowMapping] = {
@@ -835,6 +1107,116 @@ def validate_phase62_manual_fallback_record(
         errors.append("blocked_reason_missing_failure_category")
 
     return tuple(dict.fromkeys(errors))
+
+
+def validate_phase62_simulator_output(
+    *,
+    catalog_action: str,
+    output: Mapping[str, object],
+) -> SimulatorValidationErrors:
+    """Return fail-closed Phase 62.6 errors for demo/test simulator output."""
+    contract = PHASE62_SIMULATOR_CONTRACTS.get(catalog_action)
+    if contract is None:
+        return ("unsupported_action",)
+
+    errors: list[str] = []
+    for field in contract.required_output_fields:
+        if not _non_blank_string(output.get(field)):
+            errors.append(f"missing_{field}")
+
+    mode = output.get("mode")
+    if _non_blank_string(mode):
+        if mode not in contract.allowed_modes:
+            errors.append("unsupported_mode")
+
+    output_catalog_action = output.get("catalog_action")
+    if _non_blank_string(output_catalog_action):
+        if output_catalog_action != contract.catalog_action:
+            errors.append("catalog_action_mismatch")
+
+    reviewed_template_version = output.get("reviewed_template_version")
+    if _non_blank_string(reviewed_template_version):
+        if reviewed_template_version != contract.reviewed_template_version:
+            errors.append("reviewed_template_version_mismatch")
+
+    simulated_status = output.get("simulated_status")
+    if _non_blank_string(simulated_status):
+        if simulated_status not in contract.allowed_statuses:
+            errors.append("unsupported_simulated_status")
+        if _contains_unnegated_term_group(
+            _text_terms(str(simulated_status)),
+            _SIMULATOR_PRODUCTION_TRUTH_TERMS,
+        ):
+            errors.append("simulated_status_promotes_production_truth")
+
+    demo_test_label = output.get("demo_test_label")
+    if _non_blank_string(demo_test_label):
+        label_terms = _text_terms(str(demo_test_label))
+        if not (
+            {"demo", "test"} & set(label_terms)
+            and "evidence" in label_terms
+            and any(term in {"only", "non", "non_authoritative"} for term in label_terms)
+        ):
+            errors.append("missing_demo_test_label")
+        if _contains_simulator_production_truth_overclaim(label_terms):
+            errors.append("demo_test_label_promotes_production_truth")
+
+    production_exclusion = output.get("production_exclusion")
+    if _non_blank_string(production_exclusion):
+        exclusion_terms = _text_terms(str(production_exclusion))
+        has_unnegated_exclusion_term = any(
+            term in _SIMULATOR_EXCLUSION_CONTEXT_TERMS
+            and not _has_recent_negation(
+                exclusion_terms,
+                index,
+                window=_NEGATION_SCAN_WINDOW,
+            )
+            for index, term in enumerate(exclusion_terms)
+        )
+        has_production_exclusion_context = (
+            has_unnegated_exclusion_term
+            and "production" in exclusion_terms
+            and all(
+                _contains_unnegated_term_group(exclusion_terms, (term_group,))
+                for term_group in _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS
+            )
+            and _required_exclusion_groups_are_conjunctive(exclusion_terms)
+        )
+        if not has_production_exclusion_context:
+            errors.append("missing_production_exclusion")
+        if _contains_simulator_production_truth_overclaim(exclusion_terms):
+            errors.append("production_exclusion_promotes_production_truth")
+
+    authority_posture = output.get("authority_posture")
+    if _non_blank_string(authority_posture):
+        if authority_posture != contract.authority_posture:
+            errors.append("authority_posture_mismatch")
+
+    live_secret_ref = output.get("live_secret_ref")
+    if _non_blank_string(live_secret_ref) and live_secret_ref != "not_used":
+        errors.append("live_secret_ref_forbidden")
+
+    customer_data_classification = output.get("customer_data_classification")
+    if _non_blank_string(customer_data_classification):
+        if customer_data_classification not in _SIMULATOR_ALLOWED_DATA_CLASSIFICATIONS:
+            errors.append("customer_data_forbidden")
+
+    return tuple(dict.fromkeys(errors))
+
+
+def require_phase62_simulator_output(
+    *,
+    catalog_action: str,
+    output: Mapping[str, object],
+) -> None:
+    errors = validate_phase62_simulator_output(
+        catalog_action=catalog_action,
+        output=output,
+    )
+    if errors:
+        raise ValueError(
+            "simulator output violates Phase 62.6 contract: " + ", ".join(errors)
+        )
 
 
 def require_phase62_manual_fallback_record(
@@ -1048,6 +1430,429 @@ def _contains_unnegated_term_group(
         ):
             return True
     return False
+
+
+def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bool:
+    if _contains_simulator_contextual_truth_overclaim(terms):
+        return True
+    for term_group in _SIMULATOR_PRODUCTION_TRUTH_TERMS:
+        if term_group in _SIMULATOR_WORKFLOW_TRUTH_TERMS:
+            continue
+        for match in _term_group_matches(terms, term_group):
+            if any(
+                _has_recent_negation(terms, index, window=_NEGATION_SCAN_WINDOW)
+                for index in match
+            ):
+                continue
+            if _has_local_post_term_negation(terms, match):
+                continue
+            if term_group in {
+                ("authority",),
+                ("authoritative",),
+                ("authoritatively",),
+            } and _has_non_authoritative_prefix(terms, match[0]):
+                continue
+            if (
+                term_group in _SIMULATOR_EXCLUDABLE_PRODUCTION_TRUTH_TERMS
+                and _match_is_required_simulator_exclusion_statement(terms, match)
+            ):
+                continue
+            return True
+    return False
+
+
+def _contains_simulator_contextual_truth_overclaim(
+    terms: tuple[str, ...],
+) -> bool:
+    return (
+        _contains_simulator_workflow_contextual_claim(
+            terms,
+        )
+        or _contains_simulator_contextual_claim(
+            terms,
+            anchor_terms=_SIMULATOR_CLOSURE_ACTION_TERMS,
+            required_context_terms=(_SIMULATOR_CLOSURE_CONTEXT_TERMS,),
+        )
+        or _contains_simulator_contextual_claim(
+            terms,
+            anchor_terms=_SIMULATOR_ARTIFACT_ASSERTION_TERMS,
+            required_context_terms=(
+                _SIMULATOR_RECEIPT_CONTEXT_TERMS,
+                _SIMULATOR_PRODUCTION_CONTEXT_TERMS,
+            ),
+        )
+        or _contains_simulator_contextual_claim(
+            terms,
+            anchor_terms=_SIMULATOR_ARTIFACT_ASSERTION_TERMS,
+            required_context_terms=(
+                _SIMULATOR_RECONCILIATION_CONTEXT_TERMS,
+                _SIMULATOR_STATE_CONTEXT_TERMS,
+                _SIMULATOR_PRODUCTION_CONTEXT_TERMS,
+            ),
+        )
+    )
+
+
+def _contains_simulator_contextual_claim(
+    terms: tuple[str, ...],
+    *,
+    anchor_terms: set[str],
+    required_context_terms: tuple[set[str], ...],
+) -> bool:
+    for anchor_index, term in enumerate(terms):
+        if term not in anchor_terms:
+            continue
+        match_indexes = (anchor_index,)
+        for context_terms in required_context_terms:
+            context_index = _nearest_simulator_context_index(
+                terms,
+                anchor_index=anchor_index,
+                context_terms=context_terms,
+            )
+            if context_index is None:
+                break
+            match_indexes = (*match_indexes, context_index)
+        else:
+            match = tuple(sorted(set(match_indexes)))
+            if _simulator_contextual_match_is_negated(terms, match):
+                continue
+            return True
+    return False
+
+
+def _contains_simulator_workflow_contextual_claim(
+    terms: tuple[str, ...],
+) -> bool:
+    if _contains_simulator_ordered_workflow_claim(terms):
+        return True
+    for start, stop in _simulator_context_spans(
+        terms,
+        boundary_terms=_SIMULATOR_WORKFLOW_CONTEXT_CLAUSE_BOUNDARY_TERMS,
+    ):
+        production_indexes = tuple(
+            index
+            for index in range(start, stop)
+            if terms[index] in _SIMULATOR_PRODUCTION_CONTEXT_TERMS
+        )
+        if not production_indexes:
+            continue
+        workflow_indexes = tuple(
+            index
+            for index in range(start, stop)
+            if terms[index] in _SIMULATOR_WORKFLOW_CONTEXT_TERMS
+        )
+        if not workflow_indexes:
+            continue
+
+        for anchor_index in range(start, stop):
+            if terms[anchor_index] not in _SIMULATOR_WORKFLOW_ACTION_TERMS:
+                continue
+            workflow_index = min(
+                workflow_indexes,
+                key=lambda index: abs(index - anchor_index),
+            )
+            if abs(workflow_index - anchor_index) > _SIMULATOR_CONTEXT_SCAN_WINDOW:
+                continue
+            production_index = min(
+                production_indexes,
+                key=lambda index: abs(index - anchor_index),
+            )
+            match = tuple(sorted({anchor_index, workflow_index, production_index}))
+            if _simulator_contextual_match_is_negated(terms, match):
+                continue
+            return True
+    return False
+
+
+def _contains_simulator_ordered_workflow_claim(terms: tuple[str, ...]) -> bool:
+    for start, stop in _simulator_context_spans(
+        terms,
+        boundary_terms=_SIMULATOR_CONTEXT_CLAUSE_BOUNDARY_TERMS,
+    ):
+        production_indexes = tuple(
+            index
+            for index in range(start, stop)
+            if terms[index] in _SIMULATOR_PRODUCTION_CONTEXT_TERMS
+        )
+        workflow_indexes = tuple(
+            index
+            for index in range(start, stop)
+            if terms[index] in _SIMULATOR_WORKFLOW_CONTEXT_TERMS
+        )
+        action_indexes = tuple(
+            index
+            for index in range(start, stop)
+            if terms[index] in _SIMULATOR_WORKFLOW_ACTION_TERMS
+        )
+        for production_index in production_indexes:
+            for workflow_index in workflow_indexes:
+                if workflow_index <= production_index:
+                    continue
+                for action_index in action_indexes:
+                    if action_index <= workflow_index:
+                        continue
+                    match = (production_index, workflow_index, action_index)
+                    if _simulator_contextual_match_is_negated(terms, match):
+                        continue
+                    return True
+    return False
+
+
+def _simulator_context_spans(
+    terms: tuple[str, ...],
+    *,
+    boundary_terms: set[str],
+) -> tuple[tuple[int, int], ...]:
+    spans: list[tuple[int, int]] = []
+    start = 0
+    for index, term in enumerate(terms):
+        if term not in boundary_terms:
+            continue
+        if start < index:
+            spans.append((start, index))
+        start = index + 1
+    if start < len(terms):
+        spans.append((start, len(terms)))
+    return tuple(spans)
+
+
+def _nearest_simulator_context_index(
+    terms: tuple[str, ...],
+    *,
+    anchor_index: int,
+    context_terms: set[str],
+) -> int | None:
+    start = max(0, anchor_index - _SIMULATOR_CONTEXT_SCAN_WINDOW)
+    stop = min(len(terms), anchor_index + _SIMULATOR_CONTEXT_SCAN_WINDOW + 1)
+    candidates = (
+        index
+        for index in range(start, stop)
+        if terms[index] in context_terms
+        and not _simulator_context_boundary_between(
+            terms,
+            anchor_index=anchor_index,
+            context_index=index,
+        )
+    )
+    return min(candidates, key=lambda index: abs(index - anchor_index), default=None)
+
+
+def _simulator_context_boundary_between(
+    terms: tuple[str, ...],
+    *,
+    anchor_index: int,
+    context_index: int,
+) -> bool:
+    lower = min(anchor_index, context_index)
+    upper = max(anchor_index, context_index)
+    boundary_terms = {
+        *_SIMULATOR_CONTEXT_CLAUSE_BOUNDARY_TERMS,
+    }
+    return any(
+        term in boundary_terms
+        for term in terms[lower + 1 : upper]
+    )
+
+
+def _simulator_contextual_match_is_negated(
+    terms: tuple[str, ...],
+    match: tuple[int, ...],
+) -> bool:
+    return any(
+        _has_recent_negation(terms, index, window=_NEGATION_SCAN_WINDOW)
+        for index in match
+    ) or _has_local_post_term_negation(terms, match)
+
+
+def _has_local_post_term_negation(
+    terms: tuple[str, ...],
+    match: tuple[int, ...],
+) -> bool:
+    start = match[-1] + 1
+    stop = min(len(terms), start + 5)
+    for index in range(start, stop):
+        term = terms[index]
+        if term in {
+            _TERM_BOUNDARY,
+            _TERM_COMMA_BOUNDARY,
+            *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+        }:
+            return False
+        if term in _NEGATION_TERMS:
+            if _is_not_only_phrase(terms, index, stop):
+                continue
+            return _post_term_negation_denies_claim(
+                terms,
+                negation_index=index,
+                stop=stop,
+            )
+    return False
+
+
+def _post_term_negation_denies_claim(
+    terms: tuple[str, ...],
+    *,
+    negation_index: int,
+    stop: int,
+) -> bool:
+    if terms[negation_index] != "not":
+        return False
+    for term in terms[negation_index + 1 : stop]:
+        if term in {
+            _TERM_BOUNDARY,
+            _TERM_COMMA_BOUNDARY,
+            *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+        }:
+            return False
+        if term in _SIMULATOR_POST_TERM_CLAIM_DENIAL_FILLER_TERMS:
+            continue
+        return term in _SIMULATOR_POST_TERM_CLAIM_DENIAL_TERMS
+    return False
+
+
+def _has_non_authoritative_prefix(
+    terms: tuple[str, ...],
+    target_index: int,
+) -> bool:
+    return target_index > 0 and terms[target_index - 1] == "non"
+
+
+def _match_is_required_simulator_exclusion_statement(
+    terms: tuple[str, ...],
+    match: tuple[int, ...],
+) -> bool:
+    if not match:
+        return False
+    target_index = match[0]
+    start = 0
+    for context_index in range(target_index - 1, start - 1, -1):
+        term = terms[context_index]
+        if term == _TERM_COMMA_BOUNDARY:
+            if any(
+                link_term in _SOURCE_AUTHORITY_ASSERTION_LINK_TERMS
+                for link_term in terms[context_index + 1 : target_index]
+            ):
+                return False
+            continue
+        if term in _SIMULATOR_EXCLUSION_CLAIM_BOUNDARY_TERMS:
+            return False
+        if term in _SIMULATOR_EXCLUSION_CONTEXT_TERMS:
+            if any(
+                link_term in _SOURCE_AUTHORITY_ASSERTION_LINK_TERMS
+                for link_term in terms[context_index + 1 : target_index]
+            ):
+                return False
+            return _match_falls_within_required_exclusion_span(
+                terms=terms,
+                match=match,
+                context_index=context_index,
+            )
+    return False
+
+
+def _required_exclusion_groups_are_conjunctive(terms: tuple[str, ...]) -> bool:
+    first_group, second_group = _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS
+    for first_match in _required_exclusion_term_group_matches(terms, first_group):
+        for second_match in _required_exclusion_term_group_matches(terms, second_group):
+            if _required_exclusion_matches_are_conjoined(
+                terms,
+                first_match=first_match,
+                second_match=second_match,
+            ):
+                return True
+    return False
+
+
+def _required_exclusion_matches_are_conjoined(
+    terms: tuple[str, ...],
+    *,
+    first_match: tuple[int, ...],
+    second_match: tuple[int, ...],
+) -> bool:
+    if first_match[0] <= second_match[0]:
+        left_match = first_match
+        right_match = second_match
+    else:
+        left_match = second_match
+        right_match = first_match
+    if left_match[-1] >= right_match[0]:
+        return False
+    between = terms[left_match[-1] + 1 : right_match[0]]
+    if "or" in between:
+        return False
+    if any(
+        term in {_TERM_BOUNDARY, *_NEGATION_CONTRAST_BOUNDARY_TERMS}
+        for term in between
+    ):
+        return False
+    return "and" in between
+
+
+def _match_falls_within_required_exclusion_span(
+    *,
+    terms: tuple[str, ...],
+    match: tuple[int, ...],
+    context_index: int,
+) -> bool:
+    required_group_orders = (
+        _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS,
+        tuple(reversed(_SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS)),
+    )
+    for first_group, second_group in required_group_orders:
+        for first_match in _required_exclusion_term_group_matches(
+            terms,
+            first_group,
+        ):
+            if first_match[0] <= context_index:
+                continue
+            if _required_exclusion_group_between_context_and_span_start(
+                terms=terms,
+                context_index=context_index,
+                span_start=first_match[0],
+            ):
+                continue
+            for second_match in _required_exclusion_term_group_matches(
+                terms,
+                second_group,
+            ):
+                if second_match[0] <= first_match[-1]:
+                    continue
+                if not _required_exclusion_matches_are_conjoined(
+                    terms,
+                    first_match=first_match,
+                    second_match=second_match,
+                ):
+                    continue
+                if first_match[0] <= match[0] and match[-1] <= second_match[-1]:
+                    return True
+    return False
+
+
+def _required_exclusion_group_between_context_and_span_start(
+    *,
+    terms: tuple[str, ...],
+    context_index: int,
+    span_start: int,
+) -> bool:
+    return any(
+        context_index < group_match[0] < span_start
+        for term_group in _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS
+        for group_match in _required_exclusion_term_group_matches(terms, term_group)
+    )
+
+
+def _required_exclusion_term_group_matches(
+    terms: tuple[str, ...],
+    required_terms: tuple[str, ...],
+) -> tuple[tuple[int, ...], ...]:
+    return tuple(
+        match
+        for match in _term_group_matches(terms, required_terms)
+        if not any(
+            term in _NEGATION_LIST_BOUNDARY_TERMS
+            for term in terms[match[0] + 1 : match[-1]]
+        )
+    )
 
 
 def _contains_unnegated_single_term(
