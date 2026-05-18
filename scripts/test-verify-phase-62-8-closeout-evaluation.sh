@@ -89,6 +89,11 @@ copy_valid_repo "${api_path_repo}"
 printf '%s\n' "Endpoint path /api/v1/cases is documented." >>"${api_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_passes "${api_path_repo}"
 
+optional_path_repo="${workdir}/optional-path"
+copy_valid_repo "${optional_path_repo}"
+printf '%s\n' "Endpoint path /optional/features remains documented." >>"${optional_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_passes "${optional_path_repo}"
+
 missing_doc_repo="${workdir}/missing-doc"
 mkdir -p "${missing_doc_repo}/docs"
 cp "${repo_root}/README.md" "${missing_doc_repo}/README.md"
@@ -312,6 +317,27 @@ copy_valid_repo "${aegisops_can_be_repo}"
 printf '%s\n' "AegisOps can be GA ready." >>"${aegisops_can_be_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${aegisops_can_be_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_has_proven_repo="${workdir}/aegisops-has-proven"
+copy_valid_repo "${aegisops_has_proven_repo}"
+printf '%s\n' "AegisOps has proven GA readiness." >>"${aegisops_has_proven_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_has_proven_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_commercially_hyphen_ready_repo="${workdir}/aegisops-commercially-hyphen-ready"
+copy_valid_repo "${aegisops_commercially_hyphen_ready_repo}"
+printf '%s\n' "AegisOps is commercially-ready." >>"${aegisops_commercially_hyphen_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_commercially_hyphen_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_release_candidate_hyphen_ready_repo="${workdir}/aegisops-release-candidate-hyphen-ready"
+copy_valid_repo "${aegisops_release_candidate_hyphen_ready_repo}"
+printf '%s\n' "AegisOps is release-candidate ready." >>"${aegisops_release_candidate_hyphen_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_release_candidate_hyphen_ready_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 production_secret_repo="${workdir}/production-secret"
@@ -607,6 +633,20 @@ copy_valid_repo "${file_uri_opt_absolute_path_repo}"
 printf 'Use file:///opt/dev/aegisops/phase-62-closeout.\n' >>"${file_uri_opt_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${file_uri_opt_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+html_home_absolute_path_repo="${workdir}/html-home-absolute-path"
+copy_valid_repo "${html_home_absolute_path_repo}"
+printf '<a href="/%s/dev/aegisops">artifact</a>\n' "${users_segment}" >>"${html_home_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${html_home_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+html_file_uri_opt_absolute_path_repo="${workdir}/html-file-uri-opt-absolute-path"
+copy_valid_repo "${html_file_uri_opt_absolute_path_repo}"
+printf '<a href="file:///opt/dev/aegisops/phase-62-closeout">artifact</a>\n' >>"${html_file_uri_opt_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${html_file_uri_opt_absolute_path_repo}" \
   "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
 
 file_uri_etc_absolute_path_repo="${workdir}/file-uri-etc-absolute-path"
