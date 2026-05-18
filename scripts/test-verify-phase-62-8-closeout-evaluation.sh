@@ -97,6 +97,14 @@ assert_fails_with \
   "${missing_child_repo}" \
   "Missing required Phase 62 closeout term in docs/phase-62-closeout-evaluation.md: | #1322 | Phase 62.8 Phase 62 closeout evaluation | Open until this document and focused closeout verifier land. |"
 
+missing_child_row_repo="${workdir}/missing-child-row"
+copy_valid_repo "${missing_child_row_repo}"
+remove_doc_text "${missing_child_row_repo}" \
+  "| #1315 | Phase 62.1 reviewed automation catalog contract | Closed. \`docs/phase-62-reviewed-automation-catalog-contract.md\`, validation notes, focused verifier, and backend contract tests prove the bounded default Read, Notify, and Soft Write catalog without direct Shuffle launch, marketplace expansion, or write-authority overclaim. |"
+assert_fails_with \
+  "${missing_child_row_repo}" \
+  "Missing required Phase 62 closeout term in docs/phase-62-closeout-evaluation.md: | #1315 | Phase 62.1 reviewed automation catalog contract | Closed."
+
 missing_issue_lint_repo="${workdir}/missing-issue-lint"
 copy_valid_repo "${missing_issue_lint_repo}"
 perl -0pi -e 's/- `node <codex-supervisor-root>\/dist\/index\.js issue-lint 1322 --config <supervisor-config-path>`.*\n//m' \
@@ -104,6 +112,14 @@ perl -0pi -e 's/- `node <codex-supervisor-root>\/dist\/index\.js issue-lint 1322
 assert_fails_with \
   "${missing_issue_lint_repo}" \
   'Missing required Phase 62 closeout term in docs/phase-62-closeout-evaluation.md: `node <codex-supervisor-root>/dist/index.js issue-lint 1322 --config <supervisor-config-path>`'
+
+missing_issue_lint_summary_repo="${workdir}/missing-issue-lint-summary"
+copy_valid_repo "${missing_issue_lint_summary_repo}"
+remove_doc_text "${missing_issue_lint_summary_repo}" \
+  'Each command should report `execution_ready=yes`, `missing_required=none`, `metadata_errors=none`, and no blocking high-risk ambiguity before Phase 62 is considered fully closed.'
+assert_fails_with \
+  "${missing_issue_lint_summary_repo}" \
+  'Missing required Phase 62 closeout term in docs/phase-62-closeout-evaluation.md: Each command should report `execution_ready=yes`, `missing_required=none`, `metadata_errors=none`'
 
 missing_authority_repo="${workdir}/missing-authority"
 copy_valid_repo "${missing_authority_repo}"
@@ -163,12 +179,26 @@ assert_fails_with \
   "${marketplace_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: broad soar marketplace is complete"
 
+marketplace_sentence_repo="${workdir}/marketplace-sentence"
+copy_valid_repo "${marketplace_sentence_repo}"
+printf '%s\n' "Broad SOAR marketplace coverage is available in this release." >>"${marketplace_sentence_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${marketplace_sentence_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: broad SOAR marketplace overclaim"
+
 phase63_repo="${workdir}/phase63"
 copy_valid_repo "${phase63_repo}"
 printf '%s\n' "Phase 63 evidence expansion is implemented." >>"${phase63_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase63_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: phase 63 evidence expansion is implemented"
+
+phase63_available_repo="${workdir}/phase63-available"
+copy_valid_repo "${phase63_available_repo}"
+printf '%s\n' "Phase 63 evidence expansion is available now." >>"${phase63_available_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase63_available_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 phase66_repo="${workdir}/phase66"
 copy_valid_repo "${phase66_repo}"
@@ -205,6 +235,13 @@ assert_fails_with \
   "${production_secret_used_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: production-secret overclaim"
 
+production_secret_acceptable_repo="${workdir}/production-secret-acceptable"
+copy_valid_repo "${production_secret_acceptable_repo}"
+printf '%s\n' "Production secret material is acceptable for closeout evidence." >>"${production_secret_acceptable_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${production_secret_acceptable_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: production-secret overclaim"
+
 production_secret_negative_context_repo="${workdir}/production-secret-negative-context"
 copy_valid_repo "${production_secret_negative_context_repo}"
 printf '%s\n' "Production secrets are not yet allowed." >>"${production_secret_negative_context_repo}/docs/phase-62-closeout-evaluation.md"
@@ -222,6 +259,13 @@ copy_valid_repo "${phase62_readiness_direct_repo}"
 printf '%s\n' "Phase 62 is commercially ready." >>"${phase62_readiness_direct_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase62_readiness_direct_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_readiness_colon_repo="${workdir}/phase62-readiness-colon"
+copy_valid_repo "${phase62_readiness_colon_repo}"
+printf '%s\n' "This does not change our status: Phase 62 is GA ready." >>"${phase62_readiness_colon_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_readiness_colon_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 absolute_path_repo="${workdir}/absolute-path"
@@ -250,6 +294,13 @@ copy_valid_repo "${volume_absolute_path_repo}"
 printf 'Run /Volumes/work/aegisops/phase-62-closeout.\n' >>"${volume_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${volume_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+opt_absolute_path_repo="${workdir}/opt-absolute-path"
+copy_valid_repo "${opt_absolute_path_repo}"
+printf 'Run /opt/dev/aegisops/phase-62-closeout.\n' >>"${opt_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${opt_absolute_path_repo}" \
   "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
 
 echo "Phase 62 closeout verifier negative tests pass."
