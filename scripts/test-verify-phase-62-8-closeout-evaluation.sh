@@ -74,6 +74,11 @@ printf '%s\n' \
   >>"${url_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_passes "${url_path_repo}"
 
+root_relative_link_repo="${workdir}/root-relative-link"
+copy_valid_repo "${root_relative_link_repo}"
+printf '%s\n' "[Reference](/docs/phase-62-closeout-evaluation)" >>"${root_relative_link_repo}/docs/phase-62-closeout-evaluation.md"
+assert_passes "${root_relative_link_repo}"
+
 missing_doc_repo="${workdir}/missing-doc"
 mkdir -p "${missing_doc_repo}/docs"
 cp "${repo_root}/README.md" "${missing_doc_repo}/README.md"
@@ -338,6 +343,41 @@ assert_fails_with \
   "${phase62_without_prefix_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+phase62_without_any_prefix_repo="${workdir}/phase62-without-any-prefix"
+copy_valid_repo "${phase62_without_any_prefix_repo}"
+printf '%s\n' "Without any hesitation, Phase 62 is GA ready." >>"${phase62_without_any_prefix_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_without_any_prefix_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_markdown_ready_repo="${workdir}/phase62-markdown-ready"
+copy_valid_repo "${phase62_markdown_ready_repo}"
+printf '%s\n' "Phase 62 is **GA** ready." >>"${phase62_markdown_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_markdown_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_wrapped_ready_repo="${workdir}/phase62-wrapped-ready"
+copy_valid_repo "${phase62_wrapped_ready_repo}"
+printf '%s\n%s\n' "Phase 62 is" "GA ready." >>"${phase62_wrapped_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_wrapped_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_ga_hyphen_ready_repo="${workdir}/phase62-ga-hyphen-ready"
+copy_valid_repo "${phase62_ga_hyphen_ready_repo}"
+printf '%s\n' "Phase 62 is GA-ready." >>"${phase62_ga_hyphen_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_ga_hyphen_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_commercially_hyphen_ready_repo="${workdir}/phase62-commercially-hyphen-ready"
+copy_valid_repo "${phase62_commercially_hyphen_ready_repo}"
+printf '%s\n' "Phase 62 is commercially-ready." >>"${phase62_commercially_hyphen_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_commercially_hyphen_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 phase66_delivered_repo="${workdir}/phase66-delivered"
 copy_valid_repo "${phase66_delivered_repo}"
 printf '%s\n' "Phase 66 RC proof is delivered." >>"${phase66_delivered_repo}/docs/phase-62-closeout-evaluation.md"
@@ -392,6 +432,20 @@ copy_valid_repo "${file_uri_opt_absolute_path_repo}"
 printf 'Use file:///opt/dev/aegisops/phase-62-closeout.\n' >>"${file_uri_opt_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${file_uri_opt_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+windows_tmp_absolute_path_repo="${workdir}/windows-tmp-absolute-path"
+copy_valid_repo "${windows_tmp_absolute_path_repo}"
+printf 'Use C:\\tmp\\aegisops\\phase-62-closeout.\n' >>"${windows_tmp_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${windows_tmp_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+windows_slash_tmp_absolute_path_repo="${workdir}/windows-slash-tmp-absolute-path"
+copy_valid_repo "${windows_slash_tmp_absolute_path_repo}"
+printf 'Use C:/tmp/aegisops/phase-62-closeout.\n' >>"${windows_slash_tmp_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${windows_slash_tmp_absolute_path_repo}" \
   "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
 
 echo "Phase 62 closeout verifier negative tests pass."

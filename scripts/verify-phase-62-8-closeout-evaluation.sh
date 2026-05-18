@@ -98,7 +98,9 @@ done
 path_hygiene_text() {
   local file="$1"
 
-  tr '[:upper:]' '[:lower:]' < "${file}" | sed 's#\\/#/#g'
+  tr '[:upper:]' '[:lower:]' < "${file}" | \
+    sed 's#\\/#/#g' | \
+    sed -E 's|\]\(/[[:alnum:]_.~/#-]+\)|](root-relative-link)|g'
 }
 
 absolute_path_boundary='(^|[[:space:](){}<>;,!?`"'\''"])'
@@ -113,6 +115,8 @@ temporary_path_pattern="/""tmp/"
 private_temporary_path_pattern="/""private/tmp/"
 windows_backslash_home_pattern='[a-z]:\\+users\\+'
 windows_slash_home_pattern='[a-z]:/'"users"'/'
+generic_windows_backslash_path_pattern='[a-z]:\\+[^[:space:]]*'
+generic_windows_slash_path_pattern='[a-z]:/[^[:space:]]*'
 windows_subsystem_home_pattern="/""mnt/"'[a-z]/'"users/"
 unix_local_path_pattern="(${macos_home_pattern}|${linux_home_pattern}|${root_home_pattern}|${macos_volume_pattern}|${macos_var_folders_pattern}|${macos_private_var_folders_pattern}|${temporary_path_pattern}|${private_temporary_path_pattern}|${windows_subsystem_home_pattern})"
 local_path_pattern="(${unix_local_path_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})"
@@ -123,12 +127,15 @@ file_uri_generic_absolute_path_pattern="file:(//localhost)?/*/[[:alnum:]_.-]+/[^
 absolute_path_pattern="(${absolute_path_boundary}${local_path_with_tail}|${file_uri_local_path_pattern})"
 assignment_path_boundary='(^|[[:space:](){}<>;,!`"'\''"])'
 assignment_prefixed_absolute_path_pattern="${assignment_path_boundary}[^[:space:]/:=?&]+[:=]${local_path_with_tail}"
+generic_windows_absolute_path_pattern="${assignment_path_boundary}(${generic_windows_backslash_path_pattern}|${generic_windows_slash_path_pattern})"
 if path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${absolute_path_pattern}" || \
    path_hygiene_text "${readme_path}" | grep -Eq -- "${absolute_path_pattern}" || \
    path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${generic_unix_absolute_path_pattern}" || \
    path_hygiene_text "${readme_path}" | grep -Eq -- "${generic_unix_absolute_path_pattern}" || \
    path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${file_uri_generic_absolute_path_pattern}" || \
    path_hygiene_text "${readme_path}" | grep -Eq -- "${file_uri_generic_absolute_path_pattern}" || \
+   path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${generic_windows_absolute_path_pattern}" || \
+   path_hygiene_text "${readme_path}" | grep -Eq -- "${generic_windows_absolute_path_pattern}" || \
    path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${assignment_prefixed_absolute_path_pattern}" || \
    path_hygiene_text "${readme_path}" | grep -Eq -- "${assignment_prefixed_absolute_path_pattern}"; then
   echo "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected" >&2
@@ -185,6 +192,20 @@ forbidden_claim_text() {
     grep -Fxv -- "${required_rejection_line_lower}"
 }
 
+claim_scan_text() {
+  local file="$1"
+
+  tr '[:upper:]' '[:lower:]' < "${file}" | \
+    sed 's/[*_`]//g' | \
+    awk '{
+      print
+      if (previous != "" && previous !~ /[.:;!?|]$/) {
+        print previous " " $0
+      }
+      previous = $0
+    }'
+}
+
 for forbidden in "${forbidden_claims[@]}"; do
   if forbidden_claim_text | grep -Fq -e "${forbidden}"; then
     echo "Forbidden Phase 62 closeout evaluation claim: ${forbidden}" >&2
@@ -192,15 +213,21 @@ for forbidden in "${forbidden_claims[@]}"; do
   fi
 done
 
-if awk -v allowed_non_claim_line="${allowed_non_claim_line_lower}" \
+if claim_scan_text "${absolute_doc_path}" | awk -v allowed_non_claim_line="${allowed_non_claim_line_lower}" \
   -v required_rejection_line="${required_rejection_line_lower}" '
   {
     line = tolower($0)
-    if (line == allowed_non_claim_line || line == required_rejection_line) {
+    if (line == allowed_non_claim_line || line == required_rejection_line ||
+        index(line, allowed_non_claim_line) > 0 || index(line, required_rejection_line) > 0) {
+      next
+    }
+    if (line ~ /are context only; they do not replace/ ||
+        line ~ /does not add .*authority/ ||
+        line ~ /it is not broad soar marketplace/) {
       next
     }
     negative_context = line ~ /(must reject|must fail|fail closed|fails validation|invalid|must not|cannot|not satisfy|rejects|rejecting|rejected|not valid|does not|do not|is not|not yet|pre-ga|excluded|redacted|forbidden|blocked|context only|no[[:space:]]|without[[:space:]]+(direct|bypassing|creating|approval|execution|reconciliation))/
-    positive_after_separator = line ~ /:[[:space:]]*(phase 62|aegisops|controlled write|hard write|production|prod|live|broad soar|phase 6[36]|downstream workflow|shuffle workflow|simulator output|ticket state|ui cache|browser state)/
+    positive_after_separator = line ~ /[.:;,][[:space:]]*(phase 62|aegisops|controlled write|hard write|production|prod|live|broad soar|phase 6[36]|downstream workflow|shuffle workflow|simulator output|ticket state|ui cache|browser state)/
     if (negative_context) {
       if (!positive_after_separator) {
         next
@@ -242,7 +269,7 @@ if awk -v allowed_non_claim_line="${allowed_non_claim_line_lower}" \
     if (line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(readiness|replacement readiness)([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(accepted|complete|ready|verified|proven)([^[:alnum:]_]|$)/) {
       found_kind = "release-readiness overclaim"
     }
-    if (line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(is|are|becomes|became|reached|reaches|achieved|achieves|proves|ships|includes|validates|establishes|satisfies|confirms|certifies)([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|commercial|replacement|commercial replacement|self-service commercial)-(ready|readiness|complete|accepted|verified|proven)([^[:alnum:]_]|$)/) {
+    if (line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(is|are|becomes|became|reached|reaches|achieved|achieves|proves|ships|includes|validates|establishes|satisfies|confirms|certifies)([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|commercial|commercially|replacement|commercial replacement|self-service commercial)-(ready|readiness|complete|accepted|verified|proven)([^[:alnum:]_]|$)/) {
       found_kind = "release-readiness overclaim"
     }
     if (line ~ /(^|[^[:alnum:]_])production[- ]secret(s)?([^.]*[[:space:]])?(evidence|material|references?|values?)?([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(accepted|acceptable|allowed|valid|usable|trusted|sufficient)([^[:alnum:]_]|$)/) {
@@ -271,7 +298,7 @@ if awk -v allowed_non_claim_line="${allowed_non_claim_line_lower}" \
     }
     exit 1
   }
-' "${absolute_doc_path}"; then
+'; then
   exit 1
 fi
 
