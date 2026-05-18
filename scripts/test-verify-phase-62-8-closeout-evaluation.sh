@@ -396,6 +396,20 @@ assert_fails_with \
   "${aegisops_comma_has_entered_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+aegisops_can_now_be_ga_repo="${workdir}/aegisops-can-now-be-ga"
+copy_valid_repo "${aegisops_can_now_be_ga_repo}"
+printf '%s\n' "AegisOps can now be GA." >>"${aegisops_can_now_be_ga_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_can_now_be_ga_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_may_already_be_rc_repo="${workdir}/aegisops-may-already-be-rc"
+copy_valid_repo "${aegisops_may_already_be_rc_repo}"
+printf '%s\n' "AegisOps may already be RC." >>"${aegisops_may_already_be_rc_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_may_already_be_rc_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 aegisops_can_be_repo="${workdir}/aegisops-can-be"
 copy_valid_repo "${aegisops_can_be_repo}"
 printf '%s\n' "AegisOps can be GA ready." >>"${aegisops_can_be_repo}/docs/phase-62-closeout-evaluation.md"
@@ -499,6 +513,20 @@ assert_fails_with \
   "${phase62_direct_ga_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+phase62_can_be_ga_ready_repo="${workdir}/phase62-can-be-ga-ready"
+copy_valid_repo "${phase62_can_be_ga_ready_repo}"
+printf '%s\n' "Phase 62 can be GA ready." >>"${phase62_can_be_ga_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_can_be_ga_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_will_achieve_commercial_readiness_repo="${workdir}/phase62-will-achieve-commercial-readiness"
+copy_valid_repo "${phase62_will_achieve_commercial_readiness_repo}"
+printf '%s\n' "Phase 62 will achieve commercial readiness." >>"${phase62_will_achieve_commercial_readiness_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_will_achieve_commercial_readiness_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 phase62_reached_ga_repo="${workdir}/phase62-reached-ga"
 copy_valid_repo "${phase62_reached_ga_repo}"
 printf '%s\n' "Phase 62 reached GA." >>"${phase62_reached_ga_repo}/docs/phase-62-closeout-evaluation.md"
@@ -570,6 +598,27 @@ copy_valid_repo "${phase62_has_become_repo}"
 printf '%s\n' "Phase 62 has become RC ready." >>"${phase62_has_become_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase62_has_become_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_has_now_become_repo="${workdir}/phase62-has-now-become"
+copy_valid_repo "${phase62_has_now_become_repo}"
+printf '%s\n' "Phase 62 has now become GA ready." >>"${phase62_has_now_become_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_has_now_become_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_has_officially_become_repo="${workdir}/phase62-has-officially-become"
+copy_valid_repo "${phase62_has_officially_become_repo}"
+printf '%s\n' "Phase 62 has officially become GA ready." >>"${phase62_has_officially_become_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_has_officially_become_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_has_become_direct_status_repo="${workdir}/phase62-has-become-direct-status"
+copy_valid_repo "${phase62_has_become_direct_status_repo}"
+printf '%s\n' "Phase 62 has become GA." >>"${phase62_has_become_direct_status_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_has_become_direct_status_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 phase62_hyphen_ready_repo="${workdir}/phase62-hyphen-ready"
@@ -698,6 +747,13 @@ assert_fails_with \
   "${phase63_will_ship_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+phase63_six_line_wrapped_complete_repo="${workdir}/phase63-six-line-wrapped-complete"
+copy_valid_repo "${phase63_six_line_wrapped_complete_repo}"
+printf '%s\n%s\n%s\n%s\n%s\n%s\n' "Phase" "63" "evidence" "expansion" "is" "complete." >>"${phase63_six_line_wrapped_complete_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase63_six_line_wrapped_complete_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 phase66_may_ship_repo="${workdir}/phase66-may-ship"
 copy_valid_repo "${phase66_may_ship_repo}"
 printf '%s\n' "Phase 66 RC proof may ship." >>"${phase66_may_ship_repo}/docs/phase-62-closeout-evaluation.md"
@@ -794,6 +850,20 @@ copy_valid_repo "${ticket_state_comma_closes_repo}"
 printf '%s\n' "Ticket state, closes AegisOps cases." >>"${ticket_state_comma_closes_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${ticket_state_comma_closes_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ui_cache_can_approve_repo="${workdir}/ui-cache-can-approve"
+copy_valid_repo "${ui_cache_can_approve_repo}"
+printf '%s\n' "UI cache can approve actions." >>"${ui_cache_can_approve_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ui_cache_can_approve_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ticket_status_may_close_repo="${workdir}/ticket-status-may-close"
+copy_valid_repo "${ticket_status_may_close_repo}"
+printf '%s\n' "Ticket status may close cases." >>"${ticket_status_may_close_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ticket_status_may_close_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
 
 absolute_path_repo="${workdir}/absolute-path"
@@ -920,6 +990,20 @@ copy_valid_repo "${percent_encoded_home_path_repo}"
 printf 'https://example.com/download?path=%%2FUsers%%2Fdev%%2Faegisops\n' >>"${percent_encoded_home_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${percent_encoded_home_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+double_percent_encoded_etc_path_repo="${workdir}/double-percent-encoded-etc-path"
+copy_valid_repo "${double_percent_encoded_etc_path_repo}"
+printf 'https://example.com/download?path=%%252Fetc%%252Faegisops\n' >>"${double_percent_encoded_etc_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${double_percent_encoded_etc_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+double_percent_encoded_wsl_path_repo="${workdir}/double-percent-encoded-wsl-path"
+copy_valid_repo "${double_percent_encoded_wsl_path_repo}"
+printf 'https://example.com/download?path=%%252Fmnt%%252Fc%%252Ftmp\n' >>"${double_percent_encoded_wsl_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${double_percent_encoded_wsl_path_repo}" \
   "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
 
 echo "Phase 62 closeout verifier negative tests pass."
