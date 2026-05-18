@@ -101,7 +101,7 @@ path_hygiene_text() {
   tr '[:upper:]' '[:lower:]' < "${file}" | \
     sed 's#\\/#/#g' | \
     sed -E 's#</?[[:alpha:]][^>]*>#html-tag#g' | \
-    sed -E 's|\]\(/[[:alnum:]_.~/#-]+\)|](root-relative-link)|g'
+    perl -pe 's#\]\(/(?!(users|home|root|volumes|var|private|tmp|opt|mnt)(/|\)|[?\#]))[^)\s]+\)#](root-relative-link)#g'
 }
 
 absolute_path_boundary='(^|[[:space:](){}<>;,!?`"'\''"])'
@@ -114,27 +114,28 @@ macos_var_folders_pattern="/""var/folders/"
 macos_private_var_folders_pattern="/""private/var/folders/"
 temporary_path_pattern="/""tmp/"
 private_temporary_path_pattern="/""private/tmp/"
+opt_path_pattern="/""opt/"
 windows_backslash_home_pattern='[a-z]:\\+users\\+'
 windows_slash_home_pattern='[a-z]:/'"users"'/'
 generic_windows_backslash_path_pattern='[a-z]:\\+[^[:space:]]*'
 generic_windows_slash_path_pattern='[a-z]:/[^[:space:]]*'
 windows_subsystem_home_pattern="/""mnt/"'[a-z]/'"users/"
-unix_local_path_pattern="(${macos_home_pattern}|${linux_home_pattern}|${root_home_pattern}|${macos_volume_pattern}|${macos_var_folders_pattern}|${macos_private_var_folders_pattern}|${temporary_path_pattern}|${private_temporary_path_pattern}|${windows_subsystem_home_pattern})"
+unix_local_path_pattern="(${macos_home_pattern}|${linux_home_pattern}|${root_home_pattern}|${macos_volume_pattern}|${macos_var_folders_pattern}|${macos_private_var_folders_pattern}|${temporary_path_pattern}|${private_temporary_path_pattern}|${opt_path_pattern}|${windows_subsystem_home_pattern})"
 local_path_pattern="(${unix_local_path_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})"
 local_path_with_tail="${local_path_pattern}[^[:space:]]*"
 file_uri_local_path_pattern="file:(//localhost)?/*${local_path_with_tail}"
-generic_unix_absolute_path_pattern="${generic_absolute_path_boundary}/[[:alnum:]_.-]+(/[^[:space:]]*)?"
-file_uri_generic_absolute_path_pattern="file:(//localhost)?/*/[[:alnum:]_.-]+(/[^[:space:]]*)?"
+generic_unix_local_absolute_path_pattern="${generic_absolute_path_boundary}/(users|home|root|volumes|var|private|tmp|opt)(/[^[:space:]]*)?"
+file_uri_generic_local_absolute_path_pattern="file:(//localhost)?/*/(users|home|root|volumes|var|private|tmp|opt)(/[^[:space:]]*)?"
 absolute_path_pattern="(${absolute_path_boundary}${local_path_with_tail}|${file_uri_local_path_pattern})"
 assignment_path_boundary='(^|[[:space:](){}<>;,!`"'\''"])'
 assignment_prefixed_absolute_path_pattern="${assignment_path_boundary}[^[:space:]/:=?&]+[:=]${local_path_with_tail}"
 generic_windows_absolute_path_pattern="${assignment_path_boundary}(${generic_windows_backslash_path_pattern}|${generic_windows_slash_path_pattern})"
 if path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${absolute_path_pattern}" || \
    path_hygiene_text "${readme_path}" | grep -Eq -- "${absolute_path_pattern}" || \
-   path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${generic_unix_absolute_path_pattern}" || \
-   path_hygiene_text "${readme_path}" | grep -Eq -- "${generic_unix_absolute_path_pattern}" || \
-   path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${file_uri_generic_absolute_path_pattern}" || \
-   path_hygiene_text "${readme_path}" | grep -Eq -- "${file_uri_generic_absolute_path_pattern}" || \
+   path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${generic_unix_local_absolute_path_pattern}" || \
+   path_hygiene_text "${readme_path}" | grep -Eq -- "${generic_unix_local_absolute_path_pattern}" || \
+   path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${file_uri_generic_local_absolute_path_pattern}" || \
+   path_hygiene_text "${readme_path}" | grep -Eq -- "${file_uri_generic_local_absolute_path_pattern}" || \
    path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${generic_windows_absolute_path_pattern}" || \
    path_hygiene_text "${readme_path}" | grep -Eq -- "${generic_windows_absolute_path_pattern}" || \
    path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${assignment_prefixed_absolute_path_pattern}" || \
@@ -243,6 +244,8 @@ if claim_scan_text "${absolute_doc_path}" | awk -v allowed_non_claim_line="${all
     }
     positive_assertion = line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(is|are|becomes|became|reached|reaches|achieved|achieves|proves|ships|includes|validates|establishes|satisfies|confirms|certifies|has|have|had)([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|commercial|commercially|replacement|commercial replacement|self-service commercial)/ ||
       line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+(is|has|have|had|reached|reaches|achieved|achieves|entered|enters|shipped|ships)[[:space:]]+(beta|rc|ga|release candidate|general availability|generally available|self-service commercial readiness|self-service commercially ready|commercial readiness|commercially ready)/ ||
+      line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+(has|have|had)[[:space:]]+(become|reached|achieved|entered|shipped)[[:space:]]+(beta|rc|ga|release candidate|general availability|generally available|self-service commercial readiness|self-service commercially ready|commercial readiness|commercially ready)/ ||
+      line ~ /(^|[^[:alnum:]_])phase[- ]6[36][[:space:]]+(evidence[- ]expansion|rc[- ]proof)([^.]*[[:space:]])?(is[[:space:]]+)?(fully[[:space:]]+)?(complete|ready|verified|accepted|done|implemented|available|supported|shipped|released|delivered)/ ||
       line ~ /(^|[^[:alnum:]_])(controlled write|hard write)([^.]*[[:space:]])?(is|are|becomes|became|defaults?|default actions?|action defaults?|default family|default families)([^.]*[[:space:]])?(enabled|available|active|supported|complete|implemented)/ ||
       line ~ /(^|[^[:alnum:]_])broad[[:space:]]+soar[[:space:]]+marketplace([^.]*[[:space:]])?(is|are|becomes|became)([^.]*[[:space:]])?(complete|ready|verified|accepted|done|implemented|available|supported|covered|coverage|shipped|released)/ ||
       line ~ /(^|[^[:alnum:]_])(production|prod|live)[- ]secret(s)?([^.]*[[:space:]])?(evidence|material|references?|values?)?([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(accepted|acceptable|allowed|valid|usable|trusted|sufficient)/ ||
@@ -266,7 +269,7 @@ if claim_scan_text "${absolute_doc_path}" | awk -v allowed_non_claim_line="${all
     if (line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+(has|have|had)[[:space:]]+(become|reached|achieved|entered|shipped)[[:space:]]+(beta|rc|ga|release candidate|general availability|generally available|self-service commercial readiness|self-service commercially ready|commercial readiness|commercially ready)([^[:alnum:]_]|$)/) {
       found_kind = "release-readiness overclaim"
     }
-    if (line ~ /(^|[^[:alnum:]_])phase 6[36][[:space:]]+(evidence expansion|rc proof)([^.]*[[:space:]])?(is[[:space:]]+)?(fully[[:space:]]+)?(complete|ready|verified|accepted|done|implemented|available|supported|shipped|released|delivered)([^[:alnum:]_]|$)/) {
+    if (line ~ /(^|[^[:alnum:]_])phase[- ]6[36][[:space:]]+(evidence[- ]expansion|rc[- ]proof)([^.]*[[:space:]])?(is[[:space:]]+)?(fully[[:space:]]+)?(complete|ready|verified|accepted|done|implemented|available|supported|shipped|released|delivered)([^[:alnum:]_]|$)/) {
       found_kind = "release-readiness overclaim"
     }
     if (line ~ /(^|[^[:alnum:]_])broad[[:space:]]+soar[[:space:]]+marketplace([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(complete|ready|verified|accepted|done|implemented|available|supported|covered|coverage|shipped|released)([^[:alnum:]_]|$)/) {

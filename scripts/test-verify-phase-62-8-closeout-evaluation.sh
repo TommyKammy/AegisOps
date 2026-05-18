@@ -79,6 +79,16 @@ copy_valid_repo "${root_relative_link_repo}"
 printf '%s\n' "[Reference](/docs/phase-62-closeout-evaluation)" >>"${root_relative_link_repo}/docs/phase-62-closeout-evaluation.md"
 assert_passes "${root_relative_link_repo}"
 
+root_relative_link_query_repo="${workdir}/root-relative-link-query"
+copy_valid_repo "${root_relative_link_query_repo}"
+printf '%s\n' "[Reference](/docs/phase-62-closeout-evaluation?view=1#evidence)" >>"${root_relative_link_query_repo}/docs/phase-62-closeout-evaluation.md"
+assert_passes "${root_relative_link_query_repo}"
+
+api_path_repo="${workdir}/api-path"
+copy_valid_repo "${api_path_repo}"
+printf '%s\n' "Endpoint path /api/v1/cases is documented." >>"${api_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_passes "${api_path_repo}"
+
 missing_doc_repo="${workdir}/missing-doc"
 mkdir -p "${missing_doc_repo}/docs"
 cp "${repo_root}/README.md" "${missing_doc_repo}/README.md"
@@ -430,6 +440,34 @@ assert_fails_with \
   "${phase66_delivered_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+phase66_negated_delivered_repo="${workdir}/phase66-negated-delivered"
+copy_valid_repo "${phase66_negated_delivered_repo}"
+printf '%s\n' "We do not deny that Phase 66 RC proof is delivered." >>"${phase66_negated_delivered_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase66_negated_delivered_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase66_hyphen_subject_repo="${workdir}/phase66-hyphen-subject"
+copy_valid_repo "${phase66_hyphen_subject_repo}"
+printf '%s\n' "Phase-66 RC proof is delivered." >>"${phase66_hyphen_subject_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase66_hyphen_subject_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase63_hyphen_noun_repo="${workdir}/phase63-hyphen-noun"
+copy_valid_repo "${phase63_hyphen_noun_repo}"
+printf '%s\n' "Phase 63 evidence-expansion is delivered." >>"${phase63_hyphen_noun_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase63_hyphen_noun_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_negated_has_entered_repo="${workdir}/aegisops-negated-has-entered"
+copy_valid_repo "${aegisops_negated_has_entered_repo}"
+printf '%s\n' "We do not deny that AegisOps has entered GA." >>"${aegisops_negated_has_entered_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_negated_has_entered_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 ticket_source_of_truth_repo="${workdir}/ticket-source-of-truth"
 copy_valid_repo "${ticket_source_of_truth_repo}"
 printf '%s\n' "Ticket state is AegisOps source-of-truth for closure." >>"${ticket_source_of_truth_repo}/docs/phase-62-closeout-evaluation.md"
@@ -463,6 +501,13 @@ copy_valid_repo "${tmp_single_segment_absolute_path_repo}"
 printf 'Temporary files may be stored in /tmp during validation.\n' >>"${tmp_single_segment_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${tmp_single_segment_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+tmp_markdown_link_absolute_path_repo="${workdir}/tmp-markdown-link-absolute-path"
+copy_valid_repo "${tmp_markdown_link_absolute_path_repo}"
+printf 'Temporary files may be linked as [tmp](/tmp/aegisops/phase-62-closeout).\n' >>"${tmp_markdown_link_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${tmp_markdown_link_absolute_path_repo}" \
   "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
 
 volume_absolute_path_repo="${workdir}/volume-absolute-path"
