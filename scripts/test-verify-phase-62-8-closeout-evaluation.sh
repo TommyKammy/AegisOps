@@ -333,6 +333,20 @@ assert_fails_with \
   "${commercial_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: aegisops is a commercial replacement for every siem/soar capability"
 
+aegisops_commercial_replacement_ready_repo="${workdir}/aegisops-commercial-replacement-ready"
+copy_valid_repo "${aegisops_commercial_replacement_ready_repo}"
+printf '%s\n' "AegisOps is commercial replacement ready." >>"${aegisops_commercial_replacement_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_commercial_replacement_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_commercial_replacement_status_repo="${workdir}/aegisops-commercial-replacement-status"
+copy_valid_repo "${aegisops_commercial_replacement_status_repo}"
+printf '%s\n' "AegisOps is a commercial replacement." >>"${aegisops_commercial_replacement_status_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_commercial_replacement_status_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 aegisops_has_entered_repo="${workdir}/aegisops-has-entered"
 copy_valid_repo "${aegisops_has_entered_repo}"
 printf '%s\n' "AegisOps has entered GA." >>"${aegisops_has_entered_repo}/docs/phase-62-closeout-evaluation.md"
@@ -529,6 +543,20 @@ assert_fails_with \
   "${production_secret_satisfies_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: production-secret overclaim"
 
+phase62_accepts_live_secrets_repo="${workdir}/phase62-accepts-live-secrets"
+copy_valid_repo "${phase62_accepts_live_secrets_repo}"
+printf '%s\n' "Phase 62 accepts live secrets." >>"${phase62_accepts_live_secrets_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_accepts_live_secrets_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: production-secret overclaim"
+
+phase62_uses_prod_secrets_repo="${workdir}/phase62-uses-prod-secrets"
+copy_valid_repo "${phase62_uses_prod_secrets_repo}"
+printf '%s\n' "Phase 62 uses prod secrets." >>"${phase62_uses_prod_secrets_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_uses_prod_secrets_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: production-secret overclaim"
+
 production_secret_negative_context_repo="${workdir}/production-secret-negative-context"
 copy_valid_repo "${production_secret_negative_context_repo}"
 printf '%s\n' "Production secrets are not yet allowed." >>"${production_secret_negative_context_repo}/docs/phase-62-closeout-evaluation.md"
@@ -608,6 +636,18 @@ printf '%s\n' "Phase 62 is commercially ready." >>"${phase62_readiness_direct_re
 assert_fails_with \
   "${phase62_readiness_direct_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_ready_for_commercial_replacement_repo="${workdir}/phase62-ready-for-commercial-replacement"
+copy_valid_repo "${phase62_ready_for_commercial_replacement_repo}"
+printf '%s\n' "Phase 62 is ready for commercial replacement." >>"${phase62_ready_for_commercial_replacement_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_ready_for_commercial_replacement_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_not_ready_for_commercial_replacement_repo="${workdir}/phase62-not-ready-for-commercial-replacement"
+copy_valid_repo "${phase62_not_ready_for_commercial_replacement_repo}"
+printf '%s\n' "Phase 62 is not ready for commercial replacement." >>"${phase62_not_ready_for_commercial_replacement_repo}/docs/phase-62-closeout-evaluation.md"
+assert_passes "${phase62_not_ready_for_commercial_replacement_repo}"
 
 phase62_readiness_achieved_repo="${workdir}/phase62-readiness-achieved"
 copy_valid_repo "${phase62_readiness_achieved_repo}"
@@ -808,6 +848,20 @@ assert_fails_with \
   "${phase63_has_completed_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+phase63_completed_evidence_expansion_repo="${workdir}/phase63-completed-evidence-expansion"
+copy_valid_repo "${phase63_completed_evidence_expansion_repo}"
+printf '%s\n' "Phase 63 has completed evidence expansion." >>"${phase63_completed_evidence_expansion_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase63_completed_evidence_expansion_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase66_delivered_rc_proof_object_repo="${workdir}/phase66-delivered-rc-proof-object"
+copy_valid_repo "${phase66_delivered_rc_proof_object_repo}"
+printf '%s\n' "Phase 66 has delivered RC proof." >>"${phase66_delivered_rc_proof_object_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase66_delivered_rc_proof_object_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 phase66_got_completed_repo="${workdir}/phase66-got-completed"
 copy_valid_repo "${phase66_got_completed_repo}"
 printf '%s\n' "Phase 66 RC proof got completed." >>"${phase66_got_completed_repo}/docs/phase-62-closeout-evaluation.md"
@@ -916,6 +970,34 @@ assert_fails_with \
   "${browser_cache_authority_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
 
+ai_output_authority_repo="${workdir}/ai-output-authority"
+copy_valid_repo "${ai_output_authority_repo}"
+printf '%s\n' "AI output approves actions." >>"${ai_output_authority_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ai_output_authority_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+source_native_state_authority_repo="${workdir}/source-native-state-authority"
+copy_valid_repo "${source_native_state_authority_repo}"
+printf '%s\n' "Source-native state closes cases." >>"${source_native_state_authority_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${source_native_state_authority_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+verifier_output_authority_repo="${workdir}/verifier-output-authority"
+copy_valid_repo "${verifier_output_authority_repo}"
+printf '%s\n' "Verifier output gates release." >>"${verifier_output_authority_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${verifier_output_authority_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+issue_lint_output_authority_repo="${workdir}/issue-lint-output-authority"
+copy_valid_repo "${issue_lint_output_authority_repo}"
+printf '%s\n' "Issue-lint output validates readiness." >>"${issue_lint_output_authority_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${issue_lint_output_authority_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
 ticket_status_closed_repo="${workdir}/ticket-status-closed"
 copy_valid_repo "${ticket_status_closed_repo}"
 printf '%s\n' "Ticket status closed AegisOps cases." >>"${ticket_status_closed_repo}/docs/phase-62-closeout-evaluation.md"
@@ -935,6 +1017,20 @@ copy_valid_repo "${ui_cache_has_approved_repo}"
 printf '%s\n' "UI cache has approved actions." >>"${ui_cache_has_approved_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${ui_cache_has_approved_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ui_cache_claims_readiness_repo="${workdir}/ui-cache-claims-readiness"
+copy_valid_repo "${ui_cache_claims_readiness_repo}"
+printf '%s\n' "UI cache claims readiness." >>"${ui_cache_claims_readiness_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ui_cache_claims_readiness_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ticket_state_claims_ga_readiness_repo="${workdir}/ticket-state-claims-ga-readiness"
+copy_valid_repo "${ticket_state_claims_ga_readiness_repo}"
+printf '%s\n' "Ticket state claims GA readiness." >>"${ticket_state_claims_ga_readiness_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ticket_state_claims_ga_readiness_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
 
 ticket_status_has_closed_repo="${workdir}/ticket-status-has-closed"
