@@ -403,6 +403,13 @@ assert_fails_with \
   "${aegisops_can_be_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+aegisops_will_reach_ga_repo="${workdir}/aegisops-will-reach-ga"
+copy_valid_repo "${aegisops_will_reach_ga_repo}"
+printf '%s\n' "AegisOps will reach GA." >>"${aegisops_will_reach_ga_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_will_reach_ga_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 aegisops_has_proven_repo="${workdir}/aegisops-has-proven"
 copy_valid_repo "${aegisops_has_proven_repo}"
 printf '%s\n' "AegisOps has proven GA readiness." >>"${aegisops_has_proven_repo}/docs/phase-62-closeout-evaluation.md"
@@ -525,6 +532,13 @@ copy_valid_repo "${phase62_readiness_achieved_repo}"
 printf '%s\n' "Phase 62 readiness is achieved." >>"${phase62_readiness_achieved_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase62_readiness_achieved_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_passive_ga_readiness_repo="${workdir}/phase62-passive-ga-readiness"
+copy_valid_repo "${phase62_passive_ga_readiness_repo}"
+printf '%s\n' "GA readiness is achieved by Phase 62." >>"${phase62_passive_ga_readiness_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_passive_ga_readiness_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 phase62_readiness_colon_repo="${workdir}/phase62-readiness-colon"
@@ -675,6 +689,27 @@ copy_valid_repo "${phase63_comma_complete_repo}"
 printf '%s\n' "Phase 63, evidence expansion is complete." >>"${phase63_comma_complete_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase63_comma_complete_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase63_will_ship_repo="${workdir}/phase63-will-ship"
+copy_valid_repo "${phase63_will_ship_repo}"
+printf '%s\n' "Phase 63 evidence expansion will ship." >>"${phase63_will_ship_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase63_will_ship_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase66_may_ship_repo="${workdir}/phase66-may-ship"
+copy_valid_repo "${phase66_may_ship_repo}"
+printf '%s\n' "Phase 66 RC proof may ship." >>"${phase66_may_ship_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase66_may_ship_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase63_reached_ga_repo="${workdir}/phase63-reached-ga"
+copy_valid_repo "${phase63_reached_ga_repo}"
+printf '%s\n' "Phase 63 evidence expansion reached GA." >>"${phase63_reached_ga_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase63_reached_ga_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 phase66_negated_delivered_repo="${workdir}/phase66-negated-delivered"
@@ -878,6 +913,13 @@ copy_valid_repo "${windows_query_absolute_path_repo}"
 printf 'https://example.com/download?path=C:/tmp/aegisops/phase-62-closeout\n' >>"${windows_query_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${windows_query_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+percent_encoded_home_path_repo="${workdir}/percent-encoded-home-path"
+copy_valid_repo "${percent_encoded_home_path_repo}"
+printf 'https://example.com/download?path=%%2FUsers%%2Fdev%%2Faegisops\n' >>"${percent_encoded_home_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${percent_encoded_home_path_repo}" \
   "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
 
 echo "Phase 62 closeout verifier negative tests pass."
