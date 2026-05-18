@@ -120,6 +120,17 @@ assert_fails_with \
   "${missing_child_row_repo}" \
   "Missing required Phase 62 closeout term in docs/phase-62-closeout-evaluation.md: | #1315 | Phase 62.1 reviewed automation catalog contract | Closed."
 
+child_row_outside_table_repo="${workdir}/child-row-outside-table"
+copy_valid_repo "${child_row_outside_table_repo}"
+remove_doc_text "${child_row_outside_table_repo}" \
+  "| #1316 | Phase 62.2 per-action policy registry | Closed. \`control-plane/aegisops/control_plane/actions/action_policy_registry.py\`, focused policy tests, and service persistence tests prove reviewed requester, reviewer, scope, idempotency, protected-target, and expiry checks for catalog actions. |"
+printf '%s\n' \
+  "| #1316 | Phase 62.2 per-action policy registry | Closed. \`control-plane/aegisops/control_plane/actions/action_policy_registry.py\`, focused policy tests, and service persistence tests prove reviewed requester, reviewer, scope, idempotency, protected-target, and expiry checks for catalog actions. |" \
+  >>"${child_row_outside_table_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${child_row_outside_table_repo}" \
+  "Missing Phase 62 child issue outcome row in Child Issue Outcomes table: | #1316 | Phase 62.2 per-action policy registry | Closed."
+
 missing_issue_lint_repo="${workdir}/missing-issue-lint"
 copy_valid_repo "${missing_issue_lint_repo}"
 perl -0pi -e 's/- `node <codex-supervisor-root>\/dist\/index\.js issue-lint 1322 --config <supervisor-config-path>`.*\n//m' \
@@ -135,6 +146,17 @@ remove_doc_text "${missing_issue_lint_summary_repo}" \
 assert_fails_with \
   "${missing_issue_lint_summary_repo}" \
   'Missing required Phase 62 closeout term in docs/phase-62-closeout-evaluation.md: Each command should report `execution_ready=yes`, `missing_required=none`, `metadata_errors=none`'
+
+issue_lint_summary_outside_section_repo="${workdir}/issue-lint-summary-outside-section"
+copy_valid_repo "${issue_lint_summary_outside_section_repo}"
+remove_doc_text "${issue_lint_summary_outside_section_repo}" \
+  'Each command should report `execution_ready=yes`, `missing_required=none`, `metadata_errors=none`, and no blocking high-risk ambiguity before Phase 62 is considered fully closed.'
+printf '%s\n' \
+  'Each command should report `execution_ready=yes`, `missing_required=none`, `metadata_errors=none`, and no blocking high-risk ambiguity before Phase 62 is considered fully closed.' \
+  >>"${issue_lint_summary_outside_section_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${issue_lint_summary_outside_section_repo}" \
+  'Missing Phase 62 issue-lint evidence line in Issue-lint evidence section: Each command should report `execution_ready=yes`, `missing_required=none`, `metadata_errors=none`'
 
 missing_authority_repo="${workdir}/missing-authority"
 copy_valid_repo "${missing_authority_repo}"
@@ -236,6 +258,13 @@ assert_fails_with \
   "${marketplace_sentence_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: broad SOAR marketplace overclaim"
 
+soar_marketplace_sentence_repo="${workdir}/soar-marketplace-sentence"
+copy_valid_repo "${soar_marketplace_sentence_repo}"
+printf '%s\n' "SOAR marketplace coverage is available." >>"${soar_marketplace_sentence_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${soar_marketplace_sentence_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: broad SOAR marketplace overclaim"
+
 phase63_repo="${workdir}/phase63"
 copy_valid_repo "${phase63_repo}"
 printf '%s\n' "Phase 63 evidence expansion is implemented." >>"${phase63_repo}/docs/phase-62-closeout-evaluation.md"
@@ -278,6 +307,13 @@ assert_fails_with \
   "${aegisops_has_become_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+aegisops_can_be_repo="${workdir}/aegisops-can-be"
+copy_valid_repo "${aegisops_can_be_repo}"
+printf '%s\n' "AegisOps can be GA ready." >>"${aegisops_can_be_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_can_be_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 production_secret_repo="${workdir}/production-secret"
 copy_valid_repo "${production_secret_repo}"
 printf '%s\n' "Production secrets are valid evidence for Phase 62." >>"${production_secret_repo}/docs/phase-62-closeout-evaluation.md"
@@ -313,6 +349,13 @@ assert_fails_with \
   "${live_secret_acceptable_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: production-secret overclaim"
 
+production_secret_satisfies_repo="${workdir}/production-secret-satisfies"
+copy_valid_repo "${production_secret_satisfies_repo}"
+printf '%s\n' "Production-secret evidence satisfies Phase 62 closeout evidence." >>"${production_secret_satisfies_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${production_secret_satisfies_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: production-secret overclaim"
+
 production_secret_negative_context_repo="${workdir}/production-secret-negative-context"
 copy_valid_repo "${production_secret_negative_context_repo}"
 printf '%s\n' "Production secrets are not yet allowed." >>"${production_secret_negative_context_repo}/docs/phase-62-closeout-evaluation.md"
@@ -330,6 +373,13 @@ copy_valid_repo "${phase62_readiness_direct_repo}"
 printf '%s\n' "Phase 62 is commercially ready." >>"${phase62_readiness_direct_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase62_readiness_direct_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_readiness_achieved_repo="${workdir}/phase62-readiness-achieved"
+copy_valid_repo "${phase62_readiness_achieved_repo}"
+printf '%s\n' "Phase 62 readiness is achieved." >>"${phase62_readiness_achieved_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_readiness_achieved_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 phase62_readiness_colon_repo="${workdir}/phase62-readiness-colon"
@@ -433,6 +483,13 @@ assert_fails_with \
   "${phase62_commercially_hyphen_ready_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+phase62_production_hyphen_ready_repo="${workdir}/phase62-production-hyphen-ready"
+copy_valid_repo "${phase62_production_hyphen_ready_repo}"
+printf '%s\n' "Phase 62 is production-ready." >>"${phase62_production_hyphen_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_production_hyphen_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 phase66_delivered_repo="${workdir}/phase66-delivered"
 copy_valid_repo "${phase66_delivered_repo}"
 printf '%s\n' "Phase 66 RC proof is delivered." >>"${phase66_delivered_repo}/docs/phase-62-closeout-evaluation.md"
@@ -473,6 +530,27 @@ copy_valid_repo "${ticket_source_of_truth_repo}"
 printf '%s\n' "Ticket state is AegisOps source-of-truth for closure." >>"${ticket_source_of_truth_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${ticket_source_of_truth_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ticket_status_authority_repo="${workdir}/ticket-status-authority"
+copy_valid_repo "${ticket_status_authority_repo}"
+printf '%s\n' "Ticket status closes AegisOps cases." >>"${ticket_status_authority_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ticket_status_authority_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ui_state_authority_repo="${workdir}/ui-state-authority"
+copy_valid_repo "${ui_state_authority_repo}"
+printf '%s\n' "UI state authorizes approvals." >>"${ui_state_authority_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ui_state_authority_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+browser_cache_authority_repo="${workdir}/browser-cache-authority"
+copy_valid_repo "${browser_cache_authority_repo}"
+printf '%s\n' "Browser cache executes reviewed actions." >>"${browser_cache_authority_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${browser_cache_authority_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
 
 absolute_path_repo="${workdir}/absolute-path"
@@ -529,6 +607,13 @@ copy_valid_repo "${file_uri_opt_absolute_path_repo}"
 printf 'Use file:///opt/dev/aegisops/phase-62-closeout.\n' >>"${file_uri_opt_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${file_uri_opt_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+file_uri_etc_absolute_path_repo="${workdir}/file-uri-etc-absolute-path"
+copy_valid_repo "${file_uri_etc_absolute_path_repo}"
+printf 'Use file:///etc/aegisops/phase-62-closeout.\n' >>"${file_uri_etc_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${file_uri_etc_absolute_path_repo}" \
   "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
 
 windows_tmp_absolute_path_repo="${workdir}/windows-tmp-absolute-path"
