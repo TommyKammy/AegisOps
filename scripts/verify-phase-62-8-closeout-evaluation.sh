@@ -184,7 +184,7 @@ unix_local_path_pattern="(${macos_home_pattern}|${linux_home_pattern}|${root_hom
 local_path_pattern="(${unix_local_path_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})"
 local_path_with_tail="${local_path_pattern}[^[:space:]]*"
 file_uri_local_path_pattern="file:(//localhost)?/*${local_path_with_tail}"
-local_root_name_pattern="(users|home|root|volumes|var|private|etc|tmp|opt)"
+local_root_name_pattern="(users|home|root|volumes|var|private|etc|tmp|opt|mnt)"
 local_root_tail_pattern="(/[^[:space:]]*|[[:space:](){}<>;,!?=.]|$)"
 generic_unix_local_absolute_path_pattern="${generic_absolute_path_boundary}/${local_root_name_pattern}${local_root_tail_pattern}"
 file_uri_generic_local_absolute_path_pattern="file:(//localhost)?/*/${local_root_name_pattern}${local_root_tail_pattern}"
@@ -278,6 +278,14 @@ claim_scan_text() {
       if (previous_2 != "" && previous_2 !~ /[.:;!?|]$/ && previous_1 != "" && previous_1 !~ /[.:;!?|]$/) {
         print previous_2 " " previous_1 " " $0
       }
+      if (previous_3 != "" && previous_3 !~ /[.:;!?|]$/ && previous_2 != "" && previous_2 !~ /[.:;!?|]$/ && previous_1 != "" && previous_1 !~ /[.:;!?|]$/) {
+        print previous_3 " " previous_2 " " previous_1 " " $0
+      }
+      if (previous_4 != "" && previous_4 !~ /[.:;!?|]$/ && previous_3 != "" && previous_3 !~ /[.:;!?|]$/ && previous_2 != "" && previous_2 !~ /[.:;!?|]$/ && previous_1 != "" && previous_1 !~ /[.:;!?|]$/) {
+        print previous_4 " " previous_3 " " previous_2 " " previous_1 " " $0
+      }
+      previous_4 = previous_3
+      previous_3 = previous_2
       previous_2 = previous_1
       previous_1 = $0
     }'
@@ -324,13 +332,14 @@ if claim_scan_text "${absolute_doc_path}" | awk -v allowed_non_claim_line="${all
         line ~ /it is not broad soar marketplace/) {
       next
     }
+    gsub(/,/, " ", line)
     positive_assertion = line ~ /(^|[^[:alnum:]_])phase[- ]62([^.]*[[:space:]])?(is|are|becomes|became|reached|reaches|achieved|achieves|proves|ships|includes|validates|establishes|satisfies|confirms|certifies|has|have|had)([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|production)/ ||
       line ~ /(^|[^[:alnum:]_])phase[- ]62([^.]*[[:space:]])?(is|are|was|were|becomes|became|reached|reaches|achieved|achieves|remains|remained|proves|ships|includes|validates|establishes|satisfies|confirms|certifies|has been|have been|had been)([^.]*[[:space:]])?(commercial|commercially|commercial replacement|self-service commercial)([^.]*[[:space:]])?(ready|readiness|complete|accepted|verified|proven)/ ||
       line ~ /(^|[^[:alnum:]_])phase[- ]62([^.]*[[:space:]])?(readiness|replacement readiness)([^.]*[[:space:]])?(is|are|becomes|became|has been|have been|had been)([^.]*[[:space:]])?(accepted|complete|ready|verified|proven|achieved|satisfied|confirmed|certified)/ ||
       line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+(is|was|were|becomes|became|remains|remained|reached|reaches|achieved|achieves|entered|enters|shipped|ships)([[:space:]]+[[:alpha:]-]+){0,3}[[:space:]]+(beta|rc|ga|release[- ]candidate|general availability|generally available|self-service commercial readiness|self-service commercially[- ]ready|commercial readiness|commercially[- ]ready|production[- ]ready)([^[:alnum:]_]|$)/ ||
       line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+(has|have|had)([[:space:]]+[[:alpha:]-]+){0,3}[[:space:]]+(been|be|become|reached|achieved|entered|shipped|proven|proved|confirmed|certified|validated)([[:space:]]+[[:alpha:]-]+){0,3}[[:space:]]+(beta|rc|ga|release[- ]candidate|general availability|generally available|self-service commercial readiness|self-service commercially[- ]ready|commercial readiness|commercially[- ]ready|production[- ]ready)([[:space:]-]+(readiness|ready))?([^[:alnum:]_]|$)/ ||
       line ~ /(^|[^[:alnum:]_])phase[- ]6[36][[:space:]]+(evidence[- ]expansion|rc[- ]proof)([^.]*[[:space:]])?(is[[:space:]]+)?(fully[[:space:]]+)?(complete|ready|verified|accepted|done|implemented|available|supported|shipped|released|delivered)/ ||
-      line ~ /(^|[^[:alnum:]_])(controlled write|hard write)([^.]*[[:space:]])?(is|are|becomes|became|defaults?|default actions?|action defaults?|default family|default families|default enablement|enablement|default controls?)([^.]*[[:space:]])?(enabled|available|active|supported|complete|implemented|ready|delivered|shipped)/ ||
+      line ~ /(^|[^[:alnum:]_])(controlled[- ]write|hard[- ]write)([^.]*[[:space:]])?(is|are|becomes|became|defaults?|default actions?|action defaults?|default family|default families|default enablement|enablement|default controls?)([^.]*[[:space:]])?(enabled|available|active|supported|complete|implemented|ready|delivered|shipped)/ ||
       line ~ /(^|[^[:alnum:]_])(broad[[:space:]]+)?soar[[:space:]]+marketplace([[:space:]]+(coverage|expansion|connectors?|catalog|import))?([^.]*[[:space:]])?(is|are|becomes|became|has been|have been)?([^.]*[[:space:]])?(complete|ready|verified|accepted|done|implemented|available|supported|covered|shipped|released|delivered)/ ||
       line ~ /(^|[^[:alnum:]_])(production|prod|live)[- ]secret(s)?([^.]*[[:space:]])?(evidence|material|references?|values?)?([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(accepted|acceptable|allowed|valid|usable|trusted|sufficient|satisfies|satisfactory|proves|validates|qualifies)/ ||
       line ~ /(^|[^[:alnum:]_])(downstream workflow|shuffle workflow|workflow|simulator output|ticket state|ticket status|downstream ticket|ui cache|ui state|ui surface|browser state|browser cache)([[:space:]]+(state|status|output|cache|surface))?[[:space:]]+(is|are|becomes|became|counts as|served as|serves as|acted as|acts as|represented|represents|approved|approves|authorized|authorizes|executed|executes|reconciled|reconciles|closed|closes|gated|gates|validated|validates)/
@@ -371,10 +380,10 @@ if claim_scan_text "${absolute_doc_path}" | awk -v allowed_non_claim_line="${all
     if (line ~ /(^|[^[:alnum:]_])phase[- ]62([^.]*[[:space:]])?(proves|ships|includes|validates)[[:space:]]+(rc readiness|ga readiness|commercial replacement readiness)([^[:alnum:]_]|$)/) {
       found_kind = "release-readiness overclaim"
     }
-    if (line ~ /(^|[^[:alnum:]_])(controlled write|hard write)([^.]*[[:space:]])?(is|are|becomes|became|defaults?|default actions?|action defaults?|default family|default families|default enablement|enablement|default controls?)([^.]*[[:space:]])?(enabled|available|active|supported|complete|implemented|ready|delivered|shipped)([^[:alnum:]_]|$)/) {
+    if (line ~ /(^|[^[:alnum:]_])(controlled[- ]write|hard[- ]write)([^.]*[[:space:]])?(is|are|becomes|became|defaults?|default actions?|action defaults?|default family|default families|default enablement|enablement|default controls?)([^.]*[[:space:]])?(enabled|available|active|supported|complete|implemented|ready|delivered|shipped)([^[:alnum:]_]|$)/) {
       found_kind = "write-default overclaim"
     }
-    if (line ~ /(^|[^[:alnum:]_])(default|defaults?|default actions?|action defaults?|default family|default families)([^.]*[[:space:]])?(controlled write|hard write)([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(enabled|available|active|supported|complete|implemented)([^[:alnum:]_]|$)/) {
+    if (line ~ /(^|[^[:alnum:]_])(default|defaults?|default actions?|action defaults?|default family|default families)([^.]*[[:space:]])?(controlled[- ]write|hard[- ]write)([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(enabled|available|active|supported|complete|implemented)([^[:alnum:]_]|$)/) {
       found_kind = "write-default overclaim"
     }
     if (line ~ /(^|[^[:alnum:]_])phase[- ]62([^.]*[[:space:]])?(is|are|was|were|becomes|became|reached|reaches|achieved|achieves|remains|remained|proves|ships|includes|validates|establishes|satisfies|confirms|certifies|has been|have been|had been)([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|production)([^.]*[[:space:]])?(ready|readiness|complete|accepted|verified|proven)?([^[:alnum:]_]|$)/) {

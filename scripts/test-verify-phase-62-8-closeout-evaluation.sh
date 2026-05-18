@@ -256,6 +256,20 @@ assert_fails_with \
   "${hard_write_sentence_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: write-default overclaim"
 
+controlled_write_hyphen_repo="${workdir}/controlled-write-hyphen"
+copy_valid_repo "${controlled_write_hyphen_repo}"
+printf '%s\n' "Controlled-Write is default enabled." >>"${controlled_write_hyphen_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${controlled_write_hyphen_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: write-default overclaim"
+
+hard_write_hyphen_repo="${workdir}/hard-write-hyphen"
+copy_valid_repo "${hard_write_hyphen_repo}"
+printf '%s\n' "Hard-Write is default enabled." >>"${hard_write_hyphen_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${hard_write_hyphen_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: write-default overclaim"
+
 marketplace_repo="${workdir}/marketplace"
 copy_valid_repo "${marketplace_repo}"
 printf '%s\n' "Broad SOAR marketplace is complete." >>"${marketplace_repo}/docs/phase-62-closeout-evaluation.md"
@@ -359,6 +373,27 @@ copy_valid_repo "${aegisops_has_now_entered_repo}"
 printf '%s\n' "AegisOps has now entered GA." >>"${aegisops_has_now_entered_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${aegisops_has_now_entered_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_has_comma_now_entered_repo="${workdir}/aegisops-has-comma-now-entered"
+copy_valid_repo "${aegisops_has_comma_now_entered_repo}"
+printf '%s\n' "AegisOps has, now, entered GA." >>"${aegisops_has_comma_now_entered_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_has_comma_now_entered_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_comma_is_ga_repo="${workdir}/aegisops-comma-is-ga"
+copy_valid_repo "${aegisops_comma_is_ga_repo}"
+printf '%s\n' "AegisOps, is GA." >>"${aegisops_comma_is_ga_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_comma_is_ga_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_comma_has_entered_repo="${workdir}/aegisops-comma-has-entered"
+copy_valid_repo "${aegisops_comma_has_entered_repo}"
+printf '%s\n' "AegisOps, has entered GA." >>"${aegisops_comma_has_entered_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_comma_has_entered_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 aegisops_can_be_repo="${workdir}/aegisops-can-be"
@@ -586,6 +621,13 @@ assert_fails_with \
   "${phase62_three_line_wrapped_ready_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+phase62_five_line_wrapped_ready_repo="${workdir}/phase62-five-line-wrapped-ready"
+copy_valid_repo "${phase62_five_line_wrapped_ready_repo}"
+printf '%s\n%s\n%s\n%s\n%s\n' "Phase" "62" "is" "GA" "ready." >>"${phase62_five_line_wrapped_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_five_line_wrapped_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 phase62_ga_hyphen_ready_repo="${workdir}/phase62-ga-hyphen-ready"
 copy_valid_repo "${phase62_ga_hyphen_ready_repo}"
 printf '%s\n' "Phase 62 is GA-ready." >>"${phase62_ga_hyphen_ready_repo}/docs/phase-62-closeout-evaluation.md"
@@ -619,6 +661,20 @@ copy_valid_repo "${phase66_delivered_repo}"
 printf '%s\n' "Phase 66 RC proof is delivered." >>"${phase66_delivered_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase66_delivered_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase66_comma_delivered_repo="${workdir}/phase66-comma-delivered"
+copy_valid_repo "${phase66_comma_delivered_repo}"
+printf '%s\n' "Phase 66, RC proof is delivered." >>"${phase66_comma_delivered_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase66_comma_delivered_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase63_comma_complete_repo="${workdir}/phase63-comma-complete"
+copy_valid_repo "${phase63_comma_complete_repo}"
+printf '%s\n' "Phase 63, evidence expansion is complete." >>"${phase63_comma_complete_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase63_comma_complete_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 phase66_negated_delivered_repo="${workdir}/phase66-negated-delivered"
@@ -689,6 +745,20 @@ copy_valid_repo "${ui_cache_approved_repo}"
 printf '%s\n' "UI cache approved actions." >>"${ui_cache_approved_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${ui_cache_approved_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ui_cache_comma_approved_repo="${workdir}/ui-cache-comma-approved"
+copy_valid_repo "${ui_cache_comma_approved_repo}"
+printf '%s\n' "UI cache, approves actions." >>"${ui_cache_comma_approved_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ui_cache_comma_approved_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ticket_state_comma_closes_repo="${workdir}/ticket-state-comma-closes"
+copy_valid_repo "${ticket_state_comma_closes_repo}"
+printf '%s\n' "Ticket state, closes AegisOps cases." >>"${ticket_state_comma_closes_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ticket_state_comma_closes_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
 
 absolute_path_repo="${workdir}/absolute-path"
@@ -780,6 +850,13 @@ copy_valid_repo "${wsl_tmp_absolute_path_repo}"
 printf 'Run /%s/c/tmp/aegisops/phase-62-closeout.\n' "${mnt_segment}" >>"${wsl_tmp_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${wsl_tmp_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+wsl_root_absolute_path_repo="${workdir}/wsl-root-absolute-path"
+copy_valid_repo "${wsl_root_absolute_path_repo}"
+printf 'Run /%s/c.\n' "${mnt_segment}" >>"${wsl_root_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${wsl_root_absolute_path_repo}" \
   "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
 
 windows_tmp_absolute_path_repo="${workdir}/windows-tmp-absolute-path"
