@@ -1523,6 +1523,8 @@ def _contains_simulator_contextual_claim(
 def _contains_simulator_workflow_contextual_claim(
     terms: tuple[str, ...],
 ) -> bool:
+    if _contains_simulator_ordered_workflow_claim(terms):
+        return True
     for start, stop in _simulator_context_spans(
         terms,
         boundary_terms=_SIMULATOR_WORKFLOW_CONTEXT_CLAUSE_BOUNDARY_TERMS,
@@ -1559,6 +1561,40 @@ def _contains_simulator_workflow_contextual_claim(
             if _simulator_contextual_match_is_negated(terms, match):
                 continue
             return True
+    return False
+
+
+def _contains_simulator_ordered_workflow_claim(terms: tuple[str, ...]) -> bool:
+    for start, stop in _simulator_context_spans(
+        terms,
+        boundary_terms=_SIMULATOR_CONTEXT_CLAUSE_BOUNDARY_TERMS,
+    ):
+        production_indexes = tuple(
+            index
+            for index in range(start, stop)
+            if terms[index] in _SIMULATOR_PRODUCTION_CONTEXT_TERMS
+        )
+        workflow_indexes = tuple(
+            index
+            for index in range(start, stop)
+            if terms[index] in _SIMULATOR_WORKFLOW_CONTEXT_TERMS
+        )
+        action_indexes = tuple(
+            index
+            for index in range(start, stop)
+            if terms[index] in _SIMULATOR_WORKFLOW_ACTION_TERMS
+        )
+        for production_index in production_indexes:
+            for workflow_index in workflow_indexes:
+                if workflow_index <= production_index:
+                    continue
+                for action_index in action_indexes:
+                    if action_index <= workflow_index:
+                        continue
+                    match = (production_index, workflow_index, action_index)
+                    if _simulator_contextual_match_is_negated(terms, match):
+                        continue
+                    return True
     return False
 
 
@@ -1660,7 +1696,7 @@ def _post_term_negation_denies_claim(
     stop: int,
 ) -> bool:
     if terms[negation_index] != "not":
-        return True
+        return False
     for term in terms[negation_index + 1 : stop]:
         if term in {
             _TERM_BOUNDARY,
@@ -1716,8 +1752,8 @@ def _match_is_required_simulator_exclusion_statement(
 
 def _required_exclusion_groups_are_conjunctive(terms: tuple[str, ...]) -> bool:
     first_group, second_group = _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS
-    for first_match in _term_group_matches(terms, first_group):
-        for second_match in _term_group_matches(terms, second_group):
+    for first_match in _required_exclusion_term_group_matches(terms, first_group):
+        for second_match in _required_exclusion_term_group_matches(terms, second_group):
             if _required_exclusion_matches_are_conjoined(
                 terms,
                 first_match=first_match,
@@ -1763,7 +1799,10 @@ def _match_falls_within_required_exclusion_span(
         tuple(reversed(_SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS)),
     )
     for first_group, second_group in required_group_orders:
-        for first_match in _term_group_matches(terms, first_group):
+        for first_match in _required_exclusion_term_group_matches(
+            terms,
+            first_group,
+        ):
             if first_match[0] <= context_index:
                 continue
             if _required_exclusion_group_between_context_and_span_start(
@@ -1772,7 +1811,10 @@ def _match_falls_within_required_exclusion_span(
                 span_start=first_match[0],
             ):
                 continue
-            for second_match in _term_group_matches(terms, second_group):
+            for second_match in _required_exclusion_term_group_matches(
+                terms,
+                second_group,
+            ):
                 if second_match[0] <= first_match[-1]:
                     continue
                 if not _required_exclusion_matches_are_conjoined(
@@ -1795,7 +1837,21 @@ def _required_exclusion_group_between_context_and_span_start(
     return any(
         context_index < group_match[0] < span_start
         for term_group in _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS
-        for group_match in _term_group_matches(terms, term_group)
+        for group_match in _required_exclusion_term_group_matches(terms, term_group)
+    )
+
+
+def _required_exclusion_term_group_matches(
+    terms: tuple[str, ...],
+    required_terms: tuple[str, ...],
+) -> tuple[tuple[int, ...], ...]:
+    return tuple(
+        match
+        for match in _term_group_matches(terms, required_terms)
+        if not any(
+            term in _NEGATION_LIST_BOUNDARY_TERMS
+            for term in terms[match[0] + 1 : match[-1]]
+        )
     )
 
 
