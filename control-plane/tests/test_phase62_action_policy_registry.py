@@ -545,6 +545,24 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 },
                 None,
             ),
+            "PRRT_kwDOR2iDUc6CseaW_comma_after_excluded": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded, from production execution "
+                        "receipt and reconciliation truth."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6CseaW_comma_then_truth_claim": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded, this is production execution "
+                        "receipt truth."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
         }
 
         for thread_id, (override, expected_error) in cases.items():

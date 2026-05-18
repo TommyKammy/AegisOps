@@ -1346,6 +1346,13 @@ def _has_recent_simulator_exclusion_context(
     start = max(0, target_index - _NEGATION_SCAN_WINDOW)
     for context_index in range(target_index - 1, start - 1, -1):
         term = terms[context_index]
+        if term == _TERM_COMMA_BOUNDARY:
+            if any(
+                link_term in _SOURCE_AUTHORITY_ASSERTION_LINK_TERMS
+                for link_term in terms[context_index + 1 : target_index]
+            ):
+                return False
+            continue
         if term in _SIMULATOR_EXCLUSION_CLAIM_BOUNDARY_TERMS:
             return False
         if term in _SIMULATOR_EXCLUSION_CONTEXT_TERMS:
