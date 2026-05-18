@@ -1425,6 +1425,8 @@ def _contains_unnegated_term_group(
 
 
 def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bool:
+    if _contains_simulator_contextual_truth_overclaim(terms):
+        return True
     for term_group in _SIMULATOR_PRODUCTION_TRUTH_TERMS:
         for match in _term_group_matches(terms, term_group):
             if any(
@@ -1446,7 +1448,7 @@ def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bo
             ):
                 continue
             return True
-    return _contains_simulator_contextual_truth_overclaim(terms)
+    return False
 
 
 def _contains_simulator_contextual_truth_overclaim(
