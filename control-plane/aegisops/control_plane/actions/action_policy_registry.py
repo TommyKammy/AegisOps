@@ -854,6 +854,7 @@ _SIMULATOR_EXCLUSION_CLAIM_BOUNDARY_TERMS = {
     "therefore",
     "thus",
 }
+_SIMULATOR_CONTEXT_SCAN_WINDOW = _NEGATION_SCAN_WINDOW * 2
 
 PHASE62_SHUFFLE_WORKFLOW_MAPPINGS: Mapping[str, ShuffleWorkflowMapping] = {
     "enrichment_only_lookup": ShuffleWorkflowMapping(
@@ -1154,6 +1155,7 @@ def validate_phase62_simulator_output(
                 _contains_unnegated_term_group(exclusion_terms, (term_group,))
                 for term_group in _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS
             )
+            and _required_exclusion_groups_are_conjunctive(exclusion_terms)
         )
         if not has_production_exclusion_context:
             errors.append("missing_production_exclusion")
@@ -1500,8 +1502,8 @@ def _nearest_simulator_context_index(
     anchor_index: int,
     context_terms: set[str],
 ) -> int | None:
-    start = max(0, anchor_index - _NEGATION_SCAN_WINDOW)
-    stop = min(len(terms), anchor_index + _NEGATION_SCAN_WINDOW + 1)
+    start = max(0, anchor_index - _SIMULATOR_CONTEXT_SCAN_WINDOW)
+    stop = min(len(terms), anchor_index + _SIMULATOR_CONTEXT_SCAN_WINDOW + 1)
     candidates = (
         index
         for index in range(start, stop)
@@ -1559,6 +1561,8 @@ def _has_local_post_term_negation(
         }:
             return False
         if term in _NEGATION_TERMS:
+            if _is_not_only_phrase(terms, index, stop):
+                continue
             return True
     return False
 
@@ -1577,7 +1581,7 @@ def _match_is_required_simulator_exclusion_statement(
     if not match:
         return False
     target_index = match[0]
-    start = max(0, target_index - _NEGATION_SCAN_WINDOW)
+    start = 0
     for context_index in range(target_index - 1, start - 1, -1):
         term = terms[context_index]
         if term == _TERM_COMMA_BOUNDARY:
@@ -1603,6 +1607,44 @@ def _match_is_required_simulator_exclusion_statement(
     return False
 
 
+def _required_exclusion_groups_are_conjunctive(terms: tuple[str, ...]) -> bool:
+    first_group, second_group = _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS
+    for first_match in _term_group_matches(terms, first_group):
+        for second_match in _term_group_matches(terms, second_group):
+            if _required_exclusion_matches_are_conjoined(
+                terms,
+                first_match=first_match,
+                second_match=second_match,
+            ):
+                return True
+    return False
+
+
+def _required_exclusion_matches_are_conjoined(
+    terms: tuple[str, ...],
+    *,
+    first_match: tuple[int, ...],
+    second_match: tuple[int, ...],
+) -> bool:
+    if first_match[0] <= second_match[0]:
+        left_match = first_match
+        right_match = second_match
+    else:
+        left_match = second_match
+        right_match = first_match
+    if left_match[-1] >= right_match[0]:
+        return False
+    between = terms[left_match[-1] + 1 : right_match[0]]
+    if "or" in between:
+        return False
+    if any(
+        term in {_TERM_BOUNDARY, *_NEGATION_CONTRAST_BOUNDARY_TERMS}
+        for term in between
+    ):
+        return False
+    return "and" in between
+
+
 def _match_falls_within_required_exclusion_span(
     *,
     terms: tuple[str, ...],
@@ -1612,26 +1654,33 @@ def _match_falls_within_required_exclusion_span(
     spans: tuple[tuple[int, int], ...] = ()
 
     def append_ordered_spans(
+        term_groups: tuple[tuple[str, ...], ...],
         group_index: int,
         previous_end: int,
         span_start: int | None,
     ) -> None:
         nonlocal spans
-        if group_index == len(_SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS):
+        if group_index == len(term_groups):
             if span_start is not None:
                 spans = (*spans, (span_start, previous_end))
             return
-        term_group = _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS[group_index]
+        term_group = term_groups[group_index]
         for group_match in _term_group_matches(terms, term_group):
             if group_match[0] <= previous_end:
                 continue
             append_ordered_spans(
+                term_groups,
                 group_index + 1,
                 group_match[-1],
                 group_match[0] if span_start is None else span_start,
             )
 
-    append_ordered_spans(0, context_index, None)
+    required_group_orders = (
+        _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS,
+        tuple(reversed(_SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS)),
+    )
+    for term_groups in required_group_orders:
+        append_ordered_spans(term_groups, 0, context_index, None)
     return any(
         span_start <= match[0] and match[-1] <= span_end
         for span_start, span_end in spans

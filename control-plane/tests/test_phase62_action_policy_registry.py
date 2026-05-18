@@ -758,6 +758,54 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 },
                 None,
             ),
+            "PRRT_kwDOR2iDUc6Csyef_or_between_required_exclusions": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "or reconciliation truth."
+                    ),
+                },
+                "missing_production_exclusion",
+            ),
+            "PRRT_kwDOR2iDUc6Csyeh_not_only_is_not_negation": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth; production workflow launch not only "
+                        "planned but executed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Csyei_padded_workflow_launch": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth; production alpha beta gamma delta "
+                        "epsilon zeta eta workflow launch."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Csyek_long_required_exclusion": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded after demo labels and sanitized "
+                        "test-mode evidence from production execution receipt and "
+                        "reconciliation truth."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6Csyem_reversed_required_exclusion": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from reconciliation truth and "
+                        "production execution receipt."
+                    ),
+                },
+                None,
+            ),
         }
 
         for thread_id, (override, expected_error) in cases.items():
