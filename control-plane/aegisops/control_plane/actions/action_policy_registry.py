@@ -665,20 +665,25 @@ _SIMULATOR_ALLOWED_DATA_CLASSIFICATIONS = (
     "synthetic_only",
     "sanitized_demo_only",
 )
-_SIMULATOR_PRODUCTION_TRUTH_TERMS = (
+_SIMULATOR_PRODUCTION_ARTIFACT_TRUTH_TERMS = (
     ("production", "execution", "receipt", "truth"),
+    ("production", "execution", "receipt"),
     ("production", "reconciliation", "truth"),
     ("production", "receipt"),
     ("production", "reconciliation", "state"),
     ("execution", "receipt", "truth"),
     ("reconciliation", "truth"),
     ("production", "truth"),
+)
+_SIMULATOR_AUTHORITY_TRUTH_TERMS = (
     ("authority",),
     ("authoritative",),
     ("authoritative", "execution"),
     ("authoritative", "receipt"),
     ("authoritative", "reconciliation"),
     ("authoritative", "truth"),
+)
+_SIMULATOR_CLOSURE_TRUTH_TERMS = (
     ("case", "truth"),
     ("case", "closure"),
     ("close", "case"),
@@ -691,6 +696,8 @@ _SIMULATOR_PRODUCTION_TRUTH_TERMS = (
     ("closes", "ticket"),
     ("closed", "ticket"),
     ("ticket", "closed"),
+)
+_SIMULATOR_WORKFLOW_TRUTH_TERMS = (
     ("production", "workflow", "delegation"),
     ("production", "workflow", "delegate"),
     ("production", "workflow", "delegated"),
@@ -703,15 +710,28 @@ _SIMULATOR_PRODUCTION_TRUTH_TERMS = (
     ("launch", "production", "workflow"),
     ("launch", "workflow", "production"),
     ("workflow", "launch", "production"),
+)
+_SIMULATOR_AD_HOC_EXECUTION_TRUTH_TERMS = (
     ("direct", "ad", "hoc", "execution"),
     ("ad", "hoc", "execution"),
     ("execution", "ad", "hoc"),
     ("direct", "execution"),
+)
+_SIMULATOR_READINESS_TRUTH_TERMS = (
     ("ready",),
     ("readiness",),
 )
+_SIMULATOR_PRODUCTION_TRUTH_TERMS = (
+    *_SIMULATOR_PRODUCTION_ARTIFACT_TRUTH_TERMS,
+    *_SIMULATOR_AUTHORITY_TRUTH_TERMS,
+    *_SIMULATOR_CLOSURE_TRUTH_TERMS,
+    *_SIMULATOR_WORKFLOW_TRUTH_TERMS,
+    *_SIMULATOR_AD_HOC_EXECUTION_TRUTH_TERMS,
+    *_SIMULATOR_READINESS_TRUTH_TERMS,
+)
 _SIMULATOR_EXCLUDABLE_PRODUCTION_TRUTH_TERMS = (
     ("production", "execution", "receipt", "truth"),
+    ("production", "execution", "receipt"),
     ("production", "reconciliation", "truth"),
     ("production", "receipt"),
     ("execution", "receipt", "truth"),

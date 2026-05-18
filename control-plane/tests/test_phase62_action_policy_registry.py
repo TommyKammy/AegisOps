@@ -328,6 +328,41 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         self,
     ) -> None:
         cases = {
+            "PRRT_kwDOR2iDUc6Cr1WG_demo_label_production_truth": (
+                {
+                    "demo_test_label": (
+                        "demo test evidence only; production execution receipt truth"
+                    ),
+                },
+                "demo_test_label_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V5_case_closed": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and case closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V5_ticket_closed": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and ticket closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V7_delegates_production_workflow": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and delegates production workflow launch."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
             "PRRT_kwDOR2iDUc6Cr6vQ_partial_exclusion": (
                 {
                     "production_exclusion": (
