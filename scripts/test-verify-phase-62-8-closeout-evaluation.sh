@@ -296,6 +296,13 @@ assert_fails_with \
   "${production_secret_acceptable_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: production-secret overclaim"
 
+live_secret_acceptable_repo="${workdir}/live-secret-acceptable"
+copy_valid_repo "${live_secret_acceptable_repo}"
+printf '%s\n' "Live secret material is acceptable for closeout evidence." >>"${live_secret_acceptable_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${live_secret_acceptable_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: production-secret overclaim"
+
 production_secret_negative_context_repo="${workdir}/production-secret-negative-context"
 copy_valid_repo "${production_secret_negative_context_repo}"
 printf '%s\n' "Production secrets are not yet allowed." >>"${production_secret_negative_context_repo}/docs/phase-62-closeout-evaluation.md"
@@ -320,6 +327,23 @@ copy_valid_repo "${phase62_readiness_colon_repo}"
 printf '%s\n' "This does not change our status: Phase 62 is GA ready." >>"${phase62_readiness_colon_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase62_readiness_colon_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_readiness_no_separator_repo="${workdir}/phase62-readiness-no-separator"
+copy_valid_repo "${phase62_readiness_no_separator_repo}"
+printf '%s\n' "This does not change our status Phase 62 is GA ready." >>"${phase62_readiness_no_separator_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_readiness_no_separator_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+required_rejection_piggyback_repo="${workdir}/required-rejection-piggyback"
+copy_valid_repo "${required_rejection_piggyback_repo}"
+printf '%s %s\n' \
+  "Phase 62 must reject missing child evidence, missing verifier output, missing issue-lint summary, downstream workflow truth claims, simulator production truth claims, Controlled Write or Hard Write default enablement claims, broad SOAR marketplace claims, Phase 63 evidence expansion claims, Phase 66 RC proof claims, Beta/RC/GA/commercial-readiness claims, production secrets, and workstation-local paths." \
+  "Phase 62 is GA ready." \
+  >>"${required_rejection_piggyback_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${required_rejection_piggyback_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 phase62_has_become_repo="${workdir}/phase62-has-become"
@@ -357,11 +381,32 @@ assert_fails_with \
   "${phase62_markdown_ready_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+phase62_markdown_link_ready_repo="${workdir}/phase62-markdown-link-ready"
+copy_valid_repo "${phase62_markdown_link_ready_repo}"
+printf '%s\n' "Phase 62 is [GA](https://example.com) ready." >>"${phase62_markdown_link_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_markdown_link_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_html_ready_repo="${workdir}/phase62-html-ready"
+copy_valid_repo "${phase62_html_ready_repo}"
+printf '%s\n' "Phase 62 is <b>GA</b> ready." >>"${phase62_html_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_html_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 phase62_wrapped_ready_repo="${workdir}/phase62-wrapped-ready"
 copy_valid_repo "${phase62_wrapped_ready_repo}"
 printf '%s\n%s\n' "Phase 62 is" "GA ready." >>"${phase62_wrapped_ready_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase62_wrapped_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_three_line_wrapped_ready_repo="${workdir}/phase62-three-line-wrapped-ready"
+copy_valid_repo "${phase62_three_line_wrapped_ready_repo}"
+printf '%s\n%s\n%s\n' "Phase 62 is" "commercially" "ready." >>"${phase62_three_line_wrapped_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_three_line_wrapped_ready_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 phase62_ga_hyphen_ready_repo="${workdir}/phase62-ga-hyphen-ready"
@@ -411,6 +456,13 @@ copy_valid_repo "${tmp_absolute_path_repo}"
 printf 'Run /tmp/aegisops/phase-62-closeout.\n' >>"${tmp_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${tmp_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+tmp_single_segment_absolute_path_repo="${workdir}/tmp-single-segment-absolute-path"
+copy_valid_repo "${tmp_single_segment_absolute_path_repo}"
+printf 'Temporary files may be stored in /tmp during validation.\n' >>"${tmp_single_segment_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${tmp_single_segment_absolute_path_repo}" \
   "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
 
 volume_absolute_path_repo="${workdir}/volume-absolute-path"

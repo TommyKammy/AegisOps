@@ -100,6 +100,7 @@ path_hygiene_text() {
 
   tr '[:upper:]' '[:lower:]' < "${file}" | \
     sed 's#\\/#/#g' | \
+    sed -E 's#</?[[:alpha:]][^>]*>#html-tag#g' | \
     sed -E 's|\]\(/[[:alnum:]_.~/#-]+\)|](root-relative-link)|g'
 }
 
@@ -122,8 +123,8 @@ unix_local_path_pattern="(${macos_home_pattern}|${linux_home_pattern}|${root_hom
 local_path_pattern="(${unix_local_path_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})"
 local_path_with_tail="${local_path_pattern}[^[:space:]]*"
 file_uri_local_path_pattern="file:(//localhost)?/*${local_path_with_tail}"
-generic_unix_absolute_path_pattern="${generic_absolute_path_boundary}/[[:alnum:]_.-]+/[^[:space:]]*"
-file_uri_generic_absolute_path_pattern="file:(//localhost)?/*/[[:alnum:]_.-]+/[^[:space:]]*"
+generic_unix_absolute_path_pattern="${generic_absolute_path_boundary}/[[:alnum:]_.-]+(/[^[:space:]]*)?"
+file_uri_generic_absolute_path_pattern="file:(//localhost)?/*/[[:alnum:]_.-]+(/[^[:space:]]*)?"
 absolute_path_pattern="(${absolute_path_boundary}${local_path_with_tail}|${file_uri_local_path_pattern})"
 assignment_path_boundary='(^|[[:space:](){}<>;,!`"'\''"])'
 assignment_prefixed_absolute_path_pattern="${assignment_path_boundary}[^[:space:]/:=?&]+[:=]${local_path_with_tail}"
@@ -196,13 +197,17 @@ claim_scan_text() {
   local file="$1"
 
   tr '[:upper:]' '[:lower:]' < "${file}" | \
-    sed 's/[*_`]//g' | \
+    perl -pe 's/\[([^\]]+)\]\([^)]+\)/$1/g; s/<\/?[[:alpha:]][^>]*>//g; s/[*_`]//g' | \
     awk '{
       print
-      if (previous != "" && previous !~ /[.:;!?|]$/) {
-        print previous " " $0
+      if (previous_1 != "" && previous_1 !~ /[.:;!?|]$/) {
+        print previous_1 " " $0
       }
-      previous = $0
+      if (previous_2 != "" && previous_2 !~ /[.:;!?|]$/ && previous_1 != "" && previous_1 !~ /[.:;!?|]$/) {
+        print previous_2 " " previous_1 " " $0
+      }
+      previous_2 = previous_1
+      previous_1 = $0
     }'
 }
 
@@ -217,8 +222,18 @@ if claim_scan_text "${absolute_doc_path}" | awk -v allowed_non_claim_line="${all
   -v required_rejection_line="${required_rejection_line_lower}" '
   {
     line = tolower($0)
-    if (line == allowed_non_claim_line || line == required_rejection_line ||
-        index(line, allowed_non_claim_line) > 0 || index(line, required_rejection_line) > 0) {
+    if (line == allowed_non_claim_line || line == required_rejection_line) {
+      next
+    }
+    allowed_offset = index(line, allowed_non_claim_line)
+    if (allowed_offset > 0) {
+      line = substr(line, 1, allowed_offset - 1) " " substr(line, allowed_offset + length(allowed_non_claim_line))
+    }
+    required_offset = index(line, required_rejection_line)
+    if (required_offset > 0) {
+      line = substr(line, 1, required_offset - 1) " " substr(line, required_offset + length(required_rejection_line))
+    }
+    if (line ~ /^[[:space:]]*$/) {
       next
     }
     if (line ~ /are context only; they do not replace/ ||
@@ -226,12 +241,18 @@ if claim_scan_text "${absolute_doc_path}" | awk -v allowed_non_claim_line="${all
         line ~ /it is not broad soar marketplace/) {
       next
     }
-    negative_context = line ~ /(must reject|must fail|fail closed|fails validation|invalid|must not|cannot|not satisfy|rejects|rejecting|rejected|not valid|does not|do not|is not|not yet|pre-ga|excluded|redacted|forbidden|blocked|context only|no[[:space:]]|without[[:space:]]+(direct|bypassing|creating|approval|execution|reconciliation))/
-    positive_after_separator = line ~ /[.:;,][[:space:]]*(phase 62|aegisops|controlled write|hard write|production|prod|live|broad soar|phase 6[36]|downstream workflow|shuffle workflow|simulator output|ticket state|ui cache|browser state)/
-    if (negative_context) {
-      if (!positive_after_separator) {
-        next
-      }
+    positive_assertion = line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(is|are|becomes|became|reached|reaches|achieved|achieves|proves|ships|includes|validates|establishes|satisfies|confirms|certifies|has|have|had)([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|commercial|commercially|replacement|commercial replacement|self-service commercial)/ ||
+      line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+(is|has|have|had|reached|reaches|achieved|achieves|entered|enters|shipped|ships)[[:space:]]+(beta|rc|ga|release candidate|general availability|generally available|self-service commercial readiness|self-service commercially ready|commercial readiness|commercially ready)/ ||
+      line ~ /(^|[^[:alnum:]_])(controlled write|hard write)([^.]*[[:space:]])?(is|are|becomes|became|defaults?|default actions?|action defaults?|default family|default families)([^.]*[[:space:]])?(enabled|available|active|supported|complete|implemented)/ ||
+      line ~ /(^|[^[:alnum:]_])broad[[:space:]]+soar[[:space:]]+marketplace([^.]*[[:space:]])?(is|are|becomes|became)([^.]*[[:space:]])?(complete|ready|verified|accepted|done|implemented|available|supported|covered|coverage|shipped|released)/ ||
+      line ~ /(^|[^[:alnum:]_])(production|prod|live)[- ]secret(s)?([^.]*[[:space:]])?(evidence|material|references?|values?)?([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(accepted|acceptable|allowed|valid|usable|trusted|sufficient)/ ||
+      line ~ /(^|[^[:alnum:]_])(downstream workflow|shuffle workflow|workflow|simulator output|ticket state|ui cache|browser state)([[:space:]]+(state|status|output|cache))?([^.]*[[:space:]])?(is|are|becomes|became|counts as|serves as|acts as|represents|approves|authorizes|executes|reconciles|closes|gates|validates)/
+    if (line ~ /(must reject|must fail|fail closed|fails validation|invalid|must not|cannot|not satisfy|rejects|rejecting|rejected|not valid|does not implement|do not|is not|not yet|pre-ga|excluded|redacted|forbidden|blocked|context only|no[[:space:]]|without[[:space:]]+(direct|bypassing|creating|approval|execution|reconciliation))/ &&
+        !positive_assertion) {
+      next
+    }
+    if (line ~ /(^|[^[:alnum:]_])(production|prod|live)[- ]?secrets?[[:space:]]+(are|is)[[:space:]]+not([[:space:]]+yet)?[[:space:]]+(accepted|acceptable|allowed|valid|usable|trusted|sufficient)([^[:alnum:]_]|$)/) {
+      next
     }
     if (line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+is[[:space:]]+(beta|rc|ga|release candidate|generally available|self-service commercially ready|commercially ready)([^[:alnum:]_]|$)/) {
       found_kind = "release-readiness overclaim"
@@ -272,10 +293,10 @@ if claim_scan_text "${absolute_doc_path}" | awk -v allowed_non_claim_line="${all
     if (line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(is|are|becomes|became|reached|reaches|achieved|achieves|proves|ships|includes|validates|establishes|satisfies|confirms|certifies)([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|commercial|commercially|replacement|commercial replacement|self-service commercial)-(ready|readiness|complete|accepted|verified|proven)([^[:alnum:]_]|$)/) {
       found_kind = "release-readiness overclaim"
     }
-    if (line ~ /(^|[^[:alnum:]_])production[- ]secret(s)?([^.]*[[:space:]])?(evidence|material|references?|values?)?([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(accepted|acceptable|allowed|valid|usable|trusted|sufficient)([^[:alnum:]_]|$)/) {
+    if (line ~ /(^|[^[:alnum:]_])(production|prod|live)[- ]secret(s)?([^.]*[[:space:]])?(evidence|material|references?|values?)?([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(accepted|acceptable|allowed|valid|usable|trusted|sufficient)([^[:alnum:]_]|$)/) {
       found_kind = "production-secret overclaim"
     }
-    if (line ~ /(^|[^[:alnum:]_])(production|prod|live)[- ]?secrets?[[:space:]]+(are|is|count as|counts as|may be|can be|remain|stays|accepted as|treated as|allowed as)[[:space:]]+([^.]*[^[:alnum:]_])?(valid|trusted|accepted|allowed|ready|verified|sufficient)([^[:alnum:]_]|$)/) {
+    if (line ~ /(^|[^[:alnum:]_])(production|prod|live)[- ]?secrets?[[:space:]]+(are|is|count as|counts as|may be|can be|remain|stays|accepted as|treated as|allowed as)[[:space:]]+([^.]*[^[:alnum:]_])?(valid|trusted|accepted|acceptable|allowed|ready|verified|sufficient)([^[:alnum:]_]|$)/) {
       found_kind = "production-secret overclaim"
     }
     if (line ~ /(^|[^[:alnum:]_])(production|prod|live)[- ]?secrets?[[:space:]]+(are|is|may be|can be|could be|will be|should be|must be)[[:space:]]+used([[:space:]]+(for|as|in)[^.]*|[^[:alnum:]_]|$)/) {
