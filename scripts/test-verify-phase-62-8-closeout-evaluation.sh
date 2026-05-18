@@ -326,6 +326,41 @@ assert_fails_with \
   "${aegisops_became_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
+aegisops_has_been_repo="${workdir}/aegisops-has-been"
+copy_valid_repo "${aegisops_has_been_repo}"
+printf '%s\n' "AegisOps has been GA." >>"${aegisops_has_been_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_has_been_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_is_now_repo="${workdir}/aegisops-is-now"
+copy_valid_repo "${aegisops_is_now_repo}"
+printf '%s\n' "AegisOps is now GA." >>"${aegisops_is_now_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_is_now_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_is_officially_repo="${workdir}/aegisops-is-officially"
+copy_valid_repo "${aegisops_is_officially_repo}"
+printf '%s\n' "AegisOps is officially GA." >>"${aegisops_is_officially_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_is_officially_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_remains_repo="${workdir}/aegisops-remains"
+copy_valid_repo "${aegisops_remains_repo}"
+printf '%s\n' "AegisOps remains GA." >>"${aegisops_remains_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_remains_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+aegisops_has_now_entered_repo="${workdir}/aegisops-has-now-entered"
+copy_valid_repo "${aegisops_has_now_entered_repo}"
+printf '%s\n' "AegisOps has now entered GA." >>"${aegisops_has_now_entered_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_has_now_entered_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 aegisops_can_be_repo="${workdir}/aegisops-can-be"
 copy_valid_repo "${aegisops_can_be_repo}"
 printf '%s\n' "AegisOps can be GA ready." >>"${aegisops_can_be_repo}/docs/phase-62-closeout-evaluation.md"
@@ -406,6 +441,41 @@ copy_valid_repo "${phase62_readiness_repo}"
 printf '%s\n' "Phase 62 is RC ready." >>"${phase62_readiness_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase62_readiness_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_was_ready_repo="${workdir}/phase62-was-ready"
+copy_valid_repo "${phase62_was_ready_repo}"
+printf '%s\n' "Phase 62 was GA ready." >>"${phase62_was_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_was_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_direct_ga_repo="${workdir}/phase62-direct-ga"
+copy_valid_repo "${phase62_direct_ga_repo}"
+printf '%s\n' "Phase 62 is GA." >>"${phase62_direct_ga_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_direct_ga_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_reached_ga_repo="${workdir}/phase62-reached-ga"
+copy_valid_repo "${phase62_reached_ga_repo}"
+printf '%s\n' "Phase 62 reached GA." >>"${phase62_reached_ga_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_reached_ga_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_remains_ga_ready_repo="${workdir}/phase62-remains-ga-ready"
+copy_valid_repo "${phase62_remains_ga_ready_repo}"
+printf '%s\n' "Phase 62 remains GA ready." >>"${phase62_remains_ga_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_remains_ga_ready_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_remained_ga_ready_repo="${workdir}/phase62-remained-ga-ready"
+copy_valid_repo "${phase62_remained_ga_ready_repo}"
+printf '%s\n' "Phase 62 remained GA ready." >>"${phase62_remained_ga_ready_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_remained_ga_ready_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 phase62_readiness_direct_repo="${workdir}/phase62-readiness-direct"
@@ -605,6 +675,20 @@ copy_valid_repo "${browser_cache_authority_repo}"
 printf '%s\n' "Browser cache executes reviewed actions." >>"${browser_cache_authority_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${browser_cache_authority_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ticket_status_closed_repo="${workdir}/ticket-status-closed"
+copy_valid_repo "${ticket_status_closed_repo}"
+printf '%s\n' "Ticket status closed AegisOps cases." >>"${ticket_status_closed_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ticket_status_closed_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ui_cache_approved_repo="${workdir}/ui-cache-approved"
+copy_valid_repo "${ui_cache_approved_repo}"
+printf '%s\n' "UI cache approved actions." >>"${ui_cache_approved_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ui_cache_approved_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
 
 absolute_path_repo="${workdir}/absolute-path"
