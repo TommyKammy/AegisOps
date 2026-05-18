@@ -712,12 +712,16 @@ _SIMULATOR_WORKFLOW_TRUTH_TERMS = (
     ("delegating", "production", "workflow"),
     ("delegating", "workflow", "production"),
     ("production", "workflow", "launch"),
+    ("production", "workflow", "launched"),
     ("production", "workflow", "launching"),
     ("launch", "production", "workflow"),
     ("launch", "workflow", "production"),
+    ("launched", "production", "workflow"),
+    ("launched", "workflow", "production"),
     ("launching", "production", "workflow"),
     ("launching", "workflow", "production"),
     ("workflow", "launch", "production"),
+    ("workflow", "launched", "production"),
     ("workflow", "launching", "production"),
 )
 _SIMULATOR_AD_HOC_EXECUTION_TRUTH_TERMS = (
