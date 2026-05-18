@@ -630,6 +630,42 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 },
                 "production_exclusion_promotes_production_truth",
             ),
+            "PRRT_kwDOR2iDUc6Css0x_production_receipt_generated": (
+                {
+                    "production_exclusion": (
+                        "Simulator output excludes production execution receipt "
+                        "and reconciliation truth and production receipt generated."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Css00_case_closing": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and case closing."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Css04_workflow_delegating_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and workflow delegating for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Css06_production_readied": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production readied."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
         }
 
         for thread_id, (override, expected_error) in cases.items():

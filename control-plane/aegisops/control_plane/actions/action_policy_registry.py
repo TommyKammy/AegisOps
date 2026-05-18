@@ -687,18 +687,23 @@ _SIMULATOR_AUTHORITY_TRUTH_TERMS = (
 _SIMULATOR_CLOSURE_TRUTH_TERMS = (
     ("closure",),
     ("closed",),
+    ("closing",),
     ("case", "truth"),
     ("case", "closure"),
     ("close", "case"),
     ("closes", "case"),
     ("closed", "case"),
+    ("closing", "case"),
     ("case", "closed"),
+    ("case", "closing"),
     ("ticket", "truth"),
     ("ticket", "closure"),
     ("close", "ticket"),
     ("closes", "ticket"),
     ("closed", "ticket"),
+    ("closing", "ticket"),
     ("ticket", "closed"),
+    ("ticket", "closing"),
 )
 _SIMULATOR_WORKFLOW_TRUTH_TERMS = (
     ("production", "workflow", "delegation"),
@@ -711,6 +716,10 @@ _SIMULATOR_WORKFLOW_TRUTH_TERMS = (
     ("delegated", "workflow", "production"),
     ("delegating", "production", "workflow"),
     ("delegating", "workflow", "production"),
+    ("workflow", "delegation", "production"),
+    ("workflow", "delegate", "production"),
+    ("workflow", "delegated", "production"),
+    ("workflow", "delegating", "production"),
     ("production", "workflow", "launch"),
     ("production", "workflow", "launched"),
     ("production", "workflow", "launching"),
@@ -732,6 +741,7 @@ _SIMULATOR_AD_HOC_EXECUTION_TRUTH_TERMS = (
 )
 _SIMULATOR_READINESS_TRUTH_TERMS = (
     ("ready",),
+    ("readied",),
     ("readiness",),
 )
 _SIMULATOR_PRODUCTION_TRUTH_TERMS = (
@@ -1338,7 +1348,7 @@ def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bo
                 continue
             if (
                 term_group in _SIMULATOR_EXCLUDABLE_PRODUCTION_TRUTH_TERMS
-                and _has_recent_simulator_exclusion_context(terms, match[0])
+                and _match_is_required_simulator_exclusion_statement(terms, match)
             ):
                 continue
             return True
@@ -1371,10 +1381,13 @@ def _has_non_authoritative_prefix(
     return target_index > 0 and terms[target_index - 1] == "non"
 
 
-def _has_recent_simulator_exclusion_context(
+def _match_is_required_simulator_exclusion_statement(
     terms: tuple[str, ...],
-    target_index: int,
+    match: tuple[int, ...],
 ) -> bool:
+    if not match:
+        return False
+    target_index = match[0]
     start = max(0, target_index - _NEGATION_SCAN_WINDOW)
     for context_index in range(target_index - 1, start - 1, -1):
         term = terms[context_index]
@@ -1393,8 +1406,47 @@ def _has_recent_simulator_exclusion_context(
                 for link_term in terms[context_index + 1 : target_index]
             ):
                 return False
-            return True
+            return _match_falls_within_required_exclusion_span(
+                terms=terms,
+                match=match,
+                context_index=context_index,
+            )
     return False
+
+
+def _match_falls_within_required_exclusion_span(
+    *,
+    terms: tuple[str, ...],
+    match: tuple[int, ...],
+    context_index: int,
+) -> bool:
+    spans: tuple[tuple[int, int], ...] = ()
+
+    def append_ordered_spans(
+        group_index: int,
+        previous_end: int,
+        span_start: int | None,
+    ) -> None:
+        nonlocal spans
+        if group_index == len(_SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS):
+            if span_start is not None:
+                spans = (*spans, (span_start, previous_end))
+            return
+        term_group = _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS[group_index]
+        for group_match in _term_group_matches(terms, term_group):
+            if group_match[0] <= previous_end:
+                continue
+            append_ordered_spans(
+                group_index + 1,
+                group_match[-1],
+                group_match[0] if span_start is None else span_start,
+            )
+
+    append_ordered_spans(0, context_index, None)
+    return any(
+        span_start <= match[0] and match[-1] <= span_end
+        for span_start, span_end in spans
+    )
 
 
 def _contains_unnegated_single_term(
