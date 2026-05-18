@@ -142,6 +142,20 @@ assert_fails_with \
   "${controlled_write_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: controlled write is default enabled"
 
+controlled_write_sentence_repo="${workdir}/controlled-write-sentence"
+copy_valid_repo "${controlled_write_sentence_repo}"
+printf '%s\n' "Default Controlled Write actions are now enabled for Phase 62." >>"${controlled_write_sentence_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${controlled_write_sentence_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: write-default overclaim"
+
+hard_write_sentence_repo="${workdir}/hard-write-sentence"
+copy_valid_repo "${hard_write_sentence_repo}"
+printf '%s\n' "Hard Write action defaults are implemented for Phase 62." >>"${hard_write_sentence_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${hard_write_sentence_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: write-default overclaim"
+
 marketplace_repo="${workdir}/marketplace"
 copy_valid_repo "${marketplace_repo}"
 printf '%s\n' "Broad SOAR marketplace is complete." >>"${marketplace_repo}/docs/phase-62-closeout-evaluation.md"
@@ -177,6 +191,27 @@ assert_fails_with \
   "${production_secret_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: production secrets are valid"
 
+production_secret_evidence_repo="${workdir}/production-secret-evidence"
+copy_valid_repo "${production_secret_evidence_repo}"
+printf '%s\n' "Production-secret evidence is accepted for closeout." >>"${production_secret_evidence_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${production_secret_evidence_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: production-secret evidence is accepted"
+
+phase62_readiness_repo="${workdir}/phase62-readiness"
+copy_valid_repo "${phase62_readiness_repo}"
+printf '%s\n' "Phase 62 is RC ready." >>"${phase62_readiness_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_readiness_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_readiness_direct_repo="${workdir}/phase62-readiness-direct"
+copy_valid_repo "${phase62_readiness_direct_repo}"
+printf '%s\n' "Phase 62 readiness is accepted." >>"${phase62_readiness_direct_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_readiness_direct_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 absolute_path_repo="${workdir}/absolute-path"
 copy_valid_repo "${absolute_path_repo}"
 printf 'Run /%s/example/Dev/codex-supervisor/dist/index.js.\n' "Users" >>"${absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
@@ -189,6 +224,20 @@ copy_valid_repo "${root_absolute_path_repo}"
 printf 'Run /%s/example/Dev/codex-supervisor/dist/index.js.\n' "${root_segment}" >>"${root_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${root_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+tmp_absolute_path_repo="${workdir}/tmp-absolute-path"
+copy_valid_repo "${tmp_absolute_path_repo}"
+printf 'Run /tmp/aegisops/phase-62-closeout.\n' >>"${tmp_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${tmp_absolute_path_repo}" \
+  "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
+
+volume_absolute_path_repo="${workdir}/volume-absolute-path"
+copy_valid_repo "${volume_absolute_path_repo}"
+printf 'Run /Volumes/work/aegisops/phase-62-closeout.\n' >>"${volume_absolute_path_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${volume_absolute_path_repo}" \
   "Forbidden Phase 62 closeout evaluation: workstation-local absolute path detected"
 
 echo "Phase 62 closeout verifier negative tests pass."

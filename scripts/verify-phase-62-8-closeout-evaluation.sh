@@ -97,9 +97,15 @@ absolute_path_boundary='(^|[[:space:](){}<>;,!?`"'\''"])'
 macos_home_pattern="/""users/"
 linux_home_pattern="/""home/"
 root_home_pattern="/""root/"
+macos_volume_pattern="/""volumes/"
+macos_var_folders_pattern="/""var/folders/"
+macos_private_var_folders_pattern="/""private/var/folders/"
+temporary_path_pattern="/""tmp/"
+private_temporary_path_pattern="/""private/tmp/"
 windows_backslash_home_pattern='[a-z]:\\+users\\+'
 windows_slash_home_pattern='[a-z]:/'"users"'/'
-unix_local_path_pattern="(${macos_home_pattern}|${linux_home_pattern}|${root_home_pattern})"
+windows_subsystem_home_pattern="/""mnt/"'[a-z]/'"users/"
+unix_local_path_pattern="(${macos_home_pattern}|${linux_home_pattern}|${root_home_pattern}|${macos_volume_pattern}|${macos_var_folders_pattern}|${macos_private_var_folders_pattern}|${temporary_path_pattern}|${private_temporary_path_pattern}|${windows_subsystem_home_pattern})"
 local_path_pattern="(${unix_local_path_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})"
 local_path_with_tail="${local_path_pattern}[^[:space:]]*"
 file_uri_local_path_pattern="file:(//localhost)?/*${local_path_with_tail}"
@@ -148,6 +154,14 @@ forbidden_claims=(
   "production secrets are allowed"
   "production secrets are valid"
   "phase 62 accepts production secrets"
+  "production secret evidence is accepted"
+  "production secret evidence is allowed"
+  "production secret evidence is valid"
+  "production-secret evidence is accepted"
+  "production-secret evidence is allowed"
+  "production-secret evidence is valid"
+  "phase 62 accepts production secret evidence"
+  "phase 62 accepts production-secret evidence"
 )
 
 forbidden_claim_text() {
@@ -175,24 +189,47 @@ if awk -v allowed_non_claim_line="${allowed_non_claim_line_lower}" \
       next
     }
     if (line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+is[[:space:]]+(beta|rc|ga|release candidate|generally available|self-service commercially ready|commercially ready)([^[:alnum:]_]|$)/) {
-      found = 1
+      found_kind = "release-readiness overclaim"
     }
     if (line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+is[[:space:]]+generally[[:space:]]+available[[:space:]]*(\(|$)/) {
-      found = 1
+      found_kind = "release-readiness overclaim"
     }
     if (line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+(reached|reaches|achieved|achieves|entered|enters|shipped|ships)[[:space:]]+(beta|rc|ga|release candidate|general availability|generally available|self-service commercial readiness|self-service commercially ready|commercial readiness|commercially ready)([^[:alnum:]_]|$)/) {
-      found = 1
+      found_kind = "release-readiness overclaim"
     }
     if (line ~ /(^|[^[:alnum:]_])phase 6[36][[:space:]]+(evidence expansion|rc proof)([^.]*[[:space:]])?(is[[:space:]]+)?(fully[[:space:]]+)?(complete|ready|verified|accepted|done|implemented)([^[:alnum:]_]|$)/) {
-      found = 1
+      found_kind = "release-readiness overclaim"
     }
     if (line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(proves|ships|includes|validates)[[:space:]]+(rc readiness|ga readiness|commercial replacement readiness)([^[:alnum:]_]|$)/) {
-      found = 1
+      found_kind = "release-readiness overclaim"
+    }
+    if (line ~ /(^|[^[:alnum:]_])(controlled write|hard write)([^.]*[[:space:]])?(is|are|becomes|became|defaults?|default actions?|action defaults?|default family|default families)([^.]*[[:space:]])?(enabled|available|active|supported|complete|implemented)([^[:alnum:]_]|$)/) {
+      found_kind = "write-default overclaim"
+    }
+    if (line ~ /(^|[^[:alnum:]_])(default|defaults?|default actions?|action defaults?|default family|default families)([^.]*[[:space:]])?(controlled write|hard write)([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(enabled|available|active|supported|complete|implemented)([^[:alnum:]_]|$)/) {
+      found_kind = "write-default overclaim"
+    }
+    if (line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(is|are|becomes|became|reached|reaches|achieved|achieves|proves|ships|includes|validates|establishes|satisfies|confirms|certifies)([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|commercial|replacement|commercial replacement|self-service commercial)([^.]*[[:space:]])?(ready|readiness|complete|accepted|verified|proven)([^[:alnum:]_]|$)/) {
+      found_kind = "release-readiness overclaim"
+    }
+    if (line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(readiness|replacement readiness)([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(accepted|complete|ready|verified|proven)([^[:alnum:]_]|$)/) {
+      found_kind = "release-readiness overclaim"
+    }
+    if (line ~ /(^|[^[:alnum:]_])production[- ]secret(s)?([^.]*[[:space:]])?(evidence|material|references?|values?)?([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(accepted|allowed|valid|usable|trusted)([^[:alnum:]_]|$)/) {
+      found_kind = "production-secret overclaim"
+    }
+    if (line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(accepts|allows|trusts|validates)([^.]*[[:space:]])?production[- ]secret(s)?([^[:alnum:]_]|$)/) {
+      found_kind = "production-secret overclaim"
     }
   }
-  END { exit(found ? 0 : 1) }
+  END {
+    if (found_kind != "") {
+      print "Forbidden Phase 62 closeout evaluation claim: " found_kind > "/dev/stderr"
+      exit 0
+    }
+    exit 1
+  }
 ' "${absolute_doc_path}"; then
-  echo "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim" >&2
   exit 1
 fi
 
