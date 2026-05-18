@@ -14,6 +14,7 @@ export type OperatorResourceName =
   | "todayView"
   | "businessHoursHandoff"
   | "advisoryOutput"
+  | "actionCatalog"
   | "actionReview";
 
 export interface OperatorDataProviderConfig {

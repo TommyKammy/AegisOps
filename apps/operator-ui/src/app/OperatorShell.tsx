@@ -76,6 +76,8 @@ function lazyOperatorConsolePage<T extends keyof Awaited<ReturnType<typeof loadO
 
 const ActionReviewPage =
   lazyOperatorConsolePage("ActionReviewPage") as unknown as typeof import("./operatorConsolePages").ActionReviewPage;
+const ActionCatalogPage =
+  lazyOperatorConsolePage("ActionCatalogPage") as unknown as typeof import("./operatorConsolePages").ActionCatalogPage;
 const AITraceReviewQueuePage =
   lazyOperatorConsolePage("AITraceReviewQueuePage") as unknown as typeof import("./operatorConsolePages").AITraceReviewQueuePage;
 const AssistantAdvisoryPage =
@@ -576,7 +578,7 @@ function OperatorShellContent({
           <Route
             element={
               canViewActionReview ? (
-                <ReadinessPage />
+                <ActionCatalogPage />
               ) : (
                 <Navigate
                   replace
@@ -633,10 +635,7 @@ function OperatorShellContent({
           <Route
             element={
               canViewActionReview ? (
-                <ActionReviewPage
-                  operatorIdentity={operatorIdentity}
-                  operatorRoles={operatorRoles}
-                />
+                <ActionCatalogPage />
               ) : (
                 <Navigate
                   replace
