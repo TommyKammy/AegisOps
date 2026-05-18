@@ -151,6 +151,41 @@ assert_fails_with \
   "${simulator_truth_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: simulator output is production truth"
 
+shuffle_truth_sentence_repo="${workdir}/shuffle-truth-sentence"
+copy_valid_repo "${shuffle_truth_sentence_repo}"
+printf '%s\n' "Shuffle workflow state is AegisOps truth." >>"${shuffle_truth_sentence_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${shuffle_truth_sentence_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+simulator_truth_sentence_repo="${workdir}/simulator-truth-sentence"
+copy_valid_repo "${simulator_truth_sentence_repo}"
+printf '%s\n' "Simulator output is AegisOps production truth." >>"${simulator_truth_sentence_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${simulator_truth_sentence_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ticket_truth_sentence_repo="${workdir}/ticket-truth-sentence"
+copy_valid_repo "${ticket_truth_sentence_repo}"
+printf '%s\n' "Ticket state is AegisOps truth." >>"${ticket_truth_sentence_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ticket_truth_sentence_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+ui_authority_sentence_repo="${workdir}/ui-authority-sentence"
+copy_valid_repo "${ui_authority_sentence_repo}"
+printf '%s\n' "UI cache authorizes approvals." >>"${ui_authority_sentence_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${ui_authority_sentence_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
+browser_authority_sentence_repo="${workdir}/browser-authority-sentence"
+copy_valid_repo "${browser_authority_sentence_repo}"
+printf '%s\n' "Browser state executes reviewed actions." >>"${browser_authority_sentence_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${browser_authority_sentence_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: subordinate-surface authority overclaim"
+
 controlled_write_repo="${workdir}/controlled-write"
 copy_valid_repo "${controlled_write_repo}"
 printf '%s\n' "Controlled Write is default enabled." >>"${controlled_write_repo}/docs/phase-62-closeout-evaluation.md"
@@ -214,6 +249,13 @@ assert_fails_with \
   "${commercial_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: aegisops is a commercial replacement for every siem/soar capability"
 
+aegisops_has_entered_repo="${workdir}/aegisops-has-entered"
+copy_valid_repo "${aegisops_has_entered_repo}"
+printf '%s\n' "AegisOps has entered GA." >>"${aegisops_has_entered_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${aegisops_has_entered_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
 production_secret_repo="${workdir}/production-secret"
 copy_valid_repo "${production_secret_repo}"
 printf '%s\n' "Production secrets are valid evidence for Phase 62." >>"${production_secret_repo}/docs/phase-62-closeout-evaluation.md"
@@ -266,6 +308,13 @@ copy_valid_repo "${phase62_readiness_colon_repo}"
 printf '%s\n' "This does not change our status: Phase 62 is GA ready." >>"${phase62_readiness_colon_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase62_readiness_colon_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
+
+phase62_has_become_repo="${workdir}/phase62-has-become"
+copy_valid_repo "${phase62_has_become_repo}"
+printf '%s\n' "Phase 62 has become RC ready." >>"${phase62_has_become_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_has_become_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
 
 absolute_path_repo="${workdir}/absolute-path"

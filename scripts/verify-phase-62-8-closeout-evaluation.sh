@@ -196,7 +196,7 @@ if awk -v allowed_non_claim_line="${allowed_non_claim_line_lower}" \
     if (line == allowed_non_claim_line || line == required_rejection_line) {
       next
     }
-    negative_context = line ~ /(must reject|must fail|fail closed|fails validation|invalid|must not|cannot|not satisfy|rejected|not valid|does not|is not|not yet|pre-ga|excluded|redacted|forbidden|blocked)/
+    negative_context = line ~ /(must reject|must fail|fail closed|fails validation|invalid|must not|cannot|not satisfy|rejects|rejecting|rejected|not valid|does not|do not|is not|not yet|pre-ga|excluded|redacted|forbidden|blocked|without|context only|no[[:space:]])/
     positive_after_separator = line ~ /:[[:space:]]*(phase 62|aegisops|controlled write|hard write|production|prod|live|broad soar|phase 6[36]|downstream workflow|shuffle workflow|simulator output|ticket state|ui cache|browser state)/
     if (negative_context) {
       if (!positive_after_separator) {
@@ -210,6 +210,9 @@ if awk -v allowed_non_claim_line="${allowed_non_claim_line_lower}" \
       found_kind = "release-readiness overclaim"
     }
     if (line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+(reached|reaches|achieved|achieves|entered|enters|shipped|ships)[[:space:]]+(beta|rc|ga|release candidate|general availability|generally available|self-service commercial readiness|self-service commercially ready|commercial readiness|commercially ready)([^[:alnum:]_]|$)/) {
+      found_kind = "release-readiness overclaim"
+    }
+    if (line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+(has|have|had)[[:space:]]+(reached|achieved|entered|shipped)[[:space:]]+(beta|rc|ga|release candidate|general availability|generally available|self-service commercial readiness|self-service commercially ready|commercial readiness|commercially ready)([^[:alnum:]_]|$)/) {
       found_kind = "release-readiness overclaim"
     }
     if (line ~ /(^|[^[:alnum:]_])phase 6[36][[:space:]]+(evidence expansion|rc proof)([^.]*[[:space:]])?(is[[:space:]]+)?(fully[[:space:]]+)?(complete|ready|verified|accepted|done|implemented|available|supported|shipped|released)([^[:alnum:]_]|$)/) {
@@ -230,6 +233,9 @@ if awk -v allowed_non_claim_line="${allowed_non_claim_line_lower}" \
     if (line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(is|are|becomes|became|reached|reaches|achieved|achieves|proves|ships|includes|validates|establishes|satisfies|confirms|certifies)([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|commercial|replacement|commercial replacement|self-service commercial)([^.]*[[:space:]])?(ready|readiness|complete|accepted|verified|proven)([^[:alnum:]_]|$)/) {
       found_kind = "release-readiness overclaim"
     }
+    if (line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(has|have|had)[[:space:]]+(become|reached|achieved|entered|shipped|proven)([^.]*[[:space:]])?(beta|rc|ga|release candidate|general availability|generally available|release|commercial|replacement|commercial replacement|self-service commercial)([^.]*[[:space:]])?(ready|readiness|complete|accepted|verified|proven)([^[:alnum:]_]|$)/) {
+      found_kind = "release-readiness overclaim"
+    }
     if (line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(readiness|replacement readiness)([^.]*[[:space:]])?(is|are|becomes|became)?([^.]*[[:space:]])?(accepted|complete|ready|verified|proven)([^[:alnum:]_]|$)/) {
       found_kind = "release-readiness overclaim"
     }
@@ -244,6 +250,12 @@ if awk -v allowed_non_claim_line="${allowed_non_claim_line_lower}" \
     }
     if (line ~ /(^|[^[:alnum:]_])phase 62([^.]*[[:space:]])?(accepts|allows|trusts|validates|proves|ships|includes|uses)([^.]*[[:space:]])?production[- ]secret(s)?([^[:alnum:]_]|$)/) {
       found_kind = "production-secret overclaim"
+    }
+    if (line ~ /(^|[^[:alnum:]_])(downstream workflow|shuffle workflow|workflow|simulator output|ticket state|ui cache|browser state)([[:space:]]+(state|status|output|cache))?([^.]*[[:space:]])?(is|are|becomes|became|counts as|serves as|acts as|represents)?([^.]*[[:space:]])?(aegisops|production|authoritative|approval|execution|reconciliation|case|workflow)?[[:space:]]*(truth|authority|authoritative|source of truth)([^[:alnum:]_]|$)/) {
+      found_kind = "subordinate-surface authority overclaim"
+    }
+    if (line ~ /(^|[^[:alnum:]_])(ui cache|browser state|ticket state|simulator output|downstream workflow|shuffle workflow)([[:space:]]+(state|status|output|cache))?([^.]*[[:space:]])?(approves|authorizes|executes|reconciles|closes|gates|validates)([^[:alnum:]_]|$|[[:space:]])/) {
+      found_kind = "subordinate-surface authority overclaim"
     }
   }
   END {
