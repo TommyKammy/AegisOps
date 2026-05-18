@@ -144,14 +144,14 @@ assert_fails_with \
 
 controlled_write_sentence_repo="${workdir}/controlled-write-sentence"
 copy_valid_repo "${controlled_write_sentence_repo}"
-printf '%s\n' "Default Controlled Write actions are now enabled for Phase 62." >>"${controlled_write_sentence_repo}/docs/phase-62-closeout-evaluation.md"
+printf '%s\n' "Controlled Write defaults are enabled." >>"${controlled_write_sentence_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${controlled_write_sentence_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: write-default overclaim"
 
 hard_write_sentence_repo="${workdir}/hard-write-sentence"
 copy_valid_repo "${hard_write_sentence_repo}"
-printf '%s\n' "Hard Write action defaults are implemented for Phase 62." >>"${hard_write_sentence_repo}/docs/phase-62-closeout-evaluation.md"
+printf '%s\n' "Hard Write defaults are enabled." >>"${hard_write_sentence_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${hard_write_sentence_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: write-default overclaim"
@@ -193,10 +193,22 @@ assert_fails_with \
 
 production_secret_evidence_repo="${workdir}/production-secret-evidence"
 copy_valid_repo "${production_secret_evidence_repo}"
-printf '%s\n' "Production-secret evidence is accepted for closeout." >>"${production_secret_evidence_repo}/docs/phase-62-closeout-evaluation.md"
+printf '%s\n' "Production secrets count as valid evidence." >>"${production_secret_evidence_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${production_secret_evidence_repo}" \
-  "Forbidden Phase 62 closeout evaluation claim: production-secret evidence is accepted"
+  "Forbidden Phase 62 closeout evaluation claim: production-secret overclaim"
+
+production_secret_used_repo="${workdir}/production-secret-used"
+copy_valid_repo "${production_secret_used_repo}"
+printf '%s\n' "Production secrets may be used for validation." >>"${production_secret_used_repo}/docs/phase-62-closeout-evaluation.md"
+assert_fails_with \
+  "${production_secret_used_repo}" \
+  "Forbidden Phase 62 closeout evaluation claim: production-secret overclaim"
+
+production_secret_negative_context_repo="${workdir}/production-secret-negative-context"
+copy_valid_repo "${production_secret_negative_context_repo}"
+printf '%s\n' "Production secrets are not yet allowed." >>"${production_secret_negative_context_repo}/docs/phase-62-closeout-evaluation.md"
+assert_passes "${production_secret_negative_context_repo}"
 
 phase62_readiness_repo="${workdir}/phase62-readiness"
 copy_valid_repo "${phase62_readiness_repo}"
@@ -207,7 +219,7 @@ assert_fails_with \
 
 phase62_readiness_direct_repo="${workdir}/phase62-readiness-direct"
 copy_valid_repo "${phase62_readiness_direct_repo}"
-printf '%s\n' "Phase 62 readiness is accepted." >>"${phase62_readiness_direct_repo}/docs/phase-62-closeout-evaluation.md"
+printf '%s\n' "Phase 62 is commercially ready." >>"${phase62_readiness_direct_repo}/docs/phase-62-closeout-evaluation.md"
 assert_fails_with \
   "${phase62_readiness_direct_repo}" \
   "Forbidden Phase 62 closeout evaluation claim: release-readiness overclaim"
