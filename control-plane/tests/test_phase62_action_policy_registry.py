@@ -630,6 +630,78 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 },
                 "production_exclusion_promotes_production_truth",
             ),
+            "root_cause_workflow_delegation_with_filler": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and workflow is delegated for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_workflow_launch_with_filler": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and workflow was triggered for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_workflow_start_synonym": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and started production workflow."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_workflow_invoke_synonym": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production workflow invoked."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_case_closure_with_filler": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and the case is now closing."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_ticket_closure_with_filler": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and the ticket is already closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_receipt_generated_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and receipt generated for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_reconciliation_state_set_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and reconciliation state set for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
             "PRRT_kwDOR2iDUc6Css0x_production_receipt_generated": (
                 {
                     "production_exclusion": (
@@ -665,6 +737,26 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     ),
                 },
                 "production_exclusion_promotes_production_truth",
+            ),
+            "root_cause_negated_workflow_launch_with_filler": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth; workflow was triggered for production "
+                        "is not the simulator claim."
+                    ),
+                },
+                None,
+            ),
+            "root_cause_negated_receipt_generation_with_filler": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth; receipt generated for production "
+                        "is not part of the simulator output."
+                    ),
+                },
+                None,
             ),
         }
 

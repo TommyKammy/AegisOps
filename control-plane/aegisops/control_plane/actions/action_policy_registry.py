@@ -744,6 +744,81 @@ _SIMULATOR_READINESS_TRUTH_TERMS = (
     ("readied",),
     ("readiness",),
 )
+_SIMULATOR_PRODUCTION_CONTEXT_TERMS = {"production"}
+_SIMULATOR_WORKFLOW_CONTEXT_TERMS = {"workflow", "workflows"}
+_SIMULATOR_WORKFLOW_ACTION_TERMS = {
+    "delegate",
+    "delegates",
+    "delegated",
+    "delegating",
+    "delegation",
+    "launch",
+    "launches",
+    "launched",
+    "launching",
+    "start",
+    "starts",
+    "started",
+    "starting",
+    "trigger",
+    "triggers",
+    "triggered",
+    "triggering",
+    "initiate",
+    "initiates",
+    "initiated",
+    "initiating",
+    "invoke",
+    "invokes",
+    "invoked",
+    "invoking",
+    "run",
+    "runs",
+    "ran",
+    "running",
+}
+_SIMULATOR_CLOSURE_CONTEXT_TERMS = {
+    "case",
+    "cases",
+    "ticket",
+    "tickets",
+}
+_SIMULATOR_CLOSURE_ACTION_TERMS = {
+    "close",
+    "closes",
+    "closed",
+    "closing",
+    "closure",
+}
+_SIMULATOR_RECEIPT_CONTEXT_TERMS = {
+    "receipt",
+    "receipts",
+}
+_SIMULATOR_RECONCILIATION_CONTEXT_TERMS = {
+    "reconciliation",
+    "reconciliations",
+}
+_SIMULATOR_STATE_CONTEXT_TERMS = {
+    "state",
+    "states",
+}
+_SIMULATOR_ARTIFACT_ASSERTION_TERMS = {
+    "create",
+    "creates",
+    "created",
+    "creating",
+    "generate",
+    "generates",
+    "generated",
+    "generating",
+    "set",
+    "sets",
+    "setting",
+    "write",
+    "writes",
+    "wrote",
+    "writing",
+}
 _SIMULATOR_PRODUCTION_TRUTH_TERMS = (
     *_SIMULATOR_PRODUCTION_ARTIFACT_TRUTH_TERMS,
     *_SIMULATOR_AUTHORITY_TRUTH_TERMS,
@@ -1352,7 +1427,121 @@ def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bo
             ):
                 continue
             return True
+    return _contains_simulator_contextual_truth_overclaim(terms)
+
+
+def _contains_simulator_contextual_truth_overclaim(
+    terms: tuple[str, ...],
+) -> bool:
+    return (
+        _contains_simulator_contextual_claim(
+            terms,
+            anchor_terms=_SIMULATOR_WORKFLOW_ACTION_TERMS,
+            required_context_terms=(
+                _SIMULATOR_WORKFLOW_CONTEXT_TERMS,
+                _SIMULATOR_PRODUCTION_CONTEXT_TERMS,
+            ),
+        )
+        or _contains_simulator_contextual_claim(
+            terms,
+            anchor_terms=_SIMULATOR_CLOSURE_ACTION_TERMS,
+            required_context_terms=(_SIMULATOR_CLOSURE_CONTEXT_TERMS,),
+        )
+        or _contains_simulator_contextual_claim(
+            terms,
+            anchor_terms=_SIMULATOR_ARTIFACT_ASSERTION_TERMS,
+            required_context_terms=(
+                _SIMULATOR_RECEIPT_CONTEXT_TERMS,
+                _SIMULATOR_PRODUCTION_CONTEXT_TERMS,
+            ),
+        )
+        or _contains_simulator_contextual_claim(
+            terms,
+            anchor_terms=_SIMULATOR_ARTIFACT_ASSERTION_TERMS,
+            required_context_terms=(
+                _SIMULATOR_RECONCILIATION_CONTEXT_TERMS,
+                _SIMULATOR_STATE_CONTEXT_TERMS,
+                _SIMULATOR_PRODUCTION_CONTEXT_TERMS,
+            ),
+        )
+    )
+
+
+def _contains_simulator_contextual_claim(
+    terms: tuple[str, ...],
+    *,
+    anchor_terms: set[str],
+    required_context_terms: tuple[set[str], ...],
+) -> bool:
+    for anchor_index, term in enumerate(terms):
+        if term not in anchor_terms:
+            continue
+        match_indexes = (anchor_index,)
+        for context_terms in required_context_terms:
+            context_index = _nearest_simulator_context_index(
+                terms,
+                anchor_index=anchor_index,
+                context_terms=context_terms,
+            )
+            if context_index is None:
+                break
+            match_indexes = (*match_indexes, context_index)
+        else:
+            match = tuple(sorted(set(match_indexes)))
+            if _simulator_contextual_match_is_negated(terms, match):
+                continue
+            return True
     return False
+
+
+def _nearest_simulator_context_index(
+    terms: tuple[str, ...],
+    *,
+    anchor_index: int,
+    context_terms: set[str],
+) -> int | None:
+    start = max(0, anchor_index - _NEGATION_SCAN_WINDOW)
+    stop = min(len(terms), anchor_index + _NEGATION_SCAN_WINDOW + 1)
+    candidates = (
+        index
+        for index in range(start, stop)
+        if terms[index] in context_terms
+        and not _simulator_context_boundary_between(
+            terms,
+            anchor_index=anchor_index,
+            context_index=index,
+        )
+    )
+    return min(candidates, key=lambda index: abs(index - anchor_index), default=None)
+
+
+def _simulator_context_boundary_between(
+    terms: tuple[str, ...],
+    *,
+    anchor_index: int,
+    context_index: int,
+) -> bool:
+    lower = min(anchor_index, context_index)
+    upper = max(anchor_index, context_index)
+    boundary_terms = {
+        _TERM_BOUNDARY,
+        _TERM_COMMA_BOUNDARY,
+        *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+    }
+    return any(
+        term in boundary_terms
+        for term in terms[lower + 1 : upper]
+    )
+
+
+def _simulator_contextual_match_is_negated(
+    terms: tuple[str, ...],
+    match: tuple[int, ...],
+) -> bool:
+    return any(
+        _has_recent_negation(terms, index, window=_NEGATION_SCAN_WINDOW)
+        for index in match
+    ) or _has_local_post_term_negation(terms, match)
 
 
 def _has_local_post_term_negation(
