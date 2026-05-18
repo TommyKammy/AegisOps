@@ -514,6 +514,37 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 },
                 "production_exclusion_promotes_production_truth",
             ),
+            "PRRT_kwDOR2iDUc6CseaP_demo_label_non_authoritative": (
+                {"demo_test_label": "demo/test non-authoritative evidence"},
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6CseaS_authoritatively": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and authoritatively confirms."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CseaU_standalone_closure": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and closure."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CseaV_non_authority": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and non-authority evidence."
+                    ),
+                },
+                None,
+            ),
         }
 
         for thread_id, (override, expected_error) in cases.items():

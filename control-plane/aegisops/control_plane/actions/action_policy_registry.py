@@ -678,12 +678,15 @@ _SIMULATOR_PRODUCTION_ARTIFACT_TRUTH_TERMS = (
 _SIMULATOR_AUTHORITY_TRUTH_TERMS = (
     ("authority",),
     ("authoritative",),
+    ("authoritatively",),
     ("authoritative", "execution"),
     ("authoritative", "receipt"),
     ("authoritative", "reconciliation"),
     ("authoritative", "truth"),
 )
 _SIMULATOR_CLOSURE_TRUTH_TERMS = (
+    ("closure",),
+    ("closed",),
     ("case", "truth"),
     ("case", "closure"),
     ("close", "case"),
@@ -1034,10 +1037,7 @@ def validate_phase62_simulator_output(
             and any(term in {"only", "non", "non_authoritative"} for term in label_terms)
         ):
             errors.append("missing_demo_test_label")
-        if _contains_unnegated_term_group(
-            label_terms,
-            _SIMULATOR_PRODUCTION_TRUTH_TERMS,
-        ):
+        if _contains_simulator_production_truth_overclaim(label_terms):
             errors.append("demo_test_label_promotes_production_truth")
 
     production_exclusion = output.get("production_exclusion")
@@ -1318,10 +1318,10 @@ def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bo
                 for index in match
             ):
                 continue
-            if term_group == ("authoritative",) and _has_non_authoritative_prefix(
-                terms,
-                match[0],
-            ):
+            if term_group in {
+                ("authority",),
+                ("authoritative",),
+            } and _has_non_authoritative_prefix(terms, match[0]):
                 continue
             if (
                 term_group in _SIMULATOR_EXCLUDABLE_PRODUCTION_TRUTH_TERMS
