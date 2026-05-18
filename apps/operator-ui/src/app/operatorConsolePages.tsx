@@ -13,6 +13,7 @@ export {
 export { RecordSearchPage } from "./operatorConsolePages/recordSearchPages";
 export { DetectorActivationReviewPage } from "./operatorConsolePages/detectorActivationReviewPages";
 export { SourceHealthDashboardPage } from "./operatorConsolePages/sourceHealthDashboardPages";
+export { ActionCatalogPage } from "./operatorConsolePages/actionCatalogPages";
 export { ActionReviewPage } from "./operatorConsolePages/actionReviewPages";
 export {
   AITraceReviewQueuePage,

@@ -16,6 +16,12 @@ export const RESOURCE_BINDINGS: Record<
     listSemantics: "client",
     recordFamily: "alert",
   },
+  actionCatalog: {
+    idField: "action_request_id",
+    listPath: "/inspect-records",
+    listSemantics: "client",
+    recordFamily: "action_request",
+  },
   aiTraceReviewQueue: {
     idField: "ai_trace_id",
     listPath: "/inspect-ai-trace-review-queue",

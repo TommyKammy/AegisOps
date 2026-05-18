@@ -416,6 +416,49 @@ describe("createOperatorDataProvider", () => {
     );
   });
 
+  it("lists action catalog posture from backend action-request records", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        records: [
+          {
+            action_request_id: "action-request-catalog-001",
+            catalog_action: "operator_notification",
+            lifecycle_state: "approved",
+          },
+        ],
+        total_records: 1,
+      }),
+    );
+    const dataProvider = createOperatorDataProvider({ fetchFn });
+
+    await expect(
+      dataProvider.getList("actionCatalog", {
+        filter: {},
+        pagination: { page: 1, perPage: 25 },
+        sort: { field: "requested_at", order: "DESC" },
+      }),
+    ).resolves.toEqual({
+      data: [
+        expect.objectContaining({
+          id: "action-request-catalog-001",
+          action_request_id: "action-request-catalog-001",
+          catalog_action: "operator_notification",
+        }),
+      ],
+      total: 1,
+    });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      "/inspect-records?family=action_request&order=DESC&page=1&per_page=25&sort=requested_at",
+      {
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+  });
+
   it("rejects action-review detail payloads whose selected review is missing or mismatched", async () => {
     const missingSelectedReviewId = createOperatorDataProvider({
       fetchFn: vi.fn<typeof fetch>().mockResolvedValue(

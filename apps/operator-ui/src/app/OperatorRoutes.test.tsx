@@ -1,6 +1,7 @@
 import { beforeEach, describe } from "vitest";
 import { resetOperatorQueryCacheForTests } from "./operatorQueryCache";
 import { registerOperatorRoutesActionReviewTests } from "./OperatorRoutes.actionReview.testSuite";
+import { registerOperatorRoutesActionCatalogTests } from "./OperatorRoutes.actionCatalog.testSuite";
 import { registerOperatorRoutesAssistantTests } from "./OperatorRoutes.assistant.testSuite";
 import { registerOperatorRoutesAuthAndShellTests } from "./OperatorRoutes.authAndShell.testSuite";
 import { registerOperatorRoutesBusinessHoursHandoffTests } from "./OperatorRoutes.businessHoursHandoff.testSuite";
@@ -18,6 +19,7 @@ describe("OperatorRoutes", () => {
   });
 
   registerOperatorRoutesAuthAndShellTests();
+  registerOperatorRoutesActionCatalogTests();
   registerOperatorRoutesActionReviewTests();
   registerOperatorRoutesCaseworkTests();
   registerOperatorRoutesAssistantTests();
