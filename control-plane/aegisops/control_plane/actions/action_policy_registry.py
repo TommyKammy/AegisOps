@@ -709,10 +709,16 @@ _SIMULATOR_WORKFLOW_TRUTH_TERMS = (
     ("delegate", "workflow", "production"),
     ("delegated", "production", "workflow"),
     ("delegated", "workflow", "production"),
+    ("delegating", "production", "workflow"),
+    ("delegating", "workflow", "production"),
     ("production", "workflow", "launch"),
+    ("production", "workflow", "launching"),
     ("launch", "production", "workflow"),
     ("launch", "workflow", "production"),
+    ("launching", "production", "workflow"),
+    ("launching", "workflow", "production"),
     ("workflow", "launch", "production"),
+    ("workflow", "launching", "production"),
 )
 _SIMULATOR_AD_HOC_EXECUTION_TRUTH_TERMS = (
     ("direct", "ad", "hoc", "execution"),
@@ -1318,9 +1324,12 @@ def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bo
                 for index in match
             ):
                 continue
+            if _has_local_post_term_negation(terms, match):
+                continue
             if term_group in {
                 ("authority",),
                 ("authoritative",),
+                ("authoritatively",),
             } and _has_non_authoritative_prefix(terms, match[0]):
                 continue
             if (
@@ -1328,6 +1337,25 @@ def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bo
                 and _has_recent_simulator_exclusion_context(terms, match[0])
             ):
                 continue
+            return True
+    return False
+
+
+def _has_local_post_term_negation(
+    terms: tuple[str, ...],
+    match: tuple[int, ...],
+) -> bool:
+    start = match[-1] + 1
+    stop = min(len(terms), start + 5)
+    for index in range(start, stop):
+        term = terms[index]
+        if term in {
+            _TERM_BOUNDARY,
+            _TERM_COMMA_BOUNDARY,
+            *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+        }:
+            return False
+        if term in _NEGATION_TERMS:
             return True
     return False
 

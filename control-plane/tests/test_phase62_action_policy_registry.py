@@ -563,6 +563,46 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 },
                 "production_exclusion_promotes_production_truth",
             ),
+            "PRRT_kwDOR2iDUc6Cskjz_launching_production_workflow": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and launching production workflow."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cskj0_post_term_negated_launch": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth; production workflow launch is not used."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6Cskj6_non_authoritatively_exclusion": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and non-authoritatively described."
+                    ),
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6Cskj6_non_authoritatively_label": (
+                {"demo_test_label": "demo/test non-authoritatively described evidence"},
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6Cskj9_delegating_production_workflow": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and delegating production workflow."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
         }
 
         for thread_id, (override, expected_error) in cases.items():
