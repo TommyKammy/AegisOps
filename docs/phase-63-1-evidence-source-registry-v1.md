@@ -28,7 +28,9 @@ The enrichment result can support analyst review only after the file hash is alr
 - Unsupported broad sources are rejected, including Velociraptor, YARA, capa, MISP breadth, Suricata, and IntelOwl breadth.
 - Missing owner, missing freshness window, missing custody requirements, missing allowed target class, disabled source use, degraded source use, and target-class mismatch fail closed.
 - Source types outside `osquery` and `malwarebazaar_hash_reputation` are rejected.
-- Registry entries that claim workflow authority are rejected.
+- Registry entries that claim workflow authority are rejected across source id, source type, owner, target class, custody, freshness, confidence, status, degraded states, disabled states, and authority posture fields.
+- Unknown mapping fields are rejected before coercion so ignored JSON keys cannot smuggle broad source lists or workflow-authority claims.
+- Custody requirements are source-specific: osquery must keep reviewed query, collection timestamp, host binding, and AegisOps evidence record custody; MalwareBazaar must keep reviewed hash, enrichment request, collection timestamp, response digest, and AegisOps evidence record custody.
 
 ## 5. Authority Boundary
 
@@ -44,4 +46,3 @@ The negative-test posture follows `docs/phase-51-6-authority-boundary-negative-t
 - Run `python3 -m unittest control-plane.tests.test_phase63_evidence_source_registry`.
 - Run `bash scripts/verify-publishable-path-hygiene.sh`.
 - Run `node <codex-supervisor-root>/dist/index.js issue-lint 1332 --config <supervisor-config-path>`.
-

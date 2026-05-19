@@ -155,6 +155,9 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "evidence request owner",
             "action request owner",
             "execution receipt owner",
+            "may execute workflows",
+            "can reconcile cases",
+            "may close records",
             "release gates own readiness",
             "gate release",
             "activate detectors",
@@ -179,6 +182,65 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     "custody_requirements_promote_workflow_authority",
                     custody_errors,
                 )
+
+    def test_authority_boundary_terms_are_rejected_in_all_registry_fields(
+        self,
+    ) -> None:
+        cases = {
+            "source_id": (
+                {"source_id": "alert_truth_source"},
+                "source_id_promotes_workflow_authority",
+            ),
+            "source_type": (
+                {"source_type": "approval_truth"},
+                "source_type_promotes_workflow_authority",
+            ),
+            "owner": (
+                {"owner": "release_truth_owner"},
+                "owner_promotes_workflow_authority",
+            ),
+            "allowed_target_class": (
+                {"allowed_target_class": "case_truth"},
+                "allowed_target_class_promotes_workflow_authority",
+            ),
+            "freshness_window": (
+                {"freshness_window": "readiness_truth"},
+                "freshness_window_promotes_workflow_authority",
+            ),
+            "status": (
+                {"status": "approval_truth"},
+                "status_promotes_workflow_authority",
+            ),
+            "degraded_states": (
+                {"degraded_states": ("approval_truth",)},
+                "degraded_states_promotes_workflow_authority",
+            ),
+            "disabled_states": (
+                {"disabled_states": ("case_truth",)},
+                "disabled_states_promotes_workflow_authority",
+            ),
+            "authority_posture": (
+                {"authority_posture": "workflow authority"},
+                "authority_posture_promotes_workflow_authority",
+            ),
+        }
+        for label, (override, expected_error) in cases.items():
+            with self.subTest(label=label):
+                errors = validate_phase63_evidence_source_entry(
+                    {**self._valid_osquery_entry(), **override}
+                )
+                self.assertIn(expected_error, errors)
+
+    def test_unknown_mapping_fields_fail_closed_before_coercion(self) -> None:
+        errors = validate_phase63_evidence_source_entry(
+            {
+                **self._valid_osquery_entry(),
+                "additional_sources": ["Velociraptor"],
+                "workflow_authority": "approval_truth",
+            }
+        )
+
+        self.assertIn("unknown_registry_entry_field", errors)
 
     def test_review_thread_workflow_truth_terms_fail_closed_after_normalization(
         self,
@@ -251,6 +313,28 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
         self.assertIn("source_identity_type_mismatch", errors)
         self.assertIn("source_identity_target_class_mismatch", errors)
         self.assertIn("source_identity_freshness_window_mismatch", errors)
+
+    def test_registry_rejects_swapped_source_custody_requirements(self) -> None:
+        malware_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[
+            "malwarebazaar_hash_reputation"
+        ].as_dict()
+        osquery_entry = self._valid_osquery_entry()
+
+        errors = validate_phase63_evidence_source_registry(
+            {
+                "osquery_host_state": {
+                    **osquery_entry,
+                    "custody_requirements": malware_entry["custody_requirements"],
+                },
+                "malwarebazaar_hash_reputation": {
+                    **malware_entry,
+                    "custody_requirements": osquery_entry["custody_requirements"],
+                },
+            }
+        )
+
+        self.assertIn("source_identity_custody_requirements_mismatch", errors)
+        self.assertIn("registry_key_custody_requirements_mismatch", errors)
 
     def test_registry_accepts_exported_mapping_shape(self) -> None:
         self.assertEqual(

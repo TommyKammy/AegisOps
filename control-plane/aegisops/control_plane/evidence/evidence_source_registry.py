@@ -38,6 +38,7 @@ class EvidenceSourceEntry:
         }
 
 
+_ENTRY_FIELD_NAMES = frozenset(EvidenceSourceEntry.__dataclass_fields__)
 _ALLOWED_SOURCE_TYPES = frozenset(
     {
         "osquery",
@@ -67,11 +68,24 @@ _REQUIRED_SOURCE_PROFILES = {
         "source_type": "osquery",
         "allowed_target_class": "explicitly_bound_host",
         "freshness_window": "PT24H",
+        "custody_terms": (
+            "reviewed query id",
+            "collection timestamp",
+            "host binding",
+            "AegisOps evidence record id",
+        ),
     },
     "malwarebazaar_hash_reputation": {
         "source_type": "malwarebazaar_hash_reputation",
         "allowed_target_class": "reviewed_file_hash",
         "freshness_window": "PT6H",
+        "custody_terms": (
+            "reviewed file hash",
+            "enrichment request id",
+            "collection timestamp",
+            "response digest",
+            "AegisOps evidence record id",
+        ),
     },
 }
 
@@ -111,6 +125,15 @@ _AUTHORITY_WIDENING_TERMS = (
     "action request",
     "approves",
     "approve",
+    "execute",
+    "executes",
+    "executing",
+    "reconcile",
+    "reconciles",
+    "reconciling",
+    "close",
+    "closes",
+    "closing",
     "execution receipt",
     "activate detector",
     "release gate",
@@ -125,6 +148,19 @@ _AUTHORITY_WIDENING_TERMS = (
 _NORMALIZED_AUTHORITY_WIDENING_TERMS = tuple(
     _normalize_boundary_text(term) for term in _AUTHORITY_WIDENING_TERMS
 )
+_AUTHORITY_FIELD_ERROR_CODES = {
+    "source_id": "source_id_promotes_workflow_authority",
+    "source_type": "source_type_promotes_workflow_authority",
+    "owner": "owner_promotes_workflow_authority",
+    "allowed_target_class": "allowed_target_class_promotes_workflow_authority",
+    "custody_requirements": "custody_requirements_promote_workflow_authority",
+    "freshness_window": "freshness_window_promotes_workflow_authority",
+    "confidence_posture": "confidence_posture_promotes_workflow_authority",
+    "status": "status_promotes_workflow_authority",
+    "authority_posture": "authority_posture_promotes_workflow_authority",
+    "degraded_states": "degraded_states_promotes_workflow_authority",
+    "disabled_states": "disabled_states_promotes_workflow_authority",
+}
 
 
 def _coerce_entry(
@@ -160,9 +196,42 @@ def _coerce_entry(
     )
 
 
+def _unknown_mapping_field_errors(
+    entry: EvidenceSourceEntry | Mapping[str, object],
+) -> list[str]:
+    if isinstance(entry, EvidenceSourceEntry):
+        return []
+    unknown_fields = frozenset(str(key) for key in entry) - _ENTRY_FIELD_NAMES
+    return ["unknown_registry_entry_field"] if unknown_fields else []
+
+
 def _has_authority_widening_claim(value: str) -> bool:
     normalized = _normalize_boundary_text(value)
     return any(term in normalized for term in _NORMALIZED_AUTHORITY_WIDENING_TERMS)
+
+
+def _authority_widening_field_errors(entry: EvidenceSourceEntry) -> list[str]:
+    scalar_fields = (
+        "source_id",
+        "source_type",
+        "owner",
+        "allowed_target_class",
+        "custody_requirements",
+        "freshness_window",
+        "confidence_posture",
+        "status",
+        "authority_posture",
+    )
+    sequence_fields = ("degraded_states", "disabled_states")
+
+    errors: list[str] = []
+    for field_name in scalar_fields:
+        if _has_authority_widening_claim(str(getattr(entry, field_name))):
+            errors.append(_AUTHORITY_FIELD_ERROR_CODES[field_name])
+    for field_name in sequence_fields:
+        if any(_has_authority_widening_claim(value) for value in getattr(entry, field_name)):
+            errors.append(_AUTHORITY_FIELD_ERROR_CODES[field_name])
+    return errors
 
 
 def _is_positive_time_duration(value: str) -> bool:
@@ -180,6 +249,7 @@ def _required_source_profile_errors(
     source_type_error: str,
     target_class_error: str,
     freshness_window_error: str,
+    custody_requirements_error: str,
 ) -> list[str]:
     required_profile = _REQUIRED_SOURCE_PROFILES.get(source_id)
     if required_profile is None:
@@ -192,6 +262,13 @@ def _required_source_profile_errors(
         errors.append(target_class_error)
     if entry.freshness_window != required_profile["freshness_window"]:
         errors.append(freshness_window_error)
+    custody_text = _normalize_boundary_text(entry.custody_requirements)
+    required_custody_terms = tuple(
+        _normalize_boundary_text(term)
+        for term in required_profile["custody_terms"]
+    )
+    if not all(term in custody_text for term in required_custody_terms):
+        errors.append(custody_requirements_error)
     return errors
 
 
@@ -209,6 +286,7 @@ def _registry_key_profile_errors(
             source_type_error="registry_key_source_type_mismatch",
             target_class_error="registry_key_target_class_mismatch",
             freshness_window_error="registry_key_freshness_window_mismatch",
+            custody_requirements_error="registry_key_custody_requirements_mismatch",
         )
     )
     return errors
@@ -251,8 +329,9 @@ PHASE63_EVIDENCE_SOURCE_REGISTRY: dict[str, EvidenceSourceEntry] = {
 def validate_phase63_evidence_source_entry(
     entry: EvidenceSourceEntry | Mapping[str, object],
 ) -> EvidenceSourceValidationErrors:
+    raw_errors = _unknown_mapping_field_errors(entry)
     candidate = _coerce_entry(entry)
-    errors: list[str] = []
+    errors: list[str] = list(raw_errors)
 
     if not candidate.source_id:
         errors.append("missing_source_id")
@@ -271,6 +350,7 @@ def validate_phase63_evidence_source_entry(
             source_type_error="source_identity_type_mismatch",
             target_class_error="source_identity_target_class_mismatch",
             freshness_window_error="source_identity_freshness_window_mismatch",
+            custody_requirements_error="source_identity_custody_requirements_mismatch",
         )
     )
 
@@ -307,11 +387,7 @@ def validate_phase63_evidence_source_entry(
     if candidate.authority_posture != _SUBORDINATE_AUTHORITY_POSTURE:
         errors.append("authority_posture_not_subordinate")
 
-    if _has_authority_widening_claim(candidate.confidence_posture):
-        errors.append("confidence_posture_promotes_workflow_authority")
-
-    if _has_authority_widening_claim(candidate.custody_requirements):
-        errors.append("custody_requirements_promote_workflow_authority")
+    errors.extend(_authority_widening_field_errors(candidate))
 
     return tuple(dict.fromkeys(errors))
 
@@ -325,27 +401,29 @@ def validate_phase63_evidence_source_registry(
     registry_keys: tuple[str, ...] = ()
     if isinstance(entries, Mapping):
         keyed_entries = tuple(
-            (str(source_id).strip(), _coerce_entry(entry))
+            (str(source_id).strip(), entry, _coerce_entry(entry))
             for source_id, entry in entries.items()
         )
-        registry_keys = tuple(source_id for source_id, _ in keyed_entries)
-        candidates = tuple(entry for _, entry in keyed_entries)
+        registry_keys = tuple(source_id for source_id, _, _ in keyed_entries)
+        raw_candidates = tuple(entry for _, entry, _ in keyed_entries)
+        candidates = tuple(entry for _, _, entry in keyed_entries)
     else:
         keyed_entries = ()
-        candidates = tuple(_coerce_entry(entry) for entry in entries)
+        raw_candidates = tuple(entries)
+        candidates = tuple(_coerce_entry(entry) for entry in raw_candidates)
     errors: list[str] = []
 
     source_ids = {entry.source_id for entry in candidates}
     if registry_keys and set(registry_keys) != source_ids:
         errors.append("registry_key_source_id_mismatch")
-    for registry_key, entry in keyed_entries:
+    for registry_key, _, entry in keyed_entries:
         errors.extend(_registry_key_profile_errors(registry_key, entry))
     if source_ids != _ALLOWED_SOURCE_IDS:
         errors.append("registry_source_ids_not_bounded")
     if len(candidates) != len(_ALLOWED_SOURCE_IDS):
         errors.append("broad_or_default_source_list")
 
-    for entry in candidates:
+    for entry in raw_candidates:
         errors.extend(validate_phase63_evidence_source_entry(entry))
 
     return tuple(dict.fromkeys(errors))

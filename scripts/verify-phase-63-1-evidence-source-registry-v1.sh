@@ -39,6 +39,9 @@ required_registry_phrases=(
   '"source_degraded"'
   '"authority_posture_not_subordinate"'
   '"registry_key_source_type_mismatch"'
+  '"unknown_registry_entry_field"'
+  '"source_identity_custody_requirements_mismatch"'
+  '"owner_promotes_workflow_authority"'
 )
 
 for phrase in "${required_registry_phrases[@]}"; do
@@ -53,7 +56,9 @@ required_doc_phrases=(
   'Selected Bounded Enrichment Rationale'
   'Broad or default evidence source lists are rejected.'
   'Unsupported broad sources are rejected, including Velociraptor, YARA, capa, MISP breadth, Suricata, and IntelOwl breadth.'
-  'Registry entries that claim workflow authority are rejected.'
+  'Registry entries that claim workflow authority are rejected across source id, source type, owner, target class, custody, freshness, confidence, status, degraded states, disabled states, and authority posture fields.'
+  'Unknown mapping fields are rejected before coercion so ignored JSON keys cannot smuggle broad source lists or workflow-authority claims.'
+  'Custody requirements are source-specific: osquery must keep reviewed query, collection timestamp, host binding, and AegisOps evidence record custody; MalwareBazaar must keep reviewed hash, enrichment request, collection timestamp, response digest, and AegisOps evidence record custody.'
   'This registry cannot let osquery output, hash-reputation output, source-native state, evidence packs, freshness or confidence projections, UI state, browser state, AI output, verifier output, or issue-lint output approve, execute, reconcile, close, activate detectors, create source truth, gate release, or claim readiness.'
 )
 
@@ -65,8 +70,8 @@ required_validation_phrases=(
   '# Phase 63.1 Evidence Source Registry v1 Validation'
   'Validation status: PASS'
   'The registry now covers exactly two entries: `osquery_host_state` and `malwarebazaar_hash_reputation`.'
-  'The focused test suite rejects unsupported broad sources, missing owner, missing freshness window, malformed freshness windows, missing custody requirements, missing allowed target class, disabled source use, degraded source use, target-class mismatch, swapped source identity/type/target/freshness pairings, source types outside the reviewed pair, and registry entries that claim workflow authority or workflow-truth ownership.'
-  'The registry validator accepts the exported `PHASE63_EVIDENCE_SOURCE_REGISTRY` mapping directly and rejects mapping-key drift from the embedded `source_id`, including same-set key/value swaps and key/profile mismatches between the two bounded entries.'
+  'The focused test suite rejects unsupported broad sources, missing owner, missing freshness window, malformed freshness windows, missing custody requirements, missing allowed target class, disabled source use, degraded source use, target-class mismatch, swapped source identity/type/target/freshness/custody pairings, unknown mapping fields, source types outside the reviewed pair, and registry entries that claim workflow authority or workflow-truth ownership in any registry field.'
+  'The registry validator accepts the exported `PHASE63_EVIDENCE_SOURCE_REGISTRY` mapping directly and rejects mapping-key drift from the embedded `source_id`, including same-set key/value swaps, source-specific custody drift, and key/profile mismatches between the two bounded entries.'
   'No Velociraptor, YARA, capa, MISP breadth, Suricata, or IntelOwl breadth is implemented.'
 )
 
