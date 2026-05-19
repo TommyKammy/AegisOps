@@ -148,6 +148,15 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "evidence_request_truth",
             "audit_truth",
             "limitation_truth",
+            "workflow authority",
+            "admitted alert workflow owner",
+            "evidence request owner",
+            "action request owner",
+            "execution receipt owner",
+            "release gates own readiness",
+            "gate release",
+            "activate detectors",
+            "claim readiness",
         ):
             with self.subTest(prohibited_claim=prohibited_claim):
                 errors = validate_phase63_evidence_source_entry(
@@ -240,6 +249,9 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             }
         )
         self.assertIn("registry_key_entry_source_id_mismatch", errors)
+        self.assertIn("registry_key_source_type_mismatch", errors)
+        self.assertIn("registry_key_target_class_mismatch", errors)
+        self.assertIn("registry_key_freshness_window_mismatch", errors)
 
 
 if __name__ == "__main__":

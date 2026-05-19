@@ -77,27 +77,39 @@ _REQUIRED_SOURCE_PROFILES = {
 
 _AUTHORITY_WIDENING_TERMS = (
     "authoritative",
+    "workflow authority",
     "workflow truth",
     "alert truth",
+    "admitted alert",
     "case truth",
     "evidence truth",
     "evidence request truth",
+    "evidence request",
     "approval truth",
+    "approval",
     "action request truth",
+    "action request",
     "approves",
     "approve",
     "receipt truth",
     "execution receipt truth",
+    "execution receipt",
     "execution truth",
     "reconciliation truth",
     "audit truth",
     "detector activation truth",
+    "activate detector",
     "release truth",
     "release gate truth",
+    "release gate",
+    "gate release",
     "gate truth",
     "limitation truth",
+    "limitation",
     "closeout truth",
+    "closeout state",
     "readiness truth",
+    "claim readiness",
     "source truth",
     "close cases",
     "case closure",
@@ -276,6 +288,16 @@ def validate_phase63_evidence_source_registry(
         errors.append("registry_key_source_id_mismatch")
     if any(source_id != entry.source_id for source_id, entry in keyed_entries):
         errors.append("registry_key_entry_source_id_mismatch")
+    for registry_key, entry in keyed_entries:
+        required_profile = _REQUIRED_SOURCE_PROFILES.get(registry_key)
+        if required_profile is None:
+            continue
+        if entry.source_type != required_profile["source_type"]:
+            errors.append("registry_key_source_type_mismatch")
+        if entry.allowed_target_class != required_profile["allowed_target_class"]:
+            errors.append("registry_key_target_class_mismatch")
+        if entry.freshness_window != required_profile["freshness_window"]:
+            errors.append("registry_key_freshness_window_mismatch")
     if source_ids != _ALLOWED_SOURCE_IDS:
         errors.append("registry_source_ids_not_bounded")
     if source_types != _ALLOWED_SOURCE_TYPES:
