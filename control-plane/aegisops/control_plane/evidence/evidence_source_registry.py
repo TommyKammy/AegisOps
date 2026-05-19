@@ -63,6 +63,20 @@ _FRESHNESS_WINDOW_PATTERN = re.compile(
     r"^PT(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?$"
 )
 
+_OSQUERY_REQUIRED_CUSTODY_TERMS = (
+    "reviewed query id",
+    "operator or automation attribution",
+    "collection timestamp",
+    "host binding",
+    "AegisOps evidence record id",
+)
+_MALWAREBAZAAR_REQUIRED_CUSTODY_TERMS = (
+    "reviewed file hash",
+    "enrichment request id",
+    "collection timestamp",
+    "response digest",
+    "AegisOps evidence record id",
+)
 _REQUIRED_SOURCE_PROFILES = {
     "osquery_host_state": {
         "source_type": "osquery",
@@ -71,13 +85,7 @@ _REQUIRED_SOURCE_PROFILES = {
         "confidence_posture": "observed_host_state_subordinate_context",
         "degraded_states": ("missing_host_binding", "stale_collection"),
         "disabled_states": ("disabled_by_policy", "missing_custody"),
-        "custody_terms": (
-            "reviewed query id",
-            "operator or automation attribution",
-            "collection timestamp",
-            "host binding",
-            "AegisOps evidence record id",
-        ),
+        "custody_terms": _OSQUERY_REQUIRED_CUSTODY_TERMS,
     },
     "malwarebazaar_hash_reputation": {
         "source_type": "malwarebazaar_hash_reputation",
@@ -86,13 +94,7 @@ _REQUIRED_SOURCE_PROFILES = {
         "confidence_posture": "external_hash_reputation_subordinate_context",
         "degraded_states": ("stale_reputation", "incomplete_response_digest"),
         "disabled_states": ("disabled_by_policy", "missing_hash_custody"),
-        "custody_terms": (
-            "reviewed file hash",
-            "enrichment request id",
-            "collection timestamp",
-            "response digest",
-            "AegisOps evidence record id",
-        ),
+        "custody_terms": _MALWAREBAZAAR_REQUIRED_CUSTODY_TERMS,
     },
 }
 
@@ -123,6 +125,13 @@ _PROHIBITED_WORKFLOW_TRUTH_CLAIMS = (
     "closeout_state_truth",
     "readiness_truth",
 )
+_DETECTOR_ACTIVATION_AUTHORITY_TERMS = (
+    "activate detector",
+    "activates detector",
+    "activated detector",
+    "activating detector",
+    "detector activated",
+)
 _AUTHORITY_WIDENING_TERMS = (
     "authoritative",
     "workflow authority",
@@ -142,11 +151,7 @@ _AUTHORITY_WIDENING_TERMS = (
     "close",
     "closes",
     "closing",
-    "activate detector",
-    "activates detector",
-    "activated detector",
-    "activating detector",
-    "detector activated",
+    *_DETECTOR_ACTIVATION_AUTHORITY_TERMS,
     "execution receipt",
     "release gate",
     "gate release",
@@ -160,7 +165,7 @@ _AUTHORITY_WIDENING_TERMS = (
 _NORMALIZED_AUTHORITY_WIDENING_TERMS = tuple(
     _normalize_boundary_text(term) for term in _AUTHORITY_WIDENING_TERMS
 )
-_BROAD_OR_DEFAULT_SOURCE_TERMS = (
+_DEFERRED_EVIDENCE_SOURCE_TERMS = (
     "Velociraptor",
     "YARA",
     "capa",
@@ -169,6 +174,9 @@ _BROAD_OR_DEFAULT_SOURCE_TERMS = (
     "Suricata",
     "IntelOwl",
     "IntelOwl breadth",
+)
+_BROAD_OR_DEFAULT_SOURCE_TERMS = (
+    *_DEFERRED_EVIDENCE_SOURCE_TERMS,
     "default evidence source list",
     "evidence source marketplace",
     "public internet pivot",
@@ -322,18 +330,18 @@ def _required_source_profile_errors(
         return []
 
     errors: list[str] = []
-    if entry.source_type != required_profile["source_type"]:
-        errors.append(source_type_error)
-    if entry.allowed_target_class != required_profile["allowed_target_class"]:
-        errors.append(target_class_error)
-    if entry.freshness_window != required_profile["freshness_window"]:
-        errors.append(freshness_window_error)
-    if entry.confidence_posture != required_profile["confidence_posture"]:
-        errors.append(confidence_posture_error)
-    if entry.degraded_states != required_profile["degraded_states"]:
-        errors.append(degraded_states_error)
-    if entry.disabled_states != required_profile["disabled_states"]:
-        errors.append(disabled_states_error)
+    profile_bound_fields = (
+        ("source_type", source_type_error),
+        ("allowed_target_class", target_class_error),
+        ("freshness_window", freshness_window_error),
+        ("confidence_posture", confidence_posture_error),
+        ("degraded_states", degraded_states_error),
+        ("disabled_states", disabled_states_error),
+    )
+    for field_name, error_code in profile_bound_fields:
+        if getattr(entry, field_name) != required_profile[field_name]:
+            errors.append(error_code)
+
     custody_text = _normalize_boundary_text(entry.custody_requirements)
     required_custody_terms = tuple(
         _normalize_boundary_text(term)
