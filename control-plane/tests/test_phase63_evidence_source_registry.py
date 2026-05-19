@@ -474,6 +474,24 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     "and AegisOps evidence record id"
                 ),
             },
+            "osquery_reviewed_term_missing": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "reviewed query id missing, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "malwarebazaar_reviewed_term_absent": {
+                **PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "malwarebazaar_hash_reputation"
+                ].as_dict(),
+                "custody_requirements": (
+                    "reviewed file hash absent, enrichment request id, "
+                    "collection timestamp, response digest, "
+                    "and AegisOps evidence record id"
+                ),
+            },
         }
         for label, entry in cases.items():
             with self.subTest(label=label):

@@ -224,6 +224,14 @@ _AUTHORITY_FIELD_ERROR_CODES = {
     "disabled_states": "disabled_states_promotes_workflow_authority",
 }
 _NEGATED_REQUIRED_CUSTODY_PREFIXES = ("not", "no", "without")
+_NEGATED_REQUIRED_CUSTODY_SUFFIXES = (
+    "absent",
+    "missing",
+    "not present",
+    "omitted",
+    "unavailable",
+    "unverified",
+)
 
 
 def _coerce_entry(
@@ -343,11 +351,17 @@ def _contains_negated_required_custody_term(
     bounded_custody_text: str,
     required_custody_terms: tuple[str, ...],
 ) -> bool:
-    return any(
+    has_negated_prefix = any(
         f" {prefix} {term} " in bounded_custody_text
         for prefix in _NEGATED_REQUIRED_CUSTODY_PREFIXES
         for term in required_custody_terms
     )
+    has_negated_suffix = any(
+        f" {term} {suffix} " in bounded_custody_text
+        for term in required_custody_terms
+        for suffix in _NEGATED_REQUIRED_CUSTODY_SUFFIXES
+    )
+    return has_negated_prefix or has_negated_suffix
 
 
 def _contains_all_required_custody_terms(
