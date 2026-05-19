@@ -682,6 +682,14 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     "and AegisOps evidence record id"
                 ),
             },
+            "osquery_missing_reviewed_term": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "missing reviewed query id, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
         }
         for label, entry in cases.items():
             with self.subTest(label=label):
@@ -722,6 +730,42 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
 
         self.assertEqual(validate_phase63_evidence_source_entry(entry), ())
 
+    def test_review_thread_source_identity_values_reject_whitespace_drift(
+        self,
+    ) -> None:
+        cases = {
+            "source_id": (
+                {"source_id": " osquery_host_state "},
+                "source_id_whitespace_drift",
+            ),
+            "source_type": (
+                {"source_type": " osquery "},
+                "source_type_whitespace_drift",
+            ),
+        }
+        for label, (override, expected_error) in cases.items():
+            with self.subTest(label=label):
+                entry = {**self._valid_osquery_entry(), **override}
+                entry_errors = validate_phase63_evidence_source_entry(entry)
+                use_errors = validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                )
+                registry_errors = validate_phase63_evidence_source_registry(
+                    {
+                        "osquery_host_state": entry,
+                        "malwarebazaar_hash_reputation": (
+                            PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                                "malwarebazaar_hash_reputation"
+                            ]
+                        ),
+                    }
+                )
+
+                self.assertIn(expected_error, entry_errors)
+                self.assertIn(expected_error, use_errors)
+                self.assertIn(expected_error, registry_errors)
+
     def test_review_thread_workflow_truth_terms_fail_closed_after_normalization(
         self,
     ) -> None:
@@ -735,6 +779,7 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "production truth": "production truth",
             "case_truth": "case.truth",
             "source_truth": "source/truth",
+            "source_of_truth": "source of truth",
             "evidence_truth": "evidence:truth",
             "readiness_dot_truth": "readiness.truth",
         }

@@ -109,6 +109,8 @@ _PROHIBITED_RECORD_TRUTH_CLAIMS = (
     "alert_truth",
     "case_truth",
     "source_truth",
+    "source of truth",
+    "sources of truth",
     "evidence_truth",
     "evidence_request_truth",
     "audit_truth",
@@ -281,7 +283,11 @@ _STATE_LIST_FIELD_ERROR_CODES = {
     "degraded_states": "degraded_states_not_sequence",
     "disabled_states": "disabled_states_not_sequence",
 }
-_NEGATED_REQUIRED_CUSTODY_PREFIXES = ("not", "no", "without")
+_SOURCE_IDENTITY_FIELD_WHITESPACE_ERROR_CODES = {
+    "source_id": "source_id_whitespace_drift",
+    "source_type": "source_type_whitespace_drift",
+}
+_NEGATED_REQUIRED_CUSTODY_PREFIXES = ("missing", "not", "no", "without")
 _NEGATED_REQUIRED_CUSTODY_SUFFIXES = (
     "absent",
     "missing",
@@ -348,6 +354,20 @@ def _state_list_shape_errors(
     errors: list[str] = []
     for field_name, error_code in _STATE_LIST_FIELD_ERROR_CODES.items():
         if isinstance(entry.get(field_name), Mapping):
+            errors.append(error_code)
+    return errors
+
+
+def _source_identity_whitespace_errors(
+    entry: EvidenceSourceEntry | Mapping[str, object],
+) -> list[str]:
+    if isinstance(entry, EvidenceSourceEntry):
+        return []
+    errors: list[str] = []
+    field_error_codes = _SOURCE_IDENTITY_FIELD_WHITESPACE_ERROR_CODES.items()
+    for field_name, error_code in field_error_codes:
+        value = entry.get(field_name)
+        if isinstance(value, str) and value != value.strip():
             errors.append(error_code)
     return errors
 
@@ -603,6 +623,7 @@ def validate_phase63_evidence_source_entry(
 ) -> EvidenceSourceValidationErrors:
     raw_errors = _unknown_mapping_field_errors(entry)
     raw_errors.extend(_state_list_shape_errors(entry))
+    raw_errors.extend(_source_identity_whitespace_errors(entry))
     candidate = _coerce_entry(entry)
     errors: list[str] = list(raw_errors)
 
