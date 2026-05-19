@@ -80,6 +80,7 @@ _MALWAREBAZAAR_REQUIRED_CUSTODY_TERMS = (
 _REQUIRED_SOURCE_PROFILES = {
     "osquery_host_state": {
         "source_type": "osquery",
+        "owner": "IT Operations, Information Systems Department",
         "allowed_target_class": "explicitly_bound_host",
         "freshness_window": "PT24H",
         "confidence_posture": "observed_host_state_subordinate_context",
@@ -89,6 +90,7 @@ _REQUIRED_SOURCE_PROFILES = {
     },
     "malwarebazaar_hash_reputation": {
         "source_type": "malwarebazaar_hash_reputation",
+        "owner": "IT Operations, Information Systems Department",
         "allowed_target_class": "reviewed_file_hash",
         "freshness_window": "PT6H",
         "confidence_posture": "external_hash_reputation_subordinate_context",
@@ -147,6 +149,8 @@ _DETECTOR_ACTIVATION_AUTHORITY_TERMS = (
     "activated detectors",
     "activating detector",
     "activating detectors",
+    "detector activation",
+    "detector activations",
     "detector activated",
     "detectors activated",
 )
@@ -212,6 +216,12 @@ _AUTHORITY_WIDENING_TERMS = (
     "limitation",
     "closeout state",
     "claim readiness",
+    "claims readiness",
+    "claimed readiness",
+    "claiming readiness",
+    "readiness claim",
+    "readiness claims",
+    "readiness claimed",
     "close cases",
     "case closure",
     *_PROHIBITED_WORKFLOW_TRUTH_CLAIMS,
@@ -231,6 +241,7 @@ _DEFERRED_EVIDENCE_SOURCE_TERMS = (
 _BROAD_OR_DEFAULT_SOURCE_TERMS = (
     *_DEFERRED_EVIDENCE_SOURCE_TERMS,
     "default evidence source list",
+    "default evidence source lists",
     "evidence source marketplace",
     "public internet pivot",
 )
@@ -272,6 +283,7 @@ _NEGATED_REQUIRED_CUSTODY_SUFFIXES = (
     "unavailable",
     "unverified",
 )
+_NEGATED_REQUIRED_CUSTODY_LINKING_VERBS = ("is", "are", "was", "were")
 
 
 def _coerce_entry(
@@ -415,6 +427,11 @@ def _contains_negated_required_custody_term(
         f" {term} {suffix} " in bounded_custody_text
         for term in required_custody_terms
         for suffix in _NEGATED_REQUIRED_CUSTODY_SUFFIXES
+    ) or any(
+        f" {term} {linking_verb} {suffix} " in bounded_custody_text
+        for term in required_custody_terms
+        for linking_verb in _NEGATED_REQUIRED_CUSTODY_LINKING_VERBS
+        for suffix in _NEGATED_REQUIRED_CUSTODY_SUFFIXES
     )
     return has_negated_prefix or has_negated_suffix
 
@@ -467,6 +484,7 @@ def _required_source_profile_errors(
     entry: EvidenceSourceEntry,
     *,
     source_type_error: str,
+    owner_error: str,
     target_class_error: str,
     freshness_window_error: str,
     confidence_posture_error: str,
@@ -481,6 +499,7 @@ def _required_source_profile_errors(
     errors: list[str] = []
     profile_bound_fields = (
         ("source_type", source_type_error),
+        ("owner", owner_error),
         ("allowed_target_class", target_class_error),
         ("freshness_window", freshness_window_error),
         ("confidence_posture", confidence_posture_error),
@@ -524,6 +543,7 @@ def _registry_key_profile_errors(
             registry_key,
             entry,
             source_type_error="registry_key_source_type_mismatch",
+            owner_error="registry_key_owner_mismatch",
             target_class_error="registry_key_target_class_mismatch",
             freshness_window_error="registry_key_freshness_window_mismatch",
             confidence_posture_error="registry_key_confidence_posture_mismatch",
@@ -592,6 +612,7 @@ def validate_phase63_evidence_source_entry(
             candidate.source_id,
             candidate,
             source_type_error="source_identity_type_mismatch",
+            owner_error="source_identity_owner_mismatch",
             target_class_error="source_identity_target_class_mismatch",
             freshness_window_error="source_identity_freshness_window_mismatch",
             confidence_posture_error="source_identity_confidence_posture_mismatch",

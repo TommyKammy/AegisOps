@@ -85,6 +85,11 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 "owner_promotes_workflow_authority",
             ),
             (
+                "owner_detector_activation",
+                {"owner": "detector activation"},
+                "owner_promotes_workflow_authority",
+            ),
+            (
                 "custody_detector_activated",
                 {"custody_requirements": "detector activated"},
                 "custody_requirements_promote_workflow_authority",
@@ -276,7 +281,11 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "activate detectors",
             "activated detector",
             "detector activated",
+            "detector activation",
             "claim readiness",
+            "claims readiness",
+            "claimed readiness",
+            "readiness claimed",
         ):
             with self.subTest(prohibited_claim=prohibited_claim):
                 errors = validate_phase63_evidence_source_entry(
@@ -471,6 +480,7 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 )
             },
             "confidence": {"confidence_posture": "YARA match subordinate context"},
+            "default_sources": {"confidence_posture": "default evidence source lists"},
             "owner": {"owner": "MISP enrichment owner"},
             "degraded": {"degraded_states": ("Suricata alert linked",)},
             "disabled": {"disabled_states": ("IntelOwl lookup missing",)},
@@ -630,6 +640,24 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     "and AegisOps evidence record id"
                 ),
             },
+            "osquery_reviewed_term_is_missing": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "reviewed query id is missing, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "malwarebazaar_reviewed_term_is_absent": {
+                **PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "malwarebazaar_hash_reputation"
+                ].as_dict(),
+                "custody_requirements": (
+                    "reviewed file hash is absent, enrichment request id, "
+                    "collection timestamp, response digest, "
+                    "and AegisOps evidence record id"
+                ),
+            },
         }
         for label, entry in cases.items():
             with self.subTest(label=label):
@@ -637,6 +665,30 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 self.assertIn(
                     "source_identity_custody_requirements_mismatch", errors
                 )
+
+    def test_review_thread_owner_must_match_reviewed_profile_value(self) -> None:
+        entry = {
+            **self._valid_osquery_entry(),
+            "owner": "Unreviewed External Team",
+        }
+
+        entry_errors = validate_phase63_evidence_source_entry(entry)
+        use_errors = validate_phase63_evidence_source_use(
+            entry,
+            target_class="explicitly_bound_host",
+        )
+        registry_errors = validate_phase63_evidence_source_registry(
+            {
+                "osquery_host_state": entry,
+                "malwarebazaar_hash_reputation": PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "malwarebazaar_hash_reputation"
+                ],
+            }
+        )
+
+        self.assertIn("source_identity_owner_mismatch", entry_errors)
+        self.assertIn("source_identity_owner_mismatch", use_errors)
+        self.assertIn("registry_key_owner_mismatch", registry_errors)
 
     def test_mapping_without_authority_posture_uses_subordinate_default(
         self,
