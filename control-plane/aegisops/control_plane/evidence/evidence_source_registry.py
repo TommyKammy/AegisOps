@@ -120,6 +120,7 @@ _PROHIBITED_ACTION_TRUTH_CLAIMS = (
     "reconciliation_truth",
     "detector_activation_truth",
 )
+_READINESS_TRUTH_CLAIM = "readiness_truth"
 _PROHIBITED_CLOSEOUT_TRUTH_CLAIMS = (
     "release_truth",
     "release_gate_truth",
@@ -127,7 +128,7 @@ _PROHIBITED_CLOSEOUT_TRUTH_CLAIMS = (
     "limitation_truth",
     "closeout_truth",
     "closeout_state_truth",
-    "readiness_truth",
+    _READINESS_TRUTH_CLAIM,
 )
 _PROHIBITED_ENVIRONMENT_TRUTH_CLAIMS = (
     "production_truth",
