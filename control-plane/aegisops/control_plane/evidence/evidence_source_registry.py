@@ -103,20 +103,24 @@ def _normalize_boundary_text(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
 
 
-_PROHIBITED_WORKFLOW_TRUTH_CLAIMS = (
+_PROHIBITED_RECORD_TRUTH_CLAIMS = (
     "alert_truth",
     "case_truth",
     "source_truth",
     "evidence_truth",
     "evidence_request_truth",
+    "audit_truth",
+)
+_PROHIBITED_ACTION_TRUTH_CLAIMS = (
     "approval_truth",
     "action_request_truth",
     "receipt_truth",
     "execution_receipt_truth",
     "execution_truth",
     "reconciliation_truth",
-    "audit_truth",
     "detector_activation_truth",
+)
+_PROHIBITED_CLOSEOUT_TRUTH_CLAIMS = (
     "release_truth",
     "release_gate_truth",
     "gate_truth",
@@ -127,6 +131,11 @@ _PROHIBITED_WORKFLOW_TRUTH_CLAIMS = (
 )
 _PROHIBITED_ENVIRONMENT_TRUTH_CLAIMS = (
     "production_truth",
+)
+_PROHIBITED_WORKFLOW_TRUTH_CLAIMS = (
+    *_PROHIBITED_RECORD_TRUTH_CLAIMS,
+    *_PROHIBITED_ACTION_TRUTH_CLAIMS,
+    *_PROHIBITED_CLOSEOUT_TRUTH_CLAIMS,
 )
 _DETECTOR_ACTIVATION_AUTHORITY_TERMS = (
     "activate detector",
