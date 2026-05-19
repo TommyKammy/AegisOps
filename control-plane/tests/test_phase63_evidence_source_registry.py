@@ -251,6 +251,17 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     custody_errors,
                 )
 
+    def test_authority_boundary_terms_require_word_boundaries(self) -> None:
+        entry = {
+            **self._valid_osquery_entry(),
+            "custody_requirements": (
+                self._valid_osquery_entry()["custody_requirements"]
+                + ", enclosed support bundle reference"
+            ),
+        }
+
+        self.assertEqual(validate_phase63_evidence_source_entry(entry), ())
+
     def test_authority_boundary_terms_are_rejected_in_all_registry_fields(
         self,
     ) -> None:
@@ -321,6 +332,39 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
         )
 
         self.assertIn("unknown_registry_entry_field", errors)
+
+    def test_mapping_state_lists_reject_mapping_values_before_coercion(self) -> None:
+        cases = {
+            "degraded_states": (
+                {
+                    "degraded_states": {
+                        "missing_host_binding": "approval_truth",
+                        "stale_collection": "Velociraptor",
+                    }
+                },
+                "degraded_states_not_sequence",
+            ),
+            "disabled_states": (
+                {
+                    "disabled_states": {
+                        "disabled_by_policy": "case_truth",
+                        "missing_custody": "MISP",
+                    }
+                },
+                "disabled_states_not_sequence",
+            ),
+        }
+        for label, (override, expected_error) in cases.items():
+            with self.subTest(label=label):
+                entry = {**self._valid_osquery_entry(), **override}
+                entry_errors = validate_phase63_evidence_source_entry(entry)
+                use_errors = validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                )
+
+                self.assertIn(expected_error, entry_errors)
+                self.assertIn(expected_error, use_errors)
 
     def test_broad_sources_are_rejected_in_known_entry_fields(self) -> None:
         cases = {

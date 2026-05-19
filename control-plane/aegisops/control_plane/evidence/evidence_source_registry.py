@@ -140,19 +140,28 @@ _PROHIBITED_WORKFLOW_TRUTH_CLAIMS = (
 )
 _DETECTOR_ACTIVATION_AUTHORITY_TERMS = (
     "activate detector",
+    "activate detectors",
     "activates detector",
+    "activates detectors",
     "activated detector",
+    "activated detectors",
     "activating detector",
+    "activating detectors",
     "detector activated",
+    "detectors activated",
 )
 _AUTHORITY_WIDENING_TERMS = (
     "authoritative",
     "workflow authority",
     "workflow truth",
     "admitted alert",
+    "admitted alerts",
     "admit alert",
+    "admit alerts",
     "admits alert",
+    "admits alerts",
     "admitting alert",
+    "admitting alerts",
     "alert admission",
     "evidence request",
     "approval",
@@ -172,7 +181,9 @@ _AUTHORITY_WIDENING_TERMS = (
     *_DETECTOR_ACTIVATION_AUTHORITY_TERMS,
     "execution receipt",
     "release gate",
+    "release gates",
     "gate release",
+    "gate releases",
     "limitation",
     "closeout state",
     "claim readiness",
@@ -223,6 +234,10 @@ _AUTHORITY_FIELD_ERROR_CODES = {
     "degraded_states": "degraded_states_promotes_workflow_authority",
     "disabled_states": "disabled_states_promotes_workflow_authority",
 }
+_STATE_LIST_FIELD_ERROR_CODES = {
+    "degraded_states": "degraded_states_not_sequence",
+    "disabled_states": "disabled_states_not_sequence",
+}
 _NEGATED_REQUIRED_CUSTODY_PREFIXES = ("not", "no", "without")
 _NEGATED_REQUIRED_CUSTODY_SUFFIXES = (
     "absent",
@@ -248,6 +263,8 @@ def _coerce_entry(
         value = entry.get(key, ())
         if isinstance(value, str):
             return (value.strip(),) if value.strip() else ()
+        if isinstance(value, Mapping):
+            return ()
         if isinstance(value, Iterable):
             return tuple(str(item).strip() for item in value if str(item).strip())
         return ()
@@ -278,9 +295,23 @@ def _unknown_mapping_field_errors(
     return ["unknown_registry_entry_field"] if unknown_fields else []
 
 
+def _state_list_shape_errors(
+    entry: EvidenceSourceEntry | Mapping[str, object],
+) -> list[str]:
+    if isinstance(entry, EvidenceSourceEntry):
+        return []
+    errors: list[str] = []
+    for field_name, error_code in _STATE_LIST_FIELD_ERROR_CODES.items():
+        if isinstance(entry.get(field_name), Mapping):
+            errors.append(error_code)
+    return errors
+
+
 def _has_authority_widening_claim(value: str) -> bool:
-    normalized = _normalize_boundary_text(value)
-    return any(term in normalized for term in _NORMALIZED_AUTHORITY_WIDENING_TERMS)
+    normalized = f" {_normalize_boundary_text(value)} "
+    return any(
+        f" {term} " in normalized for term in _NORMALIZED_AUTHORITY_WIDENING_TERMS
+    )
 
 
 def _has_broad_or_default_source_claim(value: str) -> bool:
@@ -491,6 +522,7 @@ def validate_phase63_evidence_source_entry(
     entry: EvidenceSourceEntry | Mapping[str, object],
 ) -> EvidenceSourceValidationErrors:
     raw_errors = _unknown_mapping_field_errors(entry)
+    raw_errors.extend(_state_list_shape_errors(entry))
     candidate = _coerce_entry(entry)
     errors: list[str] = list(raw_errors)
 
