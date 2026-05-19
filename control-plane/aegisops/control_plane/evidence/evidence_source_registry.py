@@ -124,6 +124,8 @@ _PROHIBITED_WORKFLOW_TRUTH_CLAIMS = (
     "closeout_truth",
     "closeout_state_truth",
     "readiness_truth",
+)
+_PROHIBITED_ENVIRONMENT_TRUTH_CLAIMS = (
     "production_truth",
 )
 _DETECTOR_ACTIVATION_AUTHORITY_TERMS = (
@@ -167,6 +169,7 @@ _AUTHORITY_WIDENING_TERMS = (
     "close cases",
     "case closure",
     *_PROHIBITED_WORKFLOW_TRUTH_CLAIMS,
+    *_PROHIBITED_ENVIRONMENT_TRUTH_CLAIMS,
 )
 _NORMALIZED_AUTHORITY_WIDENING_TERMS = tuple(
     _normalize_boundary_text(term) for term in _AUTHORITY_WIDENING_TERMS
@@ -319,6 +322,34 @@ def _broad_or_default_source_errors(entry: EvidenceSourceEntry) -> list[str]:
     return []
 
 
+def _contains_required_custody_term(
+    bounded_custody_text: str,
+    required_custody_term: str,
+) -> bool:
+    return f" {required_custody_term} " in bounded_custody_text
+
+
+def _contains_negated_required_custody_term(
+    bounded_custody_text: str,
+    required_custody_terms: tuple[str, ...],
+) -> bool:
+    return any(
+        f" {prefix} {term} " in bounded_custody_text
+        for prefix in _NEGATED_REQUIRED_CUSTODY_PREFIXES
+        for term in required_custody_terms
+    )
+
+
+def _contains_all_required_custody_terms(
+    bounded_custody_text: str,
+    required_custody_terms: tuple[str, ...],
+) -> bool:
+    return all(
+        _contains_required_custody_term(bounded_custody_text, term)
+        for term in required_custody_terms
+    )
+
+
 def _is_positive_time_duration(value: str) -> bool:
     match = _FRESHNESS_WINDOW_PATTERN.fullmatch(value)
     if not match:
@@ -362,13 +393,12 @@ def _required_source_profile_errors(
         for term in required_profile["custody_terms"]
     )
     bounded_custody_text = f" {custody_text} "
-    has_negated_required_term = any(
-        f" {prefix} {term} " in bounded_custody_text
-        for prefix in _NEGATED_REQUIRED_CUSTODY_PREFIXES
-        for term in required_custody_terms
-    )
-    if has_negated_required_term or not all(
-        f" {term} " in bounded_custody_text for term in required_custody_terms
+    if _contains_negated_required_custody_term(
+        bounded_custody_text,
+        required_custody_terms,
+    ) or not _contains_all_required_custody_terms(
+        bounded_custody_text,
+        required_custody_terms,
     ):
         errors.append(custody_requirements_error)
     return errors

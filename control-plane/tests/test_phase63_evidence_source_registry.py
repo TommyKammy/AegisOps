@@ -530,6 +530,22 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     custody_errors,
                 )
 
+    def test_review_thread_production_truth_owner_examples_fail_closed(
+        self,
+    ) -> None:
+        for owner in ("production_truth", "production truth"):
+            with self.subTest(owner=owner):
+                entry = {**self._valid_osquery_entry(), "owner": owner}
+
+                entry_errors = validate_phase63_evidence_source_entry(entry)
+                use_errors = validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                )
+
+                self.assertIn("owner_promotes_workflow_authority", entry_errors)
+                self.assertIn("owner_promotes_workflow_authority", use_errors)
+
     def test_malformed_freshness_windows_fail_closed(self) -> None:
         for freshness_window in ("PT", "PTbananas", "PT-6H", "P1D", "PT0H"):
             with self.subTest(freshness_window=freshness_window):
