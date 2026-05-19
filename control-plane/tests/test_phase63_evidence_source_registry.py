@@ -242,6 +242,38 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
 
         self.assertIn("unknown_registry_entry_field", errors)
 
+    def test_source_use_validates_mapping_fields_before_coercion(self) -> None:
+        errors = validate_phase63_evidence_source_use(
+            {
+                **self._valid_osquery_entry(),
+                "additional_sources": ["Velociraptor"],
+                "workflow_authority": "approval_truth",
+            },
+            target_class="explicitly_bound_host",
+        )
+
+        self.assertIn("unknown_registry_entry_field", errors)
+
+    def test_broad_sources_are_rejected_in_known_entry_fields(self) -> None:
+        cases = {
+            "custody": {
+                "custody_requirements": (
+                    self._valid_osquery_entry()["custody_requirements"]
+                    + ", Velociraptor flow id"
+                )
+            },
+            "confidence": {"confidence_posture": "YARA match subordinate context"},
+            "owner": {"owner": "MISP breadth enrichment owner"},
+            "degraded": {"degraded_states": ("Suricata alert linked",)},
+            "disabled": {"disabled_states": ("IntelOwl breadth missing",)},
+        }
+        for label, override in cases.items():
+            with self.subTest(label=label):
+                errors = validate_phase63_evidence_source_entry(
+                    {**self._valid_osquery_entry(), **override}
+                )
+                self.assertIn("unsupported_broad_source_reference", errors)
+
     def test_review_thread_workflow_truth_terms_fail_closed_after_normalization(
         self,
     ) -> None:
@@ -251,6 +283,10 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "gate_truth": "Gate Truth",
             "closeout_truth": "closeout_truth",
             "readiness_truth": "readiness truth",
+            "case_truth": "case.truth",
+            "source_truth": "source/truth",
+            "evidence_truth": "evidence:truth",
+            "readiness_dot_truth": "readiness.truth",
         }
         for label, prohibited_claim in cases.items():
             with self.subTest(label=label):
@@ -314,6 +350,36 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
         self.assertIn("source_identity_target_class_mismatch", errors)
         self.assertIn("source_identity_freshness_window_mismatch", errors)
 
+    def test_registry_rejects_swapped_source_confidence_and_states(self) -> None:
+        malware_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[
+            "malwarebazaar_hash_reputation"
+        ].as_dict()
+        osquery_entry = self._valid_osquery_entry()
+
+        errors = validate_phase63_evidence_source_registry(
+            {
+                "osquery_host_state": {
+                    **osquery_entry,
+                    "confidence_posture": malware_entry["confidence_posture"],
+                    "degraded_states": malware_entry["degraded_states"],
+                    "disabled_states": malware_entry["disabled_states"],
+                },
+                "malwarebazaar_hash_reputation": {
+                    **malware_entry,
+                    "confidence_posture": osquery_entry["confidence_posture"],
+                    "degraded_states": osquery_entry["degraded_states"],
+                    "disabled_states": osquery_entry["disabled_states"],
+                },
+            }
+        )
+
+        self.assertIn("source_identity_confidence_posture_mismatch", errors)
+        self.assertIn("source_identity_degraded_states_mismatch", errors)
+        self.assertIn("source_identity_disabled_states_mismatch", errors)
+        self.assertIn("registry_key_confidence_posture_mismatch", errors)
+        self.assertIn("registry_key_degraded_states_mismatch", errors)
+        self.assertIn("registry_key_disabled_states_mismatch", errors)
+
     def test_registry_rejects_swapped_source_custody_requirements(self) -> None:
         malware_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[
             "malwarebazaar_hash_reputation"
@@ -372,6 +438,9 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
         self.assertIn("registry_key_source_type_mismatch", errors)
         self.assertIn("registry_key_target_class_mismatch", errors)
         self.assertIn("registry_key_freshness_window_mismatch", errors)
+        self.assertIn("registry_key_confidence_posture_mismatch", errors)
+        self.assertIn("registry_key_degraded_states_mismatch", errors)
+        self.assertIn("registry_key_disabled_states_mismatch", errors)
 
 
 if __name__ == "__main__":

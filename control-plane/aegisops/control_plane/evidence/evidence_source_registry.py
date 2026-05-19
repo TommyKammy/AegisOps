@@ -68,6 +68,9 @@ _REQUIRED_SOURCE_PROFILES = {
         "source_type": "osquery",
         "allowed_target_class": "explicitly_bound_host",
         "freshness_window": "PT24H",
+        "confidence_posture": "observed_host_state_subordinate_context",
+        "degraded_states": ("missing_host_binding", "stale_collection"),
+        "disabled_states": ("disabled_by_policy", "missing_custody"),
         "custody_terms": (
             "reviewed query id",
             "collection timestamp",
@@ -79,6 +82,9 @@ _REQUIRED_SOURCE_PROFILES = {
         "source_type": "malwarebazaar_hash_reputation",
         "allowed_target_class": "reviewed_file_hash",
         "freshness_window": "PT6H",
+        "confidence_posture": "external_hash_reputation_subordinate_context",
+        "degraded_states": ("stale_reputation", "incomplete_response_digest"),
+        "disabled_states": ("disabled_by_policy", "missing_hash_custody"),
         "custody_terms": (
             "reviewed file hash",
             "enrichment request id",
@@ -89,8 +95,9 @@ _REQUIRED_SOURCE_PROFILES = {
     },
 }
 
+
 def _normalize_boundary_text(value: str) -> str:
-    return re.sub(r"\s+", " ", value.lower().replace("_", " ").replace("-", " ")).strip()
+    return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
 
 
 _PROHIBITED_WORKFLOW_TRUTH_CLAIMS = (
@@ -147,6 +154,20 @@ _AUTHORITY_WIDENING_TERMS = (
 )
 _NORMALIZED_AUTHORITY_WIDENING_TERMS = tuple(
     _normalize_boundary_text(term) for term in _AUTHORITY_WIDENING_TERMS
+)
+_BROAD_OR_DEFAULT_SOURCE_TERMS = (
+    "Velociraptor",
+    "YARA",
+    "capa",
+    "MISP breadth",
+    "Suricata",
+    "IntelOwl breadth",
+    "default evidence source list",
+    "evidence source marketplace",
+    "public internet pivot",
+)
+_NORMALIZED_BROAD_OR_DEFAULT_SOURCE_TERMS = tuple(
+    _normalize_boundary_text(term) for term in _BROAD_OR_DEFAULT_SOURCE_TERMS
 )
 _AUTHORITY_FIELD_ERROR_CODES = {
     "source_id": "source_id_promotes_workflow_authority",
@@ -210,6 +231,14 @@ def _has_authority_widening_claim(value: str) -> bool:
     return any(term in normalized for term in _NORMALIZED_AUTHORITY_WIDENING_TERMS)
 
 
+def _has_broad_or_default_source_claim(value: str) -> bool:
+    normalized = f" {_normalize_boundary_text(value)} "
+    return any(
+        f" {term} " in normalized
+        for term in _NORMALIZED_BROAD_OR_DEFAULT_SOURCE_TERMS
+    )
+
+
 def _authority_widening_field_errors(entry: EvidenceSourceEntry) -> list[str]:
     scalar_fields = (
         "source_id",
@@ -234,6 +263,28 @@ def _authority_widening_field_errors(entry: EvidenceSourceEntry) -> list[str]:
     return errors
 
 
+def _entry_text_values(entry: EvidenceSourceEntry) -> tuple[str, ...]:
+    return (
+        entry.source_id,
+        entry.source_type,
+        entry.owner,
+        entry.allowed_target_class,
+        entry.custody_requirements,
+        entry.freshness_window,
+        entry.confidence_posture,
+        entry.status,
+        entry.authority_posture,
+        *entry.degraded_states,
+        *entry.disabled_states,
+    )
+
+
+def _broad_or_default_source_errors(entry: EvidenceSourceEntry) -> list[str]:
+    if any(_has_broad_or_default_source_claim(value) for value in _entry_text_values(entry)):
+        return ["unsupported_broad_source_reference"]
+    return []
+
+
 def _is_positive_time_duration(value: str) -> bool:
     match = _FRESHNESS_WINDOW_PATTERN.fullmatch(value)
     if not match:
@@ -249,6 +300,9 @@ def _required_source_profile_errors(
     source_type_error: str,
     target_class_error: str,
     freshness_window_error: str,
+    confidence_posture_error: str,
+    degraded_states_error: str,
+    disabled_states_error: str,
     custody_requirements_error: str,
 ) -> list[str]:
     required_profile = _REQUIRED_SOURCE_PROFILES.get(source_id)
@@ -262,6 +316,12 @@ def _required_source_profile_errors(
         errors.append(target_class_error)
     if entry.freshness_window != required_profile["freshness_window"]:
         errors.append(freshness_window_error)
+    if entry.confidence_posture != required_profile["confidence_posture"]:
+        errors.append(confidence_posture_error)
+    if entry.degraded_states != required_profile["degraded_states"]:
+        errors.append(degraded_states_error)
+    if entry.disabled_states != required_profile["disabled_states"]:
+        errors.append(disabled_states_error)
     custody_text = _normalize_boundary_text(entry.custody_requirements)
     required_custody_terms = tuple(
         _normalize_boundary_text(term)
@@ -286,6 +346,9 @@ def _registry_key_profile_errors(
             source_type_error="registry_key_source_type_mismatch",
             target_class_error="registry_key_target_class_mismatch",
             freshness_window_error="registry_key_freshness_window_mismatch",
+            confidence_posture_error="registry_key_confidence_posture_mismatch",
+            degraded_states_error="registry_key_degraded_states_mismatch",
+            disabled_states_error="registry_key_disabled_states_mismatch",
             custody_requirements_error="registry_key_custody_requirements_mismatch",
         )
     )
@@ -350,6 +413,9 @@ def validate_phase63_evidence_source_entry(
             source_type_error="source_identity_type_mismatch",
             target_class_error="source_identity_target_class_mismatch",
             freshness_window_error="source_identity_freshness_window_mismatch",
+            confidence_posture_error="source_identity_confidence_posture_mismatch",
+            degraded_states_error="source_identity_degraded_states_mismatch",
+            disabled_states_error="source_identity_disabled_states_mismatch",
             custody_requirements_error="source_identity_custody_requirements_mismatch",
         )
     )
@@ -388,6 +454,7 @@ def validate_phase63_evidence_source_entry(
         errors.append("authority_posture_not_subordinate")
 
     errors.extend(_authority_widening_field_errors(candidate))
+    errors.extend(_broad_or_default_source_errors(candidate))
 
     return tuple(dict.fromkeys(errors))
 
@@ -434,8 +501,8 @@ def validate_phase63_evidence_source_use(
     *,
     target_class: str,
 ) -> EvidenceSourceValidationErrors:
+    errors = list(validate_phase63_evidence_source_entry(entry))
     candidate = _coerce_entry(entry)
-    errors = list(validate_phase63_evidence_source_entry(candidate))
 
     if candidate.status == "disabled":
         errors.append("source_disabled")
