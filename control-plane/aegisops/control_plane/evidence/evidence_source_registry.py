@@ -190,6 +190,9 @@ _RECONCILIATION_AUTHORITY_TERMS = (
     "reconcile",
     "reconciles",
     "reconciling",
+    "reconciliation owner",
+    "reconciliation owners",
+    "reconciliation ownership",
 )
 _CLOSURE_AUTHORITY_TERMS = (
     "closed",
@@ -209,11 +212,13 @@ _AUTHORITY_WIDENING_TERMS = (
     *_CLOSURE_AUTHORITY_TERMS,
     *_DETECTOR_ACTIVATION_AUTHORITY_TERMS,
     "execution receipt",
+    "execution receipts",
     "release gate",
     "release gates",
     "gate release",
     "gate releases",
     "limitation",
+    "limitations",
     "closeout state",
     "claim readiness",
     "claims readiness",
@@ -243,7 +248,9 @@ _BROAD_OR_DEFAULT_SOURCE_TERMS = (
     "default evidence source list",
     "default evidence source lists",
     "evidence source marketplace",
+    "evidence source marketplaces",
     "public internet pivot",
+    "public internet pivots",
 )
 _NORMALIZED_BROAD_OR_DEFAULT_SOURCE_TERMS = tuple(
     _normalize_boundary_text(term) for term in _BROAD_OR_DEFAULT_SOURCE_TERMS
@@ -278,7 +285,9 @@ _NEGATED_REQUIRED_CUSTODY_PREFIXES = ("not", "no", "without")
 _NEGATED_REQUIRED_CUSTODY_SUFFIXES = (
     "absent",
     "missing",
+    "not available",
     "not present",
+    "not verified",
     "omitted",
     "unavailable",
     "unverified",

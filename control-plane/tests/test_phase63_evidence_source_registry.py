@@ -203,6 +203,8 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "intelowl": "IntelOwl breadth",
             "default_source_list": "default evidence source list",
             "marketplace": "evidence source marketplace",
+            "marketplaces": "evidence source marketplaces",
+            "public_pivots": "public internet pivots",
         }
         for label, source_type in cases.items():
             with self.subTest(label=label):
@@ -273,11 +275,15 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "evidence request owner",
             "action request owner",
             "execution receipt owner",
+            "execution receipts owner",
             "may execute workflows",
             "can reconcile cases",
+            "reconciliation owner",
+            "reconciliation ownership",
             "may close records",
             "release gates own readiness",
             "gate release",
+            "limitations owner",
             "activate detectors",
             "activated detector",
             "detector activated",
@@ -481,6 +487,8 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             },
             "confidence": {"confidence_posture": "YARA match subordinate context"},
             "default_sources": {"confidence_posture": "default evidence source lists"},
+            "marketplaces": {"confidence_posture": "evidence source marketplaces"},
+            "public_pivots": {"confidence_posture": "public internet pivots"},
             "owner": {"owner": "MISP enrichment owner"},
             "degraded": {"degraded_states": ("Suricata alert linked",)},
             "disabled": {"disabled_states": ("IntelOwl lookup missing",)},
@@ -644,6 +652,22 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 **self._valid_osquery_entry(),
                 "custody_requirements": (
                     "reviewed query id is missing, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "osquery_reviewed_term_is_not_available": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "reviewed query id is not available, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "osquery_reviewed_term_is_not_verified": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "reviewed query id is not verified, "
                     "operator or automation attribution, collection timestamp, "
                     "host binding, and AegisOps evidence record id"
                 ),
