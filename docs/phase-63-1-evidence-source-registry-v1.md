@@ -25,13 +25,13 @@ The enrichment result can support analyst review only after the file hash is alr
 
 - The registry must stay bounded to `osquery_host_state` and `malwarebazaar_hash_reputation`.
 - Broad or default evidence source lists are rejected.
-- Unsupported broad sources are rejected, including Velociraptor, YARA, capa, MISP breadth, Suricata, and IntelOwl breadth.
+- Unsupported broad sources are rejected, including Velociraptor, YARA, capa, MISP, MISP breadth, Suricata, IntelOwl, and IntelOwl breadth.
 - Unsupported broad source names are rejected even when embedded in known registry text fields such as custody, confidence, owner, degraded states, or disabled states.
 - Missing owner, missing freshness window, missing custody requirements, missing allowed target class, disabled source use, degraded source use, and target-class mismatch fail closed.
 - Source types outside `osquery` and `malwarebazaar_hash_reputation` are rejected.
 - Registry entries that claim workflow authority are rejected across source id, source type, owner, target class, custody, freshness, confidence, status, degraded states, disabled states, and authority posture fields.
 - Unknown mapping fields are rejected before coercion so ignored JSON keys cannot smuggle broad source lists or workflow-authority claims.
-- Custody requirements are source-specific: osquery must keep reviewed query, collection timestamp, host binding, and AegisOps evidence record custody; MalwareBazaar must keep reviewed hash, enrichment request, collection timestamp, response digest, and AegisOps evidence record custody.
+- Custody requirements are source-specific: osquery must keep reviewed query, operator or automation attribution, collection timestamp, host binding, and AegisOps evidence record custody; MalwareBazaar must keep reviewed hash, enrichment request, collection timestamp, response digest, and AegisOps evidence record custody.
 - Confidence posture plus degraded and disabled state lists are source-specific: they must remain bound to the source id rather than borrowed from another bounded source profile.
 
 ## 5. Authority Boundary

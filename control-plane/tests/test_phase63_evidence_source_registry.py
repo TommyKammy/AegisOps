@@ -80,8 +80,10 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "velociraptor": "Velociraptor",
             "yara": "YARA",
             "capa": "capa",
+            "misp": "MISP",
             "misp_breadth": "MISP breadth",
             "suricata": "Suricata",
+            "intelowl_bare": "IntelOwl",
             "intelowl": "IntelOwl breadth",
             "default_source_list": "default evidence source list",
             "marketplace": "evidence source marketplace",
@@ -161,6 +163,8 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "release gates own readiness",
             "gate release",
             "activate detectors",
+            "activated detector",
+            "detector activated",
             "claim readiness",
         ):
             with self.subTest(prohibited_claim=prohibited_claim):
@@ -263,9 +267,9 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 )
             },
             "confidence": {"confidence_posture": "YARA match subordinate context"},
-            "owner": {"owner": "MISP breadth enrichment owner"},
+            "owner": {"owner": "MISP enrichment owner"},
             "degraded": {"degraded_states": ("Suricata alert linked",)},
-            "disabled": {"disabled_states": ("IntelOwl breadth missing",)},
+            "disabled": {"disabled_states": ("IntelOwl lookup missing",)},
         }
         for label, override in cases.items():
             with self.subTest(label=label):
@@ -273,6 +277,58 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     {**self._valid_osquery_entry(), **override}
                 )
                 self.assertIn("unsupported_broad_source_reference", errors)
+
+    def test_osquery_custody_requires_operator_or_automation_attribution(
+        self,
+    ) -> None:
+        errors = validate_phase63_evidence_source_entry(
+            {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "reviewed query id, collection timestamp, host binding, "
+                    "and AegisOps evidence record id"
+                ),
+            }
+        )
+
+        self.assertIn("source_identity_custody_requirements_mismatch", errors)
+
+    def test_unreviewed_custody_terms_do_not_satisfy_reviewed_requirements(
+        self,
+    ) -> None:
+        cases = {
+            "osquery": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "unreviewed query id, operator or automation attribution, "
+                    "collection timestamp, host binding, "
+                    "and AegisOps evidence record id"
+                ),
+            },
+            "malwarebazaar": {
+                **PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "malwarebazaar_hash_reputation"
+                ].as_dict(),
+                "custody_requirements": (
+                    "unreviewed file hash, enrichment request id, collection timestamp, "
+                    "response digest, and AegisOps evidence record id"
+                ),
+            },
+        }
+        for label, entry in cases.items():
+            with self.subTest(label=label):
+                errors = validate_phase63_evidence_source_entry(entry)
+                self.assertIn(
+                    "source_identity_custody_requirements_mismatch", errors
+                )
+
+    def test_mapping_without_authority_posture_uses_subordinate_default(
+        self,
+    ) -> None:
+        entry = self._valid_osquery_entry()
+        entry.pop("authority_posture")
+
+        self.assertEqual(validate_phase63_evidence_source_entry(entry), ())
 
     def test_review_thread_workflow_truth_terms_fail_closed_after_normalization(
         self,

@@ -73,6 +73,7 @@ _REQUIRED_SOURCE_PROFILES = {
         "disabled_states": ("disabled_by_policy", "missing_custody"),
         "custody_terms": (
             "reviewed query id",
+            "operator or automation attribution",
             "collection timestamp",
             "host binding",
             "AegisOps evidence record id",
@@ -141,8 +142,12 @@ _AUTHORITY_WIDENING_TERMS = (
     "close",
     "closes",
     "closing",
-    "execution receipt",
     "activate detector",
+    "activates detector",
+    "activated detector",
+    "activating detector",
+    "detector activated",
+    "execution receipt",
     "release gate",
     "gate release",
     "limitation",
@@ -159,8 +164,10 @@ _BROAD_OR_DEFAULT_SOURCE_TERMS = (
     "Velociraptor",
     "YARA",
     "capa",
+    "MISP",
     "MISP breadth",
     "Suricata",
+    "IntelOwl",
     "IntelOwl breadth",
     "default evidence source list",
     "evidence source marketplace",
@@ -190,8 +197,8 @@ def _coerce_entry(
     if isinstance(entry, EvidenceSourceEntry):
         return entry
 
-    def text_field(key: str) -> str:
-        value = entry.get(key, "")
+    def text_field(key: str, default: str = "") -> str:
+        value = entry.get(key, default)
         return str(value).strip() if value is not None else ""
 
     def tuple_field(key: str) -> tuple[str, ...]:
@@ -213,7 +220,9 @@ def _coerce_entry(
         status=text_field("status"),
         degraded_states=tuple_field("degraded_states"),
         disabled_states=tuple_field("disabled_states"),
-        authority_posture=text_field("authority_posture"),
+        authority_posture=text_field(
+            "authority_posture", _SUBORDINATE_AUTHORITY_POSTURE
+        ),
     )
 
 
@@ -258,7 +267,10 @@ def _authority_widening_field_errors(entry: EvidenceSourceEntry) -> list[str]:
         if _has_authority_widening_claim(str(getattr(entry, field_name))):
             errors.append(_AUTHORITY_FIELD_ERROR_CODES[field_name])
     for field_name in sequence_fields:
-        if any(_has_authority_widening_claim(value) for value in getattr(entry, field_name)):
+        if any(
+            _has_authority_widening_claim(value)
+            for value in getattr(entry, field_name)
+        ):
             errors.append(_AUTHORITY_FIELD_ERROR_CODES[field_name])
     return errors
 
@@ -327,7 +339,10 @@ def _required_source_profile_errors(
         _normalize_boundary_text(term)
         for term in required_profile["custody_terms"]
     )
-    if not all(term in custody_text for term in required_custody_terms):
+    bounded_custody_text = f" {custody_text} "
+    if not all(
+        f" {term} " in bounded_custody_text for term in required_custody_terms
+    ):
         errors.append(custody_requirements_error)
     return errors
 
