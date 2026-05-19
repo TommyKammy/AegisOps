@@ -79,44 +79,48 @@ def _normalize_boundary_text(value: str) -> str:
     return re.sub(r"\s+", " ", value.lower().replace("_", " ").replace("-", " ")).strip()
 
 
-_AUTHORITY_WIDENING_TERMS = (
-    "authoritative",
-    "workflow authority",
-    "workflow truth",
+_PROHIBITED_WORKFLOW_TRUTH_CLAIMS = (
     "alert_truth",
-    "admitted alert",
     "case_truth",
+    "source_truth",
     "evidence_truth",
     "evidence_request_truth",
-    "evidence request",
     "approval_truth",
-    "approval",
     "action_request_truth",
-    "action request",
-    "approves",
-    "approve",
     "receipt_truth",
     "execution_receipt_truth",
-    "execution receipt",
     "execution_truth",
     "reconciliation_truth",
     "audit_truth",
     "detector_activation_truth",
-    "activate detector",
     "release_truth",
     "release_gate_truth",
-    "release gate",
-    "gate release",
     "gate_truth",
     "limitation_truth",
-    "limitation",
     "closeout_truth",
-    "closeout state",
+    "closeout_state_truth",
     "readiness_truth",
+)
+_AUTHORITY_WIDENING_TERMS = (
+    "authoritative",
+    "workflow authority",
+    "workflow truth",
+    "admitted alert",
+    "evidence request",
+    "approval",
+    "action request",
+    "approves",
+    "approve",
+    "execution receipt",
+    "activate detector",
+    "release gate",
+    "gate release",
+    "limitation",
+    "closeout state",
     "claim readiness",
-    "source_truth",
     "close cases",
     "case closure",
+    *_PROHIBITED_WORKFLOW_TRUTH_CLAIMS,
 )
 _NORMALIZED_AUTHORITY_WIDENING_TERMS = tuple(
     _normalize_boundary_text(term) for term in _AUTHORITY_WIDENING_TERMS
@@ -188,6 +192,25 @@ def _required_source_profile_errors(
         errors.append(target_class_error)
     if entry.freshness_window != required_profile["freshness_window"]:
         errors.append(freshness_window_error)
+    return errors
+
+
+def _registry_key_profile_errors(
+    registry_key: str,
+    entry: EvidenceSourceEntry,
+) -> list[str]:
+    errors: list[str] = []
+    if registry_key != entry.source_id:
+        errors.append("registry_key_entry_source_id_mismatch")
+    errors.extend(
+        _required_source_profile_errors(
+            registry_key,
+            entry,
+            source_type_error="registry_key_source_type_mismatch",
+            target_class_error="registry_key_target_class_mismatch",
+            freshness_window_error="registry_key_freshness_window_mismatch",
+        )
+    )
     return errors
 
 
@@ -313,25 +336,12 @@ def validate_phase63_evidence_source_registry(
     errors: list[str] = []
 
     source_ids = {entry.source_id for entry in candidates}
-    source_types = {entry.source_type for entry in candidates}
     if registry_keys and set(registry_keys) != source_ids:
         errors.append("registry_key_source_id_mismatch")
-    if any(source_id != entry.source_id for source_id, entry in keyed_entries):
-        errors.append("registry_key_entry_source_id_mismatch")
     for registry_key, entry in keyed_entries:
-        errors.extend(
-            _required_source_profile_errors(
-                registry_key,
-                entry,
-                source_type_error="registry_key_source_type_mismatch",
-                target_class_error="registry_key_target_class_mismatch",
-                freshness_window_error="registry_key_freshness_window_mismatch",
-            )
-        )
+        errors.extend(_registry_key_profile_errors(registry_key, entry))
     if source_ids != _ALLOWED_SOURCE_IDS:
         errors.append("registry_source_ids_not_bounded")
-    if source_types != _ALLOWED_SOURCE_TYPES:
-        errors.append("registry_source_types_not_bounded")
     if len(candidates) != len(_ALLOWED_SOURCE_IDS):
         errors.append("broad_or_default_source_list")
 

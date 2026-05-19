@@ -145,6 +145,8 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "gate_truth",
             "closeout_truth",
             "readiness_truth",
+            "closeout-state-truth",
+            "Readiness Truth",
             "evidence_request_truth",
             "audit_truth",
             "limitation_truth",
@@ -166,6 +168,40 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     }
                 )
                 self.assertIn("confidence_posture_promotes_workflow_authority", errors)
+
+                custody_errors = validate_phase63_evidence_source_entry(
+                    {
+                        **self._valid_osquery_entry(),
+                        "custody_requirements": prohibited_claim,
+                    }
+                )
+                self.assertIn(
+                    "custody_requirements_promote_workflow_authority",
+                    custody_errors,
+                )
+
+    def test_review_thread_workflow_truth_terms_fail_closed_after_normalization(
+        self,
+    ) -> None:
+        cases = {
+            "alert_truth": "alert_truth",
+            "release_truth": "release-truth",
+            "gate_truth": "Gate Truth",
+            "closeout_truth": "closeout_truth",
+            "readiness_truth": "readiness truth",
+        }
+        for label, prohibited_claim in cases.items():
+            with self.subTest(label=label):
+                confidence_errors = validate_phase63_evidence_source_entry(
+                    {
+                        **self._valid_osquery_entry(),
+                        "confidence_posture": prohibited_claim,
+                    }
+                )
+                self.assertIn(
+                    "confidence_posture_promotes_workflow_authority",
+                    confidence_errors,
+                )
 
                 custody_errors = validate_phase63_evidence_source_entry(
                     {
