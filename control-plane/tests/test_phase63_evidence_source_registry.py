@@ -102,6 +102,43 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 self.assertIn(expected_error, entry_errors)
                 self.assertIn(expected_error, use_errors)
 
+    def test_review_thread_approval_and_alert_admission_variants_fail_closed(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "owner_approving_cases",
+                {"owner": "approving cases"},
+                "owner_promotes_workflow_authority",
+            ),
+            (
+                "owner_may_admit_alerts",
+                {"owner": "may admit alerts"},
+                "owner_promotes_workflow_authority",
+            ),
+            (
+                "confidence_admit_alert",
+                {"confidence_posture": "admit alert"},
+                "confidence_posture_promotes_workflow_authority",
+            ),
+            (
+                "custody_alert_admission",
+                {"custody_requirements": "alert admission"},
+                "custody_requirements_promote_workflow_authority",
+            ),
+        )
+        for label, override, expected_error in cases:
+            with self.subTest(label=label):
+                entry = {**self._valid_osquery_entry(), **override}
+                entry_errors = validate_phase63_evidence_source_entry(entry)
+                use_errors = validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                )
+
+                self.assertIn(expected_error, entry_errors)
+                self.assertIn(expected_error, use_errors)
+
     def test_registry_rejects_broad_and_deferred_sources(self) -> None:
         cases = {
             "velociraptor": "Velociraptor",
@@ -315,6 +352,27 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             ("bare_misp_custody", {"custody_requirements": "MISP"}),
             ("bare_intelowl_owner", {"owner": "IntelOwl"}),
             ("bare_intelowl_disabled_state", {"disabled_states": ("IntelOwl",)}),
+        )
+        for label, override in cases:
+            with self.subTest(label=label):
+                entry = {**self._valid_osquery_entry(), **override}
+                entry_errors = validate_phase63_evidence_source_entry(entry)
+                use_errors = validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                )
+
+                self.assertIn("unsupported_broad_source_reference", entry_errors)
+                self.assertIn("unsupported_broad_source_reference", use_errors)
+
+    def test_review_thread_punctuated_broad_source_claims_fail_closed(
+        self,
+    ) -> None:
+        cases = (
+            ("punctuated_misp", {"owner": "M.I.S.P. enrichment owner"}),
+            ("punctuated_yara", {"confidence_posture": "Y.A.R.A match"}),
+            ("punctuated_capa", {"custody_requirements": "C.A.P.A output"}),
+            ("punctuated_intelowl", {"disabled_states": ("Intel.Owl lookup",)}),
         )
         for label, override in cases:
             with self.subTest(label=label):
@@ -574,6 +632,20 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             }
         )
         self.assertIn("registry_key_source_id_mismatch", errors)
+
+    def test_registry_rejects_whitespace_drifted_mapping_keys(self) -> None:
+        errors = validate_phase63_evidence_source_registry(
+            {
+                " osquery_host_state ": PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "osquery_host_state"
+                ],
+                " malwarebazaar_hash_reputation ": PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "malwarebazaar_hash_reputation"
+                ],
+            }
+        )
+        self.assertIn("registry_key_source_id_mismatch", errors)
+        self.assertIn("registry_key_entry_source_id_mismatch", errors)
 
     def test_registry_rejects_mapping_key_entry_source_id_swaps(self) -> None:
         errors = validate_phase63_evidence_source_registry(

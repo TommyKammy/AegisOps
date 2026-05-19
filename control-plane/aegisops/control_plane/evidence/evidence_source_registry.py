@@ -137,11 +137,16 @@ _AUTHORITY_WIDENING_TERMS = (
     "workflow authority",
     "workflow truth",
     "admitted alert",
+    "admit alert",
+    "admits alert",
+    "admitting alert",
+    "alert admission",
     "evidence request",
     "approval",
     "action request",
     "approves",
     "approve",
+    "approving",
     "execute",
     "executes",
     "executing",
@@ -181,6 +186,15 @@ _BROAD_OR_DEFAULT_SOURCE_TERMS = (
 )
 _NORMALIZED_BROAD_OR_DEFAULT_SOURCE_TERMS = tuple(
     _normalize_boundary_text(term) for term in _BROAD_OR_DEFAULT_SOURCE_TERMS
+)
+_NORMALIZED_BROAD_SOURCE_ALIASES = tuple(
+    alias
+    for alias in (
+        "m i s p",
+        "y a r a",
+        "c a p a",
+        "intel owl",
+    )
 )
 _AUTHORITY_FIELD_ERROR_CODES = {
     "source_id": "source_id_promotes_workflow_authority",
@@ -251,7 +265,7 @@ def _has_broad_or_default_source_claim(value: str) -> bool:
     return any(
         f" {term} " in normalized
         for term in _NORMALIZED_BROAD_OR_DEFAULT_SOURCE_TERMS
-    )
+    ) or any(f" {alias} " in normalized for alias in _NORMALIZED_BROAD_SOURCE_ALIASES)
 
 
 def _authority_widening_field_errors(entry: EvidenceSourceEntry) -> list[str]:
@@ -489,7 +503,7 @@ def validate_phase63_evidence_source_registry(
     registry_keys: tuple[str, ...] = ()
     if isinstance(entries, Mapping):
         keyed_entries = tuple(
-            (str(source_id).strip(), entry, _coerce_entry(entry))
+            (str(source_id), entry, _coerce_entry(entry))
             for source_id, entry in entries.items()
         )
         registry_keys = tuple(source_id for source_id, _, _ in keyed_entries)
