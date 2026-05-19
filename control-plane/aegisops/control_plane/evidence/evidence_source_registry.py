@@ -164,17 +164,24 @@ _AUTHORITY_WIDENING_TERMS = (
     "admitting alerts",
     "alert admission",
     "evidence request",
+    "evidence requests",
     "approval",
+    "approvals",
     "action request",
+    "action requests",
+    "approved",
     "approves",
     "approve",
     "approving",
+    "executed",
     "execute",
     "executes",
     "executing",
+    "reconciled",
     "reconcile",
     "reconciles",
     "reconciling",
+    "closed",
     "close",
     "closes",
     "closing",
@@ -412,6 +419,16 @@ def _is_positive_time_duration(value: str) -> bool:
     return any(part > 0 for part in parts)
 
 
+def _same_bounded_state_set(
+    candidate_states: tuple[str, ...],
+    required_states: tuple[str, ...],
+) -> bool:
+    return (
+        len(candidate_states) == len(required_states)
+        and frozenset(candidate_states) == frozenset(required_states)
+    )
+
+
 def _required_source_profile_errors(
     source_id: str,
     entry: EvidenceSourceEntry,
@@ -438,7 +455,13 @@ def _required_source_profile_errors(
         ("disabled_states", disabled_states_error),
     )
     for field_name, error_code in profile_bound_fields:
-        if getattr(entry, field_name) != required_profile[field_name]:
+        actual_value = getattr(entry, field_name)
+        required_value = required_profile[field_name]
+        if field_name in {"degraded_states", "disabled_states"}:
+            if not _same_bounded_state_set(actual_value, required_value):
+                errors.append(error_code)
+            continue
+        if actual_value != required_value:
             errors.append(error_code)
 
     custody_text = _normalize_boundary_text(entry.custody_requirements)

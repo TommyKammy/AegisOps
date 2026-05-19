@@ -117,6 +117,21 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 "owner_promotes_workflow_authority",
             ),
             (
+                "owner_approvals",
+                {"owner": "approvals owner"},
+                "owner_promotes_workflow_authority",
+            ),
+            (
+                "owner_action_requests",
+                {"owner": "action requests owner"},
+                "owner_promotes_workflow_authority",
+            ),
+            (
+                "owner_evidence_requests",
+                {"owner": "evidence requests owner"},
+                "owner_promotes_workflow_authority",
+            ),
+            (
                 "confidence_admit_alert",
                 {"confidence_posture": "admit alert"},
                 "confidence_posture_promotes_workflow_authority",
@@ -125,6 +140,38 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 "custody_alert_admission",
                 {"custody_requirements": "alert admission"},
                 "custody_requirements_promote_workflow_authority",
+            ),
+        )
+        for label, override, expected_error in cases:
+            with self.subTest(label=label):
+                entry = {**self._valid_osquery_entry(), **override}
+                entry_errors = validate_phase63_evidence_source_entry(entry)
+                use_errors = validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                )
+
+                self.assertIn(expected_error, entry_errors)
+                self.assertIn(expected_error, use_errors)
+
+    def test_review_thread_past_tense_authority_verbs_fail_closed(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "owner_executed_workflows",
+                {"owner": "executed workflows"},
+                "owner_promotes_workflow_authority",
+            ),
+            (
+                "owner_reconciled_cases",
+                {"owner": "reconciled cases"},
+                "owner_promotes_workflow_authority",
+            ),
+            (
+                "owner_closed_records",
+                {"owner": "closed records"},
+                "owner_promotes_workflow_authority",
             ),
         )
         for label, override, expected_error in cases:
@@ -365,6 +412,53 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
 
                 self.assertIn(expected_error, entry_errors)
                 self.assertIn(expected_error, use_errors)
+
+    def test_required_state_lists_compare_without_order_dependence(self) -> None:
+        entry = {
+            **self._valid_osquery_entry(),
+            "degraded_states": ("stale_collection", "missing_host_binding"),
+            "disabled_states": ("missing_custody", "disabled_by_policy"),
+        }
+
+        self.assertEqual(validate_phase63_evidence_source_entry(entry), ())
+        self.assertEqual(
+            validate_phase63_evidence_source_use(
+                entry,
+                target_class="explicitly_bound_host",
+            ),
+            (),
+        )
+
+    def test_required_state_lists_reject_duplicate_bounded_states(self) -> None:
+        cases = {
+            "degraded_states": (
+                {
+                    "degraded_states": (
+                        "missing_host_binding",
+                        "stale_collection",
+                        "stale_collection",
+                    )
+                },
+                "source_identity_degraded_states_mismatch",
+            ),
+            "disabled_states": (
+                {
+                    "disabled_states": (
+                        "disabled_by_policy",
+                        "missing_custody",
+                        "missing_custody",
+                    )
+                },
+                "source_identity_disabled_states_mismatch",
+            ),
+        }
+        for label, (override, expected_error) in cases.items():
+            with self.subTest(label=label):
+                errors = validate_phase63_evidence_source_entry(
+                    {**self._valid_osquery_entry(), **override}
+                )
+
+                self.assertIn(expected_error, errors)
 
     def test_broad_sources_are_rejected_in_known_entry_fields(self) -> None:
         cases = {
