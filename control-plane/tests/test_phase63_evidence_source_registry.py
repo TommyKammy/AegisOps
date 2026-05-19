@@ -452,6 +452,36 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     "source_identity_custody_requirements_mismatch", errors
                 )
 
+    def test_negated_reviewed_custody_terms_do_not_satisfy_requirements(
+        self,
+    ) -> None:
+        cases = {
+            "osquery_not_reviewed": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "not reviewed query id, operator or automation attribution, "
+                    "collection timestamp, host binding, "
+                    "and AegisOps evidence record id"
+                ),
+            },
+            "malwarebazaar_not_reviewed": {
+                **PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "malwarebazaar_hash_reputation"
+                ].as_dict(),
+                "custody_requirements": (
+                    "not reviewed file hash, enrichment request id, "
+                    "collection timestamp, response digest, "
+                    "and AegisOps evidence record id"
+                ),
+            },
+        }
+        for label, entry in cases.items():
+            with self.subTest(label=label):
+                errors = validate_phase63_evidence_source_entry(entry)
+                self.assertIn(
+                    "source_identity_custody_requirements_mismatch", errors
+                )
+
     def test_mapping_without_authority_posture_uses_subordinate_default(
         self,
     ) -> None:
@@ -469,6 +499,8 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "gate_truth": "Gate Truth",
             "closeout_truth": "closeout_truth",
             "readiness_truth": "readiness truth",
+            "production_truth": "production_truth",
+            "production truth": "production truth",
             "case_truth": "case.truth",
             "source_truth": "source/truth",
             "evidence_truth": "evidence:truth",

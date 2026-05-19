@@ -32,5 +32,5 @@ The registry records source confidence and freshness as subordinate evidence con
 ## Limitations
 
 - No broad evidence source marketplace is implemented.
-- No Velociraptor, YARA, capa, MISP, MISP breadth, Suricata, IntelOwl, or IntelOwl breadth is implemented.
+- No Velociraptor, YARA, capa, MISP, MISP breadth, Suricata, IntelOwl, or IntelOwl breadth is added to the Phase 63.1 evidence source registry. Existing out-of-registry integrations remain outside this registry scope.
 - No endpoint remediation, containment, destructive response, Controlled Write, Hard Write, Beta, RC, GA, commercial replacement readiness, or Phase 64/65/66/67 work is implemented.

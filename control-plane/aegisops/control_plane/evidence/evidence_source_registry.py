@@ -124,6 +124,7 @@ _PROHIBITED_WORKFLOW_TRUTH_CLAIMS = (
     "closeout_truth",
     "closeout_state_truth",
     "readiness_truth",
+    "production_truth",
 )
 _DETECTOR_ACTIVATION_AUTHORITY_TERMS = (
     "activate detector",
@@ -209,6 +210,7 @@ _AUTHORITY_FIELD_ERROR_CODES = {
     "degraded_states": "degraded_states_promotes_workflow_authority",
     "disabled_states": "disabled_states_promotes_workflow_authority",
 }
+_NEGATED_REQUIRED_CUSTODY_PREFIXES = ("not", "no", "without")
 
 
 def _coerce_entry(
@@ -360,7 +362,12 @@ def _required_source_profile_errors(
         for term in required_profile["custody_terms"]
     )
     bounded_custody_text = f" {custody_text} "
-    if not all(
+    has_negated_required_term = any(
+        f" {prefix} {term} " in bounded_custody_text
+        for prefix in _NEGATED_REQUIRED_CUSTODY_PREFIXES
+        for term in required_custody_terms
+    )
+    if has_negated_required_term or not all(
         f" {term} " in bounded_custody_text for term in required_custody_terms
     ):
         errors.append(custody_requirements_error)
