@@ -75,44 +75,51 @@ _REQUIRED_SOURCE_PROFILES = {
     },
 }
 
+def _normalize_boundary_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value.lower().replace("_", " ").replace("-", " ")).strip()
+
+
 _AUTHORITY_WIDENING_TERMS = (
     "authoritative",
     "workflow authority",
     "workflow truth",
-    "alert truth",
+    "alert_truth",
     "admitted alert",
-    "case truth",
-    "evidence truth",
-    "evidence request truth",
+    "case_truth",
+    "evidence_truth",
+    "evidence_request_truth",
     "evidence request",
-    "approval truth",
+    "approval_truth",
     "approval",
-    "action request truth",
+    "action_request_truth",
     "action request",
     "approves",
     "approve",
-    "receipt truth",
-    "execution receipt truth",
+    "receipt_truth",
+    "execution_receipt_truth",
     "execution receipt",
-    "execution truth",
-    "reconciliation truth",
-    "audit truth",
-    "detector activation truth",
+    "execution_truth",
+    "reconciliation_truth",
+    "audit_truth",
+    "detector_activation_truth",
     "activate detector",
-    "release truth",
-    "release gate truth",
+    "release_truth",
+    "release_gate_truth",
     "release gate",
     "gate release",
-    "gate truth",
-    "limitation truth",
+    "gate_truth",
+    "limitation_truth",
     "limitation",
-    "closeout truth",
+    "closeout_truth",
     "closeout state",
-    "readiness truth",
+    "readiness_truth",
     "claim readiness",
-    "source truth",
+    "source_truth",
     "close cases",
     "case closure",
+)
+_NORMALIZED_AUTHORITY_WIDENING_TERMS = tuple(
+    _normalize_boundary_text(term) for term in _AUTHORITY_WIDENING_TERMS
 )
 
 
@@ -150,8 +157,8 @@ def _coerce_entry(
 
 
 def _has_authority_widening_claim(value: str) -> bool:
-    normalized = value.lower().replace("_", " ").replace("-", " ")
-    return any(term in normalized for term in _AUTHORITY_WIDENING_TERMS)
+    normalized = _normalize_boundary_text(value)
+    return any(term in normalized for term in _NORMALIZED_AUTHORITY_WIDENING_TERMS)
 
 
 def _is_positive_time_duration(value: str) -> bool:
@@ -160,6 +167,28 @@ def _is_positive_time_duration(value: str) -> bool:
         return False
     parts = [int(part) for part in match.groups(default="0")]
     return any(part > 0 for part in parts)
+
+
+def _required_source_profile_errors(
+    source_id: str,
+    entry: EvidenceSourceEntry,
+    *,
+    source_type_error: str,
+    target_class_error: str,
+    freshness_window_error: str,
+) -> list[str]:
+    required_profile = _REQUIRED_SOURCE_PROFILES.get(source_id)
+    if required_profile is None:
+        return []
+
+    errors: list[str] = []
+    if entry.source_type != required_profile["source_type"]:
+        errors.append(source_type_error)
+    if entry.allowed_target_class != required_profile["allowed_target_class"]:
+        errors.append(target_class_error)
+    if entry.freshness_window != required_profile["freshness_window"]:
+        errors.append(freshness_window_error)
+    return errors
 
 
 PHASE63_EVIDENCE_SOURCE_REGISTRY: dict[str, EvidenceSourceEntry] = {
@@ -212,14 +241,15 @@ def validate_phase63_evidence_source_entry(
     elif candidate.source_type not in _ALLOWED_SOURCE_TYPES:
         errors.append("unsupported_source_type")
 
-    required_profile = _REQUIRED_SOURCE_PROFILES.get(candidate.source_id)
-    if required_profile is not None:
-        if candidate.source_type != required_profile["source_type"]:
-            errors.append("source_identity_type_mismatch")
-        if candidate.allowed_target_class != required_profile["allowed_target_class"]:
-            errors.append("source_identity_target_class_mismatch")
-        if candidate.freshness_window != required_profile["freshness_window"]:
-            errors.append("source_identity_freshness_window_mismatch")
+    errors.extend(
+        _required_source_profile_errors(
+            candidate.source_id,
+            candidate,
+            source_type_error="source_identity_type_mismatch",
+            target_class_error="source_identity_target_class_mismatch",
+            freshness_window_error="source_identity_freshness_window_mismatch",
+        )
+    )
 
     if not candidate.owner:
         errors.append("missing_owner")
@@ -289,15 +319,15 @@ def validate_phase63_evidence_source_registry(
     if any(source_id != entry.source_id for source_id, entry in keyed_entries):
         errors.append("registry_key_entry_source_id_mismatch")
     for registry_key, entry in keyed_entries:
-        required_profile = _REQUIRED_SOURCE_PROFILES.get(registry_key)
-        if required_profile is None:
-            continue
-        if entry.source_type != required_profile["source_type"]:
-            errors.append("registry_key_source_type_mismatch")
-        if entry.allowed_target_class != required_profile["allowed_target_class"]:
-            errors.append("registry_key_target_class_mismatch")
-        if entry.freshness_window != required_profile["freshness_window"]:
-            errors.append("registry_key_freshness_window_mismatch")
+        errors.extend(
+            _required_source_profile_errors(
+                registry_key,
+                entry,
+                source_type_error="registry_key_source_type_mismatch",
+                target_class_error="registry_key_target_class_mismatch",
+                freshness_window_error="registry_key_freshness_window_mismatch",
+            )
+        )
     if source_ids != _ALLOWED_SOURCE_IDS:
         errors.append("registry_source_ids_not_bounded")
     if source_types != _ALLOWED_SOURCE_TYPES:
