@@ -150,10 +150,7 @@ _DETECTOR_ACTIVATION_AUTHORITY_TERMS = (
     "detector activated",
     "detectors activated",
 )
-_AUTHORITY_WIDENING_TERMS = (
-    "authoritative",
-    "workflow authority",
-    "workflow truth",
+_ALERT_ADMISSION_AUTHORITY_TERMS = (
     "admitted alert",
     "admitted alerts",
     "admit alert",
@@ -163,28 +160,49 @@ _AUTHORITY_WIDENING_TERMS = (
     "admitting alert",
     "admitting alerts",
     "alert admission",
+)
+_REQUEST_AUTHORITY_TERMS = (
     "evidence request",
     "evidence requests",
-    "approval",
-    "approvals",
     "action request",
     "action requests",
+)
+_APPROVAL_AUTHORITY_TERMS = (
+    "approval",
+    "approvals",
     "approved",
     "approves",
     "approve",
     "approving",
+)
+_EXECUTION_AUTHORITY_TERMS = (
     "executed",
     "execute",
     "executes",
     "executing",
+)
+_RECONCILIATION_AUTHORITY_TERMS = (
     "reconciled",
     "reconcile",
     "reconciles",
     "reconciling",
+)
+_CLOSURE_AUTHORITY_TERMS = (
     "closed",
     "close",
     "closes",
     "closing",
+)
+_AUTHORITY_WIDENING_TERMS = (
+    "authoritative",
+    "workflow authority",
+    "workflow truth",
+    *_ALERT_ADMISSION_AUTHORITY_TERMS,
+    *_REQUEST_AUTHORITY_TERMS,
+    *_APPROVAL_AUTHORITY_TERMS,
+    *_EXECUTION_AUTHORITY_TERMS,
+    *_RECONCILIATION_AUTHORITY_TERMS,
+    *_CLOSURE_AUTHORITY_TERMS,
     *_DETECTOR_ACTIVATION_AUTHORITY_TERMS,
     "execution receipt",
     "release gate",
@@ -420,13 +438,28 @@ def _is_positive_time_duration(value: str) -> bool:
 
 
 def _same_bounded_state_set(
-    candidate_states: tuple[str, ...],
-    required_states: tuple[str, ...],
+    candidate_states: object,
+    required_states: object,
 ) -> bool:
+    if not isinstance(candidate_states, tuple) or not isinstance(required_states, tuple):
+        return False
     return (
         len(candidate_states) == len(required_states)
         and frozenset(candidate_states) == frozenset(required_states)
     )
+
+
+def _profile_field_matches(
+    field_name: str,
+    actual_value: object,
+    required_value: object,
+) -> bool:
+    if field_name in {"degraded_states", "disabled_states"}:
+        return _same_bounded_state_set(
+            actual_value,
+            required_value,
+        )
+    return actual_value == required_value
 
 
 def _required_source_profile_errors(
@@ -457,11 +490,7 @@ def _required_source_profile_errors(
     for field_name, error_code in profile_bound_fields:
         actual_value = getattr(entry, field_name)
         required_value = required_profile[field_name]
-        if field_name in {"degraded_states", "disabled_states"}:
-            if not _same_bounded_state_set(actual_value, required_value):
-                errors.append(error_code)
-            continue
-        if actual_value != required_value:
+        if not _profile_field_matches(field_name, actual_value, required_value):
             errors.append(error_code)
 
     custody_text = _normalize_boundary_text(entry.custody_requirements)
