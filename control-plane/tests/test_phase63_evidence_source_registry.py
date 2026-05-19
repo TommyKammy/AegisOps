@@ -94,6 +94,16 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 {"custody_requirements": "detector activated"},
                 "custody_requirements_promote_workflow_authority",
             ),
+            (
+                "custody_activate_a_detector",
+                {"custody_requirements": "activate a detector"},
+                "custody_requirements_promote_workflow_authority",
+            ),
+            (
+                "custody_activate_the_detector",
+                {"custody_requirements": "activate the detector"},
+                "custody_requirements_promote_workflow_authority",
+            ),
         )
         for label, override, expected_error in cases:
             with self.subTest(label=label):
@@ -177,6 +187,53 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 "owner_closed_records",
                 {"owner": "closed records"},
                 "owner_promotes_workflow_authority",
+            ),
+        )
+        for label, override, expected_error in cases:
+            with self.subTest(label=label):
+                entry = {**self._valid_osquery_entry(), **override}
+                entry_errors = validate_phase63_evidence_source_entry(entry)
+                use_errors = validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                )
+
+                self.assertIn(expected_error, entry_errors)
+                self.assertIn(expected_error, use_errors)
+
+    def test_review_thread_record_owner_authority_claims_fail_closed(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "custody_case_owner",
+                {
+                    "custody_requirements": (
+                        self._valid_osquery_entry()["custody_requirements"]
+                        + ", case owner"
+                    )
+                },
+                "custody_requirements_promote_workflow_authority",
+            ),
+            (
+                "custody_audit_owner",
+                {
+                    "custody_requirements": (
+                        self._valid_osquery_entry()["custody_requirements"]
+                        + ", audit owner"
+                    )
+                },
+                "custody_requirements_promote_workflow_authority",
+            ),
+            (
+                "custody_release_owner",
+                {
+                    "custody_requirements": (
+                        self._valid_osquery_entry()["custody_requirements"]
+                        + ", release owner"
+                    )
+                },
+                "custody_requirements_promote_workflow_authority",
             ),
         )
         for label, override, expected_error in cases:
@@ -668,6 +725,14 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 **self._valid_osquery_entry(),
                 "custody_requirements": (
                     "reviewed query id is not verified, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "osquery_reviewed_term_not_reviewed": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "reviewed query id not reviewed, "
                     "operator or automation attribution, collection timestamp, "
                     "host binding, and AegisOps evidence record id"
                 ),
