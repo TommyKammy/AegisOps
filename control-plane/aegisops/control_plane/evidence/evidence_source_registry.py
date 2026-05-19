@@ -263,11 +263,10 @@ def _coerce_entry(
         value = entry.get(key, ())
         if isinstance(value, str):
             return (value.strip(),) if value.strip() else ()
-        if isinstance(value, Mapping):
+        if not isinstance(value, Iterable) or isinstance(value, Mapping):
             return ()
-        if isinstance(value, Iterable):
-            return tuple(str(item).strip() for item in value if str(item).strip())
-        return ()
+        coerced_items = tuple(str(item).strip() for item in value)
+        return tuple(item for item in coerced_items if item)
 
     return EvidenceSourceEntry(
         source_id=text_field("source_id"),
