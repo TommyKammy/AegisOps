@@ -138,13 +138,95 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 )
                 self.assertIn("authority_posture_not_subordinate", errors)
 
-    def test_reviewed_registry_passes_contract_validation(self) -> None:
+    def test_authority_boundary_terms_are_rejected_in_entry_text(self) -> None:
+        for prohibited_claim in (
+            "alert_truth",
+            "release_truth",
+            "gate_truth",
+            "closeout_truth",
+            "readiness_truth",
+            "evidence_request_truth",
+            "audit_truth",
+            "limitation_truth",
+        ):
+            with self.subTest(prohibited_claim=prohibited_claim):
+                errors = validate_phase63_evidence_source_entry(
+                    {
+                        **self._valid_osquery_entry(),
+                        "confidence_posture": prohibited_claim,
+                    }
+                )
+                self.assertIn("confidence_posture_promotes_workflow_authority", errors)
+
+                custody_errors = validate_phase63_evidence_source_entry(
+                    {
+                        **self._valid_osquery_entry(),
+                        "custody_requirements": prohibited_claim,
+                    }
+                )
+                self.assertIn(
+                    "custody_requirements_promote_workflow_authority",
+                    custody_errors,
+                )
+
+    def test_malformed_freshness_windows_fail_closed(self) -> None:
+        for freshness_window in ("PT", "PTbananas", "PT-6H", "P1D", "PT0H"):
+            with self.subTest(freshness_window=freshness_window):
+                errors = validate_phase63_evidence_source_entry(
+                    {
+                        **self._valid_osquery_entry(),
+                        "freshness_window": freshness_window,
+                    }
+                )
+                self.assertIn("freshness_window_not_duration", errors)
+
+    def test_registry_rejects_swapped_source_identity_pairings(self) -> None:
+        malware_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[
+            "malwarebazaar_hash_reputation"
+        ].as_dict()
+        osquery_entry = self._valid_osquery_entry()
+
+        errors = validate_phase63_evidence_source_registry(
+            [
+                {
+                    **osquery_entry,
+                    "source_type": malware_entry["source_type"],
+                    "allowed_target_class": malware_entry["allowed_target_class"],
+                    "freshness_window": malware_entry["freshness_window"],
+                },
+                {
+                    **malware_entry,
+                    "source_type": osquery_entry["source_type"],
+                    "allowed_target_class": osquery_entry["allowed_target_class"],
+                    "freshness_window": osquery_entry["freshness_window"],
+                },
+            ]
+        )
+
+        self.assertIn("source_identity_type_mismatch", errors)
+        self.assertIn("source_identity_target_class_mismatch", errors)
+        self.assertIn("source_identity_freshness_window_mismatch", errors)
+
+    def test_registry_accepts_exported_mapping_shape(self) -> None:
         self.assertEqual(
             validate_phase63_evidence_source_registry(
-                PHASE63_EVIDENCE_SOURCE_REGISTRY.values()
+                PHASE63_EVIDENCE_SOURCE_REGISTRY
             ),
             (),
         )
+
+    def test_registry_rejects_mapping_key_source_id_drift(self) -> None:
+        errors = validate_phase63_evidence_source_registry(
+            {
+                "osquery_host_state": PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "osquery_host_state"
+                ],
+                "unexpected_hash_source": PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "malwarebazaar_hash_reputation"
+                ],
+            }
+        )
+        self.assertIn("registry_key_source_id_mismatch", errors)
 
 
 if __name__ == "__main__":

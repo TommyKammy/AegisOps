@@ -17,7 +17,9 @@
 
 The registry now covers exactly two entries: `osquery_host_state` and `malwarebazaar_hash_reputation`.
 
-The focused test suite rejects unsupported broad sources, missing owner, missing freshness window, missing custody requirements, missing allowed target class, disabled source use, degraded source use, target-class mismatch, source types outside the reviewed pair, and registry entries that claim workflow authority.
+The focused test suite rejects unsupported broad sources, missing owner, missing freshness window, malformed freshness windows, missing custody requirements, missing allowed target class, disabled source use, degraded source use, target-class mismatch, swapped source identity/type/target/freshness pairings, source types outside the reviewed pair, and registry entries that claim workflow authority.
+
+The registry validator accepts the exported `PHASE63_EVIDENCE_SOURCE_REGISTRY` mapping directly and rejects mapping-key drift from the embedded `source_id`.
 
 ## Authority-Boundary Review
 
@@ -32,4 +34,3 @@ The registry records source confidence and freshness as subordinate evidence con
 - No broad evidence source marketplace is implemented.
 - No Velociraptor, YARA, capa, MISP breadth, Suricata, or IntelOwl breadth is implemented.
 - No endpoint remediation, containment, destructive response, Controlled Write, Hard Write, Beta, RC, GA, commercial replacement readiness, or Phase 64/65/66/67 work is implemented.
-

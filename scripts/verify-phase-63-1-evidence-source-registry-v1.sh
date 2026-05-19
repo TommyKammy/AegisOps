@@ -64,7 +64,8 @@ required_validation_phrases=(
   '# Phase 63.1 Evidence Source Registry v1 Validation'
   'Validation status: PASS'
   'The registry now covers exactly two entries: `osquery_host_state` and `malwarebazaar_hash_reputation`.'
-  'The focused test suite rejects unsupported broad sources, missing owner, missing freshness window, missing custody requirements, missing allowed target class, disabled source use, degraded source use, target-class mismatch, source types outside the reviewed pair, and registry entries that claim workflow authority.'
+  'The focused test suite rejects unsupported broad sources, missing owner, missing freshness window, malformed freshness windows, missing custody requirements, missing allowed target class, disabled source use, degraded source use, target-class mismatch, swapped source identity/type/target/freshness pairings, source types outside the reviewed pair, and registry entries that claim workflow authority.'
+  'The registry validator accepts the exported `PHASE63_EVIDENCE_SOURCE_REGISTRY` mapping directly and rejects mapping-key drift from the embedded `source_id`.'
   'No Velociraptor, YARA, capa, MISP breadth, Suricata, or IntelOwl breadth is implemented.'
 )
 

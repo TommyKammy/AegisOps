@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Iterable, Mapping
 
@@ -57,19 +58,46 @@ _ALLOWED_TARGET_CLASSES = frozenset(
 )
 _ALLOWED_STATUSES = frozenset({"enabled", "disabled", "degraded"})
 _SUBORDINATE_AUTHORITY_POSTURE = "subordinate_evidence_context_only"
+_FRESHNESS_WINDOW_PATTERN = re.compile(
+    r"^PT(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?$"
+)
+
+_REQUIRED_SOURCE_PROFILES = {
+    "osquery_host_state": {
+        "source_type": "osquery",
+        "allowed_target_class": "explicitly_bound_host",
+        "freshness_window": "PT24H",
+    },
+    "malwarebazaar_hash_reputation": {
+        "source_type": "malwarebazaar_hash_reputation",
+        "allowed_target_class": "reviewed_file_hash",
+        "freshness_window": "PT6H",
+    },
+}
 
 _AUTHORITY_WIDENING_TERMS = (
     "authoritative",
     "workflow truth",
+    "alert truth",
     "case truth",
+    "evidence truth",
+    "evidence request truth",
     "approval truth",
+    "action request truth",
     "approves",
     "approve",
+    "receipt truth",
     "execution receipt truth",
     "execution truth",
     "reconciliation truth",
+    "audit truth",
     "detector activation truth",
+    "release truth",
     "release gate truth",
+    "gate truth",
+    "limitation truth",
+    "closeout truth",
+    "readiness truth",
     "source truth",
     "close cases",
     "case closure",
@@ -112,6 +140,14 @@ def _coerce_entry(
 def _has_authority_widening_claim(value: str) -> bool:
     normalized = value.lower().replace("_", " ").replace("-", " ")
     return any(term in normalized for term in _AUTHORITY_WIDENING_TERMS)
+
+
+def _is_positive_time_duration(value: str) -> bool:
+    match = _FRESHNESS_WINDOW_PATTERN.fullmatch(value)
+    if not match:
+        return False
+    parts = [int(part) for part in match.groups(default="0")]
+    return any(part > 0 for part in parts)
 
 
 PHASE63_EVIDENCE_SOURCE_REGISTRY: dict[str, EvidenceSourceEntry] = {
@@ -164,6 +200,15 @@ def validate_phase63_evidence_source_entry(
     elif candidate.source_type not in _ALLOWED_SOURCE_TYPES:
         errors.append("unsupported_source_type")
 
+    required_profile = _REQUIRED_SOURCE_PROFILES.get(candidate.source_id)
+    if required_profile is not None:
+        if candidate.source_type != required_profile["source_type"]:
+            errors.append("source_identity_type_mismatch")
+        if candidate.allowed_target_class != required_profile["allowed_target_class"]:
+            errors.append("source_identity_target_class_mismatch")
+        if candidate.freshness_window != required_profile["freshness_window"]:
+            errors.append("source_identity_freshness_window_mismatch")
+
     if not candidate.owner:
         errors.append("missing_owner")
 
@@ -177,7 +222,7 @@ def validate_phase63_evidence_source_entry(
 
     if not candidate.freshness_window:
         errors.append("missing_freshness_window")
-    elif not candidate.freshness_window.startswith("PT"):
+    elif not _is_positive_time_duration(candidate.freshness_window):
         errors.append("freshness_window_not_duration")
 
     if not candidate.confidence_posture:
@@ -207,13 +252,25 @@ def validate_phase63_evidence_source_entry(
 
 
 def validate_phase63_evidence_source_registry(
-    entries: Iterable[EvidenceSourceEntry | Mapping[str, object]],
+    entries: (
+        Iterable[EvidenceSourceEntry | Mapping[str, object]]
+        | Mapping[str, EvidenceSourceEntry | Mapping[str, object]]
+    ),
 ) -> EvidenceSourceValidationErrors:
-    candidates = tuple(_coerce_entry(entry) for entry in entries)
+    registry_keys: tuple[str, ...] = ()
+    if isinstance(entries, Mapping):
+        registry_keys = tuple(str(source_id).strip() for source_id in entries.keys())
+        raw_entries = entries.values()
+    else:
+        raw_entries = entries
+
+    candidates = tuple(_coerce_entry(entry) for entry in raw_entries)
     errors: list[str] = []
 
     source_ids = {entry.source_id for entry in candidates}
     source_types = {entry.source_type for entry in candidates}
+    if registry_keys and set(registry_keys) != source_ids:
+        errors.append("registry_key_source_id_mismatch")
     if source_ids != _ALLOWED_SOURCE_IDS:
         errors.append("registry_source_ids_not_bounded")
     if source_types != _ALLOWED_SOURCE_TYPES:
