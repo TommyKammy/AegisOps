@@ -417,13 +417,15 @@ def _required_source_profile_errors(
         for term in required_profile["custody_terms"]
     )
     bounded_custody_text = f" {custody_text} "
-    if _contains_negated_required_custody_term(
+    has_disallowed_custody_negation = _contains_negated_required_custody_term(
         bounded_custody_text,
         required_custody_terms,
-    ) or not _contains_all_required_custody_terms(
+    )
+    has_required_custody_terms = _contains_all_required_custody_terms(
         bounded_custody_text,
         required_custody_terms,
-    ):
+    )
+    if has_disallowed_custody_negation or not has_required_custody_terms:
         errors.append(custody_requirements_error)
     return errors
 
