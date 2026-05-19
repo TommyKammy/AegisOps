@@ -436,6 +436,30 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
         self.assertIn("registry_key_degraded_states_mismatch", errors)
         self.assertIn("registry_key_disabled_states_mismatch", errors)
 
+    def test_entry_and_source_use_reject_swapped_confidence_and_states(
+        self,
+    ) -> None:
+        malware_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[
+            "malwarebazaar_hash_reputation"
+        ].as_dict()
+        entry = {
+            **self._valid_osquery_entry(),
+            "confidence_posture": malware_entry["confidence_posture"],
+            "degraded_states": malware_entry["degraded_states"],
+            "disabled_states": malware_entry["disabled_states"],
+        }
+
+        entry_errors = validate_phase63_evidence_source_entry(entry)
+        use_errors = validate_phase63_evidence_source_use(
+            entry,
+            target_class="explicitly_bound_host",
+        )
+
+        for errors in (entry_errors, use_errors):
+            self.assertIn("source_identity_confidence_posture_mismatch", errors)
+            self.assertIn("source_identity_degraded_states_mismatch", errors)
+            self.assertIn("source_identity_disabled_states_mismatch", errors)
+
     def test_registry_rejects_swapped_source_custody_requirements(self) -> None:
         malware_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[
             "malwarebazaar_hash_reputation"
