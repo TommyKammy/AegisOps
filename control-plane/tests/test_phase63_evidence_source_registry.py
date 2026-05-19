@@ -75,6 +75,33 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 )
                 self.assertIn(expected_error, errors)
 
+    def test_review_thread_activated_detector_variants_fail_closed(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "owner_activated_detector",
+                {"owner": "activated detector"},
+                "owner_promotes_workflow_authority",
+            ),
+            (
+                "custody_detector_activated",
+                {"custody_requirements": "detector activated"},
+                "custody_requirements_promote_workflow_authority",
+            ),
+        )
+        for label, override, expected_error in cases:
+            with self.subTest(label=label):
+                entry = {**self._valid_osquery_entry(), **override}
+                entry_errors = validate_phase63_evidence_source_entry(entry)
+                use_errors = validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                )
+
+                self.assertIn(expected_error, entry_errors)
+                self.assertIn(expected_error, use_errors)
+
     def test_registry_rejects_broad_and_deferred_sources(self) -> None:
         cases = {
             "velociraptor": "Velociraptor",
@@ -260,6 +287,8 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
 
     def test_broad_sources_are_rejected_in_known_entry_fields(self) -> None:
         cases = {
+            "source_id": {"source_id": "MISP"},
+            "source_type": {"source_type": "IntelOwl"},
             "custody": {
                 "custody_requirements": (
                     self._valid_osquery_entry()["custody_requirements"]
@@ -278,20 +307,63 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 )
                 self.assertIn("unsupported_broad_source_reference", errors)
 
+    def test_review_thread_bare_misp_and_intelowl_claims_fail_closed(
+        self,
+    ) -> None:
+        cases = (
+            ("bare_misp_owner", {"owner": "MISP"}),
+            ("bare_misp_custody", {"custody_requirements": "MISP"}),
+            ("bare_intelowl_owner", {"owner": "IntelOwl"}),
+            ("bare_intelowl_disabled_state", {"disabled_states": ("IntelOwl",)}),
+        )
+        for label, override in cases:
+            with self.subTest(label=label):
+                entry = {**self._valid_osquery_entry(), **override}
+                entry_errors = validate_phase63_evidence_source_entry(entry)
+                use_errors = validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                )
+
+                self.assertIn("unsupported_broad_source_reference", entry_errors)
+                self.assertIn("unsupported_broad_source_reference", use_errors)
+
     def test_osquery_custody_requires_operator_or_automation_attribution(
         self,
     ) -> None:
-        errors = validate_phase63_evidence_source_entry(
-            {
-                **self._valid_osquery_entry(),
-                "custody_requirements": (
-                    "reviewed query id, collection timestamp, host binding, "
-                    "and AegisOps evidence record id"
-                ),
-            }
-        )
+        entry = {
+            **self._valid_osquery_entry(),
+            "custody_requirements": (
+                "reviewed query id, collection timestamp, host binding, "
+                "and AegisOps evidence record id"
+            ),
+        }
 
-        self.assertIn("source_identity_custody_requirements_mismatch", errors)
+        for label, errors in (
+            ("entry", validate_phase63_evidence_source_entry(entry)),
+            (
+                "source_use",
+                validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                ),
+            ),
+            (
+                "registry",
+                validate_phase63_evidence_source_registry(
+                    {
+                        "osquery_host_state": entry,
+                        "malwarebazaar_hash_reputation": (
+                            PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                                "malwarebazaar_hash_reputation"
+                            ]
+                        ),
+                    }
+                ),
+            ),
+        ):
+            with self.subTest(label=label):
+                self.assertIn("source_identity_custody_requirements_mismatch", errors)
 
     def test_unreviewed_custody_terms_do_not_satisfy_reviewed_requirements(
         self,
