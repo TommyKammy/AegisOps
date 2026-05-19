@@ -170,10 +170,8 @@ _DEFERRED_EVIDENCE_SOURCE_TERMS = (
     "YARA",
     "capa",
     "MISP",
-    "MISP breadth",
     "Suricata",
     "IntelOwl",
-    "IntelOwl breadth",
 )
 _BROAD_OR_DEFAULT_SOURCE_TERMS = (
     *_DEFERRED_EVIDENCE_SOURCE_TERMS,
