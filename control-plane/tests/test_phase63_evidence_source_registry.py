@@ -228,6 +228,19 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
         )
         self.assertIn("registry_key_source_id_mismatch", errors)
 
+    def test_registry_rejects_mapping_key_entry_source_id_swaps(self) -> None:
+        errors = validate_phase63_evidence_source_registry(
+            {
+                "osquery_host_state": PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "malwarebazaar_hash_reputation"
+                ],
+                "malwarebazaar_hash_reputation": PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "osquery_host_state"
+                ],
+            }
+        )
+        self.assertIn("registry_key_entry_source_id_mismatch", errors)
+
 
 if __name__ == "__main__":
     unittest.main()

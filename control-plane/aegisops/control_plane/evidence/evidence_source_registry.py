@@ -259,18 +259,23 @@ def validate_phase63_evidence_source_registry(
 ) -> EvidenceSourceValidationErrors:
     registry_keys: tuple[str, ...] = ()
     if isinstance(entries, Mapping):
-        registry_keys = tuple(str(source_id).strip() for source_id in entries.keys())
-        raw_entries = entries.values()
+        keyed_entries = tuple(
+            (str(source_id).strip(), _coerce_entry(entry))
+            for source_id, entry in entries.items()
+        )
+        registry_keys = tuple(source_id for source_id, _ in keyed_entries)
+        candidates = tuple(entry for _, entry in keyed_entries)
     else:
-        raw_entries = entries
-
-    candidates = tuple(_coerce_entry(entry) for entry in raw_entries)
+        keyed_entries = ()
+        candidates = tuple(_coerce_entry(entry) for entry in entries)
     errors: list[str] = []
 
     source_ids = {entry.source_id for entry in candidates}
     source_types = {entry.source_type for entry in candidates}
     if registry_keys and set(registry_keys) != source_ids:
         errors.append("registry_key_source_id_mismatch")
+    if any(source_id != entry.source_id for source_id, entry in keyed_entries):
+        errors.append("registry_key_entry_source_id_mismatch")
     if source_ids != _ALLOWED_SOURCE_IDS:
         errors.append("registry_source_ids_not_bounded")
     if source_types != _ALLOWED_SOURCE_TYPES:
