@@ -105,6 +105,34 @@ def _normalize_boundary_text(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
 
 
+def _collapse_spelled_out_tokens(normalized_value: str) -> str:
+    tokens = normalized_value.split()
+    collapsed_tokens: list[str] = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if len(token) != 1 or not token.isalnum():
+            collapsed_tokens.append(token)
+            index += 1
+            continue
+
+        run_end = index
+        while run_end < len(tokens) and len(tokens[run_end]) == 1 and tokens[run_end].isalnum():
+            run_end += 1
+        run_tokens = tokens[index:run_end]
+        collapsed_tokens.append("".join(run_tokens) if len(run_tokens) > 1 else token)
+        index = run_end
+    return " ".join(collapsed_tokens)
+
+
+def _normalized_boundary_text_variants(value: str) -> tuple[str, ...]:
+    normalized = _normalize_boundary_text(value)
+    collapsed = _collapse_spelled_out_tokens(normalized)
+    if collapsed == normalized:
+        return (normalized,)
+    return (normalized, collapsed)
+
+
 _PROHIBITED_RECORD_TRUTH_CLAIMS = (
     "alert_truth",
     "case_truth",
@@ -329,7 +357,15 @@ _SOURCE_IDENTITY_FIELD_WHITESPACE_ERROR_CODES = {
     "source_type": "source_type_whitespace_drift",
 }
 _NEGATED_REQUIRED_CUSTODY_PREFIXES = ("missing", "not", "no", "without")
-_NEGATED_REQUIRED_CUSTODY_PREFIX_FILLERS = ("a", "an", "the")
+_NEGATED_REQUIRED_CUSTODY_PREFIX_FILLERS = (
+    "a",
+    "an",
+    "the",
+    "any",
+    "currently",
+    "longer",
+    "yet",
+)
 _NEGATED_REQUIRED_CUSTODY_SUFFIXES = (
     "absent",
     "missing",
@@ -424,18 +460,29 @@ def _source_identity_whitespace_errors(
 
 
 def _has_authority_widening_claim(value: str) -> bool:
-    normalized = f" {_normalize_boundary_text(value)} "
+    normalized_variants = tuple(
+        f" {normalized} " for normalized in _normalized_boundary_text_variants(value)
+    )
     return any(
-        f" {term} " in normalized for term in _NORMALIZED_AUTHORITY_WIDENING_TERMS
+        f" {term} " in normalized
+        for normalized in normalized_variants
+        for term in _NORMALIZED_AUTHORITY_WIDENING_TERMS
     )
 
 
 def _has_broad_or_default_source_claim(value: str) -> bool:
-    normalized = f" {_normalize_boundary_text(value)} "
+    normalized_variants = tuple(
+        f" {normalized} " for normalized in _normalized_boundary_text_variants(value)
+    )
     return any(
         f" {term} " in normalized
+        for normalized in normalized_variants
         for term in _NORMALIZED_BROAD_OR_DEFAULT_SOURCE_TERMS
-    ) or any(f" {alias} " in normalized for alias in _NORMALIZED_BROAD_SOURCE_ALIASES)
+    ) or any(
+        f" {alias} " in normalized
+        for normalized in normalized_variants
+        for alias in _NORMALIZED_BROAD_SOURCE_ALIASES
+    )
 
 
 def _authority_widening_field_errors(entry: EvidenceSourceEntry) -> list[str]:
@@ -521,6 +568,18 @@ def _contains_negated_required_custody_term(
         for verb in _NEGATED_REQUIRED_CUSTODY_LINKING_VERBS
         for modifier in _NEGATED_REQUIRED_CUSTODY_SUFFIX_MODIFIERS
     )
+    suffix_sequences += tuple(
+        tuple(_normalize_boundary_text(f"{verb} {modifier} {suffix}").split())
+        for verb in _NEGATED_REQUIRED_CUSTODY_LINKING_VERBS
+        for modifier in _NEGATED_REQUIRED_CUSTODY_SUFFIX_MODIFIERS
+        for suffix in _NEGATED_REQUIRED_CUSTODY_SUFFIXES
+    )
+    suffix_sequences += tuple(
+        tuple(_normalize_boundary_text(f"{verb} no {modifier} {state}").split())
+        for verb in _NEGATED_REQUIRED_CUSTODY_LINKING_VERBS
+        for modifier in _NEGATED_REQUIRED_CUSTODY_SUFFIX_MODIFIERS
+        for state in _NEGATED_REQUIRED_CUSTODY_CONTRACTED_STATES
+    )
 
     for required_term in required_custody_terms:
         term_tokens = required_term.split()
@@ -533,13 +592,13 @@ def _contains_negated_required_custody_term(
             if tuple(custody_tokens[start:end]) != tuple(term_tokens):
                 continue
 
-            prefix_window = tuple(
-                token
-                for token in custody_tokens[max(0, start - 4) : start]
-                if token not in filler_tokens
-            )
-            if prefix_window and prefix_window[-1] in prefix_tokens:
-                return True
+            prefix_window = tuple(custody_tokens[max(0, start - 6) : start])
+            for index, token in enumerate(prefix_window):
+                if token in prefix_tokens and all(
+                    trailing_token in filler_tokens
+                    for trailing_token in prefix_window[index + 1 :]
+                ):
+                    return True
 
             trailing_tokens = tuple(custody_tokens[end : end + 6])
             if any(

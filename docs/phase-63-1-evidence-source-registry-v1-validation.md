@@ -23,6 +23,8 @@ The focused test suite also rejects record-owner authority wording such as case/
 
 The focused test suite also rejects contracted, determiner-inserted, and modifier-inserted custody negations such as reviewed query id isn't available, missing the reviewed query id, without the reviewed file hash, and reviewed query id is no longer available.
 
+The focused test suite also rejects qualifier-inserted custody negations, modifier-inserted suffix negations, fully punctuated workflow-authority claims, and fully punctuated deferred-source names such as without any reviewed file hash, reviewed query id is currently unavailable, a.p.p.r.o.v.a.l owner, and S.U.R.I.C.A.T.A.
+
 The registry validator accepts the exported `PHASE63_EVIDENCE_SOURCE_REGISTRY` mapping directly and rejects mapping-key drift from the embedded `source_id`, including same-set key/value swaps, source-specific custody drift, and key/profile mismatches between the two bounded entries.
 
 ## Authority-Boundary Review

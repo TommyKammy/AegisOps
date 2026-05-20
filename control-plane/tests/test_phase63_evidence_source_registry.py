@@ -349,6 +349,9 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "claims readiness",
             "claimed readiness",
             "readiness claimed",
+            "a.p.p.r.o.v.a.l owner",
+            "c.a.s.e truth",
+            "e.x.e.c.u.t.e workflows",
         ):
             with self.subTest(prohibited_claim=prohibited_claim):
                 errors = validate_phase63_evidence_source_entry(
@@ -586,6 +589,12 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             ("punctuated_yara", {"confidence_posture": "Y.A.R.A match"}),
             ("punctuated_capa", {"custody_requirements": "C.A.P.A output"}),
             ("punctuated_intelowl", {"disabled_states": ("Intel.Owl lookup",)}),
+            ("fully_punctuated_suricata", {"custody_requirements": "S.U.R.I.C.A.T.A"}),
+            (
+                "fully_punctuated_velociraptor",
+                {"confidence_posture": "V.E.L.O.C.I.R.A.P.T.O.R context"},
+            ),
+            ("fully_punctuated_intelowl", {"owner": "I.N.T.E.L.O.W.L"}),
         )
         for label, override in cases:
             with self.subTest(label=label):
@@ -785,6 +794,40 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 **self._valid_osquery_entry(),
                 "custody_requirements": (
                     "missing reviewed query id, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "malwarebazaar_without_any_reviewed_term": {
+                **PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "malwarebazaar_hash_reputation"
+                ].as_dict(),
+                "custody_requirements": (
+                    "without any reviewed file hash, enrichment request id, "
+                    "collection timestamp, response digest, "
+                    "and AegisOps evidence record id"
+                ),
+            },
+            "osquery_not_yet_reviewed_term": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "not yet reviewed query id, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "osquery_reviewed_term_is_currently_unavailable": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "reviewed query id is currently unavailable, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "osquery_reviewed_term_is_no_longer_verified": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "reviewed query id is no longer verified, "
                     "operator or automation attribution, collection timestamp, "
                     "host binding, and AegisOps evidence record id"
                 ),
