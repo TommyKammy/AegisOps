@@ -737,6 +737,40 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     "host binding, and AegisOps evidence record id"
                 ),
             },
+            "osquery_reviewed_term_isnt_available": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "reviewed query id isn't available, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "osquery_missing_the_reviewed_term": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "missing the reviewed query id, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "malwarebazaar_without_the_reviewed_term": {
+                **PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "malwarebazaar_hash_reputation"
+                ].as_dict(),
+                "custody_requirements": (
+                    "without the reviewed file hash, enrichment request id, "
+                    "collection timestamp, response digest, "
+                    "and AegisOps evidence record id"
+                ),
+            },
+            "osquery_reviewed_term_is_no_longer_available": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "reviewed query id is no longer available, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
             "malwarebazaar_reviewed_term_is_absent": {
                 **PHASE63_EVIDENCE_SOURCE_REGISTRY[
                     "malwarebazaar_hash_reputation"

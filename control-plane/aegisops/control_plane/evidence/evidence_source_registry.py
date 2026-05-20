@@ -329,6 +329,7 @@ _SOURCE_IDENTITY_FIELD_WHITESPACE_ERROR_CODES = {
     "source_type": "source_type_whitespace_drift",
 }
 _NEGATED_REQUIRED_CUSTODY_PREFIXES = ("missing", "not", "no", "without")
+_NEGATED_REQUIRED_CUSTODY_PREFIX_FILLERS = ("a", "an", "the")
 _NEGATED_REQUIRED_CUSTODY_SUFFIXES = (
     "absent",
     "missing",
@@ -341,6 +342,14 @@ _NEGATED_REQUIRED_CUSTODY_SUFFIXES = (
     "unverified",
 )
 _NEGATED_REQUIRED_CUSTODY_LINKING_VERBS = ("is", "are", "was", "were")
+_NEGATED_REQUIRED_CUSTODY_CONTRACTIONS = ("isn t", "aren t", "wasn t", "weren t")
+_NEGATED_REQUIRED_CUSTODY_CONTRACTED_STATES = (
+    "available",
+    "present",
+    "reviewed",
+    "verified",
+)
+_NEGATED_REQUIRED_CUSTODY_SUFFIX_MODIFIERS = ("currently", "longer")
 
 
 def _coerce_entry(
@@ -489,22 +498,56 @@ def _contains_negated_required_custody_term(
     bounded_custody_text: str,
     required_custody_terms: tuple[str, ...],
 ) -> bool:
-    has_negated_prefix = any(
-        f" {prefix} {term} " in bounded_custody_text
-        for prefix in _NEGATED_REQUIRED_CUSTODY_PREFIXES
-        for term in required_custody_terms
-    )
-    has_negated_suffix = any(
-        f" {term} {suffix} " in bounded_custody_text
-        for term in required_custody_terms
-        for suffix in _NEGATED_REQUIRED_CUSTODY_SUFFIXES
-    ) or any(
-        f" {term} {linking_verb} {suffix} " in bounded_custody_text
-        for term in required_custody_terms
-        for linking_verb in _NEGATED_REQUIRED_CUSTODY_LINKING_VERBS
+    custody_tokens = bounded_custody_text.split()
+    prefix_tokens = frozenset(_NEGATED_REQUIRED_CUSTODY_PREFIXES)
+    filler_tokens = frozenset(_NEGATED_REQUIRED_CUSTODY_PREFIX_FILLERS)
+
+    suffix_sequences = tuple(
+        tuple(_normalize_boundary_text(suffix).split())
         for suffix in _NEGATED_REQUIRED_CUSTODY_SUFFIXES
     )
-    return has_negated_prefix or has_negated_suffix
+    suffix_sequences += tuple(
+        tuple(_normalize_boundary_text(f"{verb} {suffix}").split())
+        for verb in _NEGATED_REQUIRED_CUSTODY_LINKING_VERBS
+        for suffix in _NEGATED_REQUIRED_CUSTODY_SUFFIXES
+    )
+    suffix_sequences += tuple(
+        tuple(_normalize_boundary_text(f"{contraction} {state}").split())
+        for contraction in _NEGATED_REQUIRED_CUSTODY_CONTRACTIONS
+        for state in _NEGATED_REQUIRED_CUSTODY_CONTRACTED_STATES
+    )
+    suffix_sequences += tuple(
+        tuple(_normalize_boundary_text(f"{verb} no {modifier} available").split())
+        for verb in _NEGATED_REQUIRED_CUSTODY_LINKING_VERBS
+        for modifier in _NEGATED_REQUIRED_CUSTODY_SUFFIX_MODIFIERS
+    )
+
+    for required_term in required_custody_terms:
+        term_tokens = required_term.split()
+        term_size = len(term_tokens)
+        if not term_size:
+            continue
+        max_start = len(custody_tokens) - term_size
+        for start in range(max_start + 1):
+            end = start + term_size
+            if tuple(custody_tokens[start:end]) != tuple(term_tokens):
+                continue
+
+            prefix_window = tuple(
+                token
+                for token in custody_tokens[max(0, start - 4) : start]
+                if token not in filler_tokens
+            )
+            if prefix_window and prefix_window[-1] in prefix_tokens:
+                return True
+
+            trailing_tokens = tuple(custody_tokens[end : end + 6])
+            if any(
+                trailing_tokens[: len(sequence)] == sequence
+                for sequence in suffix_sequences
+            ):
+                return True
+    return False
 
 
 def _contains_all_required_custody_terms(
