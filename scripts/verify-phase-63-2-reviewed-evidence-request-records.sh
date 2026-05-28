@@ -64,6 +64,7 @@ required_test_phrases=(
   'denied_source'
   'test_authority_boundary_rejects_evidence_output_as_truth'
   'test_authority_boundary_rejects_documented_verbs'
+  'test_authority_boundary_rejects_authorization_posture_claims'
   'test_reviewed_scope_rejects_authority_claims'
   'test_source_status_truth_claims_are_normalized'
   'test_source_freshness_beyond_registry_window_is_stale'

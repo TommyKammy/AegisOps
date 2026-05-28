@@ -142,6 +142,21 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
                     validate_phase63_reviewed_evidence_request(request),
                 )
 
+    def test_authority_boundary_rejects_authorization_posture_claims(self) -> None:
+        request = self._valid_request().with_updates(
+            authorization={
+                "authorized": True,
+                "reviewed_scope": "bounded_read_only_host_state",
+                "decision_id": "approval-decision-001",
+                "authority_posture": "evidence pack claims readiness",
+            },
+        )
+
+        self.assertIn(
+            "authority_posture_promotes_workflow_truth",
+            validate_phase63_reviewed_evidence_request(request),
+        )
+
     def test_reviewed_scope_rejects_authority_claims(self) -> None:
         request = self._valid_request().with_updates(
             requested_scope="execute the containment action",
