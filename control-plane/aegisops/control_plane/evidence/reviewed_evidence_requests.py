@@ -15,6 +15,11 @@ from .evidence_source_registry import (
 ReviewedEvidenceRequestValidationErrors = tuple[str, ...]
 
 
+_DURATION_PATTERN = re.compile(
+    r"^PT(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?$"
+)
+
+
 def _freeze_json_value(value: object) -> object:
     if isinstance(value, Mapping):
         return MappingProxyType(
@@ -124,19 +129,51 @@ _TERMINAL_SOURCE_STATUSES = frozenset({"denied", "disabled"})
 _STALE_SOURCE_STATUSES = frozenset({"stale", "degraded"})
 _SOURCE_AUTHORITY_STATUSES = frozenset({"authoritative", "source_truth"})
 _AUTHORITY_WIDENING_TERMS = (
+    "activate detector",
+    "activate detectors",
+    "activates detector",
+    "activates detectors",
+    "activated detector",
+    "activated detectors",
+    "activating detector",
+    "activating detectors",
+    "approved",
+    "approves",
+    "approving",
     "approval truth",
     "approves",
     "approve",
     "case truth",
+    "claim readiness",
+    "claimed readiness",
+    "claiming readiness",
     "close case",
+    "close cases",
+    "closed",
+    "closes",
     "closes case",
+    "closing",
     "create source truth",
     "creates source truth",
     "detector activation",
     "evidence output approves",
+    "execute",
+    "executed",
+    "executes",
+    "executing",
     "execution truth",
+    "gate release",
+    "gate releases",
     "gate truth",
+    "readiness claim",
+    "readiness truth",
+    "reconcile",
+    "reconciled",
+    "reconciles",
+    "reconciling",
     "reconciliation truth",
+    "release gate",
+    "release gates",
     "release truth",
     "source truth",
     "workflow truth",
@@ -185,6 +222,34 @@ def _same_request_subject(
         and dict(left.target) == dict(right.target)
         and left.requested_scope == right.requested_scope
     )
+
+
+def _parse_duration_seconds(value: object) -> int | None:
+    if not isinstance(value, str):
+        return None
+    match = _DURATION_PATTERN.fullmatch(value.strip())
+    if match is None:
+        return None
+    duration_parts = {
+        name: int(match.group(name) or 0) for name in ("hours", "minutes", "seconds")
+    }
+    total_seconds = (
+        duration_parts["hours"] * 3600
+        + duration_parts["minutes"] * 60
+        + duration_parts["seconds"]
+    )
+    if total_seconds <= 0:
+        return None
+    return total_seconds
+
+
+def _source_status_values(source_status: Mapping[str, object]) -> tuple[str, ...]:
+    status_values: list[str] = []
+    for field_name in ("status", "state", "registry_state", "source_state"):
+        field_value = source_status.get(field_name)
+        if isinstance(field_value, str) and field_value.strip():
+            status_values.append(field_value.strip().lower())
+    return tuple(status_values)
 
 
 def validate_phase63_reviewed_evidence_request(
@@ -249,6 +314,25 @@ def validate_phase63_reviewed_evidence_request(
         if "source_degraded" in source_use_errors:
             errors.append("source_stale")
 
+        source_freshness = request.source_status.get("freshness")
+        if source_freshness is not None:
+            source_freshness_seconds = _parse_duration_seconds(source_freshness)
+            registry_freshness_seconds = _parse_duration_seconds(
+                source_entry.freshness_window
+            )
+            if (
+                source_freshness_seconds is None
+                or registry_freshness_seconds is None
+                or source_freshness_seconds > registry_freshness_seconds
+            ):
+                errors.append("source_stale")
+
+        source_status_values = _source_status_values(request.source_status)
+        if any(value in source_entry.disabled_states for value in source_status_values):
+            errors.append("source_denied")
+        if any(value in source_entry.degraded_states for value in source_status_values):
+            errors.append("source_stale")
+
     if not request.custody:
         errors.append("missing_custody")
     elif not _mapping_has_non_empty_fields(request.custody, _REQUIRED_CUSTODY_FIELDS):
@@ -275,12 +359,12 @@ def validate_phase63_reviewed_evidence_request(
     if request.linked_case_context.get("case_id") != request.case_id:
         errors.append("linked_case_mismatch")
 
-    source_status = str(request.source_status.get("status", "")).strip().lower()
-    if source_status in _TERMINAL_SOURCE_STATUSES:
+    source_status_values = _source_status_values(request.source_status)
+    if any(value in _TERMINAL_SOURCE_STATUSES for value in source_status_values):
         errors.append("source_denied")
-    if source_status in _STALE_SOURCE_STATUSES:
+    if any(value in _STALE_SOURCE_STATUSES for value in source_status_values):
         errors.append("source_stale")
-    if source_status in _SOURCE_AUTHORITY_STATUSES:
+    if any(value in _SOURCE_AUTHORITY_STATUSES for value in source_status_values):
         errors.append("source_status_promotes_workflow_truth")
 
     authority_values = (
@@ -295,7 +379,14 @@ def validate_phase63_reviewed_evidence_request(
 
     for existing_request in existing_requests:
         if (
-            existing_request.evidence_request_id != request.evidence_request_id
+            existing_request.evidence_request_id == request.evidence_request_id
+            and not _same_request_subject(existing_request, request)
+        ):
+            errors.append("evidence_request_id_subject_mismatch")
+            break
+        if (
+            request.lifecycle_state in _ACTIVE_LIFECYCLE_STATES
+            and existing_request.evidence_request_id != request.evidence_request_id
             and existing_request.lifecycle_state in _ACTIVE_LIFECYCLE_STATES
             and _same_request_subject(existing_request, request)
         ):

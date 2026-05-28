@@ -123,6 +123,66 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
             validate_phase63_reviewed_evidence_request(request),
         )
 
+    def test_authority_boundary_rejects_documented_verbs(self) -> None:
+        claims = (
+            "evidence output can execute the action",
+            "source-native state can reconcile case findings",
+            "freshness projection can close cases",
+            "hash-reputation output can activate detectors",
+            "verifier output can gate release",
+            "UI cache can claim readiness",
+        )
+        for claim in claims:
+            with self.subTest(claim=claim):
+                request = self._valid_request().with_updates(authority_posture=claim)
+
+                self.assertIn(
+                    "authority_posture_promotes_workflow_truth",
+                    validate_phase63_reviewed_evidence_request(request),
+                )
+
+    def test_source_freshness_beyond_registry_window_is_stale(self) -> None:
+        request = self._valid_request().with_updates(
+            source_status={"status": "enabled", "freshness": "PT25H"}
+        )
+
+        self.assertIn(
+            "source_stale",
+            validate_phase63_reviewed_evidence_request(request),
+        )
+
+    def test_source_registry_degraded_and_disabled_state_names_fail_closed(
+        self,
+    ) -> None:
+        cases = {
+            "degraded_status": (
+                {"status": "missing_host_binding"},
+                "source_stale",
+            ),
+            "degraded_source_state": (
+                {"source_state": "stale_collection"},
+                "source_stale",
+            ),
+            "disabled_state": (
+                {"state": "disabled_by_policy"},
+                "source_denied",
+            ),
+            "disabled_registry_state": (
+                {"registry_state": "missing_custody"},
+                "source_denied",
+            ),
+        }
+        for label, (source_status, expected_error) in cases.items():
+            with self.subTest(label=label):
+                request = self._valid_request().with_updates(
+                    source_status=source_status
+                )
+
+                self.assertIn(
+                    expected_error,
+                    validate_phase63_reviewed_evidence_request(request),
+                )
+
     def test_duplicate_request_ambiguity_is_rejected(self) -> None:
         request = self._valid_request()
 
@@ -131,6 +191,36 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
             validate_phase63_reviewed_evidence_request(
                 request,
                 existing_requests=(request.with_updates(evidence_request_id="other"),),
+            ),
+        )
+
+    def test_duplicate_request_check_only_applies_to_active_candidate(self) -> None:
+        request = self._valid_request().with_updates(lifecycle_state="completed")
+
+        self.assertNotIn(
+            "duplicate_request_ambiguity",
+            validate_phase63_reviewed_evidence_request(
+                request,
+                existing_requests=(request.with_updates(evidence_request_id="other"),),
+            ),
+        )
+
+    def test_evidence_request_id_reuse_for_different_subject_is_rejected(self) -> None:
+        request = self._valid_request()
+        existing_request = request.with_updates(
+            case_id="case-002",
+            target={
+                "target_class": "explicitly_bound_host",
+                "host_identifier": "host-002",
+                "case_id": "case-002",
+            },
+        )
+
+        self.assertIn(
+            "evidence_request_id_subject_mismatch",
+            validate_phase63_reviewed_evidence_request(
+                request,
+                existing_requests=(existing_request,),
             ),
         )
 

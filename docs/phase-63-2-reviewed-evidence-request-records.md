@@ -40,6 +40,8 @@ The first Phase 63.2 source and target pairings are deliberately narrow:
 
 The validator rejects missing scope, expired request use, unauthorized requester roles, invalid target/source pairing, missing custody, missing case linkage, stale source use, denied source use, and duplicate active request ambiguity.
 
+Source freshness that exceeds the Phase 63.1 registry window is stale, registry degraded or disabled state names stay binding, duplicate subject checks apply only to active candidate requests, and evidence request identifiers cannot be reused for a different request subject.
+
 ## 4. Custody, Authorization, And Case Linkage
 
 Custody must include `reviewed_by`, `custody_owner`, `custody_reference`, and `provenance_chain`.

@@ -40,6 +40,7 @@ required_record_phrases=(
   '"source_stale"'
   '"source_denied"'
   '"duplicate_request_ambiguity"'
+  '"evidence_request_id_subject_mismatch"'
   '"authority_posture_promotes_workflow_truth"'
   'PHASE63_EVIDENCE_SOURCE_REGISTRY'
 )
@@ -59,7 +60,12 @@ required_test_phrases=(
   'stale_source'
   'denied_source'
   'test_authority_boundary_rejects_evidence_output_as_truth'
+  'test_authority_boundary_rejects_documented_verbs'
+  'test_source_freshness_beyond_registry_window_is_stale'
+  'test_source_registry_degraded_and_disabled_state_names_fail_closed'
   'test_duplicate_request_ambiguity_is_rejected'
+  'test_duplicate_request_check_only_applies_to_active_candidate'
+  'test_evidence_request_id_reuse_for_different_subject_is_rejected'
 )
 
 for phrase in "${required_test_phrases[@]}"; do
@@ -73,6 +79,7 @@ required_doc_phrases=(
   '`osquery_host_state`'
   '`malwarebazaar_hash_reputation`'
   'The validator rejects missing scope, expired request use, unauthorized requester roles, invalid target/source pairing, missing custody, missing case linkage, stale source use, denied source use, and duplicate active request ambiguity.'
+  'Source freshness that exceeds the Phase 63.1 registry window is stale, registry degraded or disabled state names stay binding, duplicate subject checks apply only to active candidate requests, and evidence request identifiers cannot be reused for a different request subject.'
   'Reviewed evidence request records cannot let osquery output, hash-reputation output, evidence output, source-native state, freshness or confidence projections, AI output, verifier output, issue-lint output, browser state, UI cache, or evidence packs approve, execute, reconcile, close, activate detectors, create source truth, gate release, or claim readiness.'
 )
 
@@ -84,6 +91,7 @@ required_validation_phrases=(
   '# Phase 63.2 Reviewed Evidence Request Records Validation'
   'Validation status: PASS'
   'The focused test suite accepts a valid reviewed request and rejects missing scope, expired request use, unauthorized requester, invalid target/source pairing, missing custody, missing case link, stale source, denied source, duplicate request ambiguity, and evidence output that tries to become workflow truth.'
+  'Review-thread regressions cover documented authority verbs, freshness beyond the registry window, registry degraded or disabled state names, inactive candidate duplicate handling, and same-id reuse for a different request subject.'
   'No Velociraptor, YARA, capa, MISP breadth, Suricata, IntelOwl breadth, endpoint remediation, containment, destructive response, Controlled Write, Hard Write, Beta, RC, GA, commercial replacement readiness, or Phase 64/65/66/67 work is implemented.'
 )
 
