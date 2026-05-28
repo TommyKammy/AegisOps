@@ -489,6 +489,40 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 self.assertIn(expected_error, entry_errors)
                 self.assertIn(expected_error, use_errors)
 
+    def test_mapping_state_lists_reject_blank_entries_before_coercion(self) -> None:
+        cases = {
+            "degraded_states": (
+                {"degraded_states": ["missing_host_binding", "stale_collection", ""]},
+                "degraded_states_blank_entry",
+            ),
+            "disabled_states": (
+                {"disabled_states": ["disabled_by_policy", "missing_custody", "   "]},
+                "disabled_states_blank_entry",
+            ),
+        }
+        for label, (override, expected_error) in cases.items():
+            with self.subTest(label=label):
+                entry = {**self._valid_osquery_entry(), **override}
+                entry_errors = validate_phase63_evidence_source_entry(entry)
+                use_errors = validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                )
+                registry_errors = validate_phase63_evidence_source_registry(
+                    {
+                        "osquery_host_state": entry,
+                        "malwarebazaar_hash_reputation": (
+                            PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                                "malwarebazaar_hash_reputation"
+                            ]
+                        ),
+                    }
+                )
+
+                self.assertIn(expected_error, entry_errors)
+                self.assertIn(expected_error, use_errors)
+                self.assertIn(expected_error, registry_errors)
+
     def test_required_state_lists_compare_without_order_dependence(self) -> None:
         entry = {
             **self._valid_osquery_entry(),
@@ -667,6 +701,34 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 "custody_requirements": (
                     "unreviewed file hash, enrichment request id, collection timestamp, "
                     "response digest, and AegisOps evidence record id"
+                ),
+            },
+        }
+        for label, entry in cases.items():
+            with self.subTest(label=label):
+                errors = validate_phase63_evidence_source_entry(entry)
+                self.assertIn(
+                    "source_identity_custody_requirements_mismatch", errors
+                )
+
+    def test_hyphenated_unreviewed_custody_terms_fail_closed(self) -> None:
+        cases = {
+            "osquery_un_reviewed": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "un-reviewed query id, operator or automation attribution, "
+                    "collection timestamp, host binding, "
+                    "and AegisOps evidence record id"
+                ),
+            },
+            "malwarebazaar_non_reviewed": {
+                **PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "malwarebazaar_hash_reputation"
+                ].as_dict(),
+                "custody_requirements": (
+                    "non-reviewed file hash, enrichment request id, "
+                    "collection timestamp, response digest, "
+                    "and AegisOps evidence record id"
                 ),
             },
         }
@@ -915,7 +977,7 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
 
         self.assertEqual(validate_phase63_evidence_source_entry(entry), ())
 
-    def test_review_thread_source_identity_values_reject_whitespace_drift(
+    def test_review_thread_bounded_scalar_values_reject_whitespace_drift(
         self,
     ) -> None:
         cases = {
@@ -926,6 +988,40 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "source_type": (
                 {"source_type": " osquery "},
                 "source_type_whitespace_drift",
+            ),
+            "owner": (
+                {"owner": " IT Operations, Information Systems Department "},
+                "owner_whitespace_drift",
+            ),
+            "allowed_target_class": (
+                {"allowed_target_class": " explicitly_bound_host "},
+                "allowed_target_class_whitespace_drift",
+            ),
+            "custody_requirements": (
+                {
+                    "custody_requirements": (
+                        " reviewed query id, operator or automation attribution, "
+                        "collection timestamp, host binding, "
+                        "and AegisOps evidence record id "
+                    )
+                },
+                "custody_requirements_whitespace_drift",
+            ),
+            "freshness_window": (
+                {"freshness_window": " PT24H "},
+                "freshness_window_whitespace_drift",
+            ),
+            "confidence_posture": (
+                {"confidence_posture": " observed_host_state_subordinate_context "},
+                "confidence_posture_whitespace_drift",
+            ),
+            "status": (
+                {"status": " enabled "},
+                "status_whitespace_drift",
+            ),
+            "authority_posture": (
+                {"authority_posture": " subordinate_evidence_context_only "},
+                "authority_posture_whitespace_drift",
             ),
         }
         for label, (override, expected_error) in cases.items():
