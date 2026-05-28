@@ -350,6 +350,7 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "claimed readiness",
             "readiness claimed",
             "a.p.p.r.o.v.a.l owner",
+            "a.pproval owner",
             "c.a.s.e truth",
             "e.x.e.c.u.t.e workflows",
         ):
@@ -595,6 +596,8 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 {"confidence_posture": "V.E.L.O.C.I.R.A.P.T.O.R context"},
             ),
             ("fully_punctuated_intelowl", {"owner": "I.N.T.E.L.O.W.L"}),
+            ("chunked_misp", {"custody_requirements": "M.ISP enrichment"}),
+            ("chunked_suricata", {"custody_requirements": "Suric.ata pivot"}),
         )
         for label, override in cases:
             with self.subTest(label=label):
@@ -828,6 +831,46 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 **self._valid_osquery_entry(),
                 "custody_requirements": (
                     "reviewed query id is no longer verified, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "osquery_punctuated_not_reviewed_term": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "n.o.t reviewed query id, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "osquery_punctuated_suffix_not_available": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "reviewed query id i.s n.o.t available, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "osquery_not_really_reviewed_term": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "not really reviewed query id, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "osquery_without_absolutely_any_reviewed_term": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "without absolutely any reviewed query id, "
+                    "operator or automation attribution, collection timestamp, "
+                    "host binding, and AegisOps evidence record id"
+                ),
+            },
+            "osquery_long_prefix_negation": {
+                **self._valid_osquery_entry(),
+                "custody_requirements": (
+                    "not a an the any currently longer yet a reviewed query id, "
                     "operator or automation attribution, collection timestamp, "
                     "host binding, and AegisOps evidence record id"
                 ),
