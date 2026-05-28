@@ -353,6 +353,9 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "a.pproval owner",
             "c.a.s.e truth",
             "e.x.e.c.u.t.e workflows",
+            "workflowAuthority",
+            "caseTruth",
+            "approvalOwner",
         ):
             with self.subTest(prohibited_claim=prohibited_claim):
                 errors = validate_phase63_evidence_source_entry(
@@ -373,6 +376,24 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     "custody_requirements_promote_workflow_authority",
                     custody_errors,
                 )
+
+    def test_review_thread_camel_case_broad_source_claims_fail_closed(self) -> None:
+        for prohibited_claim in (
+            "publicInternetPivot",
+            "evidenceSourceMarketplace",
+        ):
+            with self.subTest(prohibited_claim=prohibited_claim):
+                errors = validate_phase63_evidence_source_entry(
+                    {
+                        **self._valid_osquery_entry(),
+                        "custody_requirements": (
+                            self._valid_osquery_entry()["custody_requirements"]
+                            + f", {prohibited_claim}"
+                        ),
+                    }
+                )
+
+                self.assertIn("unsupported_broad_source_reference", errors)
 
     def test_authority_boundary_terms_require_word_boundaries(self) -> None:
         entry = {

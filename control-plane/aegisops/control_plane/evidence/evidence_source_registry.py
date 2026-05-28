@@ -104,7 +104,8 @@ _REQUIRED_SOURCE_PROFILES = {
 
 
 def _normalize_boundary_text(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+    split_camel_case = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", value)
+    return re.sub(r"[^a-z0-9]+", " ", split_camel_case.lower()).strip()
 
 
 def _match_normalized_term_at(
