@@ -8,6 +8,7 @@ from typing import ClassVar, Iterable, Mapping
 
 from .evidence_source_registry import (
     PHASE63_EVIDENCE_SOURCE_REGISTRY,
+    _has_authority_widening_claim as _registry_has_authority_widening_claim,
     validate_phase63_evidence_source_use,
 )
 
@@ -190,10 +191,11 @@ def _normalize_text(value: object) -> str:
 
 def _contains_authority_widening_claim(value: object) -> bool:
     normalized_value = f" {_normalize_text(value)} "
-    return any(
+    local_match = any(
         f" {_normalize_text(term)} " in normalized_value
         for term in _AUTHORITY_WIDENING_TERMS
     )
+    return local_match or _registry_has_authority_widening_claim(str(value))
 
 
 def _non_empty_string(value: object) -> bool:

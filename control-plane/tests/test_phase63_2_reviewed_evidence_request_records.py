@@ -143,19 +143,27 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
                 )
 
     def test_authority_boundary_rejects_authorization_posture_claims(self) -> None:
-        request = self._valid_request().with_updates(
-            authorization={
-                "authorized": True,
-                "reviewed_scope": "bounded_read_only_host_state",
-                "decision_id": "approval-decision-001",
-                "authority_posture": "evidence pack claims readiness",
-            },
+        claims = (
+            "evidence output executes the action",
+            "evidence output reconciles case findings",
+            "evidence output can gate release",
+            "evidence pack claims readiness",
         )
+        for claim in claims:
+            with self.subTest(claim=claim):
+                request = self._valid_request().with_updates(
+                    authorization={
+                        "authorized": True,
+                        "reviewed_scope": "bounded_read_only_host_state",
+                        "decision_id": "approval-decision-001",
+                        "authority_posture": claim,
+                    },
+                )
 
-        self.assertIn(
-            "authority_posture_promotes_workflow_truth",
-            validate_phase63_reviewed_evidence_request(request),
-        )
+                self.assertIn(
+                    "authority_posture_promotes_workflow_truth",
+                    validate_phase63_reviewed_evidence_request(request),
+                )
 
     def test_reviewed_scope_rejects_authority_claims(self) -> None:
         request = self._valid_request().with_updates(
@@ -177,6 +185,7 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
             {"status": "workflow_truth"},
             {"state": "case_truth"},
             {"registry_state": "approval truth"},
+            {"source_state": "releaseGateTruth"},
         )
         for source_status in cases:
             with self.subTest(source_status=source_status):
@@ -190,14 +199,32 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
                 )
 
     def test_source_freshness_beyond_registry_window_is_stale(self) -> None:
-        request = self._valid_request().with_updates(
-            source_status={"status": "enabled", "freshness": "PT25H"}
+        cases = (
+            self._valid_request().with_updates(
+                source_status={"status": "enabled", "freshness": "PT25H"}
+            ),
+            self._valid_request().with_updates(
+                source_id="malwarebazaar_hash_reputation",
+                target={
+                    "target_class": "reviewed_file_hash",
+                    "file_hash": "sha256:abc",
+                    "case_id": "case-001",
+                },
+                requested_scope="bounded_read_only_hash_reputation",
+                authorization={
+                    "authorized": True,
+                    "reviewed_scope": "bounded_read_only_hash_reputation",
+                    "decision_id": "approval-decision-001",
+                },
+                source_status={"status": "enabled", "freshness": "PT7H"},
+            ),
         )
-
-        self.assertIn(
-            "source_stale",
-            validate_phase63_reviewed_evidence_request(request),
-        )
+        for request in cases:
+            with self.subTest(source_id=request.source_id):
+                self.assertIn(
+                    "source_stale",
+                    validate_phase63_reviewed_evidence_request(request),
+                )
 
     def test_source_registry_degraded_and_disabled_state_names_fail_closed(
         self,
@@ -219,6 +246,10 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
                 {"registry_state": "missing_custody"},
                 "source_denied",
             ),
+            "disabled_status": (
+                {"status": "missing_custody"},
+                "source_denied",
+            ),
         }
         for label, (source_status, expected_error) in cases.items():
             with self.subTest(label=label):
@@ -230,6 +261,27 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
                     expected_error,
                     validate_phase63_reviewed_evidence_request(request),
                 )
+
+        malwarebazaar_request = self._valid_request().with_updates(
+            source_id="malwarebazaar_hash_reputation",
+            target={
+                "target_class": "reviewed_file_hash",
+                "file_hash": "sha256:abc",
+                "case_id": "case-001",
+            },
+            requested_scope="bounded_read_only_hash_reputation",
+            authorization={
+                "authorized": True,
+                "reviewed_scope": "bounded_read_only_hash_reputation",
+                "decision_id": "approval-decision-001",
+            },
+            source_status={"status": "stale_reputation"},
+        )
+
+        self.assertIn(
+            "source_stale",
+            validate_phase63_reviewed_evidence_request(malwarebazaar_request),
+        )
 
     def test_duplicate_request_ambiguity_is_rejected(self) -> None:
         request = self._valid_request()
@@ -253,24 +305,59 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
             ),
         )
 
-    def test_evidence_request_id_reuse_for_different_subject_is_rejected(self) -> None:
+    def test_duplicate_request_check_ignores_terminal_existing_requests(self) -> None:
         request = self._valid_request()
-        existing_request = request.with_updates(
-            case_id="case-002",
-            target={
-                "target_class": "explicitly_bound_host",
-                "host_identifier": "host-002",
-                "case_id": "case-002",
-            },
-        )
 
-        self.assertIn(
-            "evidence_request_id_subject_mismatch",
+        self.assertNotIn(
+            "duplicate_request_ambiguity",
             validate_phase63_reviewed_evidence_request(
                 request,
-                existing_requests=(existing_request,),
+                existing_requests=(
+                    request.with_updates(
+                        evidence_request_id="other",
+                        lifecycle_state="completed",
+                    ),
+                ),
             ),
         )
+
+    def test_evidence_request_id_reuse_for_different_subject_is_rejected(self) -> None:
+        request = self._valid_request()
+        existing_requests = (
+            request.with_updates(
+                case_id="case-002",
+                target={
+                    "target_class": "explicitly_bound_host",
+                    "host_identifier": "host-002",
+                    "case_id": "case-002",
+                },
+            ),
+            request.with_updates(
+                requested_scope="bounded_read_only_hash_reputation",
+                authorization={
+                    "authorized": True,
+                    "reviewed_scope": "bounded_read_only_hash_reputation",
+                    "decision_id": "approval-decision-001",
+                },
+            ),
+            request.with_updates(
+                source_id="malwarebazaar_hash_reputation",
+                target={
+                    "target_class": "reviewed_file_hash",
+                    "file_hash": "sha256:abc",
+                    "case_id": "case-001",
+                },
+            ),
+        )
+        for existing_request in existing_requests:
+            with self.subTest(existing_request=existing_request):
+                self.assertIn(
+                    "evidence_request_id_subject_mismatch",
+                    validate_phase63_reviewed_evidence_request(
+                        request,
+                        existing_requests=(existing_request,),
+                    ),
+                )
 
 
 if __name__ == "__main__":
