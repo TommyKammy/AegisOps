@@ -378,10 +378,14 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 )
 
     def test_review_thread_camel_case_broad_source_claims_fail_closed(self) -> None:
-        for prohibited_claim in (
-            "publicInternetPivot",
-            "evidenceSourceMarketplace",
-        ):
+        cases = (
+            ("workflowAuthority", "custody_requirements_promote_workflow_authority"),
+            ("caseTruth", "custody_requirements_promote_workflow_authority"),
+            ("approvalOwner", "custody_requirements_promote_workflow_authority"),
+            ("publicInternetPivot", "unsupported_broad_source_reference"),
+            ("evidenceSourceMarketplace", "unsupported_broad_source_reference"),
+        )
+        for prohibited_claim, expected_error in cases:
             with self.subTest(prohibited_claim=prohibited_claim):
                 errors = validate_phase63_evidence_source_entry(
                     {
@@ -393,7 +397,7 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     }
                 )
 
-                self.assertIn("unsupported_broad_source_reference", errors)
+                self.assertIn(expected_error, errors)
 
     def test_review_thread_all_lower_concatenated_boundary_claims_fail_closed(
         self,
