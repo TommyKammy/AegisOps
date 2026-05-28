@@ -42,6 +42,8 @@ The validator rejects missing scope, expired request use, unauthorized requester
 
 Source freshness that exceeds the Phase 63.1 registry window is stale, registry degraded or disabled state names stay binding, duplicate subject checks apply only to active candidate requests, and evidence request identifiers cannot be reused for a different request subject.
 
+Requested scope, authorization reviewed scope, source status, state, registry_state, and source_state fields cannot claim workflow truth, case truth, approval truth, execution authority, or readiness authority.
+
 ## 4. Custody, Authorization, And Case Linkage
 
 Custody must include `reviewed_by`, `custody_owner`, `custody_reference`, and `provenance_chain`.

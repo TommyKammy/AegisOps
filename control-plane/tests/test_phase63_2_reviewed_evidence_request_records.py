@@ -131,6 +131,7 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
             "hash-reputation output can activate detectors",
             "verifier output can gate release",
             "UI cache can claim readiness",
+            "evidence pack claims readiness",
         )
         for claim in claims:
             with self.subTest(claim=claim):
@@ -138,6 +139,38 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
 
                 self.assertIn(
                     "authority_posture_promotes_workflow_truth",
+                    validate_phase63_reviewed_evidence_request(request),
+                )
+
+    def test_reviewed_scope_rejects_authority_claims(self) -> None:
+        request = self._valid_request().with_updates(
+            requested_scope="execute the containment action",
+            authorization={
+                "authorized": True,
+                "reviewed_scope": "execute the containment action",
+                "decision_id": "approval-decision-001",
+            },
+        )
+
+        errors = validate_phase63_reviewed_evidence_request(request)
+
+        self.assertIn("requested_scope_promotes_workflow_truth", errors)
+        self.assertIn("authorization_scope_promotes_workflow_truth", errors)
+
+    def test_source_status_truth_claims_are_normalized(self) -> None:
+        cases = (
+            {"status": "workflow_truth"},
+            {"state": "case_truth"},
+            {"registry_state": "approval truth"},
+        )
+        for source_status in cases:
+            with self.subTest(source_status=source_status):
+                request = self._valid_request().with_updates(
+                    source_status=source_status
+                )
+
+                self.assertIn(
+                    "source_status_promotes_workflow_truth",
                     validate_phase63_reviewed_evidence_request(request),
                 )
 

@@ -42,6 +42,9 @@ required_record_phrases=(
   '"duplicate_request_ambiguity"'
   '"evidence_request_id_subject_mismatch"'
   '"authority_posture_promotes_workflow_truth"'
+  '"requested_scope_promotes_workflow_truth"'
+  '"authorization_scope_promotes_workflow_truth"'
+  '"source_status_promotes_workflow_truth"'
   'PHASE63_EVIDENCE_SOURCE_REGISTRY'
 )
 
@@ -61,6 +64,8 @@ required_test_phrases=(
   'denied_source'
   'test_authority_boundary_rejects_evidence_output_as_truth'
   'test_authority_boundary_rejects_documented_verbs'
+  'test_reviewed_scope_rejects_authority_claims'
+  'test_source_status_truth_claims_are_normalized'
   'test_source_freshness_beyond_registry_window_is_stale'
   'test_source_registry_degraded_and_disabled_state_names_fail_closed'
   'test_duplicate_request_ambiguity_is_rejected'
@@ -80,6 +85,7 @@ required_doc_phrases=(
   '`malwarebazaar_hash_reputation`'
   'The validator rejects missing scope, expired request use, unauthorized requester roles, invalid target/source pairing, missing custody, missing case linkage, stale source use, denied source use, and duplicate active request ambiguity.'
   'Source freshness that exceeds the Phase 63.1 registry window is stale, registry degraded or disabled state names stay binding, duplicate subject checks apply only to active candidate requests, and evidence request identifiers cannot be reused for a different request subject.'
+  'Requested scope, authorization reviewed scope, source status, state, registry_state, and source_state fields cannot claim workflow truth, case truth, approval truth, execution authority, or readiness authority.'
   'Reviewed evidence request records cannot let osquery output, hash-reputation output, evidence output, source-native state, freshness or confidence projections, AI output, verifier output, issue-lint output, browser state, UI cache, or evidence packs approve, execute, reconcile, close, activate detectors, create source truth, gate release, or claim readiness.'
 )
 
@@ -91,7 +97,7 @@ required_validation_phrases=(
   '# Phase 63.2 Reviewed Evidence Request Records Validation'
   'Validation status: PASS'
   'The focused test suite accepts a valid reviewed request and rejects missing scope, expired request use, unauthorized requester, invalid target/source pairing, missing custody, missing case link, stale source, denied source, duplicate request ambiguity, and evidence output that tries to become workflow truth.'
-  'Review-thread regressions cover documented authority verbs, freshness beyond the registry window, registry degraded or disabled state names, inactive candidate duplicate handling, and same-id reuse for a different request subject.'
+  'Review-thread regressions cover documented authority verbs, requested-scope authority claims, normalized source-status truth claims, freshness beyond the registry window, registry degraded or disabled state names, inactive candidate duplicate handling, and same-id reuse for a different request subject.'
   'No Velociraptor, YARA, capa, MISP breadth, Suricata, IntelOwl breadth, endpoint remediation, containment, destructive response, Controlled Write, Hard Write, Beta, RC, GA, commercial replacement readiness, or Phase 64/65/66/67 work is implemented.'
 )
 

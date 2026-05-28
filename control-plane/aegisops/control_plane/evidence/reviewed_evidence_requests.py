@@ -145,6 +145,7 @@ _AUTHORITY_WIDENING_TERMS = (
     "approve",
     "case truth",
     "claim readiness",
+    "claims readiness",
     "claimed readiness",
     "claiming readiness",
     "close case",
@@ -166,6 +167,8 @@ _AUTHORITY_WIDENING_TERMS = (
     "gate releases",
     "gate truth",
     "readiness claim",
+    "readiness claims",
+    "readiness claimed",
     "readiness truth",
     "reconcile",
     "reconciled",
@@ -270,6 +273,8 @@ def validate_phase63_reviewed_evidence_request(
         errors.append("unauthorized_requester_role")
     if not _non_empty_string(request.requested_scope):
         errors.append("missing_reviewed_scope")
+    elif _contains_authority_widening_claim(request.requested_scope):
+        errors.append("requested_scope_promotes_workflow_truth")
     if request.lifecycle_state not in _ALLOWED_LIFECYCLE_STATES:
         errors.append("unsupported_lifecycle_state")
 
@@ -349,6 +354,12 @@ def validate_phase63_reviewed_evidence_request(
         and request.authorization.get("reviewed_scope") != request.requested_scope
     ):
         errors.append("authorization_scope_mismatch")
+    authorization_reviewed_scope = request.authorization.get("reviewed_scope", "")
+    if (
+        _non_empty_string(authorization_reviewed_scope)
+        and _contains_authority_widening_claim(authorization_reviewed_scope)
+    ):
+        errors.append("authorization_scope_promotes_workflow_truth")
     if not request.linked_case_context:
         errors.append("missing_case_link")
     elif not _mapping_has_non_empty_fields(
@@ -364,7 +375,11 @@ def validate_phase63_reviewed_evidence_request(
         errors.append("source_denied")
     if any(value in _STALE_SOURCE_STATUSES for value in source_status_values):
         errors.append("source_stale")
-    if any(value in _SOURCE_AUTHORITY_STATUSES for value in source_status_values):
+    if any(
+        value in _SOURCE_AUTHORITY_STATUSES
+        or _contains_authority_widening_claim(value)
+        for value in source_status_values
+    ):
         errors.append("source_status_promotes_workflow_truth")
 
     authority_values = (

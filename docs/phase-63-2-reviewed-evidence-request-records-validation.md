@@ -21,7 +21,7 @@ The focused test suite accepts a valid reviewed request and rejects missing scop
 
 The validator reuses the Phase 63.1 bounded source registry so `osquery_host_state` remains tied to `explicitly_bound_host` and `malwarebazaar_hash_reputation` remains tied to `reviewed_file_hash`.
 
-Review-thread regressions cover documented authority verbs, freshness beyond the registry window, registry degraded or disabled state names, inactive candidate duplicate handling, and same-id reuse for a different request subject.
+Review-thread regressions cover documented authority verbs, requested-scope authority claims, normalized source-status truth claims, freshness beyond the registry window, registry degraded or disabled state names, inactive candidate duplicate handling, and same-id reuse for a different request subject.
 
 ## Authority-Boundary Review
 
