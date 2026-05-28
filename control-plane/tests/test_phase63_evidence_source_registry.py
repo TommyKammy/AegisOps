@@ -523,6 +523,42 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                 self.assertIn(expected_error, use_errors)
                 self.assertIn(expected_error, registry_errors)
 
+    def test_review_thread_state_lists_reject_item_whitespace_drift(
+        self,
+    ) -> None:
+        cases = {
+            "degraded_states": (
+                {"degraded_states": [" missing_host_binding", "stale_collection "]},
+                "degraded_states_whitespace_drift",
+            ),
+            "disabled_states": (
+                {"disabled_states": [" disabled_by_policy", "missing_custody "]},
+                "disabled_states_whitespace_drift",
+            ),
+        }
+        for label, (override, expected_error) in cases.items():
+            with self.subTest(label=label):
+                entry = {**self._valid_osquery_entry(), **override}
+                entry_errors = validate_phase63_evidence_source_entry(entry)
+                use_errors = validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                )
+                registry_errors = validate_phase63_evidence_source_registry(
+                    {
+                        "osquery_host_state": entry,
+                        "malwarebazaar_hash_reputation": (
+                            PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                                "malwarebazaar_hash_reputation"
+                            ]
+                        ),
+                    }
+                )
+
+                self.assertIn(expected_error, entry_errors)
+                self.assertIn(expected_error, use_errors)
+                self.assertIn(expected_error, registry_errors)
+
     def test_required_state_lists_compare_without_order_dependence(self) -> None:
         entry = {
             **self._valid_osquery_entry(),
@@ -945,6 +981,19 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     "source_identity_custody_requirements_mismatch", errors
                 )
 
+    def test_review_thread_unrelated_custody_negation_preamble_is_allowed(
+        self,
+    ) -> None:
+        entry = {
+            **self._valid_osquery_entry(),
+            "custody_requirements": (
+                "no source-native custody, "
+                + self._valid_osquery_entry()["custody_requirements"]
+            ),
+        }
+
+        self.assertEqual(validate_phase63_evidence_source_entry(entry), ())
+
     def test_review_thread_owner_must_match_reviewed_profile_value(self) -> None:
         entry = {
             **self._valid_osquery_entry(),
@@ -1171,6 +1220,23 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
         self.assertIn("registry_key_confidence_posture_mismatch", errors)
         self.assertIn("registry_key_degraded_states_mismatch", errors)
         self.assertIn("registry_key_disabled_states_mismatch", errors)
+
+    def test_review_thread_registry_binds_source_status_to_profile(self) -> None:
+        entry = {**self._valid_osquery_entry(), "status": "disabled"}
+
+        errors = validate_phase63_evidence_source_registry(
+            {
+                "osquery_host_state": entry,
+                "malwarebazaar_hash_reputation": (
+                    PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                        "malwarebazaar_hash_reputation"
+                    ]
+                ),
+            }
+        )
+
+        self.assertIn("source_identity_status_mismatch", errors)
+        self.assertIn("registry_key_status_mismatch", errors)
 
     def test_entry_and_source_use_reject_swapped_confidence_and_states(
         self,

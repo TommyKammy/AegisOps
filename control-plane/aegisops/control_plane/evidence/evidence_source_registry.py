@@ -84,6 +84,7 @@ _REQUIRED_SOURCE_PROFILES = {
         "allowed_target_class": "explicitly_bound_host",
         "freshness_window": "PT24H",
         "confidence_posture": "observed_host_state_subordinate_context",
+        "status": "enabled",
         "degraded_states": ("missing_host_binding", "stale_collection"),
         "disabled_states": ("disabled_by_policy", "missing_custody"),
         "custody_terms": _OSQUERY_REQUIRED_CUSTODY_TERMS,
@@ -94,6 +95,7 @@ _REQUIRED_SOURCE_PROFILES = {
         "allowed_target_class": "reviewed_file_hash",
         "freshness_window": "PT6H",
         "confidence_posture": "external_hash_reputation_subordinate_context",
+        "status": "enabled",
         "degraded_states": ("stale_reputation", "incomplete_response_digest"),
         "disabled_states": ("disabled_by_policy", "missing_hash_custody"),
         "custody_terms": _MALWAREBAZAAR_REQUIRED_CUSTODY_TERMS,
@@ -367,6 +369,10 @@ _STATE_LIST_BLANK_ENTRY_ERROR_CODES = {
     "degraded_states": "degraded_states_blank_entry",
     "disabled_states": "disabled_states_blank_entry",
 }
+_STATE_LIST_WHITESPACE_ENTRY_ERROR_CODES = {
+    "degraded_states": "degraded_states_whitespace_drift",
+    "disabled_states": "disabled_states_whitespace_drift",
+}
 _SCALAR_FIELD_WHITESPACE_ERROR_CODES = {
     "source_id": "source_id_whitespace_drift",
     "source_type": "source_type_whitespace_drift",
@@ -379,6 +385,19 @@ _SCALAR_FIELD_WHITESPACE_ERROR_CODES = {
     "authority_posture": "authority_posture_whitespace_drift",
 }
 _NEGATED_REQUIRED_CUSTODY_PREFIXES = ("missing", "not", "no", "without", "un", "non")
+_NEGATED_REQUIRED_CUSTODY_PREFIX_BRIDGE_TOKENS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "any",
+        "absolutely",
+        "currently",
+        "longer",
+        "really",
+        "yet",
+    }
+)
 _NEGATED_REQUIRED_CUSTODY_SUFFIXES = (
     "absent",
     "missing",
@@ -461,9 +480,20 @@ def _state_list_shape_errors(
             value is not None
             and not isinstance(value, str)
             and isinstance(value, Iterable)
-            and any(item is None or not str(item).strip() for item in value)
         ):
-            errors.append(_STATE_LIST_BLANK_ENTRY_ERROR_CODES[field_name])
+            has_blank_item = False
+            has_whitespace_drift = False
+            for item in value:
+                item_text = str(item) if item is not None else ""
+                stripped_item = item_text.strip()
+                if not stripped_item:
+                    has_blank_item = True
+                elif isinstance(item, str) and item_text != stripped_item:
+                    has_whitespace_drift = True
+            if has_blank_item:
+                errors.append(_STATE_LIST_BLANK_ENTRY_ERROR_CODES[field_name])
+            if has_whitespace_drift:
+                errors.append(_STATE_LIST_WHITESPACE_ENTRY_ERROR_CODES[field_name])
     return errors
 
 
@@ -551,6 +581,21 @@ def _contains_required_custody_term(
     return f" {required_custody_term} " in bounded_custody_text
 
 
+def _prefix_negates_required_custody_term(
+    prefix_tokens: tuple[str, ...],
+    prefix_sequences: tuple[tuple[str, ...], ...],
+) -> bool:
+    for prefix_sequence in prefix_sequences:
+        for _, prefix_end in _normalized_term_spans(prefix_tokens, prefix_sequence):
+            bridge_tokens = prefix_tokens[prefix_end:]
+            if all(
+                token in _NEGATED_REQUIRED_CUSTODY_PREFIX_BRIDGE_TOKENS
+                for token in bridge_tokens
+            ):
+                return True
+    return False
+
+
 def _contains_negated_required_custody_term(
     bounded_custody_text: str,
     required_custody_terms: tuple[str, ...],
@@ -599,9 +644,9 @@ def _contains_negated_required_custody_term(
             continue
         for start, end in _normalized_term_spans(custody_tokens, tuple(term_tokens)):
             prefix_tokens = custody_tokens[:start]
-            if any(
-                _normalized_term_spans(prefix_tokens, prefix_sequence)
-                for prefix_sequence in prefix_sequences
+            if _prefix_negates_required_custody_term(
+                prefix_tokens,
+                prefix_sequences,
             ):
                 return True
 
@@ -665,6 +710,7 @@ def _required_source_profile_errors(
     target_class_error: str,
     freshness_window_error: str,
     confidence_posture_error: str,
+    status_error: str,
     degraded_states_error: str,
     disabled_states_error: str,
     custody_requirements_error: str,
@@ -680,6 +726,7 @@ def _required_source_profile_errors(
         ("allowed_target_class", target_class_error),
         ("freshness_window", freshness_window_error),
         ("confidence_posture", confidence_posture_error),
+        ("status", status_error),
         ("degraded_states", degraded_states_error),
         ("disabled_states", disabled_states_error),
     )
@@ -724,6 +771,7 @@ def _registry_key_profile_errors(
             target_class_error="registry_key_target_class_mismatch",
             freshness_window_error="registry_key_freshness_window_mismatch",
             confidence_posture_error="registry_key_confidence_posture_mismatch",
+            status_error="registry_key_status_mismatch",
             degraded_states_error="registry_key_degraded_states_mismatch",
             disabled_states_error="registry_key_disabled_states_mismatch",
             custody_requirements_error="registry_key_custody_requirements_mismatch",
@@ -794,6 +842,7 @@ def validate_phase63_evidence_source_entry(
             target_class_error="source_identity_target_class_mismatch",
             freshness_window_error="source_identity_freshness_window_mismatch",
             confidence_posture_error="source_identity_confidence_posture_mismatch",
+            status_error="source_identity_status_mismatch",
             degraded_states_error="source_identity_degraded_states_mismatch",
             disabled_states_error="source_identity_disabled_states_mismatch",
             custody_requirements_error="source_identity_custody_requirements_mismatch",
