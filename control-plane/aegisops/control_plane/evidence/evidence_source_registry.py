@@ -148,35 +148,56 @@ def _has_normalized_boundary_term(value: str, terms: tuple[str, ...]) -> bool:
 
 _PROHIBITED_RECORD_TRUTH_CLAIMS = (
     "alert_truth",
+    "alert truths",
     "case_truth",
+    "case truths",
     "source_truth",
+    "source truths",
     "source of truth",
     "sources of truth",
     "evidence_truth",
+    "evidence truths",
     "evidence_request_truth",
+    "evidence request truths",
     "audit_truth",
+    "audit truths",
 )
 _PROHIBITED_ACTION_TRUTH_CLAIMS = (
     "approval_truth",
+    "approval truths",
     "action_request_truth",
+    "action request truths",
     "receipt_truth",
+    "receipt truths",
     "execution_receipt_truth",
+    "execution receipt truths",
     "execution_truth",
+    "execution truths",
     "reconciliation_truth",
+    "reconciliation truths",
     "detector_activation_truth",
+    "detector activation truths",
 )
 _READINESS_TRUTH_CLAIM = "readiness_truth"
 _PROHIBITED_CLOSEOUT_TRUTH_CLAIMS = (
     "release_truth",
+    "release truths",
     "release_gate_truth",
+    "release gate truths",
     "gate_truth",
+    "gate truths",
     "limitation_truth",
+    "limitation truths",
     "closeout_truth",
+    "closeout truths",
     "closeout_state_truth",
+    "closeout state truths",
     _READINESS_TRUTH_CLAIM,
+    "readiness truths",
 )
 _PROHIBITED_ENVIRONMENT_TRUTH_CLAIMS = (
     "production_truth",
+    "production truths",
 )
 _PROHIBITED_WORKFLOW_TRUTH_CLAIMS = (
     *_PROHIBITED_RECORD_TRUTH_CLAIMS,
@@ -208,12 +229,20 @@ _DETECTOR_ACTIVATION_AUTHORITY_TERMS = (
 _ALERT_ADMISSION_AUTHORITY_TERMS = (
     "admitted alert",
     "admitted alerts",
+    "admitted an alert",
+    "admitted the alert",
     "admit alert",
     "admit alerts",
+    "admit an alert",
+    "admit the alert",
     "admits alert",
     "admits alerts",
+    "admits an alert",
+    "admits the alert",
     "admitting alert",
     "admitting alerts",
+    "admitting an alert",
+    "admitting the alert",
     "alert admission",
 )
 _REQUEST_AUTHORITY_TERMS = (
@@ -285,27 +314,46 @@ _RECORD_OWNER_AUTHORITY_TERMS = (
 )
 _RECORD_SPECIFIC_AUTHORITY_TERMS = (
     "alert authority",
+    "alert authorities",
     "case authority",
+    "case authorities",
     "source authority",
+    "source authorities",
     "evidence authority",
+    "evidence authorities",
     "audit authority",
+    "audit authorities",
     "approval authority",
+    "approval authorities",
     "action request authority",
+    "action request authorities",
     "execution receipt authority",
+    "execution receipt authorities",
     "execution authority",
+    "execution authorities",
     "reconciliation authority",
+    "reconciliation authorities",
     "release authority",
+    "release authorities",
     "release gate authority",
+    "release gate authorities",
     "gate authority",
+    "gate authorities",
     "limitation authority",
+    "limitation authorities",
     "closeout authority",
+    "closeout authorities",
     "readiness authority",
+    "readiness authorities",
     "production authority",
+    "production authorities",
 )
 _AUTHORITY_WIDENING_TERMS = (
     "authoritative",
     "workflow authority",
+    "workflow authorities",
     "workflow truth",
+    "workflow truths",
     *_ALERT_ADMISSION_AUTHORITY_TERMS,
     *_REQUEST_AUTHORITY_TERMS,
     *_APPROVAL_AUTHORITY_TERMS,
@@ -407,6 +455,7 @@ _SCALAR_FIELD_WHITESPACE_ERROR_CODES = {
 _SCALAR_FIELD_TYPE_ERROR_CODES = {
     "custody_requirements": "custody_requirements_not_string",
 }
+_MALFORMED_REGISTRY_ENTRY_ERROR = "registry_entry_not_object"
 _NEGATED_REQUIRED_CUSTODY_PREFIXES = ("missing", "not", "no", "without", "un", "non")
 _NEGATED_REQUIRED_CUSTODY_PREFIX_BRIDGE_TOKENS = frozenset(
     {
@@ -444,10 +493,12 @@ _NEGATED_REQUIRED_CUSTODY_SUFFIX_MODIFIERS = ("currently", "longer")
 
 
 def _coerce_entry(
-    entry: EvidenceSourceEntry | Mapping[str, object],
+    entry: EvidenceSourceEntry | Mapping[str, object] | object,
 ) -> EvidenceSourceEntry:
     if isinstance(entry, EvidenceSourceEntry):
         return entry
+    if not isinstance(entry, Mapping):
+        entry = {}
 
     def text_field(key: str, default: str = "") -> str:
         value = entry.get(key, default)
@@ -480,18 +531,22 @@ def _coerce_entry(
 
 
 def _unknown_mapping_field_errors(
-    entry: EvidenceSourceEntry | Mapping[str, object],
+    entry: EvidenceSourceEntry | Mapping[str, object] | object,
 ) -> list[str]:
     if isinstance(entry, EvidenceSourceEntry):
         return []
+    if not isinstance(entry, Mapping):
+        return [_MALFORMED_REGISTRY_ENTRY_ERROR]
     unknown_fields = frozenset(str(key) for key in entry) - _ENTRY_FIELD_NAMES
     return ["unknown_registry_entry_field"] if unknown_fields else []
 
 
 def _state_list_shape_errors(
-    entry: EvidenceSourceEntry | Mapping[str, object],
+    entry: EvidenceSourceEntry | Mapping[str, object] | object,
 ) -> list[str]:
     if isinstance(entry, EvidenceSourceEntry):
+        return []
+    if not isinstance(entry, Mapping):
         return []
     errors: list[str] = []
     for field_name, error_code in _STATE_LIST_FIELD_ERROR_CODES.items():
@@ -521,9 +576,11 @@ def _state_list_shape_errors(
 
 
 def _scalar_field_whitespace_errors(
-    entry: EvidenceSourceEntry | Mapping[str, object],
+    entry: EvidenceSourceEntry | Mapping[str, object] | object,
 ) -> list[str]:
     if isinstance(entry, EvidenceSourceEntry):
+        return []
+    if not isinstance(entry, Mapping):
         return []
     errors: list[str] = []
     field_error_codes = _SCALAR_FIELD_WHITESPACE_ERROR_CODES.items()
@@ -535,9 +592,11 @@ def _scalar_field_whitespace_errors(
 
 
 def _scalar_field_shape_errors(
-    entry: EvidenceSourceEntry | Mapping[str, object],
+    entry: EvidenceSourceEntry | Mapping[str, object] | object,
 ) -> list[str]:
     if isinstance(entry, EvidenceSourceEntry):
+        return []
+    if not isinstance(entry, Mapping):
         return []
     errors: list[str] = []
     for field_name, error_code in _SCALAR_FIELD_TYPE_ERROR_CODES.items():

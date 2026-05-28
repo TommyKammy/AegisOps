@@ -455,6 +455,74 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
                     errors,
                 )
 
+    def test_review_thread_plural_workflow_truth_claims_fail_closed(
+        self,
+    ) -> None:
+        for prohibited_claim in (
+            "case truths",
+            "source truths",
+            "workflow truths",
+        ):
+            with self.subTest(prohibited_claim=prohibited_claim):
+                errors = validate_phase63_evidence_source_entry(
+                    {
+                        **self._valid_osquery_entry(),
+                        "custody_requirements": (
+                            self._valid_osquery_entry()["custody_requirements"]
+                            + f", {prohibited_claim}"
+                        ),
+                    }
+                )
+
+                self.assertIn(
+                    "custody_requirements_promote_workflow_authority",
+                    errors,
+                )
+
+    def test_review_thread_article_inserted_alert_admissions_fail_closed(
+        self,
+    ) -> None:
+        for prohibited_claim in ("admit an alert", "admit the alert"):
+            with self.subTest(prohibited_claim=prohibited_claim):
+                errors = validate_phase63_evidence_source_entry(
+                    {
+                        **self._valid_osquery_entry(),
+                        "custody_requirements": (
+                            self._valid_osquery_entry()["custody_requirements"]
+                            + f", {prohibited_claim}"
+                        ),
+                    }
+                )
+
+                self.assertIn(
+                    "custody_requirements_promote_workflow_authority",
+                    errors,
+                )
+
+    def test_review_thread_plural_workflow_authority_claims_fail_closed(
+        self,
+    ) -> None:
+        for prohibited_claim in (
+            "workflow authorities",
+            "case authorities",
+            "release authorities",
+        ):
+            with self.subTest(prohibited_claim=prohibited_claim):
+                errors = validate_phase63_evidence_source_entry(
+                    {
+                        **self._valid_osquery_entry(),
+                        "custody_requirements": (
+                            self._valid_osquery_entry()["custody_requirements"]
+                            + f", {prohibited_claim}"
+                        ),
+                    }
+                )
+
+                self.assertIn(
+                    "custody_requirements_promote_workflow_authority",
+                    errors,
+                )
+
     def test_authority_boundary_terms_require_word_boundaries(self) -> None:
         entry = {
             **self._valid_osquery_entry(),
@@ -1417,6 +1485,22 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             ),
             (),
         )
+
+    def test_review_thread_registry_rejects_malformed_mapping_values(
+        self,
+    ) -> None:
+        errors = validate_phase63_evidence_source_registry(
+            {
+                "osquery_host_state": "not an entry object",
+                "malwarebazaar_hash_reputation": PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                    "malwarebazaar_hash_reputation"
+                ],
+            }
+        )
+
+        self.assertIn("registry_entry_not_object", errors)
+        self.assertIn("registry_key_entry_source_id_mismatch", errors)
+        self.assertIn("registry_source_ids_not_bounded", errors)
 
     def test_registry_rejects_mapping_key_source_id_drift(self) -> None:
         errors = validate_phase63_evidence_source_registry(
