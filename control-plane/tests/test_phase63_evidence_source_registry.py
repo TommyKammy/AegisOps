@@ -395,6 +395,62 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
 
                 self.assertIn("unsupported_broad_source_reference", errors)
 
+    def test_review_thread_all_lower_concatenated_boundary_claims_fail_closed(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "workflowauthority",
+                "custody_requirements_promote_workflow_authority",
+            ),
+            (
+                "casetruth",
+                "custody_requirements_promote_workflow_authority",
+            ),
+            (
+                "publicinternetpivot",
+                "unsupported_broad_source_reference",
+            ),
+        )
+        for prohibited_claim, expected_error in cases:
+            with self.subTest(prohibited_claim=prohibited_claim):
+                errors = validate_phase63_evidence_source_entry(
+                    {
+                        **self._valid_osquery_entry(),
+                        "custody_requirements": (
+                            self._valid_osquery_entry()["custody_requirements"]
+                            + f", {prohibited_claim}"
+                        ),
+                    }
+                )
+
+                self.assertIn(expected_error, errors)
+
+    def test_review_thread_record_specific_authority_claims_fail_closed(
+        self,
+    ) -> None:
+        for prohibited_claim in (
+            "case authority",
+            "audit authority",
+            "release authority",
+            "reconciliation authority",
+        ):
+            with self.subTest(prohibited_claim=prohibited_claim):
+                errors = validate_phase63_evidence_source_entry(
+                    {
+                        **self._valid_osquery_entry(),
+                        "custody_requirements": (
+                            self._valid_osquery_entry()["custody_requirements"]
+                            + f", {prohibited_claim}"
+                        ),
+                    }
+                )
+
+                self.assertIn(
+                    "custody_requirements_promote_workflow_authority",
+                    errors,
+                )
+
     def test_authority_boundary_terms_require_word_boundaries(self) -> None:
         entry = {
             **self._valid_osquery_entry(),
@@ -1038,6 +1094,51 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
         self.assertIn("source_identity_owner_mismatch", entry_errors)
         self.assertIn("source_identity_owner_mismatch", use_errors)
         self.assertIn("registry_key_owner_mismatch", registry_errors)
+
+    def test_review_thread_non_string_custody_requirements_fail_closed(
+        self,
+    ) -> None:
+        cases = {
+            "list": [
+                "reviewed query id",
+                "operator or automation attribution",
+                "collection timestamp",
+                "host binding",
+                "AegisOps evidence record id",
+            ],
+            "mapping": {
+                "reviewed query id": True,
+                "operator or automation attribution": True,
+                "collection timestamp": True,
+                "host binding": True,
+                "AegisOps evidence record id": True,
+            },
+        }
+        for label, custody_requirements in cases.items():
+            with self.subTest(label=label):
+                entry = {
+                    **self._valid_osquery_entry(),
+                    "custody_requirements": custody_requirements,
+                }
+                entry_errors = validate_phase63_evidence_source_entry(entry)
+                use_errors = validate_phase63_evidence_source_use(
+                    entry,
+                    target_class="explicitly_bound_host",
+                )
+                registry_errors = validate_phase63_evidence_source_registry(
+                    {
+                        "osquery_host_state": entry,
+                        "malwarebazaar_hash_reputation": (
+                            PHASE63_EVIDENCE_SOURCE_REGISTRY[
+                                "malwarebazaar_hash_reputation"
+                            ]
+                        ),
+                    }
+                )
+
+                self.assertIn("custody_requirements_not_string", entry_errors)
+                self.assertIn("custody_requirements_not_string", use_errors)
+                self.assertIn("custody_requirements_not_string", registry_errors)
 
     def test_mapping_without_authority_posture_uses_subordinate_default(
         self,

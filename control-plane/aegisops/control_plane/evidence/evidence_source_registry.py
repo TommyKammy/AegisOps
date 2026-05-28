@@ -113,17 +113,16 @@ def _match_normalized_term_at(
     start: int,
     term_tokens: tuple[str, ...],
 ) -> int | None:
+    term_text = "".join(term_tokens)
+    if not term_text:
+        return None
+    assembled_text = ""
     token_index = start
-    for term_token in term_tokens:
-        assembled_token = ""
-        while (
-            token_index < len(tokens)
-            and len(assembled_token) < len(term_token)
-        ):
-            assembled_token += tokens[token_index]
-            token_index += 1
-        if assembled_token != term_token:
-            return None
+    while token_index < len(tokens) and len(assembled_text) < len(term_text):
+        assembled_text += tokens[token_index]
+        token_index += 1
+    if assembled_text != term_text:
+        return None
     return token_index
 
 
@@ -284,6 +283,25 @@ _RECORD_OWNER_AUTHORITY_TERMS = (
     "closeout owners",
     "closeout ownership",
 )
+_RECORD_SPECIFIC_AUTHORITY_TERMS = (
+    "alert authority",
+    "case authority",
+    "source authority",
+    "evidence authority",
+    "audit authority",
+    "approval authority",
+    "action request authority",
+    "execution receipt authority",
+    "execution authority",
+    "reconciliation authority",
+    "release authority",
+    "release gate authority",
+    "gate authority",
+    "limitation authority",
+    "closeout authority",
+    "readiness authority",
+    "production authority",
+)
 _AUTHORITY_WIDENING_TERMS = (
     "authoritative",
     "workflow authority",
@@ -296,6 +314,7 @@ _AUTHORITY_WIDENING_TERMS = (
     *_CLOSURE_AUTHORITY_TERMS,
     *_DETECTOR_ACTIVATION_AUTHORITY_TERMS,
     *_RECORD_OWNER_AUTHORITY_TERMS,
+    *_RECORD_SPECIFIC_AUTHORITY_TERMS,
     "execution receipt",
     "execution receipts",
     "release gate",
@@ -384,6 +403,9 @@ _SCALAR_FIELD_WHITESPACE_ERROR_CODES = {
     "confidence_posture": "confidence_posture_whitespace_drift",
     "status": "status_whitespace_drift",
     "authority_posture": "authority_posture_whitespace_drift",
+}
+_SCALAR_FIELD_TYPE_ERROR_CODES = {
+    "custody_requirements": "custody_requirements_not_string",
 }
 _NEGATED_REQUIRED_CUSTODY_PREFIXES = ("missing", "not", "no", "without", "un", "non")
 _NEGATED_REQUIRED_CUSTODY_PREFIX_BRIDGE_TOKENS = frozenset(
@@ -508,6 +530,19 @@ def _scalar_field_whitespace_errors(
     for field_name, error_code in field_error_codes:
         value = entry.get(field_name)
         if isinstance(value, str) and value != value.strip():
+            errors.append(error_code)
+    return errors
+
+
+def _scalar_field_shape_errors(
+    entry: EvidenceSourceEntry | Mapping[str, object],
+) -> list[str]:
+    if isinstance(entry, EvidenceSourceEntry):
+        return []
+    errors: list[str] = []
+    for field_name, error_code in _SCALAR_FIELD_TYPE_ERROR_CODES.items():
+        value = entry.get(field_name)
+        if value is not None and not isinstance(value, str):
             errors.append(error_code)
     return errors
 
@@ -820,6 +855,7 @@ def validate_phase63_evidence_source_entry(
 ) -> EvidenceSourceValidationErrors:
     raw_errors = _unknown_mapping_field_errors(entry)
     raw_errors.extend(_state_list_shape_errors(entry))
+    raw_errors.extend(_scalar_field_shape_errors(entry))
     raw_errors.extend(_scalar_field_whitespace_errors(entry))
     candidate = _coerce_entry(entry)
     errors: list[str] = list(raw_errors)
