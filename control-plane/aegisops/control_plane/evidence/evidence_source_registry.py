@@ -409,7 +409,7 @@ def _coerce_entry(
 
     def text_field(key: str, default: str = "") -> str:
         value = entry.get(key, default)
-        return str(value).strip() if value is not None else ""
+        return str(value) if value is not None else ""
 
     def tuple_field(key: str) -> tuple[str, ...]:
         value = entry.get(key, ())
@@ -418,7 +418,7 @@ def _coerce_entry(
         if not isinstance(value, Iterable) or isinstance(value, Mapping):
             return ()
         coerced_items = tuple(str(item).strip() for item in value)
-        return tuple(item for item in coerced_items if item)
+        return coerced_items
 
     return EvidenceSourceEntry(
         source_id=text_field("source_id"),
