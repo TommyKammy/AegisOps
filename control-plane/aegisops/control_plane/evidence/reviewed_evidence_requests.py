@@ -143,7 +143,6 @@ _AUTHORITY_WIDENING_TERMS = (
     "activated detectors",
     "activating detector",
     "activating detectors",
-    "approved",
     "approves",
     "approving",
     "approval truth",
