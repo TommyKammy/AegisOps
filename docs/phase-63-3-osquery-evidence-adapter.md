@@ -33,11 +33,11 @@ Osquery output older than the registry freshness window returns a `degraded` pac
 
 Unavailable adapter state returns an `unavailable` pack with `adapter_unavailable` and no rows. The unavailable pack remains linked to the reviewed request and custody fields so operators can see the prerequisite failure without inventing source truth.
 
-The adapter rejects osquery output whose `query_id` does not match the reviewed query id in custody. It also requires custody `collection_timestamp` to parse as a timezone-aware timestamp and match `collected_at`.
+The adapter is fixed to the `osquery_host_state` source and rejects attempts to rebind the adapter or reviewed request to another evidence source. It rejects osquery output whose `query_id` does not match the reviewed query id in custody. It also requires custody `collection_timestamp` to parse as a timezone-aware timestamp and match `collected_at`.
 
 Osquery rows are bounded before whole-pack serialization: at most 500 rows, 128 distinct columns, 256 bytes per serialized column name, and 4096 bytes per serialized cell value.
 
-Malformed rows, oversized rows, oversized column names, non-finite row values, malformed custody extras, unsupported result kinds, unauthorized, terminal, or expired reviewed requests, target mismatch, missing custody, custody query mismatch, custody host mismatch, custody timestamp mismatch, naive timestamps, and non-read-only operations fail closed.
+Malformed rows, oversized rows, oversized column names, non-finite row values, malformed custody extras, unsupported result kinds, unauthorized, terminal, or expired reviewed requests, non-osquery source bindings, target mismatch, missing custody, custody query mismatch, custody host mismatch, custody timestamp mismatch, collection before request review, future collection timestamps, naive timestamps, and non-read-only operations fail closed.
 
 ## 4. Authority Boundary
 

@@ -17,6 +17,7 @@ from .reviewed_evidence_requests import (
 _DURATION_PATTERN = re.compile(
     r"^PT(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?$"
 )
+_OSQUERY_SOURCE_ID = "osquery_host_state"
 _ALLOWED_RESULT_KINDS = frozenset({"host_state", "process", "state_context"})
 _READ_ONLY_OPERATIONS = frozenset({"collect_host_context", "collect_state_context"})
 _ACTIVE_REVIEWED_REQUEST_STATES = frozenset({"reviewed", "approved", "active"})
@@ -210,7 +211,7 @@ class OsqueryEvidencePack:
 
 @dataclass(frozen=True)
 class OsqueryEvidenceAdapter:
-    source_id: str = "osquery_host_state"
+    source_id: str = _OSQUERY_SOURCE_ID
     max_rows: int = 500
     max_columns: int = 128
     max_column_name_bytes: int = 256
@@ -251,6 +252,9 @@ class OsqueryEvidenceAdapter:
         comparison_now = now or datetime.now(timezone.utc)
         _require_aware_datetime(comparison_now, "now")
 
+        if self.source_id != _OSQUERY_SOURCE_ID:
+            raise ValueError("osquery adapter source_id must be osquery_host_state")
+
         if adapter_input.requested_operation not in _READ_ONLY_OPERATIONS:
             raise ValueError("osquery adapter is read-only")
 
@@ -267,7 +271,7 @@ class OsqueryEvidenceAdapter:
             raise ValueError(
                 "reviewed evidence request lifecycle_state must be active"
             )
-        if request.source_id != self.source_id:
+        if request.source_id != _OSQUERY_SOURCE_ID:
             raise ValueError("reviewed request source_id must be osquery_host_state")
 
         host_identifier = _require_non_empty_string(
@@ -309,6 +313,12 @@ class OsqueryEvidenceAdapter:
             raise ValueError(
                 "osquery custody collection_timestamp must match collected_at"
             )
+        if collected_at < request.requested_at:
+            raise ValueError(
+                "collected_at must not predate reviewed evidence request"
+            )
+        if collected_at > comparison_now:
+            raise ValueError("collected_at must not be in the future")
 
         if adapter_input.adapter_state == "unavailable":
             rows = ()
@@ -319,7 +329,7 @@ class OsqueryEvidenceAdapter:
             self._validate_result_bounds(rows)
 
         freshness_window = _parse_duration_seconds(
-            PHASE63_EVIDENCE_SOURCE_REGISTRY[self.source_id].freshness_window
+            PHASE63_EVIDENCE_SOURCE_REGISTRY[_OSQUERY_SOURCE_ID].freshness_window
         )
         age_seconds = (comparison_now - collected_at).total_seconds()
         is_stale = age_seconds < 0 or age_seconds > freshness_window

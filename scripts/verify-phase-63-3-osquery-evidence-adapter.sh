@@ -35,9 +35,12 @@ required_adapter_phrases=(
   'validate_phase63_reviewed_evidence_request'
   'PHASE63_EVIDENCE_SOURCE_REGISTRY'
   '"osquery_host_state"'
+  '_OSQUERY_SOURCE_ID = "osquery_host_state"'
   '"subordinate_evidence_context_only"'
   '"adapter_unavailable"'
   '"stale_collection"'
+  '"osquery adapter source_id must be osquery_host_state"'
+  '"reviewed request source_id must be osquery_host_state"'
   '"osquery adapter is read-only"'
   '"host_identifier must match reviewed request target"'
   '"missing_osquery_custody"'
@@ -49,6 +52,8 @@ required_adapter_phrases=(
   'max_cell_bytes: int = 4096'
   '"query_id must match osquery custody reviewed_query_id"'
   '"osquery custody collection_timestamp must match collected_at"'
+  '"collected_at must not predate reviewed evidence request"'
+  '"collected_at must not be in the future"'
   '"osquery evidence pack must contain JSON-serializable finite values"'
 )
 
@@ -71,6 +76,10 @@ required_test_phrases=(
   'test_malformed_custody_extras_are_rejected_before_pack_return'
   'test_unauthorized_request_fails_closed'
   'test_terminal_evidence_request_states_fail_closed'
+  'test_adapter_source_id_cannot_be_rebound'
+  'test_request_source_id_must_be_osquery'
+  'test_collection_before_reviewed_request_fails_closed'
+  'test_future_collection_timestamp_fails_closed'
   'test_target_mismatch_fails_closed'
   'test_missing_custody_fails_closed'
   'test_no_remediation_or_direct_command_authority'
@@ -86,9 +95,9 @@ required_doc_phrases=(
   'The MVP result kinds are `host_state`, `process`, and `state_context`.'
   'Osquery output older than the registry freshness window returns a `degraded` pack with `stale_collection`.'
   'Unavailable adapter state returns an `unavailable` pack with `adapter_unavailable` and no rows.'
-  'The adapter rejects osquery output whose `query_id` does not match the reviewed query id in custody. It also requires custody `collection_timestamp` to parse as a timezone-aware timestamp and match `collected_at`.'
+  'The adapter is fixed to the `osquery_host_state` source and rejects attempts to rebind the adapter or reviewed request to another evidence source. It rejects osquery output whose `query_id` does not match the reviewed query id in custody. It also requires custody `collection_timestamp` to parse as a timezone-aware timestamp and match `collected_at`.'
   'Osquery rows are bounded before whole-pack serialization: at most 500 rows, 128 distinct columns, 256 bytes per serialized column name, and 4096 bytes per serialized cell value.'
-  'Malformed rows, oversized rows, oversized column names, non-finite row values, malformed custody extras, unsupported result kinds, unauthorized, terminal, or expired reviewed requests, target mismatch, missing custody, custody query mismatch, custody host mismatch, custody timestamp mismatch, naive timestamps, and non-read-only operations fail closed.'
+  'Malformed rows, oversized rows, oversized column names, non-finite row values, malformed custody extras, unsupported result kinds, unauthorized, terminal, or expired reviewed requests, non-osquery source bindings, target mismatch, missing custody, custody query mismatch, custody host mismatch, custody timestamp mismatch, collection before request review, future collection timestamps, naive timestamps, and non-read-only operations fail closed.'
   'Osquery output, evidence packs, source-native state, freshness projections, AI output, verifier output, issue-lint output, browser state, UI cache, and adapter state remain subordinate context only.'
   'The adapter cannot approve, execute, reconcile, close, activate detectors, create source truth, gate release, claim readiness, remediate endpoints, contain hosts, quarantine files, kill processes, mutate protected targets, or issue direct command authority.'
 )
@@ -100,8 +109,8 @@ done
 required_validation_phrases=(
   '# Phase 63.3 Osquery Evidence Adapter Validation'
   'Validation status: PASS'
-  'The focused adapter test suite accepts a normal reviewed osquery host-state result and rejects or degrades the requested boundary cases: stale output, unavailable adapter state without rows, malformed rows, oversized rows, oversized column sets, oversized column names, oversized cell values, non-finite row values, unauthorized reviewed request, terminal reviewed request states, mismatched target host, query id custody mismatch, collection timestamp custody mismatch, missing custody, malformed custody extras, and no-remediation attempts.'
-  'The adapter is bound to Phase 63.1 source registry freshness and Phase 63.2 reviewed evidence request validation. It binds query id and collection timestamp to osquery custody before pack construction.'
+  'The focused adapter test suite accepts a normal reviewed osquery host-state result and rejects or degrades the requested boundary cases: stale output, unavailable adapter state without rows, malformed rows, oversized rows, oversized column sets, oversized column names, oversized cell values, non-finite row values, unauthorized reviewed request, terminal reviewed request states, non-osquery source bindings, collection before request review, future collection timestamps, mismatched target host, query id custody mismatch, collection timestamp custody mismatch, missing custody, malformed custody extras, and no-remediation attempts.'
+  'The adapter is bound to the Phase 63.1 `osquery_host_state` source registry freshness and Phase 63.2 reviewed evidence request validation. It binds query id and collection timestamp to osquery custody before pack construction.'
   'No Velociraptor, YARA, capa, MISP breadth, Suricata, IntelOwl breadth, endpoint remediation, containment, destructive response, Controlled Write, Hard Write, Beta, RC, GA, commercial replacement readiness, or Phase 64/65/66/67 work is implemented.'
 )
 

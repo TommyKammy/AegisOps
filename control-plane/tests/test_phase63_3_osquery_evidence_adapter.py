@@ -74,11 +74,12 @@ class Phase633OsqueryEvidenceAdapterTests(unittest.TestCase):
         adapter_state: str = "available",
         requested_operation: str = "collect_host_context",
         query_id: str = "reviewed-query-001",
+        request: ReviewedEvidenceRequestRecord | None = None,
     ) -> OsqueryEvidenceAdapterInput:
         timestamp = now or datetime.now(timezone.utc)
         collection_time = collected_at or timestamp
         return OsqueryEvidenceAdapterInput(
-            request=self._reviewed_request(now=timestamp),
+            request=request or self._reviewed_request(now=timestamp),
             host_identifier=host_identifier,
             query_id=query_id,
             query_name="host_state",
@@ -120,10 +121,14 @@ class Phase633OsqueryEvidenceAdapterTests(unittest.TestCase):
 
     def test_stale_osquery_output_is_degraded_not_truth(self) -> None:
         now = datetime.now(timezone.utc)
+        collected_at = now - timedelta(hours=25)
+        request = self._reviewed_request(now=collected_at - timedelta(minutes=5))
+        request = request.with_updates(expires_at=now + timedelta(hours=2))
         pack = OsqueryEvidenceAdapter().build_evidence_pack(
             self._valid_input(
                 now=now,
-                collected_at=now - timedelta(hours=25),
+                collected_at=collected_at,
+                request=request,
             ),
             now=now,
         )
@@ -301,6 +306,77 @@ class Phase633OsqueryEvidenceAdapterTests(unittest.TestCase):
                         self._valid_input(now=now).with_updates(request=request),
                         now=now,
                     )
+
+    def test_adapter_source_id_cannot_be_rebound(self) -> None:
+        now = datetime.now(timezone.utc)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "osquery adapter source_id must be osquery_host_state",
+        ):
+            OsqueryEvidenceAdapter(
+                source_id="malwarebazaar_hash_reputation"
+            ).build_evidence_pack(self._valid_input(now=now), now=now)
+
+    def test_request_source_id_must_be_osquery(self) -> None:
+        now = datetime.now(timezone.utc)
+        request = self._reviewed_request(now=now).with_updates(
+            source_id="malwarebazaar_hash_reputation",
+            target={
+                "target_class": "reviewed_file_hash",
+                "file_hash": "0" * 64,
+                "case_id": "case-001",
+                "host_identifier": "host-001",
+            },
+            requested_scope="bounded_read_only_reputation_lookup",
+            authorization={
+                "authorized": True,
+                "reviewed_scope": "bounded_read_only_reputation_lookup",
+                "decision_id": "approval-decision-001",
+            },
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "reviewed request source_id must be osquery_host_state",
+        ):
+            OsqueryEvidenceAdapter().build_evidence_pack(
+                self._valid_input(now=now, request=request),
+                now=now,
+            )
+
+    def test_collection_before_reviewed_request_fails_closed(self) -> None:
+        now = datetime.now(timezone.utc)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "collected_at must not predate reviewed evidence request",
+        ):
+            OsqueryEvidenceAdapter().build_evidence_pack(
+                self._valid_input(
+                    now=now,
+                    collected_at=now - timedelta(minutes=1),
+                ),
+                now=now,
+            )
+
+    def test_future_collection_timestamp_fails_closed(self) -> None:
+        now = datetime.now(timezone.utc)
+        collected_at = now + timedelta(minutes=1)
+        request = self._reviewed_request(now=now)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "collected_at must not be in the future",
+        ):
+            OsqueryEvidenceAdapter().build_evidence_pack(
+                self._valid_input(
+                    now=now,
+                    collected_at=collected_at,
+                    request=request,
+                ),
+                now=now,
+            )
 
     def test_target_mismatch_fails_closed(self) -> None:
         now = datetime.now(timezone.utc)
