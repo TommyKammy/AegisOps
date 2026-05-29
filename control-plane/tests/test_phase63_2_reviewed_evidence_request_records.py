@@ -169,6 +169,7 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
     def test_reviewed_scope_rejects_authority_claims(self) -> None:
         cases = (
             "execute the containment action",
+            "close the case",
             "close this case",
         )
         for reviewed_scope in cases:
@@ -345,15 +346,21 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
         )
 
     def test_duplicate_request_check_only_applies_to_active_candidate(self) -> None:
-        request = self._valid_request().with_updates(lifecycle_state="completed")
+        for lifecycle_state in ("completed", "expired", "denied", "cancelled"):
+            with self.subTest(lifecycle_state=lifecycle_state):
+                request = self._valid_request().with_updates(
+                    lifecycle_state=lifecycle_state
+                )
 
-        self.assertNotIn(
-            "duplicate_request_ambiguity",
-            validate_phase63_reviewed_evidence_request(
-                request,
-                existing_requests=(request.with_updates(evidence_request_id="other"),),
-            ),
-        )
+                self.assertNotIn(
+                    "duplicate_request_ambiguity",
+                    validate_phase63_reviewed_evidence_request(
+                        request,
+                        existing_requests=(
+                            request.with_updates(evidence_request_id="other"),
+                        ),
+                    ),
+                )
 
     def test_duplicate_request_check_ignores_terminal_existing_requests(self) -> None:
         request = self._valid_request()
