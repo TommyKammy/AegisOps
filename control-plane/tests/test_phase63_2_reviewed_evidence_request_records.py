@@ -190,6 +190,66 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
                 self.assertIn("requested_scope_promotes_workflow_truth", errors)
                 self.assertIn("authorization_scope_promotes_workflow_truth", errors)
 
+    def test_review_thread_authority_cluster_examples_fail_closed(self) -> None:
+        cases = (
+            (
+                "authorization_executes_action",
+                self._valid_request().with_updates(
+                    authorization={
+                        "authorized": True,
+                        "reviewed_scope": "bounded_read_only_host_state",
+                        "decision_id": "approval-decision-001",
+                        "authority_posture": "evidence output executes the action",
+                    },
+                ),
+                "authority_posture_promotes_workflow_truth",
+            ),
+            (
+                "authority_claims_readiness",
+                self._valid_request().with_updates(
+                    authority_posture="evidence pack claims readiness",
+                ),
+                "authority_posture_promotes_workflow_truth",
+            ),
+            (
+                "requested_scope_executes_action",
+                self._valid_request().with_updates(
+                    requested_scope="execute the containment action",
+                    authorization={
+                        "authorized": True,
+                        "reviewed_scope": "execute the containment action",
+                        "decision_id": "approval-decision-001",
+                    },
+                ),
+                "requested_scope_promotes_workflow_truth",
+            ),
+            (
+                "authorization_scope_closes_case",
+                self._valid_request().with_updates(
+                    requested_scope="close the case",
+                    authorization={
+                        "authorized": True,
+                        "reviewed_scope": "close the case",
+                        "decision_id": "approval-decision-001",
+                    },
+                ),
+                "authorization_scope_promotes_workflow_truth",
+            ),
+            (
+                "source_status_claims_truth",
+                self._valid_request().with_updates(
+                    source_status={"registry_state": "workflow_truth"},
+                ),
+                "source_status_promotes_workflow_truth",
+            ),
+        )
+        for label, request, expected_error in cases:
+            with self.subTest(label=label):
+                self.assertIn(
+                    expected_error,
+                    validate_phase63_reviewed_evidence_request(request),
+                )
+
     def test_reviewed_scope_accepts_approved_software_inventory(self) -> None:
         request = self._valid_request().with_updates(
             requested_scope="bounded_read_only_approved_software_inventory",

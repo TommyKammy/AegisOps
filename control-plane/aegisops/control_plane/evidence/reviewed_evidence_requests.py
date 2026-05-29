@@ -134,69 +134,6 @@ _APPROVED_INVENTORY_SCOPE_PHRASES = (
     "approved software state",
     "approved software",
 )
-_AUTHORITY_WIDENING_TERMS = (
-    "activate detector",
-    "activate detectors",
-    "activates detector",
-    "activates detectors",
-    "activated detector",
-    "activated detectors",
-    "activating detector",
-    "activating detectors",
-    "approves",
-    "approving",
-    "approval truth",
-    "approves",
-    "approve",
-    "case truth",
-    "claim readiness",
-    "claims readiness",
-    "claimed readiness",
-    "claiming readiness",
-    "close",
-    "close a case",
-    "close case",
-    "close cases",
-    "close the case",
-    "close this case",
-    "closed",
-    "closes",
-    "closes a case",
-    "closes case",
-    "closes the case",
-    "closes this case",
-    "closing",
-    "closing a case",
-    "closing case",
-    "closing the case",
-    "closing this case",
-    "create source truth",
-    "creates source truth",
-    "detector activation",
-    "evidence output approves",
-    "execute",
-    "executed",
-    "executes",
-    "executing",
-    "execution truth",
-    "gate release",
-    "gate releases",
-    "gate truth",
-    "readiness claim",
-    "readiness claims",
-    "readiness claimed",
-    "readiness truth",
-    "reconcile",
-    "reconciled",
-    "reconciles",
-    "reconciling",
-    "reconciliation truth",
-    "release gate",
-    "release gates",
-    "release truth",
-    "source truth",
-    "workflow truth",
-)
 
 
 def _normalize_text(value: object) -> str:
@@ -217,12 +154,7 @@ def _authority_scan_text(value: object) -> str:
 
 
 def _contains_authority_widening_claim(value: object) -> bool:
-    normalized_value = f" {_authority_scan_text(value)} "
-    local_match = any(
-        f" {_normalize_text(term)} " in normalized_value
-        for term in _AUTHORITY_WIDENING_TERMS
-    )
-    return local_match or _registry_has_authority_widening_claim(normalized_value)
+    return _registry_has_authority_widening_claim(_authority_scan_text(value))
 
 
 def _non_empty_string(value: object) -> bool:
@@ -242,6 +174,14 @@ def _is_aware_datetime(value: object) -> bool:
         and value.tzinfo is not None
         and value.utcoffset() is not None
     )
+
+
+def _is_active_lifecycle_state(value: object) -> bool:
+    return value in _ACTIVE_LIFECYCLE_STATES
+
+
+def _reviewed_scope_promotes_workflow_truth(value: object) -> bool:
+    return _non_empty_string(value) and _contains_authority_widening_claim(value)
 
 
 def _same_request_subject(
@@ -327,7 +267,7 @@ def validate_phase63_reviewed_evidence_request(
         errors.append("unauthorized_requester_role")
     if not _non_empty_string(request.requested_scope):
         errors.append("missing_reviewed_scope")
-    elif _contains_authority_widening_claim(request.requested_scope):
+    elif _reviewed_scope_promotes_workflow_truth(request.requested_scope):
         errors.append("requested_scope_promotes_workflow_truth")
     if request.lifecycle_state not in _ALLOWED_LIFECYCLE_STATES:
         errors.append("unsupported_lifecycle_state")
@@ -343,7 +283,7 @@ def validate_phase63_reviewed_evidence_request(
             errors.append("now_not_aware_datetime")
         comparison_now = now if now is not None else datetime.now(timezone.utc)
         if (
-            request.lifecycle_state in _ACTIVE_LIFECYCLE_STATES
+            _is_active_lifecycle_state(request.lifecycle_state)
             and _is_aware_datetime(comparison_now)
             and request.expires_at <= comparison_now
         ):
@@ -415,10 +355,7 @@ def validate_phase63_reviewed_evidence_request(
     ):
         errors.append("authorization_scope_mismatch")
     authorization_reviewed_scope = request.authorization.get("reviewed_scope", "")
-    if (
-        _non_empty_string(authorization_reviewed_scope)
-        and _contains_authority_widening_claim(authorization_reviewed_scope)
-    ):
+    if _reviewed_scope_promotes_workflow_truth(authorization_reviewed_scope):
         errors.append("authorization_scope_promotes_workflow_truth")
     if not request.linked_case_context:
         errors.append("missing_case_link")
@@ -463,9 +400,9 @@ def validate_phase63_reviewed_evidence_request(
                 errors.append("evidence_request_id_subject_mismatch")
             break
         if (
-            request.lifecycle_state in _ACTIVE_LIFECYCLE_STATES
+            _is_active_lifecycle_state(request.lifecycle_state)
             and existing_request.evidence_request_id != request.evidence_request_id
-            and existing_request.lifecycle_state in _ACTIVE_LIFECYCLE_STATES
+            and _is_active_lifecycle_state(existing_request.lifecycle_state)
             and _same_request_subject(existing_request, request)
         ):
             errors.append("duplicate_request_ambiguity")
