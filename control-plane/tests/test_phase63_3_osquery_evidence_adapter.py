@@ -213,12 +213,57 @@ class Phase633OsqueryEvidenceAdapterTests(unittest.TestCase):
                 now=now,
             )
 
+    def test_large_column_names_are_rejected_before_pack_serialization(self) -> None:
+        now = datetime.now(timezone.utc)
+
+        with self.assertRaisesRegex(ValueError, "max_column_name_bytes=256"):
+            OsqueryEvidenceAdapter().build_evidence_pack(
+                self._valid_input(now=now, rows=({"c" * 257: "value"},)),
+                now=now,
+            )
+
     def test_large_cell_values_are_rejected_before_pack_serialization(self) -> None:
         now = datetime.now(timezone.utc)
 
         with self.assertRaisesRegex(ValueError, "max_cell_bytes=4096"):
             OsqueryEvidenceAdapter().build_evidence_pack(
                 self._valid_input(now=now, rows=({"hostname": "h" * 4097},)),
+                now=now,
+            )
+
+    def test_non_finite_row_values_are_rejected_before_pack_return(self) -> None:
+        now = datetime.now(timezone.utc)
+
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "rows must contain JSON-serializable finite values",
+                ):
+                    OsqueryEvidenceAdapter().build_evidence_pack(
+                        self._valid_input(now=now, rows=({"cpu_percent": value},)),
+                        now=now,
+                    )
+
+    def test_malformed_custody_extras_are_rejected_before_pack_return(self) -> None:
+        now = datetime.now(timezone.utc)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "osquery evidence pack must contain JSON-serializable finite values",
+        ):
+            OsqueryEvidenceAdapter().build_evidence_pack(
+                self._valid_input(
+                    now=now,
+                    custody={
+                        "reviewed_query_id": "reviewed-query-001",
+                        "collector_identity": "osquery-automation-001",
+                        "collection_timestamp": now.isoformat(),
+                        "host_binding": "host-001",
+                        "aegisops_evidence_record_id": "evidence-osquery-001",
+                        "collector_metadata": {"not-json-serializable"},
+                    },
+                ),
                 now=now,
             )
 

@@ -35,9 +35,9 @@ Unavailable adapter state returns an `unavailable` pack with `adapter_unavailabl
 
 The adapter rejects osquery output whose `query_id` does not match the reviewed query id in custody. It also requires custody `collection_timestamp` to parse as a timezone-aware timestamp and match `collected_at`.
 
-Osquery rows are bounded before whole-pack serialization: at most 500 rows, 128 distinct columns, and 4096 bytes per serialized cell value.
+Osquery rows are bounded before whole-pack serialization: at most 500 rows, 128 distinct columns, 256 bytes per serialized column name, and 4096 bytes per serialized cell value.
 
-Malformed rows, oversized rows, unsupported result kinds, unauthorized or expired reviewed requests, target mismatch, missing custody, custody query mismatch, custody host mismatch, custody timestamp mismatch, naive timestamps, and non-read-only operations fail closed.
+Malformed rows, oversized rows, oversized column names, non-finite row values, malformed custody extras, unsupported result kinds, unauthorized or expired reviewed requests, target mismatch, missing custody, custody query mismatch, custody host mismatch, custody timestamp mismatch, naive timestamps, and non-read-only operations fail closed.
 
 ## 4. Authority Boundary
 

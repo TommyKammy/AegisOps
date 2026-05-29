@@ -67,12 +67,20 @@ def _json_size_bytes(value: object) -> int:
     try:
         encoded_value = json.dumps(
             _json_ready(value),
+            allow_nan=False,
             separators=(",", ":"),
             sort_keys=True,
         ).encode("utf-8")
-    except TypeError as exc:
-        raise ValueError("rows must contain JSON-serializable values") from exc
+    except (TypeError, ValueError) as exc:
+        raise ValueError("rows must contain JSON-serializable finite values") from exc
     return len(encoded_value)
+
+
+def _validate_json_serializable(value: object, error_message: str) -> None:
+    try:
+        json.dumps(_json_ready(value), allow_nan=False, sort_keys=True)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(error_message) from exc
 
 
 def _parse_custody_collection_timestamp(value: object) -> datetime:
@@ -204,6 +212,7 @@ class OsqueryEvidenceAdapter:
     source_id: str = "osquery_host_state"
     max_rows: int = 500
     max_columns: int = 128
+    max_column_name_bytes: int = 256
     max_cell_bytes: int = 4096
 
     def _validate_result_bounds(
@@ -221,6 +230,11 @@ class OsqueryEvidenceAdapter:
 
         for row_index, row in enumerate(rows):
             for column_name, value in row.items():
+                if _json_size_bytes(column_name) > self.max_column_name_bytes:
+                    raise ValueError(
+                        f"rows[{row_index}] column name exceeds "
+                        f"max_column_name_bytes={self.max_column_name_bytes}"
+                    )
                 if _json_size_bytes(value) > self.max_cell_bytes:
                     raise ValueError(
                         f"rows[{row_index}][{column_name}] exceeds "
@@ -349,10 +363,7 @@ class OsqueryEvidenceAdapter:
                 "remediation_authority": "none",
             },
         }
-        # Serialize once so malformed nested values fail before a pack can be returned.
-        json.dumps(_json_ready(content), sort_keys=True)
-
-        return OsqueryEvidencePack(
+        pack = OsqueryEvidencePack(
             evidence_request_id=request.evidence_request_id,
             case_id=request.case_id,
             source_id=request.source_id,
@@ -367,3 +378,8 @@ class OsqueryEvidenceAdapter:
             degraded_reasons=degraded_reasons,
             unavailable_reasons=unavailable_reasons,
         )
+        _validate_json_serializable(
+            pack.as_dict(),
+            "osquery evidence pack must contain JSON-serializable finite values",
+        )
+        return pack
