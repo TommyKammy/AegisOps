@@ -53,6 +53,46 @@ def _require_non_empty_string(value: object, field_name: str) -> str:
     return value
 
 
+def _json_ready(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {str(key): _json_ready(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_json_ready(item) for item in value]
+    if isinstance(value, list):
+        return [_json_ready(item) for item in value]
+    return value
+
+
+def _json_size_bytes(value: object) -> int:
+    try:
+        encoded_value = json.dumps(
+            _json_ready(value),
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    except TypeError as exc:
+        raise ValueError("rows must contain JSON-serializable values") from exc
+    return len(encoded_value)
+
+
+def _parse_custody_collection_timestamp(value: object) -> datetime:
+    raw_timestamp = _require_non_empty_string(
+        value,
+        "osquery custody collection_timestamp",
+    )
+    normalized_timestamp = raw_timestamp.replace("Z", "+00:00")
+    try:
+        parsed_timestamp = datetime.fromisoformat(normalized_timestamp)
+    except ValueError as exc:
+        raise ValueError(
+            "osquery custody collection_timestamp must match collected_at"
+        ) from exc
+    return _require_aware_datetime(
+        parsed_timestamp,
+        "osquery custody collection_timestamp",
+    )
+
+
 def _require_aware_datetime(value: object, field_name: str) -> datetime:
     if not isinstance(value, datetime):
         raise ValueError(f"{field_name} must be a datetime")
@@ -70,16 +110,6 @@ def _normalize_rows(rows: object) -> tuple[Mapping[str, object], ...]:
             raise ValueError(f"rows[{index}] must be a mapping")
         normalized_rows.append(_freeze_mapping(row))
     return tuple(normalized_rows)
-
-
-def _json_ready(value: object) -> object:
-    if isinstance(value, Mapping):
-        return {str(key): _json_ready(item) for key, item in value.items()}
-    if isinstance(value, tuple):
-        return [_json_ready(item) for item in value]
-    if isinstance(value, list):
-        return [_json_ready(item) for item in value]
-    return value
 
 
 def _parse_duration_seconds(value: str) -> int:
@@ -172,6 +202,30 @@ class OsqueryEvidencePack:
 @dataclass(frozen=True)
 class OsqueryEvidenceAdapter:
     source_id: str = "osquery_host_state"
+    max_rows: int = 500
+    max_columns: int = 128
+    max_cell_bytes: int = 4096
+
+    def _validate_result_bounds(
+        self,
+        rows: tuple[Mapping[str, object], ...],
+    ) -> None:
+        if len(rows) > self.max_rows:
+            raise ValueError(f"rows must contain at most {self.max_rows} rows")
+
+        columns = tuple(sorted({key for row in rows for key in row.keys()}))
+        if len(columns) > self.max_columns:
+            raise ValueError(
+                f"rows must contain at most {self.max_columns} distinct columns"
+            )
+
+        for row_index, row in enumerate(rows):
+            for column_name, value in row.items():
+                if _json_size_bytes(value) > self.max_cell_bytes:
+                    raise ValueError(
+                        f"rows[{row_index}][{column_name}] exceeds "
+                        f"max_cell_bytes={self.max_cell_bytes}"
+                    )
 
     def build_evidence_pack(
         self,
@@ -214,20 +268,36 @@ class OsqueryEvidenceAdapter:
             raise ValueError("osquery custody host_binding must match request target")
 
         query_id = _require_non_empty_string(adapter_input.query_id, "query_id")
+        if custody.get("reviewed_query_id") != query_id:
+            raise ValueError("query_id must match osquery custody reviewed_query_id")
         query_name = _require_non_empty_string(adapter_input.query_name, "query_name")
         result_kind = _require_non_empty_string(
             adapter_input.result_kind,
             "result_kind",
         )
         if result_kind not in _ALLOWED_RESULT_KINDS:
-            raise ValueError("result_kind must be host_state, process, or state_context")
-        collected_at = _require_aware_datetime(adapter_input.collected_at, "collected_at")
+            raise ValueError(
+                "result_kind must be host_state, process, or state_context"
+            )
+        collected_at = _require_aware_datetime(
+            adapter_input.collected_at,
+            "collected_at",
+        )
+        custody_collection_timestamp = _parse_custody_collection_timestamp(
+            custody.get("collection_timestamp")
+        )
+        if custody_collection_timestamp != collected_at:
+            raise ValueError(
+                "osquery custody collection_timestamp must match collected_at"
+            )
 
-        rows = _normalize_rows(adapter_input.rows)
         if adapter_input.adapter_state == "unavailable":
             rows = ()
         elif adapter_input.adapter_state != "available":
             raise ValueError("adapter_state must be available or unavailable")
+        else:
+            rows = _normalize_rows(adapter_input.rows)
+            self._validate_result_bounds(rows)
 
         freshness_window = _parse_duration_seconds(
             PHASE63_EVIDENCE_SOURCE_REGISTRY[self.source_id].freshness_window

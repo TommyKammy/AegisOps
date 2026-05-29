@@ -73,12 +73,14 @@ class Phase633OsqueryEvidenceAdapterTests(unittest.TestCase):
         rows: object | None = None,
         adapter_state: str = "available",
         requested_operation: str = "collect_host_context",
+        query_id: str = "reviewed-query-001",
     ) -> OsqueryEvidenceAdapterInput:
         timestamp = now or datetime.now(timezone.utc)
+        collection_time = collected_at or timestamp
         return OsqueryEvidenceAdapterInput(
             request=self._reviewed_request(now=timestamp),
             host_identifier=host_identifier,
-            query_id="osquery-pack-host-state",
+            query_id=query_id,
             query_name="host_state",
             result_kind="host_state",
             rows=rows if rows is not None else ({"hostname": "host-001"},),
@@ -88,7 +90,7 @@ class Phase633OsqueryEvidenceAdapterTests(unittest.TestCase):
             else {
                 "reviewed_query_id": "reviewed-query-001",
                 "collector_identity": "osquery-automation-001",
-                "collection_timestamp": timestamp.isoformat(),
+                "collection_timestamp": collection_time.isoformat(),
                 "host_binding": "host-001",
                 "aegisops_evidence_record_id": "evidence-osquery-001",
             },
@@ -134,7 +136,9 @@ class Phase633OsqueryEvidenceAdapterTests(unittest.TestCase):
     def test_unavailable_adapter_returns_unavailable_pack(self) -> None:
         now = datetime.now(timezone.utc)
         pack = OsqueryEvidenceAdapter().build_evidence_pack(
-            self._valid_input(now=now, adapter_state="unavailable"),
+            self._valid_input(now=now, adapter_state="unavailable").with_updates(
+                rows=None
+            ),
             now=now,
         )
 
@@ -148,6 +152,73 @@ class Phase633OsqueryEvidenceAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "rows must be a sequence of mappings"):
             OsqueryEvidenceAdapter().build_evidence_pack(
                 self._valid_input(now=now, rows="not-json-rows"),
+                now=now,
+            )
+
+    def test_query_id_must_match_reviewed_custody(self) -> None:
+        now = datetime.now(timezone.utc)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "query_id must match osquery custody reviewed_query_id",
+        ):
+            OsqueryEvidenceAdapter().build_evidence_pack(
+                self._valid_input(now=now, query_id="unreviewed-query"),
+                now=now,
+            )
+
+    def test_custody_collection_timestamp_must_match_collected_at(self) -> None:
+        now = datetime.now(timezone.utc)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "osquery custody collection_timestamp must match collected_at",
+        ):
+            OsqueryEvidenceAdapter().build_evidence_pack(
+                self._valid_input(
+                    now=now,
+                    custody={
+                        "reviewed_query_id": "reviewed-query-001",
+                        "collector_identity": "osquery-automation-001",
+                        "collection_timestamp": (
+                            now - timedelta(minutes=5)
+                        ).isoformat(),
+                        "host_binding": "host-001",
+                        "aegisops_evidence_record_id": "evidence-osquery-001",
+                    },
+                ),
+                now=now,
+            )
+
+    def test_large_result_sets_are_rejected_before_pack_serialization(self) -> None:
+        now = datetime.now(timezone.utc)
+        rows = tuple({"hostname": f"host-{index:03d}"} for index in range(501))
+
+        with self.assertRaisesRegex(ValueError, "rows must contain at most 500 rows"):
+            OsqueryEvidenceAdapter().build_evidence_pack(
+                self._valid_input(now=now, rows=rows),
+                now=now,
+            )
+
+    def test_large_column_sets_are_rejected_before_pack_serialization(self) -> None:
+        now = datetime.now(timezone.utc)
+        row = {f"column_{index:03d}": "value" for index in range(129)}
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "rows must contain at most 128 distinct columns",
+        ):
+            OsqueryEvidenceAdapter().build_evidence_pack(
+                self._valid_input(now=now, rows=(row,)),
+                now=now,
+            )
+
+    def test_large_cell_values_are_rejected_before_pack_serialization(self) -> None:
+        now = datetime.now(timezone.utc)
+
+        with self.assertRaisesRegex(ValueError, "max_cell_bytes=4096"):
+            OsqueryEvidenceAdapter().build_evidence_pack(
+                self._valid_input(now=now, rows=({"hostname": "h" * 4097},)),
                 now=now,
             )
 
