@@ -184,6 +184,16 @@ def _reviewed_scope_promotes_workflow_truth(value: object) -> bool:
     return _non_empty_string(value) and _contains_authority_widening_claim(value)
 
 
+def _reviewed_scope_errors(
+    request: ReviewedEvidenceRequestRecord,
+) -> ReviewedEvidenceRequestValidationErrors:
+    if not _non_empty_string(request.requested_scope):
+        return ("missing_reviewed_scope",)
+    if _reviewed_scope_promotes_workflow_truth(request.requested_scope):
+        return ("requested_scope_promotes_workflow_truth",)
+    return ()
+
+
 def _same_request_subject(
     left: ReviewedEvidenceRequestRecord,
     right: ReviewedEvidenceRequestRecord,
@@ -218,6 +228,18 @@ def _same_request_binding(
         and left.requested_at == right.requested_at
         and left.expires_at == right.expires_at
         and left.authority_posture == right.authority_posture
+    )
+
+
+def _same_active_request_subject(
+    candidate: ReviewedEvidenceRequestRecord,
+    existing_request: ReviewedEvidenceRequestRecord,
+) -> bool:
+    return (
+        _is_active_lifecycle_state(candidate.lifecycle_state)
+        and _is_active_lifecycle_state(existing_request.lifecycle_state)
+        and candidate.evidence_request_id != existing_request.evidence_request_id
+        and _same_request_subject(existing_request, candidate)
     )
 
 
@@ -265,10 +287,7 @@ def validate_phase63_reviewed_evidence_request(
         errors.append("missing_requester_identity")
     if request.requester_role not in _AUTHORIZED_REQUESTER_ROLES:
         errors.append("unauthorized_requester_role")
-    if not _non_empty_string(request.requested_scope):
-        errors.append("missing_reviewed_scope")
-    elif _reviewed_scope_promotes_workflow_truth(request.requested_scope):
-        errors.append("requested_scope_promotes_workflow_truth")
+    errors.extend(_reviewed_scope_errors(request))
     if request.lifecycle_state not in _ALLOWED_LIFECYCLE_STATES:
         errors.append("unsupported_lifecycle_state")
 
@@ -399,12 +418,7 @@ def validate_phase63_reviewed_evidence_request(
             else:
                 errors.append("evidence_request_id_subject_mismatch")
             break
-        if (
-            _is_active_lifecycle_state(request.lifecycle_state)
-            and existing_request.evidence_request_id != request.evidence_request_id
-            and _is_active_lifecycle_state(existing_request.lifecycle_state)
-            and _same_request_subject(existing_request, request)
-        ):
+        if _same_active_request_subject(request, existing_request):
             errors.append("duplicate_request_ambiguity")
             break
 
