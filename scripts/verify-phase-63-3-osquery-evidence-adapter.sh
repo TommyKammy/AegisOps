@@ -41,6 +41,8 @@ required_adapter_phrases=(
   '"osquery adapter is read-only"'
   '"host_identifier must match reviewed request target"'
   '"missing_osquery_custody"'
+  '_ACTIVE_REVIEWED_REQUEST_STATES = frozenset({"reviewed", "approved", "active"})'
+  '"reviewed evidence request lifecycle_state must be active"'
   'max_rows: int = 500'
   'max_columns: int = 128'
   'max_column_name_bytes: int = 256'
@@ -68,6 +70,7 @@ required_test_phrases=(
   'test_non_finite_row_values_are_rejected_before_pack_return'
   'test_malformed_custody_extras_are_rejected_before_pack_return'
   'test_unauthorized_request_fails_closed'
+  'test_terminal_evidence_request_states_fail_closed'
   'test_target_mismatch_fails_closed'
   'test_missing_custody_fails_closed'
   'test_no_remediation_or_direct_command_authority'
@@ -85,7 +88,7 @@ required_doc_phrases=(
   'Unavailable adapter state returns an `unavailable` pack with `adapter_unavailable` and no rows.'
   'The adapter rejects osquery output whose `query_id` does not match the reviewed query id in custody. It also requires custody `collection_timestamp` to parse as a timezone-aware timestamp and match `collected_at`.'
   'Osquery rows are bounded before whole-pack serialization: at most 500 rows, 128 distinct columns, 256 bytes per serialized column name, and 4096 bytes per serialized cell value.'
-  'Malformed rows, oversized rows, oversized column names, non-finite row values, malformed custody extras, unsupported result kinds, unauthorized or expired reviewed requests, target mismatch, missing custody, custody query mismatch, custody host mismatch, custody timestamp mismatch, naive timestamps, and non-read-only operations fail closed.'
+  'Malformed rows, oversized rows, oversized column names, non-finite row values, malformed custody extras, unsupported result kinds, unauthorized, terminal, or expired reviewed requests, target mismatch, missing custody, custody query mismatch, custody host mismatch, custody timestamp mismatch, naive timestamps, and non-read-only operations fail closed.'
   'Osquery output, evidence packs, source-native state, freshness projections, AI output, verifier output, issue-lint output, browser state, UI cache, and adapter state remain subordinate context only.'
   'The adapter cannot approve, execute, reconcile, close, activate detectors, create source truth, gate release, claim readiness, remediate endpoints, contain hosts, quarantine files, kill processes, mutate protected targets, or issue direct command authority.'
 )
@@ -97,7 +100,7 @@ done
 required_validation_phrases=(
   '# Phase 63.3 Osquery Evidence Adapter Validation'
   'Validation status: PASS'
-  'The focused adapter test suite accepts a normal reviewed osquery host-state result and rejects or degrades the requested boundary cases: stale output, unavailable adapter state without rows, malformed rows, oversized rows, oversized column sets, oversized column names, oversized cell values, non-finite row values, unauthorized reviewed request, mismatched target host, query id custody mismatch, collection timestamp custody mismatch, missing custody, malformed custody extras, and no-remediation attempts.'
+  'The focused adapter test suite accepts a normal reviewed osquery host-state result and rejects or degrades the requested boundary cases: stale output, unavailable adapter state without rows, malformed rows, oversized rows, oversized column sets, oversized column names, oversized cell values, non-finite row values, unauthorized reviewed request, terminal reviewed request states, mismatched target host, query id custody mismatch, collection timestamp custody mismatch, missing custody, malformed custody extras, and no-remediation attempts.'
   'The adapter is bound to Phase 63.1 source registry freshness and Phase 63.2 reviewed evidence request validation. It binds query id and collection timestamp to osquery custody before pack construction.'
   'No Velociraptor, YARA, capa, MISP breadth, Suricata, IntelOwl breadth, endpoint remediation, containment, destructive response, Controlled Write, Hard Write, Beta, RC, GA, commercial replacement readiness, or Phase 64/65/66/67 work is implemented.'
 )

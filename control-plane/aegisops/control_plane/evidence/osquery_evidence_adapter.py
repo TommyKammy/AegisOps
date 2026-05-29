@@ -19,6 +19,7 @@ _DURATION_PATTERN = re.compile(
 )
 _ALLOWED_RESULT_KINDS = frozenset({"host_state", "process", "state_context"})
 _READ_ONLY_OPERATIONS = frozenset({"collect_host_context", "collect_state_context"})
+_ACTIVE_REVIEWED_REQUEST_STATES = frozenset({"reviewed", "approved", "active"})
 _REQUIRED_OSQUERY_CUSTODY_FIELDS = (
     "reviewed_query_id",
     "collector_identity",
@@ -261,6 +262,10 @@ class OsqueryEvidenceAdapter:
         if request_errors:
             raise ValueError(
                 "reviewed evidence request invalid: " + ",".join(request_errors)
+            )
+        if request.lifecycle_state not in _ACTIVE_REVIEWED_REQUEST_STATES:
+            raise ValueError(
+                "reviewed evidence request lifecycle_state must be active"
             )
         if request.source_id != self.source_id:
             raise ValueError("reviewed request source_id must be osquery_host_state")

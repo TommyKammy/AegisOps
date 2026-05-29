@@ -284,6 +284,24 @@ class Phase633OsqueryEvidenceAdapterTests(unittest.TestCase):
                 now=now,
             )
 
+    def test_terminal_evidence_request_states_fail_closed(self) -> None:
+        now = datetime.now(timezone.utc)
+
+        for lifecycle_state in ("completed", "expired", "denied", "cancelled"):
+            with self.subTest(lifecycle_state=lifecycle_state):
+                request = self._reviewed_request(now=now).with_updates(
+                    lifecycle_state=lifecycle_state
+                )
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "reviewed evidence request lifecycle_state must be active",
+                ):
+                    OsqueryEvidenceAdapter().build_evidence_pack(
+                        self._valid_input(now=now).with_updates(request=request),
+                        now=now,
+                    )
+
     def test_target_mismatch_fails_closed(self) -> None:
         now = datetime.now(timezone.utc)
 
