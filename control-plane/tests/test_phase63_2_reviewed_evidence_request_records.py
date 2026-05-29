@@ -127,6 +127,7 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
         claims = (
             "evidence output can execute the action",
             "source-native state can reconcile case findings",
+            "evidence output can close the case",
             "freshness projection can close cases",
             "hash-reputation output can activate detectors",
             "verifier output can gate release",
@@ -166,19 +167,36 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
                 )
 
     def test_reviewed_scope_rejects_authority_claims(self) -> None:
-        request = self._valid_request().with_updates(
-            requested_scope="execute the containment action",
-            authorization={
-                "authorized": True,
-                "reviewed_scope": "execute the containment action",
-                "decision_id": "approval-decision-001",
-            },
+        cases = (
+            "execute the containment action",
+            "close this case",
         )
+        for reviewed_scope in cases:
+            with self.subTest(reviewed_scope=reviewed_scope):
+                request = self._valid_request().with_updates(
+                    requested_scope=reviewed_scope,
+                    authorization={
+                        "authorized": True,
+                        "reviewed_scope": reviewed_scope,
+                        "decision_id": "approval-decision-001",
+                    },
+                )
 
-        errors = validate_phase63_reviewed_evidence_request(request)
+                errors = validate_phase63_reviewed_evidence_request(request)
 
-        self.assertIn("requested_scope_promotes_workflow_truth", errors)
-        self.assertIn("authorization_scope_promotes_workflow_truth", errors)
+                self.assertIn("requested_scope_promotes_workflow_truth", errors)
+                self.assertIn("authorization_scope_promotes_workflow_truth", errors)
+
+    def test_injected_now_must_be_timezone_aware(self) -> None:
+        request = self._valid_request()
+
+        self.assertIn(
+            "now_not_aware_datetime",
+            validate_phase63_reviewed_evidence_request(
+                request,
+                now=datetime.utcnow(),
+            ),
+        )
 
     def test_source_status_truth_claims_are_normalized(self) -> None:
         cases = (
@@ -250,6 +268,18 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
                 {"status": "missing_custody"},
                 "source_denied",
             ),
+            "camel_case_degraded_state": (
+                {"registry_state": "missingHostBinding"},
+                "source_stale",
+            ),
+            "dash_separated_degraded_state": (
+                {"source_state": "stale-collection"},
+                "source_stale",
+            ),
+            "dash_separated_disabled_state": (
+                {"state": "disabled-by-policy"},
+                "source_denied",
+            ),
         }
         for label, (source_status, expected_error) in cases.items():
             with self.subTest(label=label):
@@ -291,6 +321,26 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
             validate_phase63_reviewed_evidence_request(
                 request,
                 existing_requests=(request.with_updates(evidence_request_id="other"),),
+            ),
+        )
+
+    def test_duplicate_request_compares_only_target_binding_fields(self) -> None:
+        request = self._valid_request()
+        existing_request = request.with_updates(
+            evidence_request_id="other",
+            target={
+                "target_class": "explicitly_bound_host",
+                "host_identifier": "host-001",
+                "case_id": "case-001",
+                "display_name": "host-one",
+            },
+        )
+
+        self.assertIn(
+            "duplicate_request_ambiguity",
+            validate_phase63_reviewed_evidence_request(
+                request,
+                existing_requests=(existing_request,),
             ),
         )
 
@@ -353,6 +403,44 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
             with self.subTest(existing_request=existing_request):
                 self.assertIn(
                     "evidence_request_id_subject_mismatch",
+                    validate_phase63_reviewed_evidence_request(
+                        request,
+                        existing_requests=(existing_request,),
+                    ),
+                )
+
+    def test_evidence_request_id_reuse_for_changed_binding_is_rejected(self) -> None:
+        request = self._valid_request()
+        existing_requests = (
+            request.with_updates(requester_identity="analyst-002"),
+            request.with_updates(
+                custody={
+                    "reviewed_by": "reviewer-002",
+                    "custody_owner": "IT Operations, Information Systems Department",
+                    "custody_reference": "custody-ref-001",
+                    "provenance_chain": "AegisOps evidence record custody",
+                },
+            ),
+            request.with_updates(
+                authorization={
+                    "authorized": True,
+                    "reviewed_scope": "bounded_read_only_host_state",
+                    "decision_id": "approval-decision-002",
+                },
+            ),
+            request.with_updates(
+                linked_case_context={
+                    "case_id": "case-001",
+                    "admitting_evidence_id": "evidence-001",
+                    "reviewed_context_id": "reviewed-context-002",
+                },
+            ),
+            request.with_updates(expires_at=request.expires_at + timedelta(hours=1)),
+        )
+        for existing_request in existing_requests:
+            with self.subTest(existing_request=existing_request):
+                self.assertIn(
+                    "evidence_request_id_binding_mismatch",
                     validate_phase63_reviewed_evidence_request(
                         request,
                         existing_requests=(existing_request,),

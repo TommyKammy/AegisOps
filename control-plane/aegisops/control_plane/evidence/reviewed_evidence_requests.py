@@ -224,8 +224,33 @@ def _same_request_subject(
     return (
         left.case_id == right.case_id
         and left.source_id == right.source_id
-        and dict(left.target) == dict(right.target)
+        and _target_binding(left.target) == _target_binding(right.target)
         and left.requested_scope == right.requested_scope
+    )
+
+
+def _target_binding(target: Mapping[str, object]) -> tuple[tuple[str, object], ...]:
+    target_class = str(target.get("target_class", ""))
+    binding_fields = _REQUIRED_TARGET_FIELDS_BY_CLASS.get(target_class)
+    if binding_fields is None:
+        return tuple(sorted(target.items()))
+    return tuple((field_name, target.get(field_name)) for field_name in binding_fields)
+
+
+def _same_request_binding(
+    left: ReviewedEvidenceRequestRecord,
+    right: ReviewedEvidenceRequestRecord,
+) -> bool:
+    return (
+        _same_request_subject(left, right)
+        and left.requester_identity == right.requester_identity
+        and left.requester_role == right.requester_role
+        and dict(left.custody) == dict(right.custody)
+        and dict(left.authorization) == dict(right.authorization)
+        and dict(left.linked_case_context) == dict(right.linked_case_context)
+        and left.requested_at == right.requested_at
+        and left.expires_at == right.expires_at
+        and left.authority_posture == right.authority_posture
     )
 
 
@@ -253,7 +278,7 @@ def _source_status_values(source_status: Mapping[str, object]) -> tuple[str, ...
     for field_name in ("status", "state", "registry_state", "source_state"):
         field_value = source_status.get(field_name)
         if isinstance(field_value, str) and field_value.strip():
-            status_values.append(field_value.strip().lower())
+            status_values.append("_".join(_normalize_text(field_value).split()))
     return tuple(status_values)
 
 
@@ -287,8 +312,10 @@ def validate_phase63_reviewed_evidence_request(
     if _is_aware_datetime(request.requested_at) and _is_aware_datetime(request.expires_at):
         if request.expires_at <= request.requested_at:
             errors.append("expiry_not_after_request")
-        comparison_now = now or datetime.now(timezone.utc)
-        if request.expires_at <= comparison_now:
+        if now is not None and not _is_aware_datetime(now):
+            errors.append("now_not_aware_datetime")
+        comparison_now = now if now is not None else datetime.now(timezone.utc)
+        if _is_aware_datetime(comparison_now) and request.expires_at <= comparison_now:
             errors.append("request_expired")
 
     if not request.target:
@@ -397,9 +424,12 @@ def validate_phase63_reviewed_evidence_request(
     for existing_request in existing_requests:
         if (
             existing_request.evidence_request_id == request.evidence_request_id
-            and not _same_request_subject(existing_request, request)
+            and not _same_request_binding(existing_request, request)
         ):
-            errors.append("evidence_request_id_subject_mismatch")
+            if _same_request_subject(existing_request, request):
+                errors.append("evidence_request_id_binding_mismatch")
+            else:
+                errors.append("evidence_request_id_subject_mismatch")
             break
         if (
             request.lifecycle_state in _ACTIVE_LIFECYCLE_STATES

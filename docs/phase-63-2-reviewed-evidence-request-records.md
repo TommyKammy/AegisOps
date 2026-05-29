@@ -38,9 +38,9 @@ The first Phase 63.2 source and target pairings are deliberately narrow:
 | `osquery_host_state` | `explicitly_bound_host` | `case_id` and `host_identifier` |
 | `malwarebazaar_hash_reputation` | `reviewed_file_hash` | `case_id` and `file_hash` |
 
-The validator rejects missing scope, expired request use, unauthorized requester roles, invalid target/source pairing, missing custody, missing case linkage, stale source use, denied source use, and duplicate active request ambiguity.
+The validator rejects missing scope, expired request use, naive injected clocks, unauthorized requester roles, invalid target/source pairing, missing custody, missing case linkage, stale source use, denied source use, and duplicate active request ambiguity.
 
-Source freshness that exceeds the Phase 63.1 registry window is stale, registry degraded or disabled state names stay binding, duplicate subject checks apply only to active candidate requests, and evidence request identifiers cannot be reused for a different request subject.
+Source freshness that exceeds the Phase 63.1 registry window is stale, registry degraded or disabled state names stay binding after separator or camel-case normalization, duplicate subject checks compare only target binding fields and apply only to active candidate requests, and evidence request identifiers cannot be reused for a different request subject or changed request binding.
 
 Requested scope, authorization reviewed scope, source status, state, registry_state, and source_state fields cannot claim workflow truth, case truth, approval truth, execution authority, or readiness authority.
 
