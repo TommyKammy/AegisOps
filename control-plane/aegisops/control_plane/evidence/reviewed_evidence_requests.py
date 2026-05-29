@@ -129,6 +129,11 @@ _REQUIRED_CASE_CONTEXT_FIELDS = (
 _TERMINAL_SOURCE_STATUSES = frozenset({"denied", "disabled"})
 _STALE_SOURCE_STATUSES = frozenset({"stale", "degraded"})
 _SOURCE_AUTHORITY_STATUSES = frozenset({"authoritative", "source_truth"})
+_APPROVED_INVENTORY_SCOPE_PHRASES = (
+    "approved software inventory",
+    "approved software state",
+    "approved software",
+)
 _AUTHORITY_WIDENING_TERMS = (
     "activate detector",
     "activate detectors",
@@ -200,13 +205,25 @@ def _normalize_text(value: object) -> str:
     return re.sub(r"[^a-z0-9]+", " ", split_camel_case.lower()).strip()
 
 
+def _authority_scan_text(value: object) -> str:
+    normalized_value = _normalize_text(value)
+    for phrase in _APPROVED_INVENTORY_SCOPE_PHRASES:
+        normalized_phrase = _normalize_text(phrase)
+        normalized_value = re.sub(
+            rf"\b{re.escape(normalized_phrase)}\b",
+            "software inventory",
+            normalized_value,
+        )
+    return normalized_value
+
+
 def _contains_authority_widening_claim(value: object) -> bool:
-    normalized_value = f" {_normalize_text(value)} "
+    normalized_value = f" {_authority_scan_text(value)} "
     local_match = any(
         f" {_normalize_text(term)} " in normalized_value
         for term in _AUTHORITY_WIDENING_TERMS
     )
-    return local_match or _registry_has_authority_widening_claim(str(value))
+    return local_match or _registry_has_authority_widening_claim(normalized_value)
 
 
 def _non_empty_string(value: object) -> bool:
@@ -271,6 +288,8 @@ def _parse_duration_seconds(value: object) -> int | None:
     match = _DURATION_PATTERN.fullmatch(value.strip())
     if match is None:
         return None
+    if all(match.group(name) is None for name in ("hours", "minutes", "seconds")):
+        return None
     duration_parts = {
         name: int(match.group(name) or 0) for name in ("hours", "minutes", "seconds")
     }
@@ -279,8 +298,6 @@ def _parse_duration_seconds(value: object) -> int | None:
         + duration_parts["minutes"] * 60
         + duration_parts["seconds"]
     )
-    if total_seconds <= 0:
-        return None
     return total_seconds
 
 
@@ -326,7 +343,11 @@ def validate_phase63_reviewed_evidence_request(
         if now is not None and not _is_aware_datetime(now):
             errors.append("now_not_aware_datetime")
         comparison_now = now if now is not None else datetime.now(timezone.utc)
-        if _is_aware_datetime(comparison_now) and request.expires_at <= comparison_now:
+        if (
+            request.lifecycle_state in _ACTIVE_LIFECYCLE_STATES
+            and _is_aware_datetime(comparison_now)
+            and request.expires_at <= comparison_now
+        ):
             errors.append("request_expired")
 
     if not request.target:

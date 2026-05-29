@@ -60,9 +60,11 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
         )
 
     def test_required_acceptance_criteria_fail_closed(self) -> None:
-        expired = self._valid_request()
-        expired = expired.with_updates(
-            expires_at=expired.requested_at - timedelta(minutes=1)
+        now = datetime.now(timezone.utc)
+        expired = self._valid_request().with_updates(
+            requested_at=now - timedelta(hours=2),
+            expires_at=now - timedelta(hours=1),
+            lifecycle_state="reviewed",
         )
         cases = {
             "missing_scope": (
@@ -110,7 +112,7 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
             with self.subTest(label=label):
                 self.assertIn(
                     expected_error,
-                    validate_phase63_reviewed_evidence_request(request),
+                    validate_phase63_reviewed_evidence_request(request, now=now),
                 )
 
     def test_authority_boundary_rejects_evidence_output_as_truth(self) -> None:
@@ -188,6 +190,21 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
                 self.assertIn("requested_scope_promotes_workflow_truth", errors)
                 self.assertIn("authorization_scope_promotes_workflow_truth", errors)
 
+    def test_reviewed_scope_accepts_approved_software_inventory(self) -> None:
+        request = self._valid_request().with_updates(
+            requested_scope="bounded_read_only_approved_software_inventory",
+            authorization={
+                "authorized": True,
+                "reviewed_scope": "bounded_read_only_approved_software_inventory",
+                "decision_id": "approval-decision-001",
+            },
+        )
+
+        errors = validate_phase63_reviewed_evidence_request(request)
+
+        self.assertNotIn("requested_scope_promotes_workflow_truth", errors)
+        self.assertNotIn("authorization_scope_promotes_workflow_truth", errors)
+
     def test_injected_now_must_be_timezone_aware(self) -> None:
         request = self._valid_request()
 
@@ -244,6 +261,16 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
                     "source_stale",
                     validate_phase63_reviewed_evidence_request(request),
                 )
+
+    def test_zero_age_source_freshness_is_accepted(self) -> None:
+        request = self._valid_request().with_updates(
+            source_status={"status": "enabled", "freshness": "PT0S"}
+        )
+
+        self.assertNotIn(
+            "source_stale",
+            validate_phase63_reviewed_evidence_request(request),
+        )
 
     def test_source_registry_degraded_and_disabled_state_names_fail_closed(
         self,
@@ -414,6 +441,21 @@ class Phase632ReviewedEvidenceRequestRecordTests(unittest.TestCase):
                         request,
                         existing_requests=(existing_request,),
                     ),
+                )
+
+    def test_terminal_records_skip_expiry_use_check(self) -> None:
+        now = datetime.now(timezone.utc)
+        for lifecycle_state in ("completed", "expired", "denied", "cancelled"):
+            with self.subTest(lifecycle_state=lifecycle_state):
+                request = self._valid_request().with_updates(
+                    requested_at=now - timedelta(hours=2),
+                    expires_at=now - timedelta(hours=1),
+                    lifecycle_state=lifecycle_state,
+                )
+
+                self.assertNotIn(
+                    "request_expired",
+                    validate_phase63_reviewed_evidence_request(request, now=now),
                 )
 
     def test_evidence_request_id_reuse_for_changed_binding_is_rejected(self) -> None:
