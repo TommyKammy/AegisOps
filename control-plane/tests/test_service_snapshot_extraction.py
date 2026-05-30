@@ -80,6 +80,58 @@ class ServiceSnapshotExtractionTests(unittest.TestCase):
             },
         )
 
+    def test_case_detail_snapshot_serializes_linked_evidence_pack_projections(self) -> None:
+        from aegisops.control_plane.service import CaseDetailSnapshot
+
+        snapshot = CaseDetailSnapshot(
+            read_only=True,
+            case_id="case-1",
+            case_record={"case_id": "case-1"},
+            advisory_output={},
+            reviewed_context={},
+            linked_alert_ids=(),
+            linked_observation_ids=(),
+            linked_lead_ids=(),
+            linked_evidence_ids=("evidence-1",),
+            linked_recommendation_ids=(),
+            linked_reconciliation_ids=(),
+            linked_alert_records=(),
+            linked_observation_records=(),
+            linked_lead_records=(),
+            linked_evidence_records=(),
+            linked_evidence_packs=(
+                {
+                    "case_id": "case-1",
+                    "evidence_request_id": "evidence-request-1",
+                    "custody": {"aegisops_evidence_record_id": "evidence-1"},
+                    "provenance": {"request_binding": "evidence-request-1"},
+                },
+            ),
+            linked_recommendation_records=(),
+            linked_reconciliation_records=(),
+            lifecycle_transitions=(),
+            cross_source_timeline=(),
+            case_timeline_projection={},
+            provenance_summary={},
+            current_action_review=None,
+            action_reviews=(),
+            external_ticket_reference={},
+        )
+
+        payload = snapshot.to_dict()
+
+        self.assertEqual(
+            payload["linked_evidence_packs"],
+            [
+                {
+                    "case_id": "case-1",
+                    "evidence_request_id": "evidence-request-1",
+                    "custody": {"aegisops_evidence_record_id": "evidence-1"},
+                    "provenance": {"request_binding": "evidence-request-1"},
+                }
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

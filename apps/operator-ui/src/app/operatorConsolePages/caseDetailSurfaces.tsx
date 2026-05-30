@@ -72,7 +72,7 @@ export function CaseDetailPageBody({
   const reconciliationRecords = asRecordArray(data.linked_reconciliation_records);
   const alertRecords = asRecordArray(data.linked_alert_records);
   const evidenceRecords = asRecordArray(data.linked_evidence_records);
-  const evidencePacks = asRecordArray(data.linked_evidence_packs);
+  const evidencePacks = readBackendLinkedEvidencePacks(data);
   const timelineEntries = asRecordArray(data.cross_source_timeline);
   const caseTimelineProjection = asRecord(data.case_timeline_projection);
   const caseTimelineSegments = asRecordArray(caseTimelineProjection?.segments);
@@ -497,4 +497,8 @@ export function CaseDetailPageBody({
       ) : null}
     </Stack>
   );
+}
+
+function readBackendLinkedEvidencePacks(data: UnknownRecord) {
+  return asRecordArray(getPath(data, "linked_evidence_packs"));
 }
