@@ -326,11 +326,7 @@ export function CaseDetailPageBody({
                     <TableCell>{formatValue(pack.confidence_state)}</TableCell>
                     <TableCell>
                       <Chip
-                        color={
-                          conflictState === "unresolved_conflict"
-                            ? "warning"
-                            : statusTone(conflictState)
-                        }
+                        color={evidencePackConflictTone(conflictState)}
                         label={conflictState ?? "unknown"}
                         size="small"
                         variant="outlined"
@@ -339,7 +335,7 @@ export function CaseDetailPageBody({
                     <TableCell>{formatValue(pack.uncertainty_label)}</TableCell>
                     <TableCell>
                       <Chip
-                        color={sourceState === "degraded" ? "warning" : statusTone(sourceState)}
+                        color={evidencePackSourceTone(sourceState)}
                         label={sourceState ?? "unknown"}
                         size="small"
                         variant="outlined"
@@ -501,4 +497,23 @@ export function CaseDetailPageBody({
 
 function readBackendLinkedEvidencePacks(data: UnknownRecord) {
   return asRecordArray(getPath(data, "linked_evidence_packs"));
+}
+
+function evidencePackConflictTone(
+  conflictState: string | null,
+): ReturnType<typeof statusTone> {
+  if (conflictState === "conflicting") {
+    return "warning";
+  }
+  return statusTone(conflictState);
+}
+
+function evidencePackSourceTone(sourceState: string | null): ReturnType<typeof statusTone> {
+  if (sourceState === "unavailable") {
+    return "error";
+  }
+  if (sourceState === "degraded") {
+    return "warning";
+  }
+  return statusTone(sourceState);
 }

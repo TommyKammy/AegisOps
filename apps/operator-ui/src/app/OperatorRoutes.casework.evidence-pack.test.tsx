@@ -77,6 +77,23 @@ function createEvidencePackWithSource(sourceId: string) {
   };
 }
 
+function createUnavailableEvidencePack() {
+  return createEvidencePack({
+    confidence: {
+      ...createEvidencePack().confidence,
+      ambiguity_badge: "related-entity",
+      freshness: "fresh",
+    },
+    conflict_state: "none",
+    degraded_reasons: [],
+    freshness_state: "fresh",
+    source_state: "unavailable",
+    status: "unavailable",
+    uncertainty_label: "source_unavailable",
+    unavailable_reasons: ["source_unavailable"],
+  });
+}
+
 function createCaseDetailPayload(overrides: Record<string, unknown> = {}) {
   return {
     case_id: "case-456",
@@ -147,6 +164,11 @@ describe("case detail evidence pack UI", () => {
       within(rows[0] as HTMLElement).getByText("conflicting"),
     ).toBeInTheDocument();
     expect(
+      within(rows[0] as HTMLElement)
+        .getByText("conflicting")
+        .closest(".MuiChip-root"),
+    ).toHaveClass("MuiChip-colorWarning");
+    expect(
       within(rows[0] as HTMLElement).getByText("present"),
     ).toBeInTheDocument();
     expect(
@@ -164,6 +186,31 @@ describe("case detail evidence pack UI", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Evidence pack can close case")).not.toBeInTheDocument();
     expect(screen.queryByText("Evidence pack proves RC readiness")).not.toBeInTheDocument();
+  }, fullRouteTestTimeout);
+
+  it("flags unavailable evidence sources as an error state", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-case-detail": createCaseDetailPayload({
+          linked_evidence_packs: [createUnavailableEvidencePack()],
+        }),
+      }),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/cases/case-456"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    const evidencePackTable = await screen.findByRole("table", {
+      name: "Linked evidence packs",
+    }, fullRouteWait);
+    const row = within(evidencePackTable).getAllByRole("row")[1] as HTMLElement;
+
+    expect(within(row).getByText("unavailable").closest(".MuiChip-root")).toHaveClass(
+      "MuiChip-colorError",
+    );
   }, fullRouteTestTimeout);
 
   it("keeps empty and degraded evidence-pack states explicit", async () => {

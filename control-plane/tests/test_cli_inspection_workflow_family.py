@@ -1521,6 +1521,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
     def test_cli_case_detail_rejects_malformed_linked_evidence_pack_projections(
         self,
     ) -> None:
+        expired_timestamp = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
         cases = (
             (
                 "non-subordinate posture",
@@ -1765,6 +1766,29 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                     },
                 },
                 "source state reason mismatch",
+            ),
+            (
+                "fresh direct projection outside registry freshness window",
+                {
+                    "status": "available",
+                    "degraded_reasons": [],
+                    "unavailable_reasons": [],
+                    "freshness_state": "fresh",
+                    "conflict_state": "none",
+                    "source_state": "available",
+                    "uncertainty_label": "related_entity_not_authoritative",
+                    "custody": {
+                        "collection_timestamp": expired_timestamp,
+                    },
+                    "provenance": {
+                        "collection_timestamp": expired_timestamp,
+                    },
+                    "confidence": {
+                        "ambiguity_badge": "related-entity",
+                        "freshness": "fresh",
+                    },
+                },
+                "freshness window",
             ),
             (
                 "unrecognized workflow truth field",

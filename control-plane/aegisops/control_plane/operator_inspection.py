@@ -7,6 +7,7 @@ from typing import Any, Callable, Mapping, Protocol, Type, TypeVar
 from .evidence.bounded_enrichment_adapter import BoundedEnrichmentEvidencePack
 from .evidence.evidence_freshness_provenance_projection import (
     EvidenceFreshnessProvenanceProjectionInput,
+    _parse_duration_seconds,
     project_evidence_freshness_provenance,
 )
 from .evidence.evidence_source_registry import PHASE63_EVIDENCE_SOURCE_REGISTRY
@@ -1714,6 +1715,32 @@ class OperatorInspectionReadSurface:
         self._datetime_from_evidence_pack_content(custody, "collection_timestamp")
         self._datetime_from_evidence_pack_content(provenance, "collection_timestamp")
 
+    def _validate_linked_evidence_pack_freshness_window(
+        self,
+        *,
+        values: Mapping[str, str],
+        custody: Mapping[str, object],
+    ) -> None:
+        registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(values["source_id"])
+        if registry_entry is None:
+            raise ValueError(
+                "linked evidence-pack projection has unsupported evidence-pack projection source"
+            )
+        collection_timestamp = self._datetime_from_evidence_pack_content(
+            custody,
+            "collection_timestamp",
+        )
+        age_seconds = (
+            datetime.now(timezone.utc) - collection_timestamp.astimezone(timezone.utc)
+        ).total_seconds()
+        if age_seconds < 0:
+            raise ValueError("linked evidence-pack projection freshness window mismatch")
+        if (
+            values["freshness_state"] == "fresh"
+            and age_seconds > _parse_duration_seconds(registry_entry.freshness_window)
+        ):
+            raise ValueError("linked evidence-pack projection freshness window mismatch")
+
     def _validated_linked_evidence_pack_projection(
         self,
         *,
@@ -1837,6 +1864,10 @@ class OperatorInspectionReadSurface:
         self._validate_linked_evidence_pack_metadata_formats(
             custody=custody,
             provenance=provenance,
+        )
+        self._validate_linked_evidence_pack_freshness_window(
+            values=typed_values,
+            custody=custody,
         )
         if self._optional_string_from_mapping(
             provenance,
