@@ -11,6 +11,7 @@ from .bounded_enrichment_adapter import (
     _BOUNDED_ENRICHMENT_SOURCE_ID,
     _canonical_response_digest,
     _has_conflict_marker,
+    _require_supported_hash,
     _response_hashes,
     _scan_for_authority_claim,
     _scan_for_endpoint_command_language,
@@ -156,6 +157,7 @@ class EvidenceFreshnessProvenanceProjectionInput:
     consumer: str
     expected_source_id: str
     expected_case_id: str
+    expected_custody_reference: str
     requested_workflow_authority: str = _NO_WORKFLOW_AUTHORITY
     projected_at: datetime | None = None
 
@@ -241,6 +243,11 @@ def _validate_projection_input(
         raise ValueError("unsupported_projection_source")
     if pack.case_id != expected_case_id:
         raise ValueError("case_mismatch")
+    _require_non_empty_string(
+        projection_input.expected_custody_reference,
+        "expected_custody_reference",
+    )
+    _require_supported_hash(pack.file_hash, "file_hash")
     if (
         pack.authority_posture != _SUBORDINATE_AUTHORITY_POSTURE
         or pack.workflow_authority != _NO_WORKFLOW_AUTHORITY
@@ -316,7 +323,12 @@ def _validate_custody_bindings(
     pack: BoundedEnrichmentEvidencePack,
     looked_up_at: datetime,
 ) -> None:
-    if _mapping_string(pack.custody, "reviewed_file_hash") != pack.file_hash:
+    file_hash = _require_supported_hash(pack.file_hash, "file_hash")
+    custody_file_hash = _require_supported_hash(
+        _mapping_string(pack.custody, "reviewed_file_hash"),
+        "custody.reviewed_file_hash",
+    )
+    if custody_file_hash != file_hash:
         raise ValueError("custody_binding_mismatch")
     collection_timestamp = _require_aware_datetime(
         _mapping_string(pack.custody, "collection_timestamp"),
@@ -329,17 +341,20 @@ def _validate_custody_bindings(
 def _validate_provenance_bindings(
     pack: BoundedEnrichmentEvidencePack,
     looked_up_at: datetime,
+    expected_custody_reference: str,
 ) -> None:
+    file_hash = _require_supported_hash(pack.file_hash, "file_hash")
     expected_values = {
         "request_binding": pack.evidence_request_id,
         "case_binding": pack.case_id,
-        "target_binding": pack.file_hash,
+        "target_binding": file_hash,
         "source_id": pack.source_id,
         "enrichment_request_id": _mapping_string(
             pack.custody,
             "enrichment_request_id",
         ),
         "response_digest": _mapping_string(pack.custody, "response_digest"),
+        "custody_reference": expected_custody_reference,
     }
     for field_name, expected_value in expected_values.items():
         if _mapping_string(pack.provenance, field_name) != expected_value:
@@ -389,6 +404,18 @@ def _validate_projection_reason_consistency(
     registry_entry = _source_registry_entry(pack.source_id)
     reputation = pack.content.get("reputation")
     has_conflict = _has_conflict_marker(reputation)
+    projection_degraded_reasons = frozenset(
+        {"stale_reputation", "conflicting_enrichment", "source_stale"}
+    )
+    projection_unavailable_reasons = _PROJECTION_UNAVAILABLE_REASONS
+
+    if any(reason not in projection_degraded_reasons for reason in pack.degraded_reasons):
+        raise ValueError("projection_reason_mismatch")
+    if any(
+        reason not in projection_unavailable_reasons
+        for reason in pack.unavailable_reasons
+    ):
+        raise ValueError("projection_reason_mismatch")
 
     if pack.status == "available" and (
         pack.degraded_reasons or pack.unavailable_reasons
@@ -532,7 +559,14 @@ def project_evidence_freshness_provenance(
     )
     freshness, looked_up_at = _projection_freshness(pack, projected_at)
     _validate_custody_bindings(pack, looked_up_at)
-    _validate_provenance_bindings(pack, looked_up_at)
+    _validate_provenance_bindings(
+        pack,
+        looked_up_at,
+        _require_non_empty_string(
+            projection_input.expected_custody_reference,
+            "expected_custody_reference",
+        ),
+    )
     _validate_response_digest_binding(pack)
     _validate_projection_reason_consistency(pack, freshness)
     degraded_reasons = _projected_degraded_reasons(pack, freshness)

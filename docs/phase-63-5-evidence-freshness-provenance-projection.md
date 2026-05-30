@@ -6,7 +6,7 @@ The projection starts from a directly linked `BoundedEnrichmentEvidencePack` and
 
 ## Projection Contract
 
-The projection entry point is `project_evidence_freshness_provenance`. It accepts `EvidenceFreshnessProvenanceProjectionInput` with the evidence pack, consumer, expected source id, expected case id, requested workflow authority, and optional `projected_at` timestamp.
+The projection entry point is `project_evidence_freshness_provenance`. It accepts `EvidenceFreshnessProvenanceProjectionInput` with the evidence pack, consumer, expected source id, expected case id, expected custody reference, requested workflow authority, and optional `projected_at` timestamp.
 
 Allowed consumers are `case_workbench` and `ai_grounding`. Consumer names are normalized before projection, and any other consumer is rejected until a later reviewed issue defines the boundary.
 
@@ -16,9 +16,11 @@ Projection freshness is recalculated from the pack lookup time and the authorita
 
 Projection source status is recalculated from the current authoritative source registry status each time the surface is projected. A now-disabled source projects unavailable with `source_denied`; a now-degraded source projects degraded with `source_stale`.
 
-`custody_state=complete` is returned only when the pack custody reviewed file hash, collection timestamp, response hash, response status, response authority posture, and response digest remain bound to the pack file hash, lookup time, and canonical packed reputation response.
+`custody_state=complete` is returned only when the pack file hash is still a supported reviewed-file hash and the pack custody reviewed file hash, collection timestamp, response hash, response status, response authority posture, and response digest remain bound to the pack file hash, lookup time, and canonical packed reputation response.
 
-`provenance_state=bound` is returned only when the pack provenance values remain bound to the pack's request, case, target, source, enrichment request, collection timestamp, and response digest.
+`provenance_state=bound` is returned only when the pack provenance values remain bound to the pack's request, case, target, source, enrichment request, collection timestamp, custody reference, and response digest.
+
+Projection reason labels are re-derived from validated pack content, target hash, custody, digest, conflict markers, freshness, and current source registry state. Registry-declared degraded or disabled reason labels that do not match those recomputed facts fail closed instead of being projected.
 
 Returned custody, provenance, and confidence maps must exactly match the bounded enrichment projection contract and cannot contain extra authority-bearing fields or authority-bearing values.
 

@@ -138,6 +138,7 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
             "consumer": "case_workbench",
             "expected_source_id": "malwarebazaar_hash_reputation",
             "expected_case_id": "case-001",
+            "expected_custody_reference": "custody-ref-enrichment-001",
             "requested_workflow_authority": "none",
         }
         values.update(updates)
@@ -292,6 +293,7 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
             }
         )
         future_lookup_time = pack.looked_up_at + timedelta(minutes=5)
+        unavailable_pack = self._pack(adapter_state="unavailable")
         malformed_cases = (
             (
                 "custody_hash_drift",
@@ -468,6 +470,22 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                 },
                 "response_digest_mismatch",
             ),
+            (
+                "unavailable_pack_with_invalid_target_hash",
+                unavailable_pack,
+                {
+                    "file_hash": "not-a-hash",
+                    "custody": {
+                        **dict(unavailable_pack.custody),
+                        "reviewed_file_hash": "not-a-hash",
+                    },
+                    "provenance": {
+                        **dict(unavailable_pack.provenance),
+                        "target_binding": "not-a-hash",
+                    },
+                },
+                "file_hash must be MD5, SHA1, or SHA256 hex",
+            ),
         )
 
         for label, base_pack, pack_updates, expected_error in malformed_cases:
@@ -557,10 +575,29 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                 "projection_reason_mismatch",
             ),
             (
+                "complete_digest_claims_incomplete_response_digest",
+                pack,
+                {
+                    "status": "degraded",
+                    "degraded_reasons": ("incomplete_response_digest",),
+                },
+                None,
+                "projection_reason_mismatch",
+            ),
+            (
                 "enabled_source_claims_source_denied",
                 self._pack(adapter_state="unavailable"),
                 {
                     "unavailable_reasons": ("source_denied",),
+                },
+                None,
+                "projection_reason_mismatch",
+            ),
+            (
+                "complete_custody_claims_missing_hash_custody",
+                self._pack(adapter_state="unavailable"),
+                {
+                    "unavailable_reasons": ("missing_hash_custody",),
                 },
                 None,
                 "projection_reason_mismatch",
@@ -602,6 +639,7 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                 (pack.looked_up_at + timedelta(minutes=1)).isoformat(),
             ),
             ("response_digest", "sha256:" + "b" * 64),
+            ("custody_reference", "custody-ref-other"),
         )
 
         for field_name, field_value in mismatch_cases:

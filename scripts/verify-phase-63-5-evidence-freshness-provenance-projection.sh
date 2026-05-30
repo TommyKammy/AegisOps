@@ -29,6 +29,7 @@ require_phrase() {
 
 required_projection_phrases=(
   'EvidenceFreshnessProvenanceProjectionInput'
+  'expected_custody_reference'
   'EvidenceFreshnessProvenanceProjection'
   'project_evidence_freshness_provenance'
   '"case_workbench"'
@@ -105,8 +106,9 @@ required_doc_phrases=(
   'Missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, non-bounded-enrichment source, custody binding mismatch, provenance binding mismatch, future lookup timestamps, response digest mismatch, confidence posture mismatch, confidence ambiguity badge mismatch, unexpected pack status, status/reason mismatch, reason/content mismatch, unexpected reason code, unexpected metadata field, unexpected source status, hidden metadata authority claim, or requested projection-driven workflow authority fails closed.'
   'Projection freshness is recalculated from the pack lookup time and the authoritative source registry freshness window each time the surface is projected. Persisted packs that were fresh when collected project as stale once `projected_at` falls outside the source freshness window, and lookup timestamps later than `projected_at` are rejected instead of projected.'
   'Projection source status is recalculated from the current authoritative source registry status each time the surface is projected.'
-  '`custody_state=complete` is returned only when the pack custody reviewed file hash, collection timestamp, response hash, response status, response authority posture, and response digest remain bound to the pack file hash, lookup time, and canonical packed reputation response.'
+  '`custody_state=complete` is returned only when the pack file hash is still a supported reviewed-file hash and the pack custody reviewed file hash, collection timestamp, response hash, response status, response authority posture, and response digest remain bound to the pack file hash, lookup time, and canonical packed reputation response.'
   '`provenance_state=bound` is returned only when the pack provenance values remain bound to the pack'
+  'Projection reason labels are re-derived from validated pack content, target hash, custody, digest, conflict markers, freshness, and current source registry state.'
   'Returned custody, provenance, and confidence maps must exactly match the bounded enrichment projection contract and cannot contain extra authority-bearing fields or authority-bearing values.'
   'Projection state cannot approve, execute, reconcile, close, activate detectors, create source truth, gate release, claim readiness, remediate endpoints, contain hosts, quarantine files, kill processes, mutate protected targets, or issue direct command authority.'
   'This slice does not add endpoint remediation, broad evidence-source breadth, autonomous AI authority, source-native truth, Controlled Write, Hard Write, Beta, RC, GA, commercial replacement readiness, or Phase 64/65/66/67 work.'
@@ -120,6 +122,7 @@ required_validation_phrases=(
   '# Phase 63.5 Evidence Freshness and Provenance Projection Validation'
   'Validation status: PASS'
   'Focused projection tests cover fresh, normalized consumers, stale, projection-time aging, future lookup rejection, conflicting, unavailable source, missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, non-bounded-enrichment source rejection, custody binding mismatch, provenance binding mismatch, response digest mismatch, response hash mismatch, non-ok response rejection, populated unavailable-pack response rejection, response authority scan rejection, confidence posture mismatch, confidence ambiguity badge mismatch, unexpected pack status, status without a matching reason, status/reason drift, reason/content drift, unexpected reason codes, unexpected metadata fields, hidden metadata authority claims, exact request-binding truth claims, unexpected source status, projection-time source registry status changes, malformed persisted-pack review-thread cluster rejection, and no-authority-promotion paths.'
+  'Focused review regressions also cover custody-reference provenance drift, invalid target hashes on unavailable reconstructed packs, and registry-declared degraded or disabled reason labels that contradict complete custody, complete digest, current source status, or recomputed projection facts.'
   'The projection remains subordinate context for case workbench and AI-grounding consumers only.'
   'No projection field becomes alert, case, evidence request, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, or closeout truth.'
 )
