@@ -341,6 +341,94 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                 self._projection_input(malformed_pack)
             )
 
+    def test_unknown_projection_reason_codes_fail_closed(self) -> None:
+        pack = self._pack()
+        malformed_cases = (
+            ("degraded_reasons", ("case_truth",)),
+            ("unavailable_reasons", ("approval_truth",)),
+        )
+
+        for field_name, reason_codes in malformed_cases:
+            with self.subTest(field_name=field_name):
+                malformed_pack = BoundedEnrichmentEvidencePack(
+                    **{
+                        **pack.as_dict(),
+                        "looked_up_at": pack.looked_up_at,
+                        field_name: reason_codes,
+                    }
+                )
+                with self.assertRaisesRegex(ValueError, "unexpected_projection_reason"):
+                    project_evidence_freshness_provenance(
+                        self._projection_input(malformed_pack)
+                    )
+
+    def test_projection_metadata_maps_cannot_claim_authority(self) -> None:
+        pack = self._pack()
+        malformed_cases = (
+            (
+                "custody_extra_authority_key",
+                {
+                    "custody": {
+                        **dict(pack.custody),
+                        "workflow_authority": "close_case",
+                    },
+                },
+                "unexpected_projection_metadata",
+            ),
+            (
+                "provenance_authority_value",
+                {
+                    "provenance": {
+                        **dict(pack.provenance),
+                        "custody_reference": "approval_truth",
+                    },
+                },
+                "projection metadata cannot claim workflow authority",
+            ),
+        )
+
+        for label, pack_updates, expected_error in malformed_cases:
+            with self.subTest(label=label):
+                malformed_pack = BoundedEnrichmentEvidencePack(
+                    **{
+                        **pack.as_dict(),
+                        "looked_up_at": pack.looked_up_at,
+                        **pack_updates,
+                    }
+                )
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    project_evidence_freshness_provenance(
+                        self._projection_input(malformed_pack)
+                    )
+
+    def test_projection_rejects_non_bounded_enrichment_sources(self) -> None:
+        pack = self._pack()
+        malformed_pack = BoundedEnrichmentEvidencePack(
+            **{
+                **pack.as_dict(),
+                "looked_up_at": pack.looked_up_at,
+                "source_id": "osquery_host_state",
+                "provenance": {
+                    **dict(pack.provenance),
+                    "source_id": "osquery_host_state",
+                },
+                "confidence": {
+                    **dict(pack.confidence),
+                    "posture": (
+                        "observed_host_state_subordinate_context"
+                    ),
+                },
+            }
+        )
+
+        with self.assertRaisesRegex(ValueError, "unsupported_projection_source"):
+            project_evidence_freshness_provenance(
+                self._projection_input(
+                    malformed_pack,
+                    expected_source_id="osquery_host_state",
+                )
+            )
+
     def test_projection_rechecks_current_source_registry_status(self) -> None:
         pack = self._pack()
         source_id = "malwarebazaar_hash_reputation"

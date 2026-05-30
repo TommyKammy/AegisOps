@@ -6,7 +6,12 @@ import re
 from types import MappingProxyType
 from typing import Mapping
 
-from .bounded_enrichment_adapter import BoundedEnrichmentEvidencePack
+from .bounded_enrichment_adapter import (
+    BoundedEnrichmentEvidencePack,
+    _BOUNDED_ENRICHMENT_SOURCE_ID,
+    _scan_for_authority_claim,
+    _scan_for_endpoint_command_language,
+)
 from .evidence_source_registry import PHASE63_EVIDENCE_SOURCE_REGISTRY
 
 
@@ -37,8 +42,18 @@ _REQUIRED_CONFIDENCE_FIELDS = (
     "ambiguity_badge",
     "source_native_score_authority",
 )
+_ALLOWED_CUSTODY_FIELDS = frozenset(_REQUIRED_CUSTODY_FIELDS)
+_ALLOWED_PROVENANCE_FIELDS = frozenset(_REQUIRED_PROVENANCE_FIELDS)
+_ALLOWED_CONFIDENCE_FIELDS = frozenset(_REQUIRED_CONFIDENCE_FIELDS)
 _ALLOWED_PACK_STATUSES = frozenset({"available", "degraded", "unavailable"})
 _ALLOWED_SOURCE_STATUSES = frozenset({"enabled", "degraded", "disabled"})
+_PROJECTION_DEGRADED_REASONS = frozenset({"source_stale"})
+_PROJECTION_UNAVAILABLE_REASONS = frozenset(
+    {
+        "source_denied",
+        "source_unavailable",
+    }
+)
 _DURATION_PATTERN = re.compile(
     r"PT"
     r"(?:(?P<hours>\d+)H)?"
@@ -96,6 +111,21 @@ def _parse_duration_seconds(value: str) -> int:
 
 def _mapping_string(value: Mapping[str, object], field_name: str) -> str:
     return _require_non_empty_string(value.get(field_name), field_name)
+
+
+def _validate_projection_metadata_map(
+    value: Mapping[str, object],
+    allowed_fields: frozenset[str],
+    authority_scanned_fields: frozenset[str],
+) -> None:
+    if frozenset(value) != allowed_fields:
+        raise ValueError("unexpected_projection_metadata")
+    if any(
+        _scan_for_authority_claim(item) or _scan_for_endpoint_command_language(item)
+        for field_name, item in value.items()
+        if field_name in authority_scanned_fields
+    ):
+        raise ValueError("projection metadata cannot claim workflow authority")
 
 
 @dataclass(frozen=True)
@@ -185,6 +215,8 @@ def _validate_projection_input(
     )
     if pack.source_id != expected_source_id:
         raise ValueError("source_mismatch")
+    if expected_source_id != _BOUNDED_ENRICHMENT_SOURCE_ID:
+        raise ValueError("unsupported_projection_source")
     if pack.case_id != expected_case_id:
         raise ValueError("case_mismatch")
     if (
@@ -207,6 +239,17 @@ def _source_registry_entry(source_id: str):
 def _validate_projection_fields(pack: BoundedEnrichmentEvidencePack) -> None:
     if pack.status not in _ALLOWED_PACK_STATUSES:
         raise ValueError("unexpected_projection_status")
+    registry_entry = _source_registry_entry(pack.source_id)
+    allowed_degraded_reasons = (
+        frozenset(registry_entry.degraded_states) | _PROJECTION_DEGRADED_REASONS
+    )
+    allowed_unavailable_reasons = (
+        frozenset(registry_entry.disabled_states) | _PROJECTION_UNAVAILABLE_REASONS
+    )
+    if any(reason not in allowed_degraded_reasons for reason in pack.degraded_reasons):
+        raise ValueError("unexpected_projection_reason")
+    if any(reason not in allowed_unavailable_reasons for reason in pack.unavailable_reasons):
+        raise ValueError("unexpected_projection_reason")
     if not _mapping_has_non_empty_fields(pack.custody, _REQUIRED_CUSTODY_FIELDS):
         raise ValueError("missing_projection_custody")
     if not _mapping_has_non_empty_fields(pack.provenance, _REQUIRED_PROVENANCE_FIELDS):
@@ -215,11 +258,25 @@ def _validate_projection_fields(pack: BoundedEnrichmentEvidencePack) -> None:
         if not pack.confidence or "ambiguity_badge" in pack.confidence:
             raise ValueError("missing_projection_confidence")
         raise ValueError("missing_projection_uncertainty")
+    _validate_projection_metadata_map(
+        pack.custody,
+        _ALLOWED_CUSTODY_FIELDS,
+        _ALLOWED_CUSTODY_FIELDS,
+    )
+    _validate_projection_metadata_map(
+        pack.provenance,
+        _ALLOWED_PROVENANCE_FIELDS,
+        frozenset({"custody_reference"}),
+    )
+    _validate_projection_metadata_map(
+        pack.confidence,
+        _ALLOWED_CONFIDENCE_FIELDS,
+        frozenset({"ambiguity_badge"}),
+    )
     if pack.provenance["authority_posture"] != _SUBORDINATE_AUTHORITY_POSTURE:
         raise ValueError("projection cannot drive workflow authority")
     if pack.confidence["source_native_score_authority"] != _NO_WORKFLOW_AUTHORITY:
         raise ValueError("projection cannot drive workflow authority")
-    registry_entry = _source_registry_entry(pack.source_id)
     if pack.confidence["posture"] != registry_entry.confidence_posture:
         raise ValueError("confidence_posture_mismatch")
 

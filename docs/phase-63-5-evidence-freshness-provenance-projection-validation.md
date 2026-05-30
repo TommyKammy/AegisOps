@@ -2,7 +2,7 @@
 
 Validation status: PASS
 
-Focused projection tests cover fresh, stale, projection-time aging, conflicting, unavailable source, missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, custody binding mismatch, provenance binding mismatch, confidence posture mismatch, unexpected pack status, unexpected source status, projection-time source registry status changes, and no-authority-promotion paths.
+Focused projection tests cover fresh, stale, projection-time aging, conflicting, unavailable source, missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, non-bounded-enrichment source rejection, custody binding mismatch, provenance binding mismatch, confidence posture mismatch, unexpected pack status, unexpected reason codes, unexpected metadata fields, hidden metadata authority claims, unexpected source status, projection-time source registry status changes, and no-authority-promotion paths.
 
 The projection remains subordinate context for case workbench and AI-grounding consumers only.
 
