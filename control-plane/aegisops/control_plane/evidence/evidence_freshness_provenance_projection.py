@@ -10,6 +10,7 @@ from .bounded_enrichment_adapter import (
     BoundedEnrichmentEvidencePack,
     _BOUNDED_ENRICHMENT_SOURCE_ID,
     _canonical_response_digest,
+    _response_hashes,
     _scan_for_authority_claim,
     _scan_for_endpoint_command_language,
 )
@@ -114,6 +115,14 @@ def _mapping_string(value: Mapping[str, object], field_name: str) -> str:
     return _require_non_empty_string(value.get(field_name), field_name)
 
 
+def _projection_metadata_authority_value(field_name: str, item: object) -> object:
+    if field_name == "request_binding" and isinstance(item, str):
+        return re.sub(r"^evidence[-_\s]+request[-_\s]*", "", item.strip(), flags=re.I)
+    if field_name == "authority_posture":
+        return ""
+    return item
+
+
 def _validate_projection_metadata_map(
     value: Mapping[str, object],
     allowed_fields: frozenset[str],
@@ -122,7 +131,12 @@ def _validate_projection_metadata_map(
     if frozenset(value) != allowed_fields:
         raise ValueError("unexpected_projection_metadata")
     if any(
-        _scan_for_authority_claim(item) or _scan_for_endpoint_command_language(item)
+        _scan_for_authority_claim(
+            _projection_metadata_authority_value(field_name, item)
+        )
+        or _scan_for_endpoint_command_language(
+            _projection_metadata_authority_value(field_name, item)
+        )
         for field_name, item in value.items()
         if field_name in authority_scanned_fields
     ):
@@ -271,7 +285,7 @@ def _validate_projection_fields(pack: BoundedEnrichmentEvidencePack) -> None:
     _validate_projection_metadata_map(
         pack.provenance,
         _ALLOWED_PROVENANCE_FIELDS,
-        frozenset({"custody_reference"}),
+        _ALLOWED_PROVENANCE_FIELDS,
     )
     _validate_projection_metadata_map(
         pack.confidence,
@@ -335,6 +349,15 @@ def _validate_provenance_bindings(
 def _validate_response_digest_binding(pack: BoundedEnrichmentEvidencePack) -> None:
     reputation = pack.content.get("reputation")
     if not isinstance(reputation, Mapping):
+        raise ValueError("response_digest_mismatch")
+    if reputation:
+        try:
+            response_hashes = _response_hashes(reputation, file_hash=pack.file_hash)
+        except ValueError as exc:
+            raise ValueError("response_digest_mismatch") from exc
+        if pack.file_hash not in response_hashes:
+            raise ValueError("response_digest_mismatch")
+    elif pack.status != "unavailable" and not pack.unavailable_reasons:
         raise ValueError("response_digest_mismatch")
     expected_digest = _canonical_response_digest(reputation)
     if _mapping_string(pack.custody, "response_digest") != expected_digest:
@@ -454,6 +477,7 @@ def project_evidence_freshness_provenance(
     projection_input: EvidenceFreshnessProvenanceProjectionInput,
 ) -> EvidenceFreshnessProvenanceProjection:
     pack = _validate_projection_input(projection_input)
+    consumer = _require_non_empty_string(projection_input.consumer, "consumer")
     _validate_projection_fields(pack)
     projected_at = _require_aware_datetime(
         projection_input.projected_at or datetime.now(timezone.utc),
@@ -479,7 +503,7 @@ def project_evidence_freshness_provenance(
         evidence_request_id=pack.evidence_request_id,
         case_id=pack.case_id,
         source_id=pack.source_id,
-        consumer=projection_input.consumer,
+        consumer=consumer,
         status=status,
         freshness_state=freshness,
         custody_state="complete",

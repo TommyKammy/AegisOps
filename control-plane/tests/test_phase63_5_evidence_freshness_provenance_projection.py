@@ -161,6 +161,15 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
         self.assertFalse(projection.authoritative_workflow_truth)
         self.assertEqual(projection.workflow_authority, "none")
 
+    def test_projection_returns_normalized_consumer_name(self) -> None:
+        pack = self._pack()
+
+        projection = project_evidence_freshness_provenance(
+            self._projection_input(pack, consumer=" case_workbench ")
+        )
+
+        self.assertEqual(projection.consumer, "case_workbench")
+
     def test_stale_projection_preserves_uncertainty_without_truth_promotion(self) -> None:
         now = datetime.now(timezone.utc)
         pack = self._pack(now=now, looked_up_at=now - timedelta(hours=7))
@@ -337,6 +346,38 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                 self._projection_input(malformed_pack)
             )
 
+    def test_packed_reputation_hash_must_match_reviewed_hash(self) -> None:
+        pack = self._pack()
+        other_response = {
+            **self._response(),
+            "sha256_hash": "b" * 64,
+            "signature": "other-family",
+        }
+        other_digest = self._response_digest(other_response)
+        malformed_pack = BoundedEnrichmentEvidencePack(
+            **{
+                **pack.as_dict(),
+                "looked_up_at": pack.looked_up_at,
+                "custody": {
+                    **dict(pack.custody),
+                    "response_digest": other_digest,
+                },
+                "provenance": {
+                    **dict(pack.provenance),
+                    "response_digest": other_digest,
+                },
+                "content": {
+                    **dict(pack.content),
+                    "reputation": other_response,
+                },
+            }
+        )
+
+        with self.assertRaisesRegex(ValueError, "response_digest_mismatch"):
+            project_evidence_freshness_provenance(
+                self._projection_input(malformed_pack)
+            )
+
     def test_confidence_posture_must_match_source_registry(self) -> None:
         pack = self._pack()
         malformed_pack = BoundedEnrichmentEvidencePack(
@@ -463,6 +504,16 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                     "provenance": {
                         **dict(pack.provenance),
                         "custody_reference": "approval_truth",
+                    },
+                },
+                "projection metadata cannot claim workflow authority",
+            ),
+            (
+                "bound_provenance_authority_value",
+                {
+                    "provenance": {
+                        **dict(pack.provenance),
+                        "request_binding": "approval_truth",
                     },
                 },
                 "projection metadata cannot claim workflow authority",

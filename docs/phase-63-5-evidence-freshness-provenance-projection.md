@@ -8,7 +8,7 @@ The projection starts from a directly linked `BoundedEnrichmentEvidencePack` and
 
 The projection entry point is `project_evidence_freshness_provenance`. It accepts `EvidenceFreshnessProvenanceProjectionInput` with the evidence pack, consumer, expected source id, expected case id, requested workflow authority, and optional `projected_at` timestamp.
 
-Allowed consumers are `case_workbench` and `ai_grounding`. Any other consumer is rejected until a later reviewed issue defines the boundary.
+Allowed consumers are `case_workbench` and `ai_grounding`. Consumer names are normalized before projection, and any other consumer is rejected until a later reviewed issue defines the boundary.
 
 The projection requires explicit custody, confidence, provenance, uncertainty, source, and case bindings before it returns a projection. Missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, non-bounded-enrichment source, custody binding mismatch, provenance binding mismatch, response digest mismatch, confidence posture mismatch, confidence ambiguity badge mismatch, unexpected pack status, status without a matching reason, unexpected reason code, unexpected metadata field, unexpected source status, hidden metadata authority claim, or requested projection-driven workflow authority fails closed.
 
@@ -16,7 +16,7 @@ Projection freshness is recalculated from the pack lookup time and the authorita
 
 Projection source status is recalculated from the current authoritative source registry status each time the surface is projected. A now-disabled source projects unavailable with `source_denied`; a now-degraded source projects degraded with `source_stale`.
 
-`custody_state=complete` is returned only when the pack custody reviewed file hash, collection timestamp, and response digest remain bound to the pack file hash, lookup time, and canonical packed reputation response.
+`custody_state=complete` is returned only when the pack custody reviewed file hash, collection timestamp, response hash, and response digest remain bound to the pack file hash, lookup time, and canonical packed reputation response.
 
 `provenance_state=bound` is returned only when the pack provenance values remain bound to the pack's request, case, target, source, enrichment request, collection timestamp, and response digest.
 
