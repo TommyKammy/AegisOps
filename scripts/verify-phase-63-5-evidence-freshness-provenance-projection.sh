@@ -37,6 +37,7 @@ required_projection_phrases=(
   '"missing_projection_confidence"'
   '"missing_projection_provenance"'
   '"missing_projection_uncertainty"'
+  '"provenance_binding_mismatch"'
   '"source_mismatch"'
   '"case_mismatch"'
   '"projection cannot drive workflow authority"'
@@ -54,9 +55,11 @@ done
 required_test_phrases=(
   'test_fresh_projection_for_case_workbench_is_subordinate'
   'test_stale_projection_preserves_uncertainty_without_truth_promotion'
+  'test_projection_recomputes_freshness_for_aged_persisted_pack'
   'test_conflicting_projection_is_unresolved_not_case_truth'
   'test_unavailable_source_projects_prerequisite_failure'
   'test_missing_custody_confidence_provenance_or_uncertainty_fails_closed'
+  'test_provenance_bindings_must_match_pack_authority_fields'
   'test_source_or_case_mismatch_fails_closed'
   'test_projection_cannot_drive_case_closure_reconciliation_or_approval'
 )
@@ -70,7 +73,9 @@ required_doc_phrases=(
   'Phase 63.5 projects evidence freshness, custody, confidence, provenance, conflict, source mismatch, unavailable-source, and uncertainty posture for case workbench and AI-grounding consumers.'
   'The projection starts from a directly linked `BoundedEnrichmentEvidencePack` and does not redefine AegisOps workflow truth.'
   'Stale evidence projects `stale_review_required`; conflicting evidence projects `unresolved_conflict`; unavailable sources project `source_unavailable`; fresh related evidence projects `related_entity_not_authoritative`.'
-  'Missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, or requested projection-driven workflow authority fails closed.'
+  'Missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, provenance binding mismatch, or requested projection-driven workflow authority fails closed.'
+  'Projection freshness is recalculated from the pack lookup time and the authoritative source registry freshness window each time the surface is projected.'
+  '`provenance_state=bound` is returned only when the pack provenance values remain bound to the pack'
   'Projection state cannot approve, execute, reconcile, close, activate detectors, create source truth, gate release, claim readiness, remediate endpoints, contain hosts, quarantine files, kill processes, mutate protected targets, or issue direct command authority.'
   'This slice does not add endpoint remediation, broad evidence-source breadth, autonomous AI authority, source-native truth, Controlled Write, Hard Write, Beta, RC, GA, commercial replacement readiness, or Phase 64/65/66/67 work.'
 )
@@ -82,7 +87,7 @@ done
 required_validation_phrases=(
   '# Phase 63.5 Evidence Freshness and Provenance Projection Validation'
   'Validation status: PASS'
-  'Focused projection tests cover fresh, stale, conflicting, unavailable source, missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, and no-authority-promotion paths.'
+  'Focused projection tests cover fresh, stale, projection-time aging, conflicting, unavailable source, missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, provenance binding mismatch, and no-authority-promotion paths.'
   'The projection remains subordinate context for case workbench and AI-grounding consumers only.'
   'No projection field becomes alert, case, evidence request, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, or closeout truth.'
 )

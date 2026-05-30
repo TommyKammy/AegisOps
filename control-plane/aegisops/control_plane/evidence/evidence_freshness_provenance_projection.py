@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import re
 from types import MappingProxyType
 from typing import Mapping
 
 from .bounded_enrichment_adapter import BoundedEnrichmentEvidencePack
+from .evidence_source_registry import PHASE63_EVIDENCE_SOURCE_REGISTRY
 
 
 _ALLOWED_CONSUMERS = frozenset({"case_workbench", "ai_grounding"})
@@ -34,6 +37,12 @@ _REQUIRED_CONFIDENCE_FIELDS = (
     "ambiguity_badge",
     "source_native_score_authority",
 )
+_DURATION_PATTERN = re.compile(
+    r"PT"
+    r"(?:(?P<hours>\d+)H)?"
+    r"(?:(?P<minutes>\d+)M)?"
+    r"(?:(?P<seconds>\d+)S)?"
+)
 
 
 def _freeze_mapping(value: Mapping[str, object]) -> Mapping[str, object]:
@@ -56,6 +65,37 @@ def _require_non_empty_string(value: object, field_name: str) -> str:
     return value.strip()
 
 
+def _require_aware_datetime(value: object, field_name: str) -> datetime:
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"{field_name} must be timezone-aware") from exc
+    if not isinstance(value, datetime):
+        raise ValueError(f"{field_name} must be timezone-aware")
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{field_name} must be timezone-aware")
+    return value
+
+
+def _parse_duration_seconds(value: str) -> int:
+    match = _DURATION_PATTERN.fullmatch(value.strip())
+    if match is None:
+        raise ValueError("freshness window must be an ISO-8601 time duration")
+    duration_parts = {
+        name: int(match.group(name) or 0) for name in ("hours", "minutes", "seconds")
+    }
+    return (
+        duration_parts["hours"] * 3600
+        + duration_parts["minutes"] * 60
+        + duration_parts["seconds"]
+    )
+
+
+def _mapping_string(value: Mapping[str, object], field_name: str) -> str:
+    return _require_non_empty_string(value.get(field_name), field_name)
+
+
 @dataclass(frozen=True)
 class EvidenceFreshnessProvenanceProjectionInput:
     evidence_pack: BoundedEnrichmentEvidencePack
@@ -63,6 +103,7 @@ class EvidenceFreshnessProvenanceProjectionInput:
     expected_source_id: str
     expected_case_id: str
     requested_workflow_authority: str = _NO_WORKFLOW_AUTHORITY
+    projected_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -167,12 +208,90 @@ def _validate_projection_fields(pack: BoundedEnrichmentEvidencePack) -> None:
         raise ValueError("projection cannot drive workflow authority")
 
 
-def _uncertainty_label(pack: BoundedEnrichmentEvidencePack) -> str:
+def _validate_provenance_bindings(
+    pack: BoundedEnrichmentEvidencePack,
+    looked_up_at: datetime,
+) -> None:
+    expected_values = {
+        "request_binding": pack.evidence_request_id,
+        "case_binding": pack.case_id,
+        "target_binding": pack.file_hash,
+        "source_id": pack.source_id,
+        "enrichment_request_id": _mapping_string(
+            pack.custody,
+            "enrichment_request_id",
+        ),
+        "response_digest": _mapping_string(pack.custody, "response_digest"),
+    }
+    for field_name, expected_value in expected_values.items():
+        if _mapping_string(pack.provenance, field_name) != expected_value:
+            raise ValueError("provenance_binding_mismatch")
+
+    collection_timestamp = _require_aware_datetime(
+        _mapping_string(pack.provenance, "collection_timestamp"),
+        "provenance.collection_timestamp",
+    )
+    if collection_timestamp != looked_up_at:
+        raise ValueError("provenance_binding_mismatch")
+
+
+def _projection_freshness(
+    pack: BoundedEnrichmentEvidencePack,
+    projected_at: datetime,
+) -> tuple[str, datetime]:
+    looked_up_at = _require_aware_datetime(pack.looked_up_at, "looked_up_at")
+    registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(pack.source_id)
+    if registry_entry is None:
+        raise ValueError("unsupported_source_id")
+    freshness_window = _parse_duration_seconds(registry_entry.freshness_window)
+    age_seconds = (projected_at - looked_up_at).total_seconds()
+    freshness = "stale" if age_seconds < 0 or age_seconds > freshness_window else "fresh"
+    return freshness, looked_up_at
+
+
+def _projected_degraded_reasons(
+    pack: BoundedEnrichmentEvidencePack,
+    freshness: str,
+) -> tuple[str, ...]:
+    reasons = list(pack.degraded_reasons)
+    if freshness == "stale" and "stale_reputation" not in reasons:
+        reasons.append("stale_reputation")
+    return tuple(reasons)
+
+
+def _projected_status(
+    pack: BoundedEnrichmentEvidencePack,
+    degraded_reasons: tuple[str, ...],
+) -> str:
+    if pack.status == "unavailable" or pack.unavailable_reasons:
+        return "unavailable"
+    if degraded_reasons:
+        return "degraded"
+    return pack.status
+
+
+def _projected_confidence(
+    pack: BoundedEnrichmentEvidencePack,
+    freshness: str,
+) -> Mapping[str, object]:
+    confidence = dict(pack.confidence)
+    confidence["freshness"] = freshness
+    return MappingProxyType(confidence)
+
+
+def _uncertainty_label(
+    pack: BoundedEnrichmentEvidencePack,
+    freshness: str,
+    degraded_reasons: tuple[str, ...],
+    status: str,
+) -> str:
     if "source_unavailable" in pack.unavailable_reasons or pack.status == "unavailable":
         return "source_unavailable"
-    if "conflicting_enrichment" in pack.degraded_reasons:
+    if status == "unavailable":
+        return "source_unavailable"
+    if "conflicting_enrichment" in degraded_reasons:
         return "unresolved_conflict"
-    if pack.freshness == "stale" or "stale_reputation" in pack.degraded_reasons:
+    if freshness == "stale" or "stale_reputation" in degraded_reasons:
         return "stale_review_required"
     return "related_entity_not_authoritative"
 
@@ -182,30 +301,39 @@ def project_evidence_freshness_provenance(
 ) -> EvidenceFreshnessProvenanceProjection:
     pack = _validate_projection_input(projection_input)
     _validate_projection_fields(pack)
+    projected_at = _require_aware_datetime(
+        projection_input.projected_at or datetime.now(timezone.utc),
+        "projected_at",
+    )
+    freshness, looked_up_at = _projection_freshness(pack, projected_at)
+    _validate_provenance_bindings(pack, looked_up_at)
+    degraded_reasons = _projected_degraded_reasons(pack, freshness)
+    status = _projected_status(pack, degraded_reasons)
+    confidence = _projected_confidence(pack, freshness)
 
     conflict_state = (
         "conflicting"
-        if "conflicting_enrichment" in pack.degraded_reasons
+        if "conflicting_enrichment" in degraded_reasons
         else "none"
     )
-    source_state = "unavailable" if pack.status == "unavailable" else "available"
+    source_state = "unavailable" if status == "unavailable" else "available"
 
     return EvidenceFreshnessProvenanceProjection(
         evidence_request_id=pack.evidence_request_id,
         case_id=pack.case_id,
         source_id=pack.source_id,
         consumer=projection_input.consumer,
-        status=pack.status,
-        freshness_state=pack.freshness,
+        status=status,
+        freshness_state=freshness,
         custody_state="complete",
         confidence_state="present",
         provenance_state="bound",
         conflict_state=conflict_state,
         source_state=source_state,
-        uncertainty_label=_uncertainty_label(pack),
-        degraded_reasons=pack.degraded_reasons,
+        uncertainty_label=_uncertainty_label(pack, freshness, degraded_reasons, status),
+        degraded_reasons=degraded_reasons,
         unavailable_reasons=pack.unavailable_reasons,
         custody=pack.custody,
         provenance=pack.provenance,
-        confidence=pack.confidence,
+        confidence=confidence,
     )

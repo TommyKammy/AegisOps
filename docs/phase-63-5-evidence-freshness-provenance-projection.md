@@ -6,11 +6,15 @@ The projection starts from a directly linked `BoundedEnrichmentEvidencePack` and
 
 ## Projection Contract
 
-The projection entry point is `project_evidence_freshness_provenance`. It accepts `EvidenceFreshnessProvenanceProjectionInput` with the evidence pack, consumer, expected source id, expected case id, and requested workflow authority.
+The projection entry point is `project_evidence_freshness_provenance`. It accepts `EvidenceFreshnessProvenanceProjectionInput` with the evidence pack, consumer, expected source id, expected case id, requested workflow authority, and optional `projected_at` timestamp.
 
 Allowed consumers are `case_workbench` and `ai_grounding`. Any other consumer is rejected until a later reviewed issue defines the boundary.
 
-The projection requires explicit custody, confidence, provenance, uncertainty, source, and case bindings before it returns a projection. Missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, or requested projection-driven workflow authority fails closed.
+The projection requires explicit custody, confidence, provenance, uncertainty, source, and case bindings before it returns a projection. Missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, provenance binding mismatch, or requested projection-driven workflow authority fails closed.
+
+Projection freshness is recalculated from the pack lookup time and the authoritative source registry freshness window each time the surface is projected. Persisted packs that were fresh when collected project as stale once `projected_at` falls outside the source freshness window.
+
+`provenance_state=bound` is returned only when the pack provenance values remain bound to the pack's request, case, target, source, enrichment request, collection timestamp, and response digest.
 
 ## States
 

@@ -172,6 +172,25 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
         self.assertEqual(projection.uncertainty_label, "stale_review_required")
         self.assertFalse(projection.authoritative_workflow_truth)
 
+    def test_projection_recomputes_freshness_for_aged_persisted_pack(self) -> None:
+        built_at = datetime(2026, 5, 30, 0, 0, tzinfo=timezone.utc)
+        pack = self._pack(now=built_at, looked_up_at=built_at)
+        persisted_pack = BoundedEnrichmentEvidencePack(**pack.as_dict())
+
+        projection = project_evidence_freshness_provenance(
+            self._projection_input(
+                persisted_pack,
+                projected_at=built_at + timedelta(hours=7),
+            )
+        )
+
+        self.assertEqual(projection.freshness_state, "stale")
+        self.assertEqual(projection.status, "degraded")
+        self.assertIn("stale_reputation", projection.degraded_reasons)
+        self.assertEqual(projection.confidence["freshness"], "stale")
+        self.assertEqual(projection.uncertainty_label, "stale_review_required")
+        self.assertFalse(projection.authoritative_workflow_truth)
+
     def test_conflicting_projection_is_unresolved_not_case_truth(self) -> None:
         response = {
             **self._response(),
@@ -222,6 +241,38 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                     **{**pack.as_dict(), **pack_updates, "looked_up_at": pack.looked_up_at}
                 )
                 with self.assertRaisesRegex(ValueError, expected_error):
+                    project_evidence_freshness_provenance(
+                        self._projection_input(malformed_pack)
+                    )
+
+    def test_provenance_bindings_must_match_pack_authority_fields(self) -> None:
+        pack = self._pack()
+        mismatch_cases = (
+            ("request_binding", "evidence-request-other"),
+            ("case_binding", "case-other"),
+            ("target_binding", "b" * 64),
+            ("source_id", "osquery_host_state"),
+            ("enrichment_request_id", "enrichment-request-other"),
+            (
+                "collection_timestamp",
+                (pack.looked_up_at + timedelta(minutes=1)).isoformat(),
+            ),
+            ("response_digest", "sha256:" + "b" * 64),
+        )
+
+        for field_name, field_value in mismatch_cases:
+            with self.subTest(field_name=field_name):
+                malformed_pack = BoundedEnrichmentEvidencePack(
+                    **{
+                        **pack.as_dict(),
+                        "looked_up_at": pack.looked_up_at,
+                        "provenance": {
+                            **dict(pack.provenance),
+                            field_name: field_value,
+                        },
+                    }
+                )
+                with self.assertRaisesRegex(ValueError, "provenance_binding_mismatch"):
                     project_evidence_freshness_provenance(
                         self._projection_input(malformed_pack)
                     )
