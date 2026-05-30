@@ -8,7 +8,7 @@ The adapter consumes already reviewed Phase 63 evidence freshness and provenance
 
 The adapter entry point is `build_ai_grounding_adapter`.
 
-Input must use contract version `phase-63-7`, a directly bound case review anchor, the reviewed file hash, reviewed custody reference, reviewed collection timestamp, and evidence record id for each evidence request, and one or more evidence projections from `project_evidence_freshness_provenance` with `consumer=ai_grounding`. Projection freshness is recomputed from the independently anchored collection timestamp against the adapter's current trusted grounding time before grounding; caller-supplied payload timestamps are not trusted to keep cached projections fresh.
+Input must use contract version `phase-63-7`, a directly bound case review anchor, the reviewed file hash, reviewed custody reference, reviewed collection timestamp, response digest, and evidence record id for each evidence request, and one or more evidence projections from `project_evidence_freshness_provenance` with `consumer=ai_grounding`. Projection freshness is recomputed from the independently anchored collection timestamp against the adapter's current trusted grounding time before grounding; caller-supplied payload timestamps are not trusted to keep cached projections fresh.
 
 The adapter is registered as `ai_grounding_adapter` with the `evidence_grounding` tool in the executable AI agent and tool registries.
 
@@ -29,11 +29,11 @@ The adapter derives case, reviewed-evidence-request, evidence-record, and source
 
 Custody, provenance, and confidence metadata maps must match the Phase 63.5 projection contract exactly. Extra metadata fields or authority-bearing metadata values fail closed before grounding.
 
-Missing reviewed-file-hash binding, missing custody-reference binding, missing evidence-record binding, malformed response digest, missing custody, missing provenance, missing confidence, missing uncertainty, state/uncertainty mismatch, stale cached freshness, internally inconsistent state fields, unsupported consumer, case-anchor mismatch, unsupported status, unsupported source, unsupported source state, unsupported conflict state, or any requested authority promotion fails closed with `decision=fallback`.
+Missing reviewed-file-hash binding, missing custody-reference binding, missing evidence-record binding, missing response-digest binding, malformed or mismatched response digest, missing custody, missing provenance, missing confidence, missing uncertainty, state/uncertainty mismatch, stale cached freshness, internally inconsistent state fields, unsupported consumer, case-anchor mismatch, unsupported status, unsupported source, unsupported source state, unsupported conflict state, disabled or unavailable source, or any requested authority promotion fails closed with `decision=fallback`.
 
 Per-item citations remain scoped to the projection that produced that item. If any projection is malformed, cross-anchor, missing custody, or otherwise untrusted, its citations are not exported in the adapter response.
 
-Prompt pressure to hide citations, suppress uncertainty, treat evidence as case truth, approve, execute, reconcile, close a case, activate a detector, bypass policy, remediate endpoints, mutate protected targets, create source or evidence truth, or mark release/readiness/gate truth is blocked with `decision=blocked`.
+Prompt pressure to hide citations, suppress uncertainty, treat evidence as case truth, approve, execute, reconcile, resolve conflicts, advance workflow progress, write to production, close a case, activate a detector, bypass policy, remediate endpoints, mutate protected targets, create source or evidence truth, or mark release/readiness/gate truth is blocked with `decision=blocked`.
 
 When AI advisory posture is disabled or degraded, the adapter returns a fallback with AI generation and trace creation disabled while preserving the non-AI evidence review path.
 

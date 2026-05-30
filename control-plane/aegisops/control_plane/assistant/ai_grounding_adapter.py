@@ -116,6 +116,14 @@ _AUTHORITY_PRESSURE_TERMS = (
     "activate detector",
     "create source truth",
     "create evidence truth",
+    "resolve conflict",
+    "resolve this conflict",
+    "conflict resolution",
+    "advance workflow",
+    "advance the workflow",
+    "workflow progress",
+    "write to production",
+    "production write",
     "bypass policy",
     "policy bypass",
     "quarantine host",
@@ -149,11 +157,14 @@ _AUTHORITY_PRESSURE_PATTERNS = (
     rf"activate\s+(?:{_PROMPT_DETERMINER_PATTERN})?detectors?",
     rf"create\s+(?:{_PROMPT_DETERMINER_PATTERN})?source\s+truth",
     rf"create\s+(?:{_PROMPT_DETERMINER_PATTERN})?evidence\s+truth",
+    rf"resolve\s+(?:{_PROMPT_DETERMINER_PATTERN})?conflicts?",
+    rf"advance\s+(?:{_PROMPT_DETERMINER_PATTERN})?workflows?",
+    r"write\s+to\s+production",
     rf"bypass\s+(?:{_PROMPT_DETERMINER_PATTERN})?polic(?:y|ies)",
 )
 _READINESS_PRESSURE_PATTERNS = (
-    rf"mark\s+(?:{_PROMPT_DETERMINER_PATTERN})?gate\s+ready",
-    rf"mark\s+(?:{_PROMPT_DETERMINER_PATTERN})?release\s+ready",
+    rf"mark\s+(?:{_PROMPT_DETERMINER_PATTERN})?gates?\s+ready",
+    rf"mark\s+(?:{_PROMPT_DETERMINER_PATTERN})?releases?\s+ready",
     rf"create\s+(?:{_PROMPT_DETERMINER_PATTERN})?release\s+truth",
     rf"create\s+(?:{_PROMPT_DETERMINER_PATTERN})?workflow\s+truth",
     r"gate\s+is\s+ready",
@@ -339,6 +350,7 @@ def _validated_grounding_payload(
     collection_timestamp_bindings = anchor.get(
         "collection_timestamp_by_evidence_request_id"
     )
+    response_digest_bindings = anchor.get("response_digest_by_evidence_request_id")
 
     raw_projections = grounding_context_payload.get("evidence_projections")
     if not isinstance(raw_projections, Sequence) or isinstance(
@@ -362,6 +374,7 @@ def _validated_grounding_payload(
             evidence_record_bindings,
             reviewed_hash_bindings,
             collection_timestamp_bindings,
+            response_digest_bindings,
             trusted_grounded_at,
         )
         reasons.extend(projection_reasons)
@@ -382,6 +395,7 @@ def _projection_reasons(
     evidence_record_bindings: object,
     reviewed_hash_bindings: object,
     collection_timestamp_bindings: object,
+    response_digest_bindings: object,
     grounded_at: datetime,
 ) -> tuple[str, ...]:
     reasons: list[str] = []
@@ -402,6 +416,10 @@ def _projection_reasons(
     )
     expected_collection_timestamp = _expected_collection_timestamp(
         collection_timestamp_bindings,
+        evidence_request_id,
+    )
+    expected_response_digest = _expected_response_digest(
+        response_digest_bindings,
         evidence_request_id,
     )
     if projection.get("consumer") != "ai_grounding":
@@ -459,7 +477,7 @@ def _projection_reasons(
         )
     if isinstance(custody, Mapping):
         reasons.extend(_reviewed_hash_reasons(custody, expected_reviewed_file_hash))
-        reasons.extend(_response_digest_reasons(custody))
+        reasons.extend(_response_digest_reasons(custody, expected_response_digest))
         reasons.extend(
             _evidence_record_binding_reasons(
                 custody=custody,
@@ -481,6 +499,8 @@ def _projection_reasons(
         reasons.append("missing_grounding_reviewed_hash_binding")
     if expected_collection_timestamp is None:
         reasons.append("missing_grounding_collection_timestamp_binding")
+    if expected_response_digest is None:
+        reasons.append("missing_grounding_response_digest_binding")
     if not _mapping_has_non_empty_fields(confidence, _REQUIRED_CONFIDENCE_FIELDS):
         reasons.append("missing_grounding_confidence")
     if isinstance(provenance, Mapping):
@@ -530,6 +550,7 @@ def _grounding_source_reasons(
     status = projection.get("status")
     source_state = projection.get("source_state")
     if registry_entry.status == "disabled":
+        reasons.append("unavailable_evidence_source")
         if (
             status != "unavailable"
             or source_state != "unavailable"
@@ -708,11 +729,16 @@ def _evidence_record_binding_reasons(
     return ()
 
 
-def _response_digest_reasons(custody: Mapping[str, object]) -> tuple[str, ...]:
+def _response_digest_reasons(
+    custody: Mapping[str, object],
+    expected_response_digest: str | None,
+) -> tuple[str, ...]:
     response_digest = _string(custody.get("response_digest"))
     if (
         response_digest is None
         or _SHA256_DIGEST_PATTERN.fullmatch(response_digest) is None
+        or expected_response_digest is None
+        or response_digest != expected_response_digest
     ):
         return ("grounding_response_digest_mismatch",)
     return ()
@@ -881,6 +907,21 @@ def _expected_collection_timestamp(
         )
     except ValueError:
         return None
+
+
+def _expected_response_digest(
+    response_digest_bindings: object,
+    evidence_request_id: str | None,
+) -> str | None:
+    if evidence_request_id is None or not isinstance(response_digest_bindings, Mapping):
+        return None
+    response_digest = _string(response_digest_bindings.get(evidence_request_id))
+    if (
+        response_digest is None
+        or _SHA256_DIGEST_PATTERN.fullmatch(response_digest) is None
+    ):
+        return None
+    return response_digest
 
 
 def _uncertainty_state_reasons(
