@@ -33,7 +33,7 @@ Missing reviewed-file-hash binding, missing custody-reference binding, missing e
 
 Per-item citations remain scoped to the projection that produced that item. If any projection is malformed, cross-anchor, missing custody, or otherwise untrusted, its citations are not exported in the adapter response.
 
-Prompt pressure to hide citations, suppress uncertainty, treat evidence as case truth, approve, execute, reconcile, close a case, activate a detector, create source or evidence truth, or mark release/readiness/gate truth is blocked with `decision=blocked`.
+Prompt pressure to hide citations, suppress uncertainty, treat evidence as case truth, approve, execute, reconcile, close a case, activate a detector, bypass policy, remediate endpoints, mutate protected targets, create source or evidence truth, or mark release/readiness/gate truth is blocked with `decision=blocked`.
 
 When AI advisory posture is disabled or degraded, the adapter returns a fallback with AI generation and trace creation disabled while preserving the non-AI evidence review path.
 
