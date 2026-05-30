@@ -10,6 +10,7 @@ from .bounded_enrichment_adapter import (
     BoundedEnrichmentEvidencePack,
     _BOUNDED_ENRICHMENT_SOURCE_ID,
     _canonical_response_digest,
+    _has_conflict_marker,
     _response_hashes,
     _scan_for_authority_claim,
     _scan_for_endpoint_command_language,
@@ -381,6 +382,35 @@ def _validate_response_digest_binding(pack: BoundedEnrichmentEvidencePack) -> No
         raise ValueError("response_digest_mismatch")
 
 
+def _validate_projection_reason_consistency(
+    pack: BoundedEnrichmentEvidencePack,
+    freshness: str,
+) -> None:
+    registry_entry = _source_registry_entry(pack.source_id)
+    reputation = pack.content.get("reputation")
+    has_conflict = _has_conflict_marker(reputation)
+
+    if pack.status == "available" and (
+        pack.degraded_reasons or pack.unavailable_reasons
+    ):
+        raise ValueError("projection_status_reason_mismatch")
+    if pack.status == "degraded" and pack.unavailable_reasons:
+        raise ValueError("projection_status_reason_mismatch")
+
+    if "stale_reputation" in pack.degraded_reasons and freshness != "stale":
+        raise ValueError("projection_reason_mismatch")
+    if (
+        "conflicting_enrichment" in pack.degraded_reasons
+    ) != has_conflict:
+        raise ValueError("projection_reason_mismatch")
+    if "source_stale" in pack.degraded_reasons and registry_entry.status != "degraded":
+        raise ValueError("projection_reason_mismatch")
+    if "source_denied" in pack.unavailable_reasons and registry_entry.status != "disabled":
+        raise ValueError("projection_reason_mismatch")
+    if "source_unavailable" in pack.unavailable_reasons and pack.status != "unavailable":
+        raise ValueError("projection_reason_mismatch")
+
+
 def _projection_freshness(
     pack: BoundedEnrichmentEvidencePack,
     projected_at: datetime,
@@ -504,6 +534,7 @@ def project_evidence_freshness_provenance(
     _validate_custody_bindings(pack, looked_up_at)
     _validate_provenance_bindings(pack, looked_up_at)
     _validate_response_digest_binding(pack)
+    _validate_projection_reason_consistency(pack, freshness)
     degraded_reasons = _projected_degraded_reasons(pack, freshness)
     unavailable_reasons = _projected_unavailable_reasons(pack)
     status = _projected_status(pack, degraded_reasons, unavailable_reasons)

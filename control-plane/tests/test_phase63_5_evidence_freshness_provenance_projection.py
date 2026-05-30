@@ -484,6 +484,111 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                         self._projection_input(malformed_pack)
                     )
 
+    def test_structurally_valid_reason_drift_in_reconstructed_pack_fails_closed(
+        self,
+    ) -> None:
+        pack = self._pack()
+        conflicting_response = {
+            **self._response(),
+            "conflict_marker": {
+                "state": "conflict",
+                "reason": "hash reputation conflicts with reviewed context",
+            },
+        }
+        conflicting_pack = self._pack(response=conflicting_response)
+        source_id = "malwarebazaar_hash_reputation"
+        original_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id]
+        malformed_cases = (
+            (
+                "available_pack_with_degraded_reason",
+                pack,
+                {
+                    "degraded_reasons": ("stale_reputation",),
+                },
+                None,
+                "projection_status_reason_mismatch",
+            ),
+            (
+                "fresh_pack_claims_stale_reputation",
+                pack,
+                {
+                    "status": "degraded",
+                    "degraded_reasons": ("stale_reputation",),
+                },
+                None,
+                "projection_reason_mismatch",
+            ),
+            (
+                "non_conflicting_content_claims_conflict",
+                pack,
+                {
+                    "status": "degraded",
+                    "degraded_reasons": ("conflicting_enrichment",),
+                    "confidence": {
+                        **dict(pack.confidence),
+                        "ambiguity_badge": "unresolved",
+                    },
+                },
+                None,
+                "projection_reason_mismatch",
+            ),
+            (
+                "conflicting_content_missing_conflict_reason",
+                conflicting_pack,
+                {
+                    "status": "available",
+                    "degraded_reasons": (),
+                    "confidence": {
+                        **dict(conflicting_pack.confidence),
+                        "ambiguity_badge": "related-entity",
+                    },
+                },
+                None,
+                "projection_reason_mismatch",
+            ),
+            (
+                "enabled_source_claims_source_stale",
+                pack,
+                {
+                    "status": "degraded",
+                    "degraded_reasons": ("source_stale",),
+                },
+                None,
+                "projection_reason_mismatch",
+            ),
+            (
+                "enabled_source_claims_source_denied",
+                self._pack(adapter_state="unavailable"),
+                {
+                    "unavailable_reasons": ("source_denied",),
+                },
+                None,
+                "projection_reason_mismatch",
+            ),
+        )
+
+        for label, base_pack, pack_updates, registry_status, expected_error in malformed_cases:
+            with self.subTest(label=label):
+                try:
+                    if registry_status is not None:
+                        PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id] = replace(
+                            original_entry,
+                            status=registry_status,
+                        )
+                    malformed_pack = BoundedEnrichmentEvidencePack(
+                        **{
+                            **base_pack.as_dict(),
+                            "looked_up_at": base_pack.looked_up_at,
+                            **pack_updates,
+                        }
+                    )
+                    with self.assertRaisesRegex(ValueError, expected_error):
+                        project_evidence_freshness_provenance(
+                            self._projection_input(malformed_pack)
+                        )
+                finally:
+                    PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id] = original_entry
+
     def test_provenance_bindings_must_match_pack_authority_fields(self) -> None:
         pack = self._pack()
         mismatch_cases = (
