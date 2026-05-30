@@ -1432,6 +1432,53 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 "unsupported evidence-pack projection label",
             ),
             (
+                "unsupported source id",
+                {
+                    "source_id": "workflow_gate",
+                    "provenance": {
+                        "source_id": "workflow_gate",
+                    },
+                },
+                "unsupported evidence-pack projection source",
+            ),
+            (
+                "unsupported degraded reason",
+                {"degraded_reasons": ["case_truth"]},
+                "unsupported evidence-pack projection reason",
+            ),
+            (
+                "unsupported unavailable reason",
+                {"unavailable_reasons": ["approval_truth"]},
+                "unsupported evidence-pack projection reason",
+            ),
+            (
+                "missing custody field",
+                {
+                    "custody": {
+                        "reviewed_file_hash": "",
+                    },
+                },
+                "missing required metadata fields",
+            ),
+            (
+                "missing provenance field",
+                {
+                    "provenance": {
+                        "custody_reference": "",
+                    },
+                },
+                "missing required metadata fields",
+            ),
+            (
+                "missing confidence field",
+                {
+                    "confidence": {
+                        "posture": "",
+                    },
+                },
+                "missing required metadata fields",
+            ),
+            (
                 "custody mismatch",
                 {
                     "custody": {

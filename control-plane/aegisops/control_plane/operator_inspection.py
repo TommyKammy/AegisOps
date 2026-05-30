@@ -53,6 +53,7 @@ _EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS = {
     "rc_readiness_claim",
     "gate_readiness_claim",
 }
+_EVIDENCE_PACK_SUPPORTED_SOURCE_ID = "malwarebazaar_hash_reputation"
 _EVIDENCE_PACK_ALLOWED_PROJECTION_LABELS = {
     "consumer": frozenset({"case_workbench", "ai_grounding"}),
     "status": frozenset({"available", "degraded", "unavailable"}),
@@ -71,6 +72,19 @@ _EVIDENCE_PACK_ALLOWED_PROJECTION_LABELS = {
         }
     ),
 }
+_EVIDENCE_PACK_ALLOWED_DEGRADED_REASONS = frozenset(
+    {
+        "stale_reputation",
+        "conflicting_enrichment",
+        "source_stale",
+    }
+)
+_EVIDENCE_PACK_ALLOWED_UNAVAILABLE_REASONS = frozenset(
+    {
+        "source_denied",
+        "source_unavailable",
+    }
+)
 _EVIDENCE_PACK_PROJECTION_REQUIRED_STRINGS = (
     "evidence_request_id",
     "case_id",
@@ -86,6 +100,36 @@ _EVIDENCE_PACK_PROJECTION_REQUIRED_STRINGS = (
     "uncertainty_label",
     "authority_posture",
     "workflow_authority",
+)
+_EVIDENCE_PACK_REQUIRED_CUSTODY_FIELDS = frozenset(
+    {
+        "reviewed_file_hash",
+        "enrichment_request_id",
+        "collection_timestamp",
+        "response_digest",
+        "aegisops_evidence_record_id",
+    }
+)
+_EVIDENCE_PACK_REQUIRED_PROVENANCE_FIELDS = frozenset(
+    {
+        "request_binding",
+        "case_binding",
+        "target_binding",
+        "source_id",
+        "enrichment_request_id",
+        "collection_timestamp",
+        "response_digest",
+        "custody_reference",
+        "authority_posture",
+    }
+)
+_EVIDENCE_PACK_REQUIRED_CONFIDENCE_FIELDS = frozenset(
+    {
+        "posture",
+        "freshness",
+        "ambiguity_badge",
+        "source_native_score_authority",
+    }
 )
 
 
@@ -1399,6 +1443,44 @@ class OperatorInspectionReadSurface:
             )
         return parsed
 
+    def _required_metadata_map_fields(
+        self,
+        metadata: Mapping[str, object],
+        required_fields: frozenset[str],
+    ) -> None:
+        if frozenset(metadata) != required_fields:
+            raise ValueError(
+                "linked evidence-pack projection is missing required metadata fields"
+            )
+        if any(
+            self._optional_string_from_mapping(metadata, field_name) is None
+            for field_name in required_fields
+        ):
+            raise ValueError(
+                "linked evidence-pack projection is missing required metadata fields"
+            )
+
+    @staticmethod
+    def _projection_reason_tuple(
+        projection: Mapping[str, object],
+        key: str,
+    ) -> tuple[str, ...]:
+        value = projection.get(key)
+        if value is None:
+            return ()
+        if not isinstance(value, (tuple, list)):
+            raise ValueError(
+                "linked evidence-pack projection has unsupported evidence-pack projection reason"
+            )
+        reasons: list[str] = []
+        for item in value:
+            if not isinstance(item, str) or not item.strip():
+                raise ValueError(
+                    "linked evidence-pack projection has unsupported evidence-pack projection reason"
+                )
+            reasons.append(item.strip())
+        return tuple(reasons)
+
     def _validated_linked_evidence_pack_projection(
         self,
         *,
@@ -1417,12 +1499,36 @@ class OperatorInspectionReadSurface:
                 raise ValueError(
                     "linked evidence-pack projection has unsupported evidence-pack projection label"
                 )
+        if values["source_id"] != _EVIDENCE_PACK_SUPPORTED_SOURCE_ID:
+            raise ValueError(
+                "linked evidence-pack projection has unsupported evidence-pack projection source"
+            )
+        degraded_reasons = self._projection_reason_tuple(
+            projection,
+            "degraded_reasons",
+        )
+        unavailable_reasons = self._projection_reason_tuple(
+            projection,
+            "unavailable_reasons",
+        )
+        if any(
+            reason not in _EVIDENCE_PACK_ALLOWED_DEGRADED_REASONS
+            for reason in degraded_reasons
+        ) or any(
+            reason not in _EVIDENCE_PACK_ALLOWED_UNAVAILABLE_REASONS
+            for reason in unavailable_reasons
+        ):
+            raise ValueError(
+                "linked evidence-pack projection has unsupported evidence-pack projection reason"
+            )
         if values["case_id"] != case_id:
             raise ValueError("linked evidence-pack projection case binding mismatch")
         if projection.get("authoritative_workflow_truth") is not False:
             raise ValueError("linked evidence-pack projection cannot carry workflow truth")
         if values["workflow_authority"] != "none":
-            raise ValueError("linked evidence-pack projection cannot carry workflow authority")
+            raise ValueError(
+                "linked evidence-pack projection cannot carry workflow authority"
+            )
         if values["authority_posture"] != _EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE:
             raise ValueError("linked evidence-pack projection must stay subordinate")
         if projection.get("operator_visible") is not None and projection.get(
@@ -1460,6 +1566,18 @@ class OperatorInspectionReadSurface:
             raise ValueError(
                 "linked evidence-pack projection requires custody, provenance, and confidence maps"
             )
+        self._required_metadata_map_fields(
+            custody,
+            _EVIDENCE_PACK_REQUIRED_CUSTODY_FIELDS,
+        )
+        self._required_metadata_map_fields(
+            provenance,
+            _EVIDENCE_PACK_REQUIRED_PROVENANCE_FIELDS,
+        )
+        self._required_metadata_map_fields(
+            confidence,
+            _EVIDENCE_PACK_REQUIRED_CONFIDENCE_FIELDS,
+        )
         if evidence_record_id is None or self._optional_string_from_mapping(
             custody,
             "aegisops_evidence_record_id",

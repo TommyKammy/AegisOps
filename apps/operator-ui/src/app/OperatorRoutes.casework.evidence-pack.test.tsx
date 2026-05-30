@@ -64,6 +64,17 @@ function createEvidencePack(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function createEvidencePackWithSource(sourceId: string) {
+  const pack = createEvidencePack({ source_id: sourceId });
+  return {
+    ...pack,
+    provenance: {
+      ...pack.provenance,
+      source_id: sourceId,
+    },
+  };
+}
+
 function createCaseDetailPayload(overrides: Record<string, unknown> = {}) {
   return {
     case_id: "case-456",
@@ -181,9 +192,47 @@ describe("case detail evidence pack UI", () => {
     ["UI-cache source", createEvidencePack({ cache_sourced: true })],
     ["browser-state source", createEvidencePack({ projection_source: "browser_state" })],
     ["hidden stale label", createEvidencePack({ freshness_state: "" })],
+    ["unsupported stale label", createEvidencePack({ freshness_state: "rc_ready" })],
     ["hidden conflict label", createEvidencePack({ conflict_state: "" })],
+    ["unsupported conflict label", createEvidencePack({ conflict_state: "ready_to_close" })],
+    ["unsupported consumer", createEvidencePack({ consumer: "workflow_gate" })],
+    ["unsupported source", createEvidencePackWithSource("workflow_gate")],
+    [
+      "unsupported degraded reason",
+      createEvidencePack({ degraded_reasons: ["case_truth"] }),
+    ],
+    [
+      "unsupported unavailable reason",
+      createEvidencePack({ unavailable_reasons: ["approval_truth"] }),
+    ],
     ["missing custody display", createEvidencePack({ custody: null })],
+    [
+      "incomplete custody display",
+      createEvidencePack({
+        custody: {
+          aegisops_evidence_record_id: "evidence-enrichment-001",
+        },
+      }),
+    ],
     ["missing provenance display", createEvidencePack({ provenance: null })],
+    [
+      "incomplete provenance display",
+      createEvidencePack({
+        provenance: {
+          request_binding: "evidence-request-001",
+          case_binding: "case-456",
+          source_id: "malwarebazaar_hash_reputation",
+        },
+      }),
+    ],
+    [
+      "incomplete confidence display",
+      createEvidencePack({
+        confidence: {
+          source_native_score_authority: "none",
+        },
+      }),
+    ],
     ["evidence truth", createEvidencePack({ authoritative_workflow_truth: true })],
     [
       "authoritative posture",

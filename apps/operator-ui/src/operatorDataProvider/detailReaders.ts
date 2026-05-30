@@ -56,6 +56,56 @@ const EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES = new Set([
 ]);
 const EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE =
   "subordinate_evidence_context_only";
+const EVIDENCE_PACK_SUPPORTED_SOURCE_ID = "malwarebazaar_hash_reputation";
+const EVIDENCE_PACK_ALLOWED_LABELS = {
+  consumer: new Set(["case_workbench", "ai_grounding"]),
+  status: new Set(["available", "degraded", "unavailable"]),
+  freshness_state: new Set(["fresh", "stale"]),
+  custody_state: new Set(["complete"]),
+  confidence_state: new Set(["present"]),
+  provenance_state: new Set(["bound"]),
+  conflict_state: new Set(["conflicting", "none"]),
+  source_state: new Set(["available", "degraded", "unavailable"]),
+  uncertainty_label: new Set([
+    "related_entity_not_authoritative",
+    "stale_review_required",
+    "unresolved_conflict",
+    "source_unavailable",
+  ]),
+};
+const EVIDENCE_PACK_ALLOWED_DEGRADED_REASONS = new Set([
+  "stale_reputation",
+  "conflicting_enrichment",
+  "source_stale",
+]);
+const EVIDENCE_PACK_ALLOWED_UNAVAILABLE_REASONS = new Set([
+  "source_denied",
+  "source_unavailable",
+]);
+const EVIDENCE_PACK_REQUIRED_CUSTODY_FIELDS = new Set([
+  "reviewed_file_hash",
+  "enrichment_request_id",
+  "collection_timestamp",
+  "response_digest",
+  "aegisops_evidence_record_id",
+]);
+const EVIDENCE_PACK_REQUIRED_PROVENANCE_FIELDS = new Set([
+  "request_binding",
+  "case_binding",
+  "target_binding",
+  "source_id",
+  "enrichment_request_id",
+  "collection_timestamp",
+  "response_digest",
+  "custody_reference",
+  "authority_posture",
+]);
+const EVIDENCE_PACK_REQUIRED_CONFIDENCE_FIELDS = new Set([
+  "posture",
+  "freshness",
+  "ambiguity_badge",
+  "source_native_score_authority",
+]);
 const BUSINESS_HOURS_HANDOFF_CONTRACT_VERSION = "phase-56-6";
 
 const BUSINESS_HOURS_HANDOFF_STATES = new Set([
@@ -336,6 +386,56 @@ function validateCaseTimelineSummary(payload: unknown) {
   });
 }
 
+function validateEvidencePackLabel(
+  fieldName: keyof typeof EVIDENCE_PACK_ALLOWED_LABELS,
+  value: string,
+  evidenceRequestId: string,
+) {
+  if (!EVIDENCE_PACK_ALLOWED_LABELS[fieldName].has(value)) {
+    throw new OperatorDataProviderContractError(
+      `Resource cases linked_evidence_packs item ${evidenceRequestId} has an unsupported evidence-pack label.`,
+    );
+  }
+}
+
+function validateEvidencePackReasons(
+  value: unknown,
+  allowedReasons: Set<string>,
+) {
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (!Array.isArray(value)) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases linked_evidence_packs item has unsupported evidence-pack reasons.",
+    );
+  }
+  value.forEach((reason) => {
+    if (!asString(reason) || !allowedReasons.has(asString(reason) ?? "")) {
+      throw new OperatorDataProviderContractError(
+        "Resource cases linked_evidence_packs item has unsupported evidence-pack reasons.",
+      );
+    }
+  });
+}
+
+function validateEvidencePackMetadataMap(
+  value: Record<string, unknown>,
+  requiredFields: Set<string>,
+  evidenceRequestId: string,
+) {
+  const fieldNames = Object.keys(value);
+  if (
+    fieldNames.length !== requiredFields.size ||
+    fieldNames.some((fieldName) => !requiredFields.has(fieldName)) ||
+    Array.from(requiredFields).some((fieldName) => asString(value[fieldName]) === null)
+  ) {
+    throw new OperatorDataProviderContractError(
+      `Resource cases linked_evidence_packs item ${evidenceRequestId} is missing required evidence-pack metadata.`,
+    );
+  }
+}
+
 function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) {
   const response = asObject(
     payload,
@@ -380,7 +480,7 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
       pack.provenance,
       "Resource cases linked_evidence_packs item provenance must be an object.",
     );
-    asObject(
+    const confidence = asObject(
       pack.confidence,
       "Resource cases linked_evidence_packs item confidence must be an object.",
     );
@@ -409,6 +509,59 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
         `Resource cases linked_evidence_packs item ${evidenceRequestId} must stay bound to case ${requestedCaseId}.`,
       );
     }
+    if (sourceId !== EVIDENCE_PACK_SUPPORTED_SOURCE_ID) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases linked_evidence_packs item ${evidenceRequestId} has an unsupported evidence-pack source.`,
+      );
+    }
+    validateEvidencePackLabel("consumer", consumer, evidenceRequestId);
+    validateEvidencePackLabel("status", status, evidenceRequestId);
+    validateEvidencePackLabel(
+      "freshness_state",
+      freshnessState,
+      evidenceRequestId,
+    );
+    validateEvidencePackLabel("custody_state", custodyState, evidenceRequestId);
+    validateEvidencePackLabel(
+      "confidence_state",
+      confidenceState,
+      evidenceRequestId,
+    );
+    validateEvidencePackLabel(
+      "provenance_state",
+      provenanceState,
+      evidenceRequestId,
+    );
+    validateEvidencePackLabel("conflict_state", conflictState, evidenceRequestId);
+    validateEvidencePackLabel("source_state", sourceState, evidenceRequestId);
+    validateEvidencePackLabel(
+      "uncertainty_label",
+      uncertaintyLabel,
+      evidenceRequestId,
+    );
+    validateEvidencePackReasons(
+      pack.degraded_reasons,
+      EVIDENCE_PACK_ALLOWED_DEGRADED_REASONS,
+    );
+    validateEvidencePackReasons(
+      pack.unavailable_reasons,
+      EVIDENCE_PACK_ALLOWED_UNAVAILABLE_REASONS,
+    );
+    validateEvidencePackMetadataMap(
+      custody,
+      EVIDENCE_PACK_REQUIRED_CUSTODY_FIELDS,
+      evidenceRequestId,
+    );
+    validateEvidencePackMetadataMap(
+      provenance,
+      EVIDENCE_PACK_REQUIRED_PROVENANCE_FIELDS,
+      evidenceRequestId,
+    );
+    validateEvidencePackMetadataMap(
+      confidence,
+      EVIDENCE_PACK_REQUIRED_CONFIDENCE_FIELDS,
+      evidenceRequestId,
+    );
     if (
       asString(provenance.request_binding) !== evidenceRequestId ||
       asString(provenance.case_binding) !== requestedCaseId ||
