@@ -315,6 +315,31 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
             "example-family",
         )
 
+    def test_source_native_malwarebazaar_data_rejects_unrelated_records(self) -> None:
+        now = datetime.now(timezone.utc)
+        response = {
+            "query_status": "ok",
+            "data": [
+                {
+                    "sha256_hash": "a" * 64,
+                    "signature": "reviewed-family",
+                },
+                {
+                    "sha256_hash": "d" * 64,
+                    "signature": "unrelated-family",
+                },
+            ],
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "response hash must match reviewed file hash",
+        ):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(now=now, response=response),
+                now=now,
+            )
+
     def test_response_hash_fields_must_match_declared_algorithm(self) -> None:
         now = datetime.now(timezone.utc)
         file_hash = "b" * 32
@@ -465,6 +490,30 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
                 now=now,
             )
 
+        for custody_extra in (
+            {"workflow_authority": True},
+            {"operator_guidance": "delete this file"},
+        ):
+            with self.subTest(custody_extra=custody_extra):
+                response = self._response()
+                custody = {
+                    "reviewed_file_hash": "a" * 64,
+                    "enrichment_request_id": "enrichment-request-001",
+                    "collection_timestamp": now.isoformat(),
+                    "response_digest": self._response_digest(response),
+                    "aegisops_evidence_record_id": "evidence-enrichment-001",
+                    **custody_extra,
+                }
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "custody cannot claim workflow authority or endpoint command authority",
+                ):
+                    BoundedEnrichmentAdapter().build_evidence_pack(
+                        self._input(now=now, response=response, custody=custody),
+                        now=now,
+                    )
+
         for phrase in (
             "quarantine this file",
             "contain the host",
@@ -474,6 +523,30 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
             "delete this file",
             "remediate this endpoint",
             "block this hash",
+        ):
+            with self.subTest(phrase=phrase):
+                with self.assertRaisesRegex(ValueError, "endpoint command authority"):
+                    BoundedEnrichmentAdapter().build_evidence_pack(
+                        self._input(
+                            now=now,
+                            response={
+                                **self._response(),
+                                "operator_guidance": phrase,
+                            },
+                        ),
+                        now=now,
+                    )
+
+    def test_endpoint_command_language_rejects_inflected_action_verbs(self) -> None:
+        now = datetime.now(timezone.utc)
+
+        for phrase in (
+            "isolates this host",
+            "terminating this process",
+            "deleting this file",
+            "removes this file",
+            "blocks this hash",
+            "remediating this endpoint",
         ):
             with self.subTest(phrase=phrase):
                 with self.assertRaisesRegex(ValueError, "endpoint command authority"):

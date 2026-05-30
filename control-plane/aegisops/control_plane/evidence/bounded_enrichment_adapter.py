@@ -80,22 +80,37 @@ _ENDPOINT_COMMAND_TERMS = (
 )
 _ENDPOINT_COMMAND_OBJECTS_BY_ACTION = {
     "contain": ("host",),
+    "contains": ("host",),
     "contained": ("host",),
     "containing": ("host",),
     "isolate": ("host",),
+    "isolates": ("host",),
     "isolated": ("host",),
     "isolating": ("host",),
     "kill": ("process",),
+    "kills": ("process",),
     "killed": ("process",),
     "killing": ("process",),
     "terminate": ("process",),
+    "terminates": ("process",),
     "terminated": ("process",),
+    "terminating": ("process",),
     "delete": ("file",),
+    "deletes": ("file",),
     "deleted": ("file",),
+    "deleting": ("file",),
     "remove": ("file",),
+    "removes": ("file",),
     "removed": ("file",),
+    "removing": ("file",),
     "remediate": ("endpoint",),
+    "remediated": ("endpoint",),
+    "remediates": ("endpoint",),
+    "remediating": ("endpoint",),
     "block": ("ip", "domain", "url", "hash"),
+    "blocked": ("ip", "domain", "url", "hash"),
+    "blocking": ("ip", "domain", "url", "hash"),
+    "blocks": ("ip", "domain", "url", "hash"),
 }
 _ENDPOINT_COMMAND_DETERMINERS = frozenset(
     {
@@ -246,13 +261,21 @@ def _response_hashes_from_record(response_record: Mapping[str, object]) -> tuple
     return tuple(hashes)
 
 
-def _response_hashes(response: Mapping[str, object]) -> tuple[str, ...]:
+def _response_hashes(
+    response: Mapping[str, object],
+    *,
+    file_hash: str,
+) -> tuple[str, ...]:
     hashes = list(_response_hashes_from_record(response))
     data = response.get("data")
     if isinstance(data, (tuple, list)):
         for item in data:
-            if isinstance(item, Mapping):
-                hashes.extend(_response_hashes_from_record(item))
+            if not isinstance(item, Mapping):
+                raise ValueError("response hash must match reviewed file hash")
+            item_hashes = _response_hashes_from_record(item)
+            if file_hash not in item_hashes:
+                raise ValueError("response hash must match reviewed file hash")
+            hashes.extend(item_hashes)
     return tuple(hashes)
 
 
@@ -462,6 +485,12 @@ class BoundedEnrichmentAdapter:
             raise ValueError(
                 "bounded enrichment custody collection_timestamp must match looked_up_at"
             )
+        if _scan_for_authority_claim(custody) or _scan_for_endpoint_command_language(
+            custody
+        ):
+            raise ValueError(
+                "custody cannot claim workflow authority or endpoint command authority"
+            )
 
         if adapter_input.adapter_state == "unavailable":
             if adapter_input.response:
@@ -476,7 +505,7 @@ class BoundedEnrichmentAdapter:
             query_status = response.get("query_status")
             if not isinstance(query_status, str) or query_status.strip().lower() != "ok":
                 raise ValueError("MalwareBazaar response query_status must be ok")
-            response_hashes = _response_hashes(response)
+            response_hashes = _response_hashes(response, file_hash=file_hash)
             if file_hash not in response_hashes:
                 raise ValueError("response hash must match reviewed file hash")
             if _scan_for_authority_claim(response) or _scan_for_endpoint_command_language(
