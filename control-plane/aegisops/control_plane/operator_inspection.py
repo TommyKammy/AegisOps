@@ -1763,9 +1763,13 @@ class OperatorInspectionReadSurface:
         ).total_seconds()
         if age_seconds < 0:
             raise ValueError("linked evidence-pack projection freshness window mismatch")
+        freshness_window_seconds = _parse_duration_seconds(registry_entry.freshness_window)
         if (
-            values["freshness_state"] == "fresh"
-            and age_seconds > _parse_duration_seconds(registry_entry.freshness_window)
+            (values["freshness_state"] == "fresh" and age_seconds > freshness_window_seconds)
+            or (
+                values["freshness_state"] == "stale"
+                and age_seconds <= freshness_window_seconds
+            )
         ):
             raise ValueError("linked evidence-pack projection freshness window mismatch")
 

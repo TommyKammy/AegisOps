@@ -1137,6 +1137,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         evidence_request_id: str = "evidence-request-enrichment-001",
         file_hash: str = "b" * 64,
     ) -> dict[str, object]:
+        collection_timestamp = (reviewed_at - timedelta(days=2)).isoformat()
         return {
             "evidence_request_id": evidence_request_id,
             "case_id": case_id,
@@ -1157,7 +1158,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             "workflow_authority": "none",
             "custody": {
                 "aegisops_evidence_record_id": evidence_record_id,
-                "collection_timestamp": reviewed_at.isoformat(),
+                "collection_timestamp": collection_timestamp,
                 "enrichment_request_id": "enrichment-request-001",
                 "response_digest": "sha256:" + "a" * 64,
                 "reviewed_file_hash": file_hash,
@@ -1165,7 +1166,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             "provenance": {
                 "authority_posture": "subordinate_evidence_context_only",
                 "case_binding": case_id,
-                "collection_timestamp": reviewed_at.isoformat(),
+                "collection_timestamp": collection_timestamp,
                 "custody_reference": "custody-ref-enrichment-001",
                 "enrichment_request_id": "enrichment-request-001",
                 "request_binding": evidence_request_id,
@@ -1627,6 +1628,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         self,
     ) -> None:
         expired_timestamp = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+        current_timestamp = datetime.now(timezone.utc).isoformat()
         cases = (
             (
                 "non-subordinate posture",
@@ -1695,6 +1697,12 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                     "freshness_state": "fresh",
                     "conflict_state": "none",
                     "uncertainty_label": "related_entity_not_authoritative",
+                    "custody": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "provenance": {
+                        "collection_timestamp": current_timestamp,
+                    },
                     "confidence": {
                         "ambiguity_badge": "related-entity",
                         "freshness": "fresh",
@@ -1848,6 +1856,12 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                     "conflict_state": "none",
                     "source_state": "degraded",
                     "uncertainty_label": "stale_review_required",
+                    "custody": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "provenance": {
+                        "collection_timestamp": current_timestamp,
+                    },
                     "confidence": {
                         "ambiguity_badge": "related-entity",
                         "freshness": "fresh",
@@ -1865,6 +1879,12 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                     "conflict_state": "none",
                     "source_state": "unavailable",
                     "uncertainty_label": "source_unavailable",
+                    "custody": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "provenance": {
+                        "collection_timestamp": current_timestamp,
+                    },
                     "confidence": {
                         "ambiguity_badge": "related-entity",
                         "freshness": "fresh",
@@ -1891,6 +1911,29 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                     "confidence": {
                         "ambiguity_badge": "related-entity",
                         "freshness": "fresh",
+                    },
+                },
+                "freshness window",
+            ),
+            (
+                "stale direct projection inside registry freshness window",
+                {
+                    "status": "degraded",
+                    "degraded_reasons": ["stale_reputation"],
+                    "unavailable_reasons": [],
+                    "freshness_state": "stale",
+                    "conflict_state": "none",
+                    "source_state": "available",
+                    "uncertainty_label": "stale_review_required",
+                    "custody": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "provenance": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "confidence": {
+                        "ambiguity_badge": "related-entity",
+                        "freshness": "stale",
                     },
                 },
                 "freshness window",

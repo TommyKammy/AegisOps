@@ -360,6 +360,51 @@ describe("case detail evidence pack UI", () => {
         },
       }),
     ],
+    [
+      "invalid calendar collection timestamp",
+      createEvidencePack({
+        custody: {
+          ...createEvidencePack().custody,
+          collection_timestamp: "2026-02-30T00:00:00Z",
+        },
+        provenance: {
+          ...createEvidencePack().provenance,
+          collection_timestamp: "2026-02-30T00:00:00Z",
+        },
+      }),
+    ],
+    [
+      "enabled source stale reason",
+      createEvidencePack({
+        confidence: {
+          ...createEvidencePack().confidence,
+          ambiguity_badge: "related-entity",
+          freshness: "fresh",
+        },
+        conflict_state: "none",
+        degraded_reasons: ["source_stale"],
+        freshness_state: "fresh",
+        source_state: "degraded",
+        uncertainty_label: "stale_review_required",
+      }),
+    ],
+    [
+      "enabled source denied reason",
+      createEvidencePack({
+        confidence: {
+          ...createEvidencePack().confidence,
+          ambiguity_badge: "related-entity",
+          freshness: "fresh",
+        },
+        conflict_state: "none",
+        degraded_reasons: [],
+        freshness_state: "fresh",
+        source_state: "unavailable",
+        status: "unavailable",
+        uncertainty_label: "source_unavailable",
+        unavailable_reasons: ["source_denied"],
+      }),
+    ],
     ["missing custody display", createEvidencePack({ custody: null })],
     [
       "incomplete custody display",

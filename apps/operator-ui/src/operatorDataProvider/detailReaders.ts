@@ -448,10 +448,45 @@ function isSha256Digest(value: string | null) {
 }
 
 function isAwareTimestamp(value: string | null) {
+  if (value === null) {
+    return false;
+  }
+  const match = value?.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/,
+  );
+  if (!match || Number.isNaN(Date.parse(value))) {
+    return false;
+  }
+
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, zoneText] =
+    match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const offsetHour =
+    zoneText === "Z" ? 0 : Number(zoneText.slice(1, 3));
+  const offsetMinute =
+    zoneText === "Z" ? 0 : Number(zoneText.slice(4, 6));
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
   return (
-    value !== null &&
-    !Number.isNaN(Date.parse(value)) &&
-    /(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= daysInMonth &&
+    hour >= 0 &&
+    hour <= 23 &&
+    minute >= 0 &&
+    minute <= 59 &&
+    second >= 0 &&
+    second <= 59 &&
+    offsetHour >= 0 &&
+    offsetHour <= 23 &&
+    offsetMinute >= 0 &&
+    offsetMinute <= 59
   );
 }
 
@@ -518,6 +553,13 @@ function validateEvidencePackReasonConsistency(
   const unavailableReasons = evidencePackReasonList(pack.unavailable_reasons);
   const inconsistentMessage =
     "Resource cases linked_evidence_packs item has inconsistent evidence-pack reasons.";
+
+  if (
+    degradedReasons.includes("source_stale") ||
+    unavailableReasons.includes("source_denied")
+  ) {
+    throw new OperatorDataProviderContractError(inconsistentMessage);
+  }
 
   if (
     (labels.status === "available" &&
