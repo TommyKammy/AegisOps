@@ -4,6 +4,11 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Protocol, Type, TypeVar
 
+from .evidence.bounded_enrichment_adapter import BoundedEnrichmentEvidencePack
+from .evidence.evidence_freshness_provenance_projection import (
+    EvidenceFreshnessProvenanceProjectionInput,
+    project_evidence_freshness_provenance,
+)
 from .models import (
     ActionExecutionRecord,
     ActionRequestRecord,
@@ -42,6 +47,11 @@ _EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES = {
     "browser_cache",
     "ui_cache",
     "cache",
+}
+_EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS = {
+    "release_readiness_claim",
+    "rc_readiness_claim",
+    "gate_readiness_claim",
 }
 _EVIDENCE_PACK_PROJECTION_REQUIRED_STRINGS = (
     "evidence_request_id",
@@ -1205,7 +1215,14 @@ class OperatorInspectionReadSurface:
             content = evidence_record.get("content")
             if not isinstance(content, Mapping):
                 continue
-            projection = content.get(_EVIDENCE_PACK_PROJECTION_CONTENT_KEY)
+            evidence_record_id = self._optional_string_from_mapping(
+                evidence_record,
+                "evidence_id",
+            )
+            projection = self._linked_evidence_pack_projection_from_content(
+                content=content,
+                evidence_record_id=evidence_record_id,
+            )
             if projection is None:
                 continue
             if not isinstance(projection, Mapping):
@@ -1214,13 +1231,155 @@ class OperatorInspectionReadSurface:
                 self._validated_linked_evidence_pack_projection(
                     projection=projection,
                     case_id=case_id,
-                    evidence_record_id=self._optional_string_from_mapping(
-                        evidence_record,
-                        "evidence_id",
-                    ),
+                    evidence_record_id=evidence_record_id,
                 )
             )
         return tuple(projections)
+
+    def _linked_evidence_pack_projection_from_content(
+        self,
+        *,
+        content: Mapping[str, object],
+        evidence_record_id: str | None,
+    ) -> Mapping[str, object] | None:
+        projection = content.get(_EVIDENCE_PACK_PROJECTION_CONTENT_KEY)
+        if projection is not None:
+            if not isinstance(projection, Mapping):
+                raise ValueError("linked evidence-pack projection must be a mapping")
+            return projection
+        if not self._looks_like_bounded_enrichment_pack(content):
+            return None
+        return self._project_bounded_enrichment_evidence_pack(
+            content=content,
+            evidence_record_id=evidence_record_id,
+        )
+
+    def _project_bounded_enrichment_evidence_pack(
+        self,
+        *,
+        content: Mapping[str, object],
+        evidence_record_id: str | None,
+    ) -> Mapping[str, object]:
+        if evidence_record_id is None:
+            raise ValueError("linked evidence-pack projection custody binding mismatch")
+        looked_up_at = self._datetime_from_evidence_pack_content(
+            content,
+            "looked_up_at",
+        )
+        provenance = content.get("provenance")
+        if not isinstance(provenance, Mapping):
+            raise ValueError("linked evidence-pack projection requires provenance map")
+        expected_custody_reference = self._optional_string_from_mapping(
+            provenance,
+            "custody_reference",
+        )
+        if expected_custody_reference is None:
+            raise ValueError("linked evidence-pack projection provenance binding mismatch")
+        pack = BoundedEnrichmentEvidencePack(
+            evidence_request_id=self._required_string_from_mapping(
+                content,
+                "evidence_request_id",
+            ),
+            case_id=self._required_string_from_mapping(content, "case_id"),
+            source_id=self._required_string_from_mapping(content, "source_id"),
+            file_hash=self._required_string_from_mapping(content, "file_hash"),
+            status=self._required_string_from_mapping(content, "status"),
+            freshness=self._required_string_from_mapping(content, "freshness"),
+            looked_up_at=looked_up_at,
+            custody=self._required_mapping_from_mapping(content, "custody"),
+            provenance=provenance,
+            confidence=self._required_mapping_from_mapping(content, "confidence"),
+            content=self._required_mapping_from_mapping(content, "content"),
+            authority_posture=self._required_string_from_mapping(
+                content,
+                "authority_posture",
+            ),
+            degraded_reasons=self._string_tuple_from_object(
+                content.get("degraded_reasons")
+            ),
+            unavailable_reasons=self._string_tuple_from_object(
+                content.get("unavailable_reasons")
+            ),
+            workflow_authority=self._required_string_from_mapping(
+                content,
+                "workflow_authority",
+            ),
+        )
+        projection = project_evidence_freshness_provenance(
+            EvidenceFreshnessProvenanceProjectionInput(
+                evidence_pack=pack,
+                consumer="case_workbench",
+                expected_source_id=pack.source_id,
+                expected_case_id=pack.case_id,
+                expected_custody_reference=expected_custody_reference,
+                projected_at=datetime.now(timezone.utc),
+            )
+        ).as_dict()
+        return projection
+
+    @staticmethod
+    def _looks_like_bounded_enrichment_pack(content: Mapping[str, object]) -> bool:
+        return all(
+            field_name in content
+            for field_name in (
+                "evidence_request_id",
+                "case_id",
+                "source_id",
+                "file_hash",
+                "looked_up_at",
+                "custody",
+                "provenance",
+                "confidence",
+                "content",
+            )
+        )
+
+    @staticmethod
+    def _required_string_from_mapping(
+        mapping: Mapping[str, object],
+        key: str,
+    ) -> str:
+        value = mapping.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("linked evidence-pack projection is missing required fields")
+        return value.strip()
+
+    @staticmethod
+    def _required_mapping_from_mapping(
+        mapping: Mapping[str, object],
+        key: str,
+    ) -> Mapping[str, object]:
+        value = mapping.get(key)
+        if not isinstance(value, Mapping):
+            raise ValueError(
+                "linked evidence-pack projection requires custody, provenance, and confidence maps"
+            )
+        return value
+
+    @staticmethod
+    def _datetime_from_evidence_pack_content(
+        mapping: Mapping[str, object],
+        key: str,
+    ) -> datetime:
+        value = mapping.get(key)
+        if isinstance(value, datetime):
+            parsed = value
+        elif isinstance(value, str):
+            try:
+                parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise ValueError(
+                    "linked evidence-pack projection requires timezone-aware timestamps"
+                ) from exc
+        else:
+            raise ValueError(
+                "linked evidence-pack projection requires timezone-aware timestamps"
+            )
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            raise ValueError(
+                "linked evidence-pack projection requires timezone-aware timestamps"
+            )
+        return parsed
 
     def _validated_linked_evidence_pack_projection(
         self,
@@ -1243,6 +1402,17 @@ class OperatorInspectionReadSurface:
             raise ValueError("linked evidence-pack projection cannot carry workflow authority")
         if values["authority_posture"] != _EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE:
             raise ValueError("linked evidence-pack projection must stay subordinate")
+        if projection.get("operator_visible") is not None and projection.get(
+            "operator_visible"
+        ) is not True:
+            raise ValueError("linked evidence-pack projection must stay operator visible")
+        if any(
+            claim_name in projection
+            for claim_name in _EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS
+        ):
+            raise ValueError(
+                "linked evidence-pack projection cannot claim release readiness"
+            )
         projection_source = self._optional_string_from_mapping(
             projection,
             "projection_source",
@@ -1283,6 +1453,16 @@ class OperatorInspectionReadSurface:
             "source_id",
         ) != values["source_id"]:
             raise ValueError("linked evidence-pack projection provenance binding mismatch")
+        if self._optional_string_from_mapping(
+            provenance,
+            "authority_posture",
+        ) != _EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE:
+            raise ValueError("linked evidence-pack projection must stay subordinate")
+        if self._optional_string_from_mapping(
+            confidence,
+            "source_native_score_authority",
+        ) != "none":
+            raise ValueError("linked evidence-pack projection cannot carry workflow authority")
 
         return dict(projection)
 

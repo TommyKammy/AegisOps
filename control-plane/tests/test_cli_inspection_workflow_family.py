@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import pathlib
 import sys
 import unittest
@@ -10,6 +11,13 @@ if str(TESTS_ROOT) not in sys.path:
 
 from _cli_inspection_support import *  # noqa: F403
 from _cli_inspection_support import _approved_payload_binding_hash, _load_wazuh_fixture
+from aegisops.control_plane.evidence.bounded_enrichment_adapter import (
+    BoundedEnrichmentAdapter,
+    BoundedEnrichmentAdapterInput,
+)
+from aegisops.control_plane.evidence.reviewed_evidence_requests import (
+    ReviewedEvidenceRequestRecord,
+)
 
 
 class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
@@ -1172,6 +1180,84 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             },
         }
 
+    def _phase63_response_digest(self, response: dict[str, object]) -> str:
+        response_bytes = json.dumps(
+            response,
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return "sha256:" + hashlib.sha256(response_bytes).hexdigest()
+
+    def _phase63_bounded_enrichment_pack_content(
+        self,
+        *,
+        case_id: str,
+        evidence_record_id: str,
+        reviewed_at: datetime,
+        evidence_request_id: str = "evidence-request-enrichment-001",
+    ) -> dict[str, object]:
+        file_hash = "b" * 64
+        response = {
+            "query_status": "ok",
+            "sha256_hash": file_hash,
+            "signature": "example-family",
+            "first_seen": "2026-05-29T00:00:00Z",
+            "last_seen": "2026-05-30T00:00:00Z",
+        }
+        request = ReviewedEvidenceRequestRecord(
+            evidence_request_id=evidence_request_id,
+            case_id=case_id,
+            requester_identity="analyst-001",
+            requester_role="security_analyst",
+            target={
+                "target_class": "reviewed_file_hash",
+                "file_hash": file_hash,
+                "case_id": case_id,
+            },
+            source_id="malwarebazaar_hash_reputation",
+            requested_scope="bounded_read_only_hash_reputation",
+            custody={
+                "reviewed_by": "reviewer-001",
+                "custody_owner": "IT Operations, Information Systems Department",
+                "custody_reference": "custody-ref-enrichment-001",
+                "provenance_chain": "AegisOps evidence record custody",
+            },
+            authorization={
+                "authorized": True,
+                "reviewed_scope": "bounded_read_only_hash_reputation",
+                "decision_id": "approval-decision-001",
+            },
+            linked_case_context={
+                "case_id": case_id,
+                "admitting_evidence_id": evidence_record_id,
+                "reviewed_context_id": "reviewed-context-001",
+            },
+            requested_at=reviewed_at - timedelta(minutes=5),
+            expires_at=reviewed_at + timedelta(hours=2),
+            lifecycle_state="reviewed",
+            authority_posture=(
+                "aegisops_owned_workflow_context_subordinate_evidence_output"
+            ),
+        )
+        pack = BoundedEnrichmentAdapter().build_evidence_pack(
+            BoundedEnrichmentAdapterInput(
+                request=request,
+                file_hash=file_hash,
+                looked_up_at=reviewed_at,
+                response=response,
+                custody={
+                    "reviewed_file_hash": file_hash,
+                    "enrichment_request_id": "enrichment-request-001",
+                    "collection_timestamp": reviewed_at.isoformat(),
+                    "response_digest": self._phase63_response_digest(response),
+                    "aegisops_evidence_record_id": evidence_record_id,
+                },
+            ),
+            now=reviewed_at,
+        )
+        return pack.as_dict()
+
     def test_cli_case_detail_exposes_direct_linked_evidence_pack_projections(
         self,
     ) -> None:
@@ -1252,6 +1338,65 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         self.assertFalse(linked_pack["authoritative_workflow_truth"])
         self.assertEqual(linked_pack["workflow_authority"], "none")
 
+    def test_cli_case_detail_projects_persisted_bounded_enrichment_pack(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        pack_content = self._phase63_bounded_enrichment_pack_content(
+            case_id=promoted_case.case_id,
+            evidence_record_id="evidence-enrichment-001",
+            reviewed_at=reviewed_at,
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-enrichment-001",
+                source_record_id="phase63://evidence-request-enrichment-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="phase63_bounded_enrichment_adapter",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="bounded_enrichment_projection",
+                lifecycle_state="validated",
+                provenance=pack_content["provenance"],
+                content=pack_content,
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "inspect-case-detail",
+                "--case-id",
+                promoted_case.case_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(len(payload["linked_evidence_packs"]), 1)
+        linked_pack = payload["linked_evidence_packs"][0]
+        self.assertEqual(
+            linked_pack["evidence_request_id"],
+            "evidence-request-enrichment-001",
+        )
+        self.assertEqual(linked_pack["case_id"], promoted_case.case_id)
+        self.assertEqual(
+            linked_pack["custody"]["aegisops_evidence_record_id"],
+            "evidence-enrichment-001",
+        )
+        self.assertEqual(
+            linked_pack["provenance"]["authority_posture"],
+            "subordinate_evidence_context_only",
+        )
+        self.assertEqual(
+            linked_pack["confidence"]["source_native_score_authority"],
+            "none",
+        )
+
     def test_cli_case_detail_rejects_malformed_linked_evidence_pack_projections(
         self,
     ) -> None:
@@ -1285,6 +1430,34 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 {"projection_source": "browser_state"},
                 "cannot be cache sourced",
             ),
+            (
+                "hidden operator pack",
+                {"operator_visible": False},
+                "must stay operator visible",
+            ),
+            (
+                "release readiness claim",
+                {"release_readiness_claim": "rc_ready"},
+                "cannot claim release readiness",
+            ),
+            (
+                "nested provenance authority",
+                {
+                    "provenance": {
+                        "authority_posture": "authoritative_aegisops_record",
+                    },
+                },
+                "must stay subordinate",
+            ),
+            (
+                "nested confidence authority",
+                {
+                    "confidence": {
+                        "source_native_score_authority": "workflow_truth",
+                    },
+                },
+                "cannot carry workflow authority",
+            ),
         )
 
         for label, overrides, expected_message in cases:
@@ -1297,13 +1470,14 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                     evidence_record_id="evidence-enrichment-001",
                     reviewed_at=reviewed_at,
                 )
-                if "custody" in overrides:
-                    projection["custody"] = {
-                        **projection["custody"],
-                        **overrides["custody"],
-                    }
-                else:
-                    projection.update(overrides)
+                for field_name, override in overrides.items():
+                    if field_name in {"custody", "provenance", "confidence"}:
+                        projection[field_name] = {
+                            **projection[field_name],
+                            **override,
+                        }
+                    else:
+                        projection[field_name] = override
                 service.persist_record(
                     EvidenceRecord(
                         evidence_id="evidence-enrichment-001",
