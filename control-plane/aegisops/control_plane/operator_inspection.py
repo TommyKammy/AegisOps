@@ -9,6 +9,7 @@ from .evidence.evidence_freshness_provenance_projection import (
     EvidenceFreshnessProvenanceProjectionInput,
     project_evidence_freshness_provenance,
 )
+from .evidence.evidence_source_registry import PHASE63_EVIDENCE_SOURCE_REGISTRY
 from .models import (
     ActionExecutionRecord,
     ActionRequestRecord,
@@ -132,6 +133,27 @@ _EVIDENCE_PACK_REQUIRED_CONFIDENCE_FIELDS = frozenset(
         "freshness",
         "ambiguity_badge",
         "source_native_score_authority",
+    }
+)
+_EVIDENCE_PACK_PROJECTION_CONTRACT_FIELDS = frozenset(
+    {
+        *_EVIDENCE_PACK_PROJECTION_REQUIRED_STRINGS,
+        "degraded_reasons",
+        "unavailable_reasons",
+        "authoritative_workflow_truth",
+        "custody",
+        "provenance",
+        "confidence",
+    }
+)
+_EVIDENCE_PACK_PROJECTION_RECOGNIZED_FIELDS = frozenset(
+    {
+        *_EVIDENCE_PACK_PROJECTION_CONTRACT_FIELDS,
+        "cache_sourced",
+        "stale_cache",
+        "projection_source",
+        "operator_visible",
+        *_EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS,
     }
 )
 
@@ -1605,6 +1627,19 @@ class OperatorInspectionReadSurface:
             raise ValueError(
                 "linked evidence-pack projection has inconsistent evidence-pack projection reason"
             )
+        registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(values["source_id"])
+        if registry_entry is None:
+            raise ValueError(
+                "linked evidence-pack projection has unsupported evidence-pack projection source"
+            )
+        if "source_stale" in degraded_reasons and registry_entry.status != "degraded":
+            raise ValueError(
+                "linked evidence-pack projection source state reason mismatch"
+            )
+        if "source_denied" in unavailable_reasons and registry_entry.status != "disabled":
+            raise ValueError(
+                "linked evidence-pack projection source state reason mismatch"
+            )
 
     def _validate_linked_evidence_pack_provenance_bindings(
         self,
@@ -1766,6 +1801,16 @@ class OperatorInspectionReadSurface:
             "source_native_score_authority",
         ) != "none":
             raise ValueError("linked evidence-pack projection cannot carry workflow authority")
+        registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(typed_values["source_id"])
+        if registry_entry is None:
+            raise ValueError(
+                "linked evidence-pack projection has unsupported evidence-pack projection source"
+            )
+        if (
+            self._optional_string_from_mapping(confidence, "posture")
+            != registry_entry.confidence_posture
+        ):
+            raise ValueError("linked evidence-pack projection confidence posture mismatch")
         self._validate_linked_evidence_pack_reason_consistency(
             values=typed_values,
             degraded_reasons=degraded_reasons,
@@ -1773,7 +1818,22 @@ class OperatorInspectionReadSurface:
             confidence=confidence,
         )
 
-        return dict(projection)
+        missing_fields = _EVIDENCE_PACK_PROJECTION_CONTRACT_FIELDS - frozenset(
+            projection
+        )
+        if missing_fields:
+            raise ValueError("linked evidence-pack projection is missing required fields")
+        unexpected_fields = (
+            frozenset(projection) - _EVIDENCE_PACK_PROJECTION_RECOGNIZED_FIELDS
+        )
+        if unexpected_fields:
+            raise ValueError(
+                "linked evidence-pack projection has unexpected evidence-pack projection field"
+            )
+        return {
+            field_name: projection[field_name]
+            for field_name in _EVIDENCE_PACK_PROJECTION_CONTRACT_FIELDS
+        }
 
     def _build_case_timeline_projection(
         self,

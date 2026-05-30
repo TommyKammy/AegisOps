@@ -1646,6 +1646,52 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 },
                 "cannot carry workflow authority",
             ),
+            (
+                "spoofed confidence posture",
+                {
+                    "confidence": {
+                        "posture": "workflow_truth_confidence",
+                    },
+                },
+                "confidence posture mismatch",
+            ),
+            (
+                "enabled source claims stale registry state",
+                {
+                    "degraded_reasons": ["source_stale"],
+                    "freshness_state": "fresh",
+                    "conflict_state": "none",
+                    "source_state": "degraded",
+                    "uncertainty_label": "stale_review_required",
+                    "confidence": {
+                        "ambiguity_badge": "related-entity",
+                        "freshness": "fresh",
+                    },
+                },
+                "source state reason mismatch",
+            ),
+            (
+                "enabled source claims denied registry state",
+                {
+                    "status": "unavailable",
+                    "degraded_reasons": [],
+                    "unavailable_reasons": ["source_denied"],
+                    "freshness_state": "fresh",
+                    "conflict_state": "none",
+                    "source_state": "unavailable",
+                    "uncertainty_label": "source_unavailable",
+                    "confidence": {
+                        "ambiguity_badge": "related-entity",
+                        "freshness": "fresh",
+                    },
+                },
+                "source state reason mismatch",
+            ),
+            (
+                "unrecognized workflow truth field",
+                {"can_complete_workflow": True},
+                "unexpected evidence-pack projection field",
+            ),
         )
 
         for label, overrides, expected_message in cases:
