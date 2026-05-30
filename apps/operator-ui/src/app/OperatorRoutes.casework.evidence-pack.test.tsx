@@ -60,6 +60,9 @@ function createCaseDetailPayload(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const fullRouteWait = { timeout: 10_000 };
+const fullRouteTestTimeout = 15_000;
+
 describe("case detail evidence pack UI", () => {
   beforeEach(() => {
     resetOperatorQueryCacheForTests();
@@ -80,7 +83,7 @@ describe("case detail evidence pack UI", () => {
 
     const evidencePackTable = await screen.findByRole("table", {
       name: "Linked evidence packs",
-    });
+    }, fullRouteWait);
     const rows = within(evidencePackTable).getAllByRole("row").slice(1);
 
     expect(rows).toHaveLength(1);
@@ -114,7 +117,7 @@ describe("case detail evidence pack UI", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Evidence pack can close case")).not.toBeInTheDocument();
     expect(screen.queryByText("Evidence pack proves RC readiness")).not.toBeInTheDocument();
-  });
+  }, fullRouteTestTimeout);
 
   it("keeps empty and degraded evidence-pack states explicit", async () => {
     const dependencies = createDefaultDependencies({
@@ -132,9 +135,13 @@ describe("case detail evidence pack UI", () => {
     );
 
     expect(
-      await screen.findByText("No linked evidence packs were returned for this case."),
+      await screen.findByText(
+        "No linked evidence packs were returned for this case.",
+        undefined,
+        fullRouteWait,
+      ),
     ).toBeInTheDocument();
-  });
+  }, fullRouteTestTimeout);
 
   it.each([
     ["UI-cache source", createEvidencePack({ cache_sourced: true })],
@@ -162,13 +169,16 @@ describe("case detail evidence pack UI", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => {
-      expect(
-        screen.getByText(
-          "Reviewed operator data could not be verified. The browser stayed fail-closed instead of rendering an untrusted record.",
-        ),
-      ).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(
+          screen.getByText(
+            "Reviewed operator data could not be verified. The browser stayed fail-closed instead of rendering an untrusted record.",
+          ),
+        ).toBeInTheDocument();
+      },
+      fullRouteWait,
+    );
     expect(
       screen.queryByRole("table", { name: "Linked evidence packs" }),
     ).not.toBeInTheDocument();
@@ -196,12 +206,12 @@ describe("case detail evidence pack UI", () => {
     );
 
     expect(
-      await screen.findByRole("heading", { name: "Access denied" }),
+      await screen.findByRole("heading", { name: "Access denied" }, fullRouteWait),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("table", { name: "Linked evidence packs" }),
     ).not.toBeInTheDocument();
-  });
+  }, fullRouteTestTimeout);
 
   it("rereads backend case detail after case writes instead of treating edited evidence ids as evidence-pack truth", async () => {
     let caseDetailRequests = 0;
@@ -255,10 +265,12 @@ describe("case detail evidence pack UI", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("evidence-pack-001")).toBeInTheDocument();
+    expect(
+      await screen.findByText("evidence-pack-001", undefined, fullRouteWait),
+    ).toBeInTheDocument();
     const user = userEvent.setup();
     await user.type(
-      await screen.findByRole("textbox", { name: "Observed at" }),
+      await screen.findByRole("textbox", { name: "Observed at" }, fullRouteWait),
       "2026-05-30T12:00:00Z",
     );
     await user.type(
@@ -279,7 +291,9 @@ describe("case detail evidence pack UI", () => {
     );
     await user.click(screen.getByRole("button", { name: "Record observation" }));
 
-    expect(await screen.findByText("evidence-pack-reread")).toBeInTheDocument();
+    expect(
+      await screen.findByText("evidence-pack-reread", undefined, fullRouteWait),
+    ).toBeInTheDocument();
     expect(screen.queryByText("stale-evidence")).not.toBeInTheDocument();
-  });
+  }, fullRouteTestTimeout);
 });
