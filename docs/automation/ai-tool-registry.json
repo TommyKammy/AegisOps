@@ -500,6 +500,8 @@
         "conflict_resolution",
         "workflow_progress",
         "production_write",
+        "endpoint_remediation",
+        "protected_target_mutation",
         "policy_bypass"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"

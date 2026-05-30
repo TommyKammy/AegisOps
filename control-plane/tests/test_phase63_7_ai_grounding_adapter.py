@@ -1014,6 +1014,33 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertEqual(payload["grounding_items"], ())
 
+    def test_scalar_projection_reason_fields_fail_closed(self) -> None:
+        cases = (
+            ("degraded_reasons", "conflicting_enrichment"),
+            ("unavailable_reasons", "source_unavailable"),
+        )
+
+        for field_name, field_value in cases:
+            with self.subTest(field_name=field_name):
+                projection = {
+                    **_projection(),
+                    field_name: field_value,
+                }
+
+                payload = build_ai_grounding_adapter(
+                    grounding_context_payload=_grounding_payload(
+                        projections=(projection,)
+                    )
+                )
+
+                self.assertEqual(payload["decision"], "fallback")
+                self.assertIn(
+                    "unsupported_grounding_reason",
+                    payload["unresolved_reasons"],
+                )
+                self.assertFalse(payload["ai_generation_allowed"])
+                self.assertEqual(payload["grounding_items"], ())
+
     def test_projection_metadata_extra_fields_fail_closed(self) -> None:
         cases = (
             ("custody", {"workflow_authority": "close_case"}),
@@ -1287,6 +1314,8 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertIn("reviewed_evidence_request", tool["allowed_record_families"])
         self.assertNotIn("evidence_request", tool["allowed_record_families"])
         self.assertIn("evidence_truth_creation", tool["disallowed_authority"])
+        self.assertIn("endpoint_remediation", tool["disallowed_authority"])
+        self.assertIn("protected_target_mutation", tool["disallowed_authority"])
 
 
 def _response_digest(response: dict[str, object]) -> str:

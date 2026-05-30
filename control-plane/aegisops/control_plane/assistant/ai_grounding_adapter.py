@@ -706,6 +706,10 @@ def _aware_datetime(value: object, field_name: str) -> datetime:
 def _unsupported_projection_reason_reasons(
     projection: Mapping[str, object],
 ) -> tuple[str, ...]:
+    if _malformed_optional_string_sequence(
+        projection.get("degraded_reasons")
+    ) or _malformed_optional_string_sequence(projection.get("unavailable_reasons")):
+        return ("unsupported_grounding_reason",)
     degraded_reasons = _string_tuple(projection.get("degraded_reasons"))
     unavailable_reasons = _string_tuple(projection.get("unavailable_reasons"))
     if any(reason not in _ALLOWED_DEGRADED_REASONS for reason in degraded_reasons):
@@ -1168,6 +1172,14 @@ def _string_tuple(value: object) -> tuple[str, ...]:
         if normalized_item is not None and normalized_item not in normalized:
             normalized.append(normalized_item)
     return tuple(normalized)
+
+
+def _malformed_optional_string_sequence(value: object) -> bool:
+    if value is None:
+        return False
+    if not isinstance(value, (list, tuple)):
+        return True
+    return any(_string(item) is None for item in value)
 
 
 def _dedupe_strings(values: tuple[str, ...]) -> tuple[str, ...]:
