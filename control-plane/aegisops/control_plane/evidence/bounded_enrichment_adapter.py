@@ -78,6 +78,42 @@ _ENDPOINT_COMMAND_TERMS = (
     "issue endpoint command",
     "direct command authority",
 )
+_ENDPOINT_COMMAND_OBJECTS_BY_ACTION = {
+    "contain": ("host",),
+    "contained": ("host",),
+    "containing": ("host",),
+    "isolate": ("host",),
+    "isolated": ("host",),
+    "isolating": ("host",),
+    "kill": ("process",),
+    "killed": ("process",),
+    "killing": ("process",),
+    "terminate": ("process",),
+    "terminated": ("process",),
+    "delete": ("file",),
+    "deleted": ("file",),
+    "remove": ("file",),
+    "removed": ("file",),
+    "remediate": ("endpoint",),
+    "block": ("ip", "domain", "url", "hash"),
+}
+_ENDPOINT_COMMAND_DETERMINERS = frozenset(
+    {
+        "a",
+        "an",
+        "any",
+        "affected",
+        "all",
+        "malicious",
+        "observed",
+        "related",
+        "that",
+        "the",
+        "this",
+        "these",
+        "those",
+    }
+)
 
 
 def _freeze_json_value(value: object) -> object:
@@ -226,10 +262,40 @@ def _normalize_command_text(value: str) -> str:
 
 def _has_endpoint_command_language(value: str) -> bool:
     normalized_value = f" {_normalize_command_text(value)} "
-    return any(
+    if any(
         f" {_normalize_command_text(term)} " in normalized_value
         for term in _ENDPOINT_COMMAND_TERMS
+    ):
+        return True
+
+    words = normalized_value.strip().split()
+    for index, word in enumerate(words):
+        objects = _ENDPOINT_COMMAND_OBJECTS_BY_ACTION.get(word)
+        if objects is None:
+            continue
+        object_index = index + 1
+        while (
+            object_index < len(words)
+            and words[object_index] in _ENDPOINT_COMMAND_DETERMINERS
+        ):
+            object_index += 1
+        if object_index < len(words) and words[object_index] in objects:
+            return True
+    return False
+
+
+def _declared_degraded_reasons(
+    candidate_reasons: tuple[str, ...],
+    declared_reasons: tuple[str, ...],
+) -> tuple[str, ...]:
+    undeclared_reasons = tuple(
+        reason for reason in candidate_reasons if reason not in declared_reasons
     )
+    if undeclared_reasons:
+        raise ValueError(
+            "bounded enrichment degraded reason must be declared in source registry"
+        )
+    return candidate_reasons
 
 
 def _scan_for_authority_claim(value: object) -> bool:
@@ -420,15 +486,17 @@ class BoundedEnrichmentAdapter:
                     "enrichment response cannot claim workflow authority or endpoint command authority"
                 )
 
-        if str(custody["response_digest"]).strip() != _canonical_response_digest(response):
+        verified_response_digest = _canonical_response_digest(response)
+        if str(custody["response_digest"]).strip() != verified_response_digest:
             raise ValueError(
                 "response_digest must match canonical enrichment response"
             )
 
+        registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[
+            _BOUNDED_ENRICHMENT_SOURCE_ID
+        ]
         freshness_window = _parse_duration_seconds(
-            PHASE63_EVIDENCE_SOURCE_REGISTRY[
-                _BOUNDED_ENRICHMENT_SOURCE_ID
-            ].freshness_window
+            registry_entry.freshness_window
         )
         age_seconds = (comparison_now - looked_up_at).total_seconds()
         is_stale = age_seconds < 0 or age_seconds > freshness_window
@@ -438,13 +506,16 @@ class BoundedEnrichmentAdapter:
             if adapter_input.adapter_state == "unavailable"
             else ()
         )
-        degraded_reasons = tuple(
-            reason
-            for reason, present in (
-                ("stale_reputation", is_stale),
-                ("conflicting_enrichment", has_conflict),
-            )
-            if present
+        degraded_reasons = _declared_degraded_reasons(
+            tuple(
+                reason
+                for reason, present in (
+                    ("stale_reputation", is_stale),
+                    ("conflicting_enrichment", has_conflict),
+                )
+                if present
+            ),
+            registry_entry.degraded_states,
         )
         status = "available"
         if unavailable_reasons:
@@ -452,9 +523,6 @@ class BoundedEnrichmentAdapter:
         elif degraded_reasons:
             status = "degraded"
 
-        registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[
-            _BOUNDED_ENRICHMENT_SOURCE_ID
-        ]
         confidence = {
             "posture": registry_entry.confidence_posture,
             "freshness": "stale" if is_stale else "fresh",
@@ -468,7 +536,7 @@ class BoundedEnrichmentAdapter:
             "source_id": request.source_id,
             "enrichment_request_id": custody["enrichment_request_id"],
             "collection_timestamp": looked_up_at.isoformat(),
-            "response_digest": custody["response_digest"],
+            "response_digest": verified_response_digest,
             "custody_reference": request.custody["custody_reference"],
             "authority_posture": "subordinate_evidence_context_only",
         }

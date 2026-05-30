@@ -468,7 +468,12 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
         for phrase in (
             "quarantine this file",
             "contain the host",
+            "contain this host",
+            "isolate this host",
             "kill the process",
+            "delete this file",
+            "remediate this endpoint",
+            "block this hash",
         ):
             with self.subTest(phrase=phrase):
                 with self.assertRaisesRegex(ValueError, "endpoint command authority"):
