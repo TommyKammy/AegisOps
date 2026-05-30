@@ -138,6 +138,23 @@ _READINESS_PRESSURE_TERMS = (
     "closeout truth",
     "production truth",
 )
+_PROMPT_DETERMINER_PATTERN = r"(?:a|an|any|the|this|that|these|those)\s+"
+_AUTHORITY_PRESSURE_PATTERNS = (
+    rf"approve\s+(?:{_PROMPT_DETERMINER_PATTERN})?actions?",
+    rf"execute\s+(?:{_PROMPT_DETERMINER_PATTERN})?actions?",
+    rf"reconcile\s+(?:{_PROMPT_DETERMINER_PATTERN})?receipts?",
+    rf"close\s+(?:{_PROMPT_DETERMINER_PATTERN})?cases?",
+    rf"activate\s+(?:{_PROMPT_DETERMINER_PATTERN})?detectors?",
+    rf"create\s+(?:{_PROMPT_DETERMINER_PATTERN})?source\s+truth",
+    rf"create\s+(?:{_PROMPT_DETERMINER_PATTERN})?evidence\s+truth",
+    rf"bypass\s+(?:{_PROMPT_DETERMINER_PATTERN})?polic(?:y|ies)",
+)
+_READINESS_PRESSURE_PATTERNS = (
+    rf"mark\s+(?:{_PROMPT_DETERMINER_PATTERN})?gate\s+ready",
+    rf"mark\s+(?:{_PROMPT_DETERMINER_PATTERN})?release\s+ready",
+    r"gate\s+is\s+ready",
+    r"release\s+is\s+ready",
+)
 _UNCERTAINTY_SUPPRESSION_TERMS = (
     "hide citations",
     "hide citation",
@@ -981,9 +998,15 @@ def _prompt_pressure_flags(prompt_text: object) -> tuple[str, ...]:
         return _dedupe_strings(tuple(flags))
     if _contains_any_term(prompt_text, _UNCERTAINTY_SUPPRESSION_TERMS):
         flags.append("citation_suppression_attempt")
-    if _contains_any_term(prompt_text, _AUTHORITY_PRESSURE_TERMS):
+    if (
+        _contains_any_term(prompt_text, _AUTHORITY_PRESSURE_TERMS)
+        or _contains_any_pattern(prompt_text, _AUTHORITY_PRESSURE_PATTERNS)
+        or _scan_for_endpoint_command_language(prompt_text)
+    ):
         flags.append("authority_overreach")
-    if _contains_any_term(prompt_text, _READINESS_PRESSURE_TERMS):
+    if _contains_any_term(prompt_text, _READINESS_PRESSURE_TERMS) or (
+        _contains_any_pattern(prompt_text, _READINESS_PRESSURE_PATTERNS)
+    ):
         flags.append("readiness_truth_attempt")
     return _dedupe_strings(tuple(flags))
 
@@ -997,6 +1020,15 @@ def _contains_any_term(text: str, terms: tuple[str, ...]) -> bool:
         if re.search(pattern, normalized) is not None:
             return True
     return False
+
+
+def _contains_any_pattern(text: str, patterns: tuple[str, ...]) -> bool:
+    normalized = re.sub(r"[\W_]+", " ", text.lower())
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return any(
+        re.search(rf"(?<!\w){pattern}(?!\w)", normalized) is not None
+        for pattern in patterns
+    )
 
 
 def _invalid(

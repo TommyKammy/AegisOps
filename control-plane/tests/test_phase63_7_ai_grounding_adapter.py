@@ -936,6 +936,36 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
                 self.assertFalse(payload["ai_generation_allowed"])
                 self.assertEqual(payload["grounding_items"], ())
 
+    def test_authority_prompt_pressure_with_determiners_is_blocked(self) -> None:
+        prompt_texts = (
+            "approve this action",
+            "close this case",
+            "activate this detector",
+            "create the source truth",
+            "create the evidence truth",
+            "bypass the policy",
+            "quarantine the host",
+            "delete the file",
+            "remediate the endpoint",
+            "contain the host",
+            "kill the process",
+        )
+
+        for prompt_text in prompt_texts:
+            with self.subTest(prompt_text=prompt_text):
+                payload = build_ai_grounding_adapter(
+                    grounding_context_payload=_grounding_payload(
+                        projections=(_projection(),)
+                    ),
+                    prompt_text=prompt_text,
+                )
+
+                self.assertEqual(payload["decision"], "blocked")
+                self.assertEqual(payload["mode"], "prompt_pressure_blocked")
+                self.assertIn("authority_overreach", payload["unresolved_reasons"])
+                self.assertFalse(payload["ai_generation_allowed"])
+                self.assertEqual(payload["grounding_items"], ())
+
     def test_malformed_prompt_payload_is_blocked(self) -> None:
         payload = build_ai_grounding_adapter(
             grounding_context_payload=_grounding_payload(projections=(_projection(),)),
