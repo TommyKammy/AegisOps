@@ -1,0 +1,211 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Mapping
+
+from .bounded_enrichment_adapter import BoundedEnrichmentEvidencePack
+
+
+_ALLOWED_CONSUMERS = frozenset({"case_workbench", "ai_grounding"})
+_NO_WORKFLOW_AUTHORITY = "none"
+_SUBORDINATE_AUTHORITY_POSTURE = "subordinate_evidence_context_only"
+_REQUIRED_CUSTODY_FIELDS = (
+    "reviewed_file_hash",
+    "enrichment_request_id",
+    "collection_timestamp",
+    "response_digest",
+    "aegisops_evidence_record_id",
+)
+_REQUIRED_PROVENANCE_FIELDS = (
+    "request_binding",
+    "case_binding",
+    "target_binding",
+    "source_id",
+    "enrichment_request_id",
+    "collection_timestamp",
+    "response_digest",
+    "custody_reference",
+    "authority_posture",
+)
+_REQUIRED_CONFIDENCE_FIELDS = (
+    "posture",
+    "freshness",
+    "ambiguity_badge",
+    "source_native_score_authority",
+)
+
+
+def _freeze_mapping(value: Mapping[str, object]) -> Mapping[str, object]:
+    return MappingProxyType({str(key): item for key, item in value.items()})
+
+
+def _mapping_has_non_empty_fields(
+    value: Mapping[str, object],
+    required_fields: tuple[str, ...],
+) -> bool:
+    return all(
+        isinstance(value.get(field_name), str) and bool(str(value[field_name]).strip())
+        for field_name in required_fields
+    )
+
+
+def _require_non_empty_string(value: object, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string")
+    return value.strip()
+
+
+@dataclass(frozen=True)
+class EvidenceFreshnessProvenanceProjectionInput:
+    evidence_pack: BoundedEnrichmentEvidencePack
+    consumer: str
+    expected_source_id: str
+    expected_case_id: str
+    requested_workflow_authority: str = _NO_WORKFLOW_AUTHORITY
+
+
+@dataclass(frozen=True)
+class EvidenceFreshnessProvenanceProjection:
+    evidence_request_id: str
+    case_id: str
+    source_id: str
+    consumer: str
+    status: str
+    freshness_state: str
+    custody_state: str
+    confidence_state: str
+    provenance_state: str
+    conflict_state: str
+    source_state: str
+    uncertainty_label: str
+    degraded_reasons: tuple[str, ...] = ()
+    unavailable_reasons: tuple[str, ...] = ()
+    authority_posture: str = _SUBORDINATE_AUTHORITY_POSTURE
+    authoritative_workflow_truth: bool = False
+    workflow_authority: str = _NO_WORKFLOW_AUTHORITY
+    custody: Mapping[str, object] = MappingProxyType({})
+    provenance: Mapping[str, object] = MappingProxyType({})
+    confidence: Mapping[str, object] = MappingProxyType({})
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "custody", _freeze_mapping(self.custody))
+        object.__setattr__(self, "provenance", _freeze_mapping(self.provenance))
+        object.__setattr__(self, "confidence", _freeze_mapping(self.confidence))
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "evidence_request_id": self.evidence_request_id,
+            "case_id": self.case_id,
+            "source_id": self.source_id,
+            "consumer": self.consumer,
+            "status": self.status,
+            "freshness_state": self.freshness_state,
+            "custody_state": self.custody_state,
+            "confidence_state": self.confidence_state,
+            "provenance_state": self.provenance_state,
+            "conflict_state": self.conflict_state,
+            "source_state": self.source_state,
+            "uncertainty_label": self.uncertainty_label,
+            "degraded_reasons": self.degraded_reasons,
+            "unavailable_reasons": self.unavailable_reasons,
+            "authority_posture": self.authority_posture,
+            "authoritative_workflow_truth": self.authoritative_workflow_truth,
+            "workflow_authority": self.workflow_authority,
+            "custody": dict(self.custody),
+            "provenance": dict(self.provenance),
+            "confidence": dict(self.confidence),
+        }
+
+
+def _validate_projection_input(
+    projection_input: EvidenceFreshnessProvenanceProjectionInput,
+) -> BoundedEnrichmentEvidencePack:
+    consumer = _require_non_empty_string(projection_input.consumer, "consumer")
+    if consumer not in _ALLOWED_CONSUMERS:
+        raise ValueError("projection consumer must be case_workbench or ai_grounding")
+    requested_authority = _require_non_empty_string(
+        projection_input.requested_workflow_authority,
+        "requested_workflow_authority",
+    )
+    if requested_authority != _NO_WORKFLOW_AUTHORITY:
+        raise ValueError("projection cannot drive workflow authority")
+
+    pack = projection_input.evidence_pack
+    expected_source_id = _require_non_empty_string(
+        projection_input.expected_source_id,
+        "expected_source_id",
+    )
+    expected_case_id = _require_non_empty_string(
+        projection_input.expected_case_id,
+        "expected_case_id",
+    )
+    if pack.source_id != expected_source_id:
+        raise ValueError("source_mismatch")
+    if pack.case_id != expected_case_id:
+        raise ValueError("case_mismatch")
+    if (
+        pack.authority_posture != _SUBORDINATE_AUTHORITY_POSTURE
+        or pack.workflow_authority != _NO_WORKFLOW_AUTHORITY
+    ):
+        raise ValueError("projection cannot drive workflow authority")
+    return pack
+
+
+def _validate_projection_fields(pack: BoundedEnrichmentEvidencePack) -> None:
+    if not _mapping_has_non_empty_fields(pack.custody, _REQUIRED_CUSTODY_FIELDS):
+        raise ValueError("missing_projection_custody")
+    if not _mapping_has_non_empty_fields(pack.provenance, _REQUIRED_PROVENANCE_FIELDS):
+        raise ValueError("missing_projection_provenance")
+    if not _mapping_has_non_empty_fields(pack.confidence, _REQUIRED_CONFIDENCE_FIELDS):
+        if not pack.confidence or "ambiguity_badge" in pack.confidence:
+            raise ValueError("missing_projection_confidence")
+        raise ValueError("missing_projection_uncertainty")
+    if pack.provenance["authority_posture"] != _SUBORDINATE_AUTHORITY_POSTURE:
+        raise ValueError("projection cannot drive workflow authority")
+    if pack.confidence["source_native_score_authority"] != _NO_WORKFLOW_AUTHORITY:
+        raise ValueError("projection cannot drive workflow authority")
+
+
+def _uncertainty_label(pack: BoundedEnrichmentEvidencePack) -> str:
+    if "source_unavailable" in pack.unavailable_reasons or pack.status == "unavailable":
+        return "source_unavailable"
+    if "conflicting_enrichment" in pack.degraded_reasons:
+        return "unresolved_conflict"
+    if pack.freshness == "stale" or "stale_reputation" in pack.degraded_reasons:
+        return "stale_review_required"
+    return "related_entity_not_authoritative"
+
+
+def project_evidence_freshness_provenance(
+    projection_input: EvidenceFreshnessProvenanceProjectionInput,
+) -> EvidenceFreshnessProvenanceProjection:
+    pack = _validate_projection_input(projection_input)
+    _validate_projection_fields(pack)
+
+    conflict_state = (
+        "conflicting"
+        if "conflicting_enrichment" in pack.degraded_reasons
+        else "none"
+    )
+    source_state = "unavailable" if pack.status == "unavailable" else "available"
+
+    return EvidenceFreshnessProvenanceProjection(
+        evidence_request_id=pack.evidence_request_id,
+        case_id=pack.case_id,
+        source_id=pack.source_id,
+        consumer=projection_input.consumer,
+        status=pack.status,
+        freshness_state=pack.freshness,
+        custody_state="complete",
+        confidence_state="present",
+        provenance_state="bound",
+        conflict_state=conflict_state,
+        source_state=source_state,
+        uncertainty_label=_uncertainty_label(pack),
+        degraded_reasons=pack.degraded_reasons,
+        unavailable_reasons=pack.unavailable_reasons,
+        custody=pack.custody,
+        provenance=pack.provenance,
+        confidence=pack.confidence,
+    )
