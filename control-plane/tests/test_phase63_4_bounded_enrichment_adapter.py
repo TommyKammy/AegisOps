@@ -492,6 +492,7 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
 
         for custody_extra in (
             {"workflow_authority": True},
+            {"source_truth": "authoritative"},
             {"operator_guidance": "delete this file"},
         ):
             with self.subTest(custody_extra=custody_extra):
@@ -546,6 +547,8 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
             "deleting this file",
             "removes this file",
             "blocks this hash",
+            "blocking this hash",
+            "remediating endpoint",
             "remediating this endpoint",
         ):
             with self.subTest(phrase=phrase):
