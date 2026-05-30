@@ -13,7 +13,7 @@ The adapter entry point is `BoundedEnrichmentAdapter.build_evidence_pack`.
 Required input:
 
 - `ReviewedEvidenceRequestRecord` with `source_id` set to `malwarebazaar_hash_reputation`.
-- Explicit `file_hash` matching the reviewed request target and MalwareBazaar response hash.
+- Explicit MD5, SHA1, or SHA256 `file_hash` matching the reviewed request target and at least one MalwareBazaar response hash.
 - Timezone-aware `looked_up_at`.
 - MalwareBazaar hash reputation response represented as a mapping.
 - Enrichment custody with reviewed file hash, enrichment request id, collection timestamp, canonical response digest, and AegisOps evidence record id.
@@ -30,9 +30,9 @@ Hash reputation output older than the registry freshness window returns a `degra
 
 Unavailable source state returns an `unavailable` pack with `source_unavailable` and no response body. The unavailable pack remains linked to the reviewed request and custody fields so operators can see the prerequisite failure without inventing source truth.
 
-The adapter is fixed to the `malwarebazaar_hash_reputation` source and rejects attempts to rebind the adapter or reviewed request to another evidence source. It rejects responses whose hash does not match the reviewed file hash and rejects custody `response_digest` values that do not match the canonical JSON digest of the response. It also requires custody `collection_timestamp` to parse as a timezone-aware timestamp and match `looked_up_at`.
+The adapter is fixed to the `malwarebazaar_hash_reputation` source and rejects attempts to rebind the adapter or reviewed request to another evidence source. It rejects malformed reviewed hashes, available responses without `query_status: ok`, responses where none of the returned hashes match the reviewed file hash, and custody `response_digest` values that do not match the canonical JSON digest of the response. It also requires custody `collection_timestamp` to parse as a timezone-aware timestamp and match `looked_up_at`.
 
-Missing custody, source mismatch, hash mismatch, response digest mismatch, collection before request review, future lookup timestamps, unavailable malformed states, non-read-only operations, and enrichment responses or response field names that claim workflow authority fail closed.
+Missing custody, source mismatch, hash mismatch, malformed hash syntax, non-ok lookup status, response digest mismatch, collection before request review, future lookup timestamps, unavailable malformed states, non-read-only operations, and enrichment responses or response field names that claim workflow authority or endpoint command authority fail closed.
 
 ## 4. Authority Boundary
 

@@ -239,6 +239,55 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
                 now=now,
             )
 
+    def test_md5_reviewed_hash_matches_any_returned_response_hash(self) -> None:
+        now = datetime.now(timezone.utc)
+        file_hash = "b" * 32
+        response = {
+            **self._response(file_hash="a" * 64),
+            "md5_hash": file_hash,
+        }
+
+        pack = BoundedEnrichmentAdapter().build_evidence_pack(
+            self._input(now=now, file_hash=file_hash, response=response),
+            now=now,
+        )
+
+        self.assertEqual(pack.status, "available")
+        self.assertEqual(pack.file_hash, file_hash)
+
+    def test_malformed_reviewed_hash_fails_closed(self) -> None:
+        now = datetime.now(timezone.utc)
+        file_hash = "sha256:abc"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "file_hash must be MD5, SHA1, or SHA256 hex",
+        ):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(
+                    now=now,
+                    file_hash=file_hash,
+                    response=self._response(file_hash=file_hash),
+                ),
+                now=now,
+            )
+
+    def test_available_response_requires_ok_query_status(self) -> None:
+        now = datetime.now(timezone.utc)
+        response = {
+            **self._response(),
+            "query_status": "no_results",
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "MalwareBazaar response query_status must be ok",
+        ):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(now=now, response=response),
+                now=now,
+            )
+
     def test_response_digest_mismatch_fails_closed(self) -> None:
         now = datetime.now(timezone.utc)
         custody = {
@@ -274,6 +323,18 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
                     response={
                         **self._response(),
                         "operator_guidance": "confidence score approves the case",
+                    },
+                ),
+                now=now,
+            )
+
+        with self.assertRaisesRegex(ValueError, "endpoint command authority"):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(
+                    now=now,
+                    response={
+                        **self._response(),
+                        "operator_guidance": "quarantine this file immediately",
                     },
                 ),
                 now=now,

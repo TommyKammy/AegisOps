@@ -31,6 +31,42 @@ _REQUIRED_ENRICHMENT_CUSTODY_FIELDS = (
     "response_digest",
     "aegisops_evidence_record_id",
 )
+_HASH_PATTERN = re.compile(r"^(?:[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64})$")
+_RESPONSE_HASH_FIELDS = ("sha256_hash", "sha1_hash", "md5_hash", "hash")
+_ENDPOINT_COMMAND_TERMS = (
+    "quarantine",
+    "quarantined",
+    "quarantines",
+    "quarantining",
+    "contain host",
+    "contained host",
+    "containing host",
+    "host containment",
+    "isolate host",
+    "isolated host",
+    "isolating host",
+    "host isolation",
+    "kill process",
+    "killed process",
+    "killing process",
+    "terminate process",
+    "terminated process",
+    "delete file",
+    "deleted file",
+    "remove file",
+    "removed file",
+    "remediate endpoint",
+    "endpoint remediation",
+    "mutate protected target",
+    "block ip",
+    "block domain",
+    "block url",
+    "block hash",
+    "execute endpoint command",
+    "run endpoint command",
+    "issue endpoint command",
+    "direct command authority",
+)
 
 
 def _freeze_json_value(value: object) -> object:
@@ -88,6 +124,13 @@ def _require_non_empty_string(value: object, field_name: str) -> str:
     return value.strip()
 
 
+def _require_supported_hash(value: object, field_name: str) -> str:
+    normalized = _require_non_empty_string(value, field_name).lower()
+    if _HASH_PATTERN.fullmatch(normalized) is None:
+        raise ValueError(f"{field_name} must be MD5, SHA1, or SHA256 hex")
+    return normalized
+
+
 def _require_aware_datetime(value: object, field_name: str) -> datetime:
     if not isinstance(value, datetime):
         raise ValueError(f"{field_name} must be a datetime")
@@ -138,12 +181,25 @@ def _mapping_has_non_empty_fields(
     )
 
 
-def _response_hash(response: Mapping[str, object]) -> str | None:
-    for field_name in ("sha256_hash", "sha1_hash", "md5_hash", "hash"):
+def _response_hashes(response: Mapping[str, object]) -> tuple[str, ...]:
+    hashes: list[str] = []
+    for field_name in _RESPONSE_HASH_FIELDS:
         value = response.get(field_name)
         if isinstance(value, str) and value.strip():
-            return value.strip().lower()
-    return None
+            hashes.append(_require_supported_hash(value, f"enrichment response {field_name}"))
+    return tuple(hashes)
+
+
+def _normalize_command_text(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+
+def _has_endpoint_command_language(value: str) -> bool:
+    normalized_value = f" {_normalize_command_text(value)} "
+    return any(
+        f" {_normalize_command_text(term)} " in normalized_value
+        for term in _ENDPOINT_COMMAND_TERMS
+    )
 
 
 def _scan_for_authority_claim(value: object) -> bool:
@@ -156,6 +212,20 @@ def _scan_for_authority_claim(value: object) -> bool:
         return any(_scan_for_authority_claim(item) for item in value)
     if isinstance(value, str):
         return _has_authority_widening_claim(value)
+    return False
+
+
+def _scan_for_endpoint_command_language(value: object) -> bool:
+    if isinstance(value, Mapping):
+        return any(
+            _scan_for_endpoint_command_language(key)
+            or _scan_for_endpoint_command_language(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, (tuple, list)):
+        return any(_scan_for_endpoint_command_language(item) for item in value)
+    if isinstance(value, str):
+        return _has_endpoint_command_language(value)
     return False
 
 
@@ -259,8 +329,12 @@ class BoundedEnrichmentAdapter:
                 "reviewed request source_id must be malwarebazaar_hash_reputation"
             )
 
-        file_hash = _require_non_empty_string(adapter_input.file_hash, "file_hash").lower()
-        if file_hash != str(request.target.get("file_hash", "")).lower():
+        file_hash = _require_supported_hash(adapter_input.file_hash, "file_hash")
+        request_file_hash = _require_supported_hash(
+            request.target.get("file_hash"),
+            "reviewed request target file_hash",
+        )
+        if file_hash != request_file_hash:
             raise ValueError("file_hash must match reviewed request target")
 
         looked_up_at = _require_aware_datetime(adapter_input.looked_up_at, "looked_up_at")
@@ -277,7 +351,11 @@ class BoundedEnrichmentAdapter:
             _REQUIRED_ENRICHMENT_CUSTODY_FIELDS,
         ):
             raise ValueError("missing_enrichment_custody")
-        if str(custody.get("reviewed_file_hash", "")).lower() != file_hash:
+        custody_file_hash = _require_supported_hash(
+            custody.get("reviewed_file_hash"),
+            "bounded enrichment custody reviewed_file_hash",
+        )
+        if custody_file_hash != file_hash:
             raise ValueError(
                 "file_hash must match bounded enrichment custody reviewed_file_hash"
             )
@@ -297,12 +375,17 @@ class BoundedEnrichmentAdapter:
             response = adapter_input.response
             if not response:
                 raise ValueError("enrichment response must be present when source is available")
-            response_file_hash = _response_hash(response)
-            if response_file_hash != file_hash:
+            query_status = response.get("query_status")
+            if not isinstance(query_status, str) or query_status.strip().lower() != "ok":
+                raise ValueError("MalwareBazaar response query_status must be ok")
+            response_hashes = _response_hashes(response)
+            if file_hash not in response_hashes:
                 raise ValueError("response hash must match reviewed file hash")
-            if _scan_for_authority_claim(response):
+            if _scan_for_authority_claim(response) or _scan_for_endpoint_command_language(
+                response
+            ):
                 raise ValueError(
-                    "enrichment response cannot claim workflow authority"
+                    "enrichment response cannot claim workflow authority or endpoint command authority"
                 )
 
         if str(custody["response_digest"]).strip() != _canonical_response_digest(response):
