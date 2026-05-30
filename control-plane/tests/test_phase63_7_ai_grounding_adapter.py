@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -23,6 +24,9 @@ from aegisops.control_plane.evidence.bounded_enrichment_adapter import (  # noqa
 )
 from aegisops.control_plane.evidence.reviewed_evidence_requests import (  # noqa: E402
     ReviewedEvidenceRequestRecord,
+)
+from aegisops.control_plane.evidence.evidence_source_registry import (  # noqa: E402
+    PHASE63_EVIDENCE_SOURCE_REGISTRY,
 )
 
 
@@ -367,6 +371,71 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["decision"], "fallback")
         self.assertIn("grounding_state_mismatch", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
+
+    def test_current_registry_source_status_drift_fails_closed(self) -> None:
+        projection = _projection()
+        source_id = "malwarebazaar_hash_reputation"
+        original_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id]
+
+        try:
+            for registry_status in ("disabled", "degraded"):
+                with self.subTest(registry_status=registry_status):
+                    PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id] = replace(
+                        original_entry,
+                        status=registry_status,
+                    )
+
+                    payload = build_ai_grounding_adapter(
+                        grounding_context_payload=_grounding_payload(
+                            projections=(projection,)
+                        )
+                    )
+
+                    self.assertEqual(payload["decision"], "fallback")
+                    self.assertIn(
+                        "grounding_source_registry_status_mismatch",
+                        payload["unresolved_reasons"],
+                    )
+                    self.assertFalse(payload["ai_generation_allowed"])
+                    self.assertEqual(payload["grounding_items"], ())
+        finally:
+            PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id] = original_entry
+
+    def test_confidence_posture_must_match_source_registry(self) -> None:
+        projection = _projection()
+        projection["confidence"] = {
+            **projection["confidence"],
+            "posture": "case_truth_authority",
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn(
+            "grounding_confidence_posture_mismatch",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
+
+    def test_unsupported_projection_reasons_fail_closed(self) -> None:
+        projection = {
+            **_projection(),
+            "status": "degraded",
+            "uncertainty_label": "stale_review_required",
+            "degraded_reasons": ("manual_override",),
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn("unsupported_grounding_reason", payload["unresolved_reasons"])
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertEqual(payload["grounding_items"], ())
 

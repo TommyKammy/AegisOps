@@ -70,6 +70,19 @@ _ALLOWED_STATUS = frozenset({"available", "degraded", "unavailable"})
 _ALLOWED_FRESHNESS = frozenset({"fresh", "stale"})
 _ALLOWED_CONFLICT = frozenset({"none", "conflicting"})
 _ALLOWED_SOURCE_STATE = frozenset({"available", "degraded", "unavailable"})
+_ALLOWED_DEGRADED_REASONS = frozenset(
+    {
+        "stale_reputation",
+        "conflicting_enrichment",
+        "source_stale",
+    }
+)
+_ALLOWED_UNAVAILABLE_REASONS = frozenset(
+    {
+        "source_denied",
+        "source_unavailable",
+    }
+)
 _ALLOWED_UNCERTAINTY = frozenset(
     {
         "related_entity_not_authoritative",
@@ -326,7 +339,7 @@ def _projection_reasons(
     if source_id is None:
         reasons.append("missing_grounding_source_id")
     else:
-        reasons.extend(_grounding_source_reasons(source_id))
+        reasons.extend(_grounding_source_reasons(source_id, projection))
     if projection.get("authoritative_workflow_truth") is not False:
         reasons.append("grounding_authority_promotion_attempt")
     if projection.get("workflow_authority") != _NO_WORKFLOW_AUTHORITY:
@@ -386,18 +399,77 @@ def _projection_reasons(
         if provenance.get("authority_posture") != _SUBORDINATE_AUTHORITY_POSTURE:
             reasons.append("grounding_authority_promotion_attempt")
     if isinstance(confidence, Mapping):
+        reasons.extend(_confidence_binding_reasons(confidence, source_id))
         if confidence.get("source_native_score_authority") != _NO_WORKFLOW_AUTHORITY:
             reasons.append("grounding_authority_promotion_attempt")
     reasons.extend(_citation_reasons(projection, anchor_id))
     return tuple(reasons)
 
 
-def _grounding_source_reasons(source_id: str) -> tuple[str, ...]:
+def _grounding_source_reasons(
+    source_id: str,
+    projection: Mapping[str, object],
+) -> tuple[str, ...]:
     registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(source_id)
     if registry_entry is None or source_id not in _SUPPORTED_GROUNDING_SOURCE_IDS:
         return ("unsupported_grounding_source",)
     if registry_entry.status not in {"enabled", "degraded", "disabled"}:
         return ("unsupported_grounding_source",)
+    reasons: list[str] = []
+    degraded_reasons = _string_tuple(projection.get("degraded_reasons"))
+    unavailable_reasons = _string_tuple(projection.get("unavailable_reasons"))
+    status = projection.get("status")
+    source_state = projection.get("source_state")
+    if registry_entry.status == "disabled":
+        if (
+            status != "unavailable"
+            or source_state != "unavailable"
+            or "source_denied" not in unavailable_reasons
+        ):
+            reasons.append("grounding_source_registry_status_mismatch")
+    if registry_entry.status == "degraded":
+        if (
+            status == "available"
+            or source_state == "available"
+            or "source_stale" not in degraded_reasons
+        ):
+            reasons.append("grounding_source_registry_status_mismatch")
+    if registry_entry.status == "enabled":
+        if (
+            "source_denied" in unavailable_reasons
+            or "source_stale" in degraded_reasons
+        ):
+            reasons.append("grounding_source_registry_status_mismatch")
+    reasons.extend(_unsupported_projection_reason_reasons(projection))
+    return tuple(reasons)
+
+
+def _confidence_binding_reasons(
+    confidence: Mapping[str, object],
+    source_id: str | None,
+) -> tuple[str, ...]:
+    if source_id is None:
+        return ()
+    registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(source_id)
+    if registry_entry is None:
+        return ()
+    if confidence.get("posture") != registry_entry.confidence_posture:
+        return ("grounding_confidence_posture_mismatch",)
+    return ()
+
+
+def _unsupported_projection_reason_reasons(
+    projection: Mapping[str, object],
+) -> tuple[str, ...]:
+    degraded_reasons = _string_tuple(projection.get("degraded_reasons"))
+    unavailable_reasons = _string_tuple(projection.get("unavailable_reasons"))
+    if any(reason not in _ALLOWED_DEGRADED_REASONS for reason in degraded_reasons):
+        return ("unsupported_grounding_reason",)
+    if any(
+        reason not in _ALLOWED_UNAVAILABLE_REASONS
+        for reason in unavailable_reasons
+    ):
+        return ("unsupported_grounding_reason",)
     return ()
 
 
