@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
 import re
 
 from .assistant_context import _advisory_text_claims_authority_or_scope_expansion
 from .live_assistant_workflow import phase24_live_assistant_prompt_injection_flags
+from ..evidence.bounded_enrichment_adapter import (
+    _scan_for_authority_claim,
+    _scan_for_endpoint_command_language,
+)
 from ..evidence.evidence_source_registry import PHASE63_EVIDENCE_SOURCE_REGISTRY
 
 _AGENT_NAME = "ai_grounding_adapter"
@@ -64,6 +69,9 @@ _REQUIRED_CONFIDENCE_FIELDS = (
     "ambiguity_badge",
     "source_native_score_authority",
 )
+_ALLOWED_CUSTODY_FIELDS = frozenset(_REQUIRED_CUSTODY_FIELDS)
+_ALLOWED_PROVENANCE_FIELDS = frozenset(_REQUIRED_PROVENANCE_FIELDS)
+_ALLOWED_CONFIDENCE_FIELDS = frozenset(_REQUIRED_CONFIDENCE_FIELDS)
 _SUBORDINATE_AUTHORITY_POSTURE = "subordinate_evidence_context_only"
 _NO_WORKFLOW_AUTHORITY = "none"
 _ALLOWED_STATUS = frozenset({"available", "degraded", "unavailable"})
@@ -128,6 +136,12 @@ _UNCERTAINTY_SUPPRESSION_TERMS = (
     "hide conflicts",
     "hide conflicting",
     "suppress conflicts",
+)
+_DURATION_PATTERN = re.compile(
+    r"PT"
+    r"(?:(?P<hours>\d+)H)?"
+    r"(?:(?P<minutes>\d+)M)?"
+    r"(?:(?P<seconds>\d+)S)?"
 )
 
 
@@ -277,6 +291,11 @@ def _validated_grounding_payload(
     anchor_id = _string(anchor.get("record_id"))
     if anchor_family != "case" or anchor_id is None:
         return _invalid(("unsupported_review_anchor",))
+    grounded_at_reasons, grounded_at = _grounded_at(
+        grounding_context_payload.get("grounded_at")
+    )
+    if grounded_at_reasons:
+        return _invalid(grounded_at_reasons, anchor_id=anchor_id)
     custody_reference_bindings = anchor.get("custody_reference_by_evidence_request_id")
     evidence_record_bindings = anchor.get("evidence_record_id_by_evidence_request_id")
 
@@ -300,6 +319,7 @@ def _validated_grounding_payload(
             anchor_id,
             custody_reference_bindings,
             evidence_record_bindings,
+            grounded_at,
         )
         reasons.extend(projection_reasons)
         if not projection_reasons:
@@ -317,6 +337,7 @@ def _projection_reasons(
     anchor_id: str,
     custody_reference_bindings: object,
     evidence_record_bindings: object,
+    grounded_at: datetime,
 ) -> tuple[str, ...]:
     reasons: list[str] = []
     case_id = _string(projection.get("case_id"))
@@ -389,6 +410,13 @@ def _projection_reasons(
                 expected_evidence_record_id=expected_evidence_record_id,
             )
         )
+        reasons.extend(
+            _metadata_contract_reasons(
+                custody,
+                _ALLOWED_CUSTODY_FIELDS,
+                _ALLOWED_CUSTODY_FIELDS,
+            )
+        )
     if expected_custody_reference is None:
         reasons.append("missing_grounding_custody_reference_binding")
     if expected_evidence_record_id is None:
@@ -396,12 +424,27 @@ def _projection_reasons(
     if not _mapping_has_non_empty_fields(confidence, _REQUIRED_CONFIDENCE_FIELDS):
         reasons.append("missing_grounding_confidence")
     if isinstance(provenance, Mapping):
+        reasons.extend(
+            _metadata_contract_reasons(
+                provenance,
+                _ALLOWED_PROVENANCE_FIELDS,
+                _ALLOWED_PROVENANCE_FIELDS,
+            )
+        )
         if provenance.get("authority_posture") != _SUBORDINATE_AUTHORITY_POSTURE:
             reasons.append("grounding_authority_promotion_attempt")
     if isinstance(confidence, Mapping):
+        reasons.extend(
+            _metadata_contract_reasons(
+                confidence,
+                _ALLOWED_CONFIDENCE_FIELDS,
+                frozenset({"ambiguity_badge"}),
+            )
+        )
         reasons.extend(_confidence_binding_reasons(confidence, source_id))
         if confidence.get("source_native_score_authority") != _NO_WORKFLOW_AUTHORITY:
             reasons.append("grounding_authority_promotion_attempt")
+    reasons.extend(_freshness_recomputation_reasons(projection, grounded_at))
     reasons.extend(_citation_reasons(projection, anchor_id))
     return tuple(reasons)
 
@@ -456,6 +499,120 @@ def _confidence_binding_reasons(
     if confidence.get("posture") != registry_entry.confidence_posture:
         return ("grounding_confidence_posture_mismatch",)
     return ()
+
+
+def _metadata_contract_reasons(
+    value: Mapping[str, object],
+    allowed_fields: frozenset[str],
+    authority_scanned_fields: frozenset[str],
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    if frozenset(value) != allowed_fields:
+        reasons.append("unexpected_grounding_metadata")
+    for field_name, item in value.items():
+        if field_name not in authority_scanned_fields:
+            continue
+        for scan_value in _metadata_authority_values(field_name, item):
+            if _scan_for_authority_claim(
+                scan_value
+            ) or _scan_for_endpoint_command_language(scan_value):
+                reasons.append("grounding_metadata_authority_claim")
+                return tuple(reasons)
+    return tuple(reasons)
+
+
+def _metadata_authority_values(
+    field_name: str,
+    item: object,
+) -> tuple[object, ...]:
+    if field_name == "request_binding" and isinstance(item, str):
+        stripped_item = item.strip()
+        scan_values = [
+            re.sub(r"^evidence[-_\s]+request[-_\s]*", "", stripped_item, flags=re.I)
+        ]
+        if re.search(r"\bevidence[-_\s]*request[-_\s]*truths?\b", stripped_item, re.I):
+            scan_values.append(stripped_item)
+        return tuple(scan_values)
+    if field_name == "authority_posture":
+        return ("",)
+    return (item,)
+
+
+def _freshness_recomputation_reasons(
+    projection: Mapping[str, object],
+    grounded_at: datetime,
+) -> tuple[str, ...]:
+    source_id = _string(projection.get("source_id"))
+    custody = projection.get("custody")
+    if source_id is None or not isinstance(custody, Mapping):
+        return ()
+    registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(source_id)
+    if registry_entry is None:
+        return ()
+    try:
+        freshness_window_seconds = _parse_duration_seconds(registry_entry.freshness_window)
+        collection_timestamp = _aware_datetime(
+            custody.get("collection_timestamp"),
+            "custody.collection_timestamp",
+        )
+    except ValueError:
+        return ("grounding_freshness_recompute_unavailable",)
+
+    age_seconds = (grounded_at - collection_timestamp).total_seconds()
+    if age_seconds < 0:
+        return ("grounding_freshness_recompute_mismatch",)
+    expected_freshness = (
+        "stale" if age_seconds > freshness_window_seconds else "fresh"
+    )
+    reasons: list[str] = []
+    if projection.get("freshness_state") != expected_freshness:
+        reasons.append("grounding_freshness_state_mismatch")
+    confidence = projection.get("confidence")
+    if (
+        isinstance(confidence, Mapping)
+        and confidence.get("freshness") != expected_freshness
+    ):
+        reasons.append("grounding_freshness_state_mismatch")
+    return tuple(reasons)
+
+
+def _parse_duration_seconds(value: str) -> int:
+    match = _DURATION_PATTERN.fullmatch(value.strip())
+    if match is None:
+        raise ValueError("freshness window must be an ISO-8601 time duration")
+    duration_parts = {
+        name: int(match.group(name) or 0) for name in ("hours", "minutes", "seconds")
+    }
+    seconds = (
+        duration_parts["hours"] * 3600
+        + duration_parts["minutes"] * 60
+        + duration_parts["seconds"]
+    )
+    if seconds <= 0:
+        raise ValueError("freshness window must be positive")
+    return seconds
+
+
+def _grounded_at(value: object) -> tuple[tuple[str, ...], datetime]:
+    if value is None:
+        return (), datetime.now(timezone.utc)
+    try:
+        return (), _aware_datetime(value, "grounded_at")
+    except ValueError:
+        return ("malformed_grounded_at",), datetime.now(timezone.utc)
+
+
+def _aware_datetime(value: object, field_name: str) -> datetime:
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"{field_name} must be timezone-aware") from exc
+    if not isinstance(value, datetime):
+        raise ValueError(f"{field_name} must be timezone-aware")
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{field_name} must be timezone-aware")
+    return value
 
 
 def _unsupported_projection_reason_reasons(
