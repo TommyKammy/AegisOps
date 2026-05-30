@@ -37,6 +37,8 @@ _REQUIRED_CONFIDENCE_FIELDS = (
     "ambiguity_badge",
     "source_native_score_authority",
 )
+_ALLOWED_PACK_STATUSES = frozenset({"available", "degraded", "unavailable"})
+_ALLOWED_SOURCE_STATUSES = frozenset({"enabled", "degraded", "disabled"})
 _DURATION_PATTERN = re.compile(
     r"PT"
     r"(?:(?P<hours>\d+)H)?"
@@ -193,7 +195,18 @@ def _validate_projection_input(
     return pack
 
 
+def _source_registry_entry(source_id: str):
+    registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(source_id)
+    if registry_entry is None:
+        raise ValueError("unsupported_source_id")
+    if registry_entry.status not in _ALLOWED_SOURCE_STATUSES:
+        raise ValueError("unexpected_source_status")
+    return registry_entry
+
+
 def _validate_projection_fields(pack: BoundedEnrichmentEvidencePack) -> None:
+    if pack.status not in _ALLOWED_PACK_STATUSES:
+        raise ValueError("unexpected_projection_status")
     if not _mapping_has_non_empty_fields(pack.custody, _REQUIRED_CUSTODY_FIELDS):
         raise ValueError("missing_projection_custody")
     if not _mapping_has_non_empty_fields(pack.provenance, _REQUIRED_PROVENANCE_FIELDS):
@@ -206,6 +219,23 @@ def _validate_projection_fields(pack: BoundedEnrichmentEvidencePack) -> None:
         raise ValueError("projection cannot drive workflow authority")
     if pack.confidence["source_native_score_authority"] != _NO_WORKFLOW_AUTHORITY:
         raise ValueError("projection cannot drive workflow authority")
+    registry_entry = _source_registry_entry(pack.source_id)
+    if pack.confidence["posture"] != registry_entry.confidence_posture:
+        raise ValueError("confidence_posture_mismatch")
+
+
+def _validate_custody_bindings(
+    pack: BoundedEnrichmentEvidencePack,
+    looked_up_at: datetime,
+) -> None:
+    if _mapping_string(pack.custody, "reviewed_file_hash") != pack.file_hash:
+        raise ValueError("custody_binding_mismatch")
+    collection_timestamp = _require_aware_datetime(
+        _mapping_string(pack.custody, "collection_timestamp"),
+        "custody.collection_timestamp",
+    )
+    if collection_timestamp != looked_up_at:
+        raise ValueError("custody_binding_mismatch")
 
 
 def _validate_provenance_bindings(
@@ -240,13 +270,16 @@ def _projection_freshness(
     projected_at: datetime,
 ) -> tuple[str, datetime]:
     looked_up_at = _require_aware_datetime(pack.looked_up_at, "looked_up_at")
-    registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(pack.source_id)
-    if registry_entry is None:
-        raise ValueError("unsupported_source_id")
+    registry_entry = _source_registry_entry(pack.source_id)
     freshness_window = _parse_duration_seconds(registry_entry.freshness_window)
     age_seconds = (projected_at - looked_up_at).total_seconds()
     freshness = "stale" if age_seconds < 0 or age_seconds > freshness_window else "fresh"
     return freshness, looked_up_at
+
+
+def _append_unique(reasons: list[str], reason: str) -> None:
+    if reason not in reasons:
+        reasons.append(reason)
 
 
 def _projected_degraded_reasons(
@@ -254,16 +287,30 @@ def _projected_degraded_reasons(
     freshness: str,
 ) -> tuple[str, ...]:
     reasons = list(pack.degraded_reasons)
-    if freshness == "stale" and "stale_reputation" not in reasons:
-        reasons.append("stale_reputation")
+    if freshness == "stale":
+        _append_unique(reasons, "stale_reputation")
+    registry_entry = _source_registry_entry(pack.source_id)
+    if registry_entry.status == "degraded":
+        _append_unique(reasons, "source_stale")
+    return tuple(reasons)
+
+
+def _projected_unavailable_reasons(
+    pack: BoundedEnrichmentEvidencePack,
+) -> tuple[str, ...]:
+    reasons = list(pack.unavailable_reasons)
+    registry_entry = _source_registry_entry(pack.source_id)
+    if registry_entry.status == "disabled":
+        _append_unique(reasons, "source_denied")
     return tuple(reasons)
 
 
 def _projected_status(
     pack: BoundedEnrichmentEvidencePack,
     degraded_reasons: tuple[str, ...],
+    unavailable_reasons: tuple[str, ...],
 ) -> str:
-    if pack.status == "unavailable" or pack.unavailable_reasons:
+    if pack.status == "unavailable" or unavailable_reasons:
         return "unavailable"
     if degraded_reasons:
         return "degraded"
@@ -283,17 +330,38 @@ def _uncertainty_label(
     pack: BoundedEnrichmentEvidencePack,
     freshness: str,
     degraded_reasons: tuple[str, ...],
+    unavailable_reasons: tuple[str, ...],
     status: str,
 ) -> str:
-    if "source_unavailable" in pack.unavailable_reasons or pack.status == "unavailable":
+    if (
+        "source_unavailable" in unavailable_reasons
+        or "source_denied" in unavailable_reasons
+        or pack.status == "unavailable"
+    ):
         return "source_unavailable"
     if status == "unavailable":
         return "source_unavailable"
     if "conflicting_enrichment" in degraded_reasons:
         return "unresolved_conflict"
-    if freshness == "stale" or "stale_reputation" in degraded_reasons:
+    if (
+        freshness == "stale"
+        or "stale_reputation" in degraded_reasons
+        or "source_stale" in degraded_reasons
+    ):
         return "stale_review_required"
     return "related_entity_not_authoritative"
+
+
+def _source_state(
+    status: str,
+    degraded_reasons: tuple[str, ...],
+    unavailable_reasons: tuple[str, ...],
+) -> str:
+    if status == "unavailable" or unavailable_reasons:
+        return "unavailable"
+    if "source_stale" in degraded_reasons:
+        return "degraded"
+    return "available"
 
 
 def project_evidence_freshness_provenance(
@@ -306,9 +374,11 @@ def project_evidence_freshness_provenance(
         "projected_at",
     )
     freshness, looked_up_at = _projection_freshness(pack, projected_at)
+    _validate_custody_bindings(pack, looked_up_at)
     _validate_provenance_bindings(pack, looked_up_at)
     degraded_reasons = _projected_degraded_reasons(pack, freshness)
-    status = _projected_status(pack, degraded_reasons)
+    unavailable_reasons = _projected_unavailable_reasons(pack)
+    status = _projected_status(pack, degraded_reasons, unavailable_reasons)
     confidence = _projected_confidence(pack, freshness)
 
     conflict_state = (
@@ -316,7 +386,7 @@ def project_evidence_freshness_provenance(
         if "conflicting_enrichment" in degraded_reasons
         else "none"
     )
-    source_state = "unavailable" if status == "unavailable" else "available"
+    source_state = _source_state(status, degraded_reasons, unavailable_reasons)
 
     return EvidenceFreshnessProvenanceProjection(
         evidence_request_id=pack.evidence_request_id,
@@ -330,9 +400,15 @@ def project_evidence_freshness_provenance(
         provenance_state="bound",
         conflict_state=conflict_state,
         source_state=source_state,
-        uncertainty_label=_uncertainty_label(pack, freshness, degraded_reasons, status),
+        uncertainty_label=_uncertainty_label(
+            pack,
+            freshness,
+            degraded_reasons,
+            unavailable_reasons,
+            status,
+        ),
         degraded_reasons=degraded_reasons,
-        unavailable_reasons=pack.unavailable_reasons,
+        unavailable_reasons=unavailable_reasons,
         custody=pack.custody,
         provenance=pack.provenance,
         confidence=confidence,

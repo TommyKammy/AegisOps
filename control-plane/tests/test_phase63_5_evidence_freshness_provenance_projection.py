@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -20,6 +21,9 @@ from aegisops.control_plane.evidence.bounded_enrichment_adapter import (  # noqa
 from aegisops.control_plane.evidence.evidence_freshness_provenance_projection import (  # noqa: E402
     EvidenceFreshnessProvenanceProjectionInput,
     project_evidence_freshness_provenance,
+)
+from aegisops.control_plane.evidence.evidence_source_registry import (  # noqa: E402
+    PHASE63_EVIDENCE_SOURCE_REGISTRY,
 )
 from aegisops.control_plane.evidence.reviewed_evidence_requests import (  # noqa: E402
     ReviewedEvidenceRequestRecord,
@@ -276,6 +280,114 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                     project_evidence_freshness_provenance(
                         self._projection_input(malformed_pack)
                     )
+
+    def test_custody_bindings_must_match_pack_hash_and_lookup_time(self) -> None:
+        pack = self._pack()
+        mismatch_cases = (
+            ("reviewed_file_hash", "b" * 64),
+            (
+                "collection_timestamp",
+                (pack.looked_up_at + timedelta(minutes=1)).isoformat(),
+            ),
+        )
+
+        for field_name, field_value in mismatch_cases:
+            with self.subTest(field_name=field_name):
+                malformed_pack = BoundedEnrichmentEvidencePack(
+                    **{
+                        **pack.as_dict(),
+                        "looked_up_at": pack.looked_up_at,
+                        "custody": {
+                            **dict(pack.custody),
+                            field_name: field_value,
+                        },
+                    }
+                )
+                with self.assertRaisesRegex(ValueError, "custody_binding_mismatch"):
+                    project_evidence_freshness_provenance(
+                        self._projection_input(malformed_pack)
+                    )
+
+    def test_confidence_posture_must_match_source_registry(self) -> None:
+        pack = self._pack()
+        malformed_pack = BoundedEnrichmentEvidencePack(
+            **{
+                **pack.as_dict(),
+                "looked_up_at": pack.looked_up_at,
+                "confidence": {
+                    **dict(pack.confidence),
+                    "posture": "case_truth_authority",
+                },
+            }
+        )
+
+        with self.assertRaisesRegex(ValueError, "confidence_posture_mismatch"):
+            project_evidence_freshness_provenance(
+                self._projection_input(malformed_pack)
+            )
+
+    def test_unexpected_pack_status_fails_closed(self) -> None:
+        pack = self._pack()
+        malformed_pack = BoundedEnrichmentEvidencePack(
+            **{
+                **pack.as_dict(),
+                "looked_up_at": pack.looked_up_at,
+                "status": "case_truth",
+            }
+        )
+
+        with self.assertRaisesRegex(ValueError, "unexpected_projection_status"):
+            project_evidence_freshness_provenance(
+                self._projection_input(malformed_pack)
+            )
+
+    def test_projection_rechecks_current_source_registry_status(self) -> None:
+        pack = self._pack()
+        source_id = "malwarebazaar_hash_reputation"
+        original_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id]
+        try:
+            PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id] = replace(
+                original_entry,
+                status="disabled",
+            )
+            disabled_projection = project_evidence_freshness_provenance(
+                self._projection_input(pack)
+            )
+
+            self.assertEqual(disabled_projection.status, "unavailable")
+            self.assertEqual(disabled_projection.source_state, "unavailable")
+            self.assertIn("source_denied", disabled_projection.unavailable_reasons)
+            self.assertEqual(
+                disabled_projection.uncertainty_label,
+                "source_unavailable",
+            )
+
+            PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id] = replace(
+                original_entry,
+                status="degraded",
+            )
+            degraded_projection = project_evidence_freshness_provenance(
+                self._projection_input(pack)
+            )
+
+            self.assertEqual(degraded_projection.status, "degraded")
+            self.assertEqual(degraded_projection.source_state, "degraded")
+            self.assertIn("source_stale", degraded_projection.degraded_reasons)
+            self.assertEqual(
+                degraded_projection.uncertainty_label,
+                "stale_review_required",
+            )
+
+            PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id] = replace(
+                original_entry,
+                status="case_truth",
+            )
+            with self.assertRaisesRegex(ValueError, "unexpected_source_status"):
+                project_evidence_freshness_provenance(
+                    self._projection_input(pack)
+                )
+        finally:
+            PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id] = original_entry
 
     def test_source_or_case_mismatch_fails_closed(self) -> None:
         pack = self._pack()
