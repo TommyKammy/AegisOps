@@ -32,6 +32,11 @@ _REQUIRED_ENRICHMENT_CUSTODY_FIELDS = (
     "aegisops_evidence_record_id",
 )
 _HASH_PATTERN = re.compile(r"^(?:[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64})$")
+_HASH_FIELD_PATTERNS = {
+    "md5_hash": re.compile(r"^[0-9a-f]{32}$"),
+    "sha1_hash": re.compile(r"^[0-9a-f]{40}$"),
+    "sha256_hash": re.compile(r"^[0-9a-f]{64}$"),
+}
 _RESPONSE_HASH_FIELDS = ("sha256_hash", "sha1_hash", "md5_hash", "hash")
 _ENDPOINT_COMMAND_TERMS = (
     "quarantine",
@@ -137,6 +142,15 @@ def _require_supported_hash(value: object, field_name: str) -> str:
     return normalized
 
 
+def _require_response_hash_field(value: object, field_name: str) -> str:
+    normalized = _require_supported_hash(value, f"enrichment response {field_name}")
+    field_pattern = _HASH_FIELD_PATTERNS.get(field_name)
+    if field_pattern is not None and field_pattern.fullmatch(normalized) is None:
+        algorithm = field_name.removesuffix("_hash").upper()
+        raise ValueError(f"enrichment response {field_name} must be {algorithm} hex")
+    return normalized
+
+
 def _require_aware_datetime(value: object, field_name: str) -> datetime:
     if not isinstance(value, datetime):
         raise ValueError(f"{field_name} must be a datetime")
@@ -187,12 +201,22 @@ def _mapping_has_non_empty_fields(
     )
 
 
-def _response_hashes(response: Mapping[str, object]) -> tuple[str, ...]:
+def _response_hashes_from_record(response_record: Mapping[str, object]) -> tuple[str, ...]:
     hashes: list[str] = []
     for field_name in _RESPONSE_HASH_FIELDS:
-        value = response.get(field_name)
+        value = response_record.get(field_name)
         if isinstance(value, str) and value.strip():
-            hashes.append(_require_supported_hash(value, f"enrichment response {field_name}"))
+            hashes.append(_require_response_hash_field(value, field_name))
+    return tuple(hashes)
+
+
+def _response_hashes(response: Mapping[str, object]) -> tuple[str, ...]:
+    hashes = list(_response_hashes_from_record(response))
+    data = response.get("data")
+    if isinstance(data, (tuple, list)):
+        for item in data:
+            if isinstance(item, Mapping):
+                hashes.extend(_response_hashes_from_record(item))
     return tuple(hashes)
 
 
@@ -374,6 +398,8 @@ class BoundedEnrichmentAdapter:
             )
 
         if adapter_input.adapter_state == "unavailable":
+            if adapter_input.response:
+                raise ValueError("unavailable enrichment source cannot include response")
             response: Mapping[str, object] = MappingProxyType({})
         elif adapter_input.adapter_state != "available":
             raise ValueError("adapter_state must be available or unavailable")

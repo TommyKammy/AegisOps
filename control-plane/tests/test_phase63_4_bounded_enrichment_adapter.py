@@ -176,6 +176,30 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
         self.assertIn("source_unavailable", pack.unavailable_reasons)
         self.assertEqual(pack.content["reputation"], {})
 
+    def test_unavailable_source_rejects_response_body(self) -> None:
+        now = datetime.now(timezone.utc)
+        custody = {
+            "reviewed_file_hash": "a" * 64,
+            "enrichment_request_id": "enrichment-request-001",
+            "collection_timestamp": now.isoformat(),
+            "response_digest": self._response_digest({}),
+            "aegisops_evidence_record_id": "evidence-enrichment-001",
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "unavailable enrichment source cannot include response",
+        ):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(
+                    now=now,
+                    adapter_state="unavailable",
+                    response=self._response(),
+                    custody=custody,
+                ),
+                now=now,
+            )
+
     def test_conflicting_enrichment_is_degraded_and_visible(self) -> None:
         now = datetime.now(timezone.utc)
         response = {
@@ -264,6 +288,49 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
 
         self.assertEqual(pack.status, "available")
         self.assertEqual(pack.file_hash, file_hash)
+
+    def test_source_native_malwarebazaar_data_hashes_are_accepted(self) -> None:
+        now = datetime.now(timezone.utc)
+        response = {
+            "query_status": "ok",
+            "data": [
+                {
+                    "sha256_hash": "a" * 64,
+                    "sha1_hash": "b" * 40,
+                    "md5_hash": "c" * 32,
+                    "signature": "example-family",
+                }
+            ],
+        }
+
+        pack = BoundedEnrichmentAdapter().build_evidence_pack(
+            self._input(now=now, response=response),
+            now=now,
+        )
+
+        self.assertEqual(pack.status, "available")
+        self.assertEqual(pack.content["reputation"]["query_status"], "ok")
+        self.assertEqual(
+            pack.content["reputation"]["data"][0]["signature"],
+            "example-family",
+        )
+
+    def test_response_hash_fields_must_match_declared_algorithm(self) -> None:
+        now = datetime.now(timezone.utc)
+        file_hash = "b" * 32
+        response = {
+            "query_status": "ok",
+            "sha256_hash": file_hash,
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "enrichment response sha256_hash must be SHA256 hex",
+        ):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(now=now, file_hash=file_hash, response=response),
+                now=now,
+            )
 
     def test_malformed_reviewed_hash_fails_closed(self) -> None:
         now = datetime.now(timezone.utc)
