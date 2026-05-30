@@ -242,6 +242,31 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
         self.assertIn("conflicting_enrichment", pack.degraded_reasons)
         self.assertEqual(pack.confidence["ambiguity_badge"], "unresolved")
 
+    def test_nested_conflict_marker_is_degraded_and_unresolved(self) -> None:
+        now = datetime.now(timezone.utc)
+        response = {
+            "query_status": "ok",
+            "data": [
+                {
+                    "sha256_hash": "a" * 64,
+                    "signature": "example-family",
+                    "conflict_marker": {
+                        "state": "conflict",
+                        "reason": "nested hash reputation conflicts",
+                    },
+                }
+            ],
+        }
+
+        pack = BoundedEnrichmentAdapter().build_evidence_pack(
+            self._input(now=now, response=response),
+            now=now,
+        )
+
+        self.assertEqual(pack.status, "degraded")
+        self.assertIn("conflicting_enrichment", pack.degraded_reasons)
+        self.assertEqual(pack.confidence["ambiguity_badge"], "unresolved")
+
     def test_missing_custody_fails_closed(self) -> None:
         now = datetime.now(timezone.utc)
 
@@ -356,6 +381,25 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
                 now=now,
             )
 
+    def test_source_native_malwarebazaar_data_must_be_array(self) -> None:
+        now = datetime.now(timezone.utc)
+        response = {
+            **self._response(),
+            "data": {
+                "sha256_hash": "d" * 64,
+                "signature": "unrelated-family",
+            },
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "MalwareBazaar response data must be a list",
+        ):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(now=now, response=response),
+                now=now,
+            )
+
     def test_source_native_data_cannot_mask_top_level_hash_mismatch(self) -> None:
         now = datetime.now(timezone.utc)
         response = {
@@ -394,6 +438,32 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
                 self._input(now=now, file_hash=file_hash, response=response),
                 now=now,
             )
+
+    def test_response_hash_fields_must_be_non_empty_strings_when_declared(self) -> None:
+        now = datetime.now(timezone.utc)
+        file_hash = "b" * 32
+
+        for malformed_hash in (None, ""):
+            with self.subTest(malformed_hash=malformed_hash):
+                response = {
+                    "query_status": "ok",
+                    "data": [
+                        {
+                            "sha256_hash": malformed_hash,
+                            "md5_hash": file_hash,
+                            "signature": "example-family",
+                        }
+                    ],
+                }
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "enrichment response sha256_hash must be a non-empty string",
+                ):
+                    BoundedEnrichmentAdapter().build_evidence_pack(
+                        self._input(now=now, file_hash=file_hash, response=response),
+                        now=now,
+                    )
 
     def test_malformed_reviewed_hash_fails_closed(self) -> None:
         now = datetime.now(timezone.utc)

@@ -268,21 +268,24 @@ def _response_hashes_from_record(
     hashes: list[str] = []
     reviewed_hash_algorithm = _hash_algorithm(file_hash) if file_hash else None
     for field_name in _RESPONSE_HASH_FIELDS:
-        value = response_record.get(field_name)
-        if isinstance(value, str) and value.strip():
-            response_hash = _require_response_hash_field(value, field_name)
-            response_hash_algorithm = (
-                field_name
-                if field_name in _HASH_FIELD_PATTERNS
-                else _hash_algorithm(response_hash)
-            )
-            if (
-                reviewed_hash_algorithm is not None
-                and response_hash_algorithm == reviewed_hash_algorithm
-                and response_hash != file_hash
-            ):
-                raise ValueError("response hash must match reviewed file hash")
-            hashes.append(response_hash)
+        if field_name not in response_record:
+            continue
+        response_hash = _require_response_hash_field(
+            response_record.get(field_name),
+            field_name,
+        )
+        response_hash_algorithm = (
+            field_name
+            if field_name in _HASH_FIELD_PATTERNS
+            else _hash_algorithm(response_hash)
+        )
+        if (
+            reviewed_hash_algorithm is not None
+            and response_hash_algorithm == reviewed_hash_algorithm
+            and response_hash != file_hash
+        ):
+            raise ValueError("response hash must match reviewed file hash")
+        hashes.append(response_hash)
     return tuple(hashes)
 
 
@@ -292,8 +295,10 @@ def _response_hashes(
     file_hash: str,
 ) -> tuple[str, ...]:
     hashes = list(_response_hashes_from_record(response, file_hash=file_hash))
-    data = response.get("data")
-    if isinstance(data, (tuple, list)):
+    if "data" in response:
+        data = response.get("data")
+        if not isinstance(data, (tuple, list)):
+            raise ValueError("MalwareBazaar response data must be a list")
         for item in data:
             if not isinstance(item, Mapping):
                 raise ValueError("response hash must match reviewed file hash")
@@ -302,6 +307,17 @@ def _response_hashes(
                 raise ValueError("response hash must match reviewed file hash")
             hashes.extend(item_hashes)
     return tuple(hashes)
+
+
+def _has_conflict_marker(value: object) -> bool:
+    if isinstance(value, Mapping):
+        return any(
+            key == "conflict_marker" or _has_conflict_marker(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, (tuple, list)):
+        return any(_has_conflict_marker(item) for item in value)
+    return False
 
 
 def _normalize_command_text(value: str) -> str:
@@ -560,7 +576,7 @@ class BoundedEnrichmentAdapter:
         )
         age_seconds = (comparison_now - looked_up_at).total_seconds()
         is_stale = age_seconds < 0 or age_seconds > freshness_window
-        has_conflict = "conflict_marker" in response
+        has_conflict = _has_conflict_marker(response)
         unavailable_reasons = (
             ("source_unavailable",)
             if adapter_input.adapter_state == "unavailable"
