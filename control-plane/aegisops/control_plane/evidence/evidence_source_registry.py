@@ -96,7 +96,11 @@ _REQUIRED_SOURCE_PROFILES = {
         "freshness_window": "PT6H",
         "confidence_posture": "external_hash_reputation_subordinate_context",
         "status": "enabled",
-        "degraded_states": ("stale_reputation", "incomplete_response_digest"),
+        "degraded_states": (
+            "stale_reputation",
+            "incomplete_response_digest",
+            "conflicting_enrichment",
+        ),
         "disabled_states": ("disabled_by_policy", "missing_hash_custody"),
         "custody_terms": _MALWAREBAZAAR_REQUIRED_CUSTODY_TERMS,
     },
@@ -903,7 +907,11 @@ PHASE63_EVIDENCE_SOURCE_REGISTRY: dict[str, EvidenceSourceEntry] = {
         freshness_window="PT6H",
         confidence_posture="external_hash_reputation_subordinate_context",
         status="enabled",
-        degraded_states=("stale_reputation", "incomplete_response_digest"),
+        degraded_states=(
+            "stale_reputation",
+            "incomplete_response_digest",
+            "conflicting_enrichment",
+        ),
         disabled_states=("disabled_by_policy", "missing_hash_custody"),
     ),
 }
