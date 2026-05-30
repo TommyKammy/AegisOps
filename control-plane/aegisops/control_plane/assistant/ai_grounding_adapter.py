@@ -150,6 +150,7 @@ _READINESS_PRESSURE_TERMS = (
 )
 _PROMPT_DETERMINER_PATTERN = r"(?:a|all|an|any|the|this|that|these|those)\s+"
 _AUTHORITY_PRESSURE_PATTERNS = (
+    rf"promote\s+(?:{_PROMPT_DETERMINER_PATTERN})?evidence\s+to\s+truth",
     rf"approve\s+(?:{_PROMPT_DETERMINER_PATTERN})?actions?",
     rf"execute\s+(?:{_PROMPT_DETERMINER_PATTERN})?actions?",
     rf"reconcile\s+(?:{_PROMPT_DETERMINER_PATTERN})?receipts?",
@@ -549,8 +550,9 @@ def _grounding_source_reasons(
     unavailable_reasons = _string_tuple(projection.get("unavailable_reasons"))
     status = projection.get("status")
     source_state = projection.get("source_state")
-    if registry_entry.status == "disabled":
+    if status == "unavailable" or source_state == "unavailable":
         reasons.append("unavailable_evidence_source")
+    if registry_entry.status == "disabled":
         if (
             status != "unavailable"
             or source_state != "unavailable"
@@ -823,9 +825,14 @@ def _citation_reasons(
     required = _projection_citation_ids(projection, anchor_id)
     if not required:
         return ("missing_required_grounding_citation",)
-    supplied = _string_tuple(projection.get("citation_ids"))
-    if not supplied:
+    if "citation_ids" not in projection:
         return ()
+    supplied_value = projection.get("citation_ids")
+    if not isinstance(supplied_value, (list, tuple)):
+        return ("malformed_grounding_citation_ids",)
+    supplied = _string_tuple(supplied_value)
+    if len(supplied) != len(supplied_value):
+        return ("malformed_grounding_citation_ids",)
     reasons: list[str] = []
     required_set = frozenset(required)
     supplied_set = frozenset(supplied)
