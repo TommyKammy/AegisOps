@@ -54,6 +54,8 @@ const EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES = new Set([
   "ui_cache",
   "cache",
 ]);
+const EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE =
+  "subordinate_evidence_context_only";
 const BUSINESS_HOURS_HANDOFF_CONTRACT_VERSION = "phase-56-6";
 
 const BUSINESS_HOURS_HANDOFF_STATES = new Set([
@@ -418,6 +420,7 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
     }
     if (
       pack.authoritative_workflow_truth !== false ||
+      authorityPosture !== EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE ||
       workflowAuthority !== "none"
     ) {
       throw new OperatorDataProviderContractError(

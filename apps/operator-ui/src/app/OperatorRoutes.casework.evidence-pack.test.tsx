@@ -185,6 +185,10 @@ describe("case detail evidence pack UI", () => {
     ["missing custody display", createEvidencePack({ custody: null })],
     ["missing provenance display", createEvidencePack({ provenance: null })],
     ["evidence truth", createEvidencePack({ authoritative_workflow_truth: true })],
+    [
+      "authoritative posture",
+      createEvidencePack({ authority_posture: "authoritative_aegisops_record" }),
+    ],
     ["workflow authority", createEvidencePack({ workflow_authority: "close_case" })],
     ["RC readiness claim", createEvidencePack({ release_readiness_claim: "rc_ready" })],
     ["role bypass", createEvidencePack({ operator_visible: false })],

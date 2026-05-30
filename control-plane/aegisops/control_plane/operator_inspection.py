@@ -53,6 +53,24 @@ _EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS = {
     "rc_readiness_claim",
     "gate_readiness_claim",
 }
+_EVIDENCE_PACK_ALLOWED_PROJECTION_LABELS = {
+    "consumer": frozenset({"case_workbench", "ai_grounding"}),
+    "status": frozenset({"available", "degraded", "unavailable"}),
+    "freshness_state": frozenset({"fresh", "stale"}),
+    "custody_state": frozenset({"complete"}),
+    "confidence_state": frozenset({"present"}),
+    "provenance_state": frozenset({"bound"}),
+    "conflict_state": frozenset({"conflicting", "none"}),
+    "source_state": frozenset({"available", "degraded", "unavailable"}),
+    "uncertainty_label": frozenset(
+        {
+            "related_entity_not_authoritative",
+            "stale_review_required",
+            "unresolved_conflict",
+            "source_unavailable",
+        }
+    ),
+}
 _EVIDENCE_PACK_PROJECTION_REQUIRED_STRINGS = (
     "evidence_request_id",
     "case_id",
@@ -1394,6 +1412,11 @@ class OperatorInspectionReadSurface:
         }
         if any(value is None for value in values.values()):
             raise ValueError("linked evidence-pack projection is missing required fields")
+        for field_name, allowed_values in _EVIDENCE_PACK_ALLOWED_PROJECTION_LABELS.items():
+            if values[field_name] not in allowed_values:
+                raise ValueError(
+                    "linked evidence-pack projection has unsupported evidence-pack projection label"
+                )
         if values["case_id"] != case_id:
             raise ValueError("linked evidence-pack projection case binding mismatch")
         if projection.get("authoritative_workflow_truth") is not False:

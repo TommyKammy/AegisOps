@@ -1407,6 +1407,31 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 "must stay subordinate",
             ),
             (
+                "unsupported status label",
+                {"status": "rc_ready"},
+                "unsupported evidence-pack projection label",
+            ),
+            (
+                "unsupported freshness label",
+                {"freshness_state": "rc_ready"},
+                "unsupported evidence-pack projection label",
+            ),
+            (
+                "unsupported conflict label",
+                {"conflict_state": "ready_to_close"},
+                "unsupported evidence-pack projection label",
+            ),
+            (
+                "unsupported source label",
+                {"source_state": "ready_to_close"},
+                "unsupported evidence-pack projection label",
+            ),
+            (
+                "unsupported uncertainty label",
+                {"uncertainty_label": "case_truth"},
+                "unsupported evidence-pack projection label",
+            ),
+            (
                 "custody mismatch",
                 {
                     "custody": {
