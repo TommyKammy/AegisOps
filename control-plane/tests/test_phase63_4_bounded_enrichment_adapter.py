@@ -226,6 +226,22 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
             set(registry_entry.degraded_states),
         )
 
+    def test_malformed_conflict_marker_is_degraded_and_unresolved(self) -> None:
+        now = datetime.now(timezone.utc)
+        response = {
+            **self._response(),
+            "conflict_marker": "conflict",
+        }
+
+        pack = BoundedEnrichmentAdapter().build_evidence_pack(
+            self._input(now=now, response=response),
+            now=now,
+        )
+
+        self.assertEqual(pack.status, "degraded")
+        self.assertIn("conflicting_enrichment", pack.degraded_reasons)
+        self.assertEqual(pack.confidence["ambiguity_badge"], "unresolved")
+
     def test_missing_custody_fails_closed(self) -> None:
         now = datetime.now(timezone.utc)
 
@@ -327,6 +343,28 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
                 {
                     "sha256_hash": "d" * 64,
                     "signature": "unrelated-family",
+                },
+            ],
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "response hash must match reviewed file hash",
+        ):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(now=now, response=response),
+                now=now,
+            )
+
+    def test_source_native_data_cannot_mask_top_level_hash_mismatch(self) -> None:
+        now = datetime.now(timezone.utc)
+        response = {
+            "query_status": "ok",
+            "sha256_hash": "d" * 64,
+            "data": [
+                {
+                    "sha256_hash": "a" * 64,
+                    "signature": "reviewed-family",
                 },
             ],
         }
@@ -534,9 +572,25 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
                                 **self._response(),
                                 "operator_guidance": phrase,
                             },
-                        ),
-                        now=now,
-                    )
+                ),
+                now=now,
+            )
+
+        request = self._reviewed_request(now=now).with_updates(
+            requested_scope="bounded_read_only_hash_reputation_and_endpoint_remediation",
+            authorization={
+                "authorized": True,
+                "reviewed_scope": (
+                    "bounded_read_only_hash_reputation_and_endpoint_remediation"
+                ),
+                "decision_id": "approval-decision-001",
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "endpoint command authority"):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(now=now, request=request),
+                now=now,
+            )
 
     def test_endpoint_command_language_rejects_inflected_action_verbs(self) -> None:
         now = datetime.now(timezone.utc)

@@ -202,6 +202,14 @@ def _require_response_hash_field(value: object, field_name: str) -> str:
     return normalized
 
 
+def _hash_algorithm(value: str) -> str:
+    if len(value) == 32:
+        return "md5_hash"
+    if len(value) == 40:
+        return "sha1_hash"
+    return "sha256_hash"
+
+
 def _require_aware_datetime(value: object, field_name: str) -> datetime:
     if not isinstance(value, datetime):
         raise ValueError(f"{field_name} must be a datetime")
@@ -252,12 +260,29 @@ def _mapping_has_non_empty_fields(
     )
 
 
-def _response_hashes_from_record(response_record: Mapping[str, object]) -> tuple[str, ...]:
+def _response_hashes_from_record(
+    response_record: Mapping[str, object],
+    *,
+    file_hash: str | None = None,
+) -> tuple[str, ...]:
     hashes: list[str] = []
+    reviewed_hash_algorithm = _hash_algorithm(file_hash) if file_hash else None
     for field_name in _RESPONSE_HASH_FIELDS:
         value = response_record.get(field_name)
         if isinstance(value, str) and value.strip():
-            hashes.append(_require_response_hash_field(value, field_name))
+            response_hash = _require_response_hash_field(value, field_name)
+            response_hash_algorithm = (
+                field_name
+                if field_name in _HASH_FIELD_PATTERNS
+                else _hash_algorithm(response_hash)
+            )
+            if (
+                reviewed_hash_algorithm is not None
+                and response_hash_algorithm == reviewed_hash_algorithm
+                and response_hash != file_hash
+            ):
+                raise ValueError("response hash must match reviewed file hash")
+            hashes.append(response_hash)
     return tuple(hashes)
 
 
@@ -266,13 +291,13 @@ def _response_hashes(
     *,
     file_hash: str,
 ) -> tuple[str, ...]:
-    hashes = list(_response_hashes_from_record(response))
+    hashes = list(_response_hashes_from_record(response, file_hash=file_hash))
     data = response.get("data")
     if isinstance(data, (tuple, list)):
         for item in data:
             if not isinstance(item, Mapping):
                 raise ValueError("response hash must match reviewed file hash")
-            item_hashes = _response_hashes_from_record(item)
+            item_hashes = _response_hashes_from_record(item, file_hash=file_hash)
             if file_hash not in item_hashes:
                 raise ValueError("response hash must match reviewed file hash")
             hashes.extend(item_hashes)
@@ -447,6 +472,12 @@ class BoundedEnrichmentAdapter:
             raise ValueError(
                 "reviewed request source_id must be malwarebazaar_hash_reputation"
             )
+        if _scan_for_endpoint_command_language(
+            request.requested_scope
+        ) or _scan_for_endpoint_command_language(request.authorization.get("reviewed_scope")):
+            raise ValueError(
+                "reviewed request scope cannot claim endpoint command authority"
+            )
 
         file_hash = _require_supported_hash(adapter_input.file_hash, "file_hash")
         request_file_hash = _require_supported_hash(
@@ -529,7 +560,7 @@ class BoundedEnrichmentAdapter:
         )
         age_seconds = (comparison_now - looked_up_at).total_seconds()
         is_stale = age_seconds < 0 or age_seconds > freshness_window
-        has_conflict = isinstance(response.get("conflict_marker"), Mapping)
+        has_conflict = "conflict_marker" in response
         unavailable_reasons = (
             ("source_unavailable",)
             if adapter_input.adapter_state == "unavailable"
