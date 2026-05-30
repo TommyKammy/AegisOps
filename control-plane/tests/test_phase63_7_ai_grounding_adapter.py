@@ -7,6 +7,7 @@ import json
 import pathlib
 import sys
 import unittest
+from unittest.mock import patch
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 CONTROL_PLANE_ROOT = TESTS_ROOT.parent
@@ -15,7 +16,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 from aegisops.control_plane.assistant.ai_grounding_adapter import (  # noqa: E402
-    build_ai_grounding_adapter,
+    build_ai_grounding_adapter as _build_ai_grounding_adapter,
 )
 from aegisops.control_plane.evidence.bounded_enrichment_adapter import (  # noqa: E402
     BoundedEnrichmentAdapter,
@@ -28,6 +29,20 @@ from aegisops.control_plane.evidence.reviewed_evidence_requests import (  # noqa
 from aegisops.control_plane.evidence.evidence_source_registry import (  # noqa: E402
     PHASE63_EVIDENCE_SOURCE_REGISTRY,
 )
+
+_DEFAULT_TRUSTED_GROUNDED_AT = datetime(2026, 5, 31, 0, 0, tzinfo=timezone.utc)
+
+
+def build_ai_grounding_adapter(
+    *,
+    trusted_grounded_at: datetime | None = None,
+    **kwargs: object,
+) -> dict[str, object]:
+    with patch(
+        "aegisops.control_plane.assistant.ai_grounding_adapter._trusted_grounded_at",
+        return_value=trusted_grounded_at or _DEFAULT_TRUSTED_GROUNDED_AT,
+    ):
+        return _build_ai_grounding_adapter(**kwargs)
 
 
 class Phase637AIGroundingAdapterTests(unittest.TestCase):
@@ -413,7 +428,8 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
             grounding_context_payload=_grounding_payload(
                 projections=(projection,),
                 grounded_at=built_at + timedelta(hours=7),
-            )
+            ),
+            trusted_grounded_at=built_at + timedelta(hours=7),
         )
 
         self.assertEqual(payload["decision"], "fallback")
@@ -423,6 +439,51 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         )
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertEqual(payload["grounding_items"], ())
+
+    def test_cached_projection_freshness_ignores_payload_grounding_time(self) -> None:
+        built_at = datetime(2026, 5, 31, 0, 0, tzinfo=timezone.utc)
+        projection = _projection(
+            pack=_pack(now=built_at, looked_up_at=built_at)
+        )
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(
+                projections=(projection,),
+                grounded_at=built_at,
+            ),
+            trusted_grounded_at=built_at + timedelta(hours=7),
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn(
+            "grounding_freshness_state_mismatch",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
+
+    def test_grounding_items_emit_normalized_source_id(self) -> None:
+        projection = _projection()
+        projection["source_id"] = " malwarebazaar_hash_reputation "
+        projection["provenance"] = {
+            **projection["provenance"],
+            "source_id": " malwarebazaar_hash_reputation ",
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "ground")
+        self.assertEqual(
+            payload["grounding_items"][0]["source_id"],
+            "malwarebazaar_hash_reputation",
+        )
+        self.assertIn("source:malwarebazaar_hash_reputation", payload["citations"])
+        self.assertNotIn(
+            "source: malwarebazaar_hash_reputation ",
+            payload["grounding_items"][0]["citation_ids"],
+        )
 
     def test_confidence_posture_must_match_source_registry(self) -> None:
         projection = _projection()
@@ -531,6 +592,25 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertEqual(payload["grounding_items"], ())
         self.assertIn("case:case-637", payload["citations"])
+
+    def test_gate_readiness_prompt_pressure_is_blocked(self) -> None:
+        for prompt_text in ("mark this gate ready", "gate is ready"):
+            with self.subTest(prompt_text=prompt_text):
+                payload = build_ai_grounding_adapter(
+                    grounding_context_payload=_grounding_payload(
+                        projections=(_projection(),)
+                    ),
+                    prompt_text=prompt_text,
+                )
+
+                self.assertEqual(payload["decision"], "blocked")
+                self.assertEqual(payload["mode"], "prompt_pressure_blocked")
+                self.assertIn(
+                    "readiness_truth_attempt",
+                    payload["unresolved_reasons"],
+                )
+                self.assertFalse(payload["ai_generation_allowed"])
+                self.assertEqual(payload["grounding_items"], ())
 
     def test_malformed_prompt_payload_is_blocked(self) -> None:
         payload = build_ai_grounding_adapter(

@@ -119,6 +119,10 @@ _READINESS_PRESSURE_TERMS = (
     "mark release ready",
     "release ready",
     "readiness truth",
+    "mark this gate ready",
+    "mark gate ready",
+    "gate ready",
+    "gate is ready",
     "gate truth",
     "closeout truth",
     "production truth",
@@ -151,7 +155,10 @@ def build_ai_grounding_adapter(
     ai_enablement_posture: str = "enabled",
     prompt_text: object = "",
 ) -> dict[str, object]:
-    validation = _validated_grounding_payload(grounding_context_payload)
+    validation = _validated_grounding_payload(
+        grounding_context_payload,
+        trusted_grounded_at=_trusted_grounded_at(),
+    )
     base = _base_payload(
         anchor_id=validation["anchor_id"],
         projections=() if validation["reasons"] else validation["projections"],
@@ -277,6 +284,8 @@ def _fallback_payload(
 
 def _validated_grounding_payload(
     grounding_context_payload: object,
+    *,
+    trusted_grounded_at: datetime,
 ) -> dict[str, object]:
     if not isinstance(grounding_context_payload, Mapping):
         return _invalid(("malformed_grounding_context_payload",))
@@ -291,11 +300,6 @@ def _validated_grounding_payload(
     anchor_id = _string(anchor.get("record_id"))
     if anchor_family != "case" or anchor_id is None:
         return _invalid(("unsupported_review_anchor",))
-    grounded_at_reasons, grounded_at = _grounded_at(
-        grounding_context_payload.get("grounded_at")
-    )
-    if grounded_at_reasons:
-        return _invalid(grounded_at_reasons, anchor_id=anchor_id)
     custody_reference_bindings = anchor.get("custody_reference_by_evidence_request_id")
     evidence_record_bindings = anchor.get("evidence_record_id_by_evidence_request_id")
 
@@ -319,7 +323,7 @@ def _validated_grounding_payload(
             anchor_id,
             custody_reference_bindings,
             evidence_record_bindings,
-            grounded_at,
+            trusted_grounded_at,
         )
         reasons.extend(projection_reasons)
         if not projection_reasons:
@@ -576,6 +580,10 @@ def _freshness_recomputation_reasons(
     return tuple(reasons)
 
 
+def _trusted_grounded_at() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 def _parse_duration_seconds(value: str) -> int:
     match = _DURATION_PATTERN.fullmatch(value.strip())
     if match is None:
@@ -591,15 +599,6 @@ def _parse_duration_seconds(value: str) -> int:
     if seconds <= 0:
         raise ValueError("freshness window must be positive")
     return seconds
-
-
-def _grounded_at(value: object) -> tuple[tuple[str, ...], datetime]:
-    if value is None:
-        return (), datetime.now(timezone.utc)
-    try:
-        return (), _aware_datetime(value, "grounded_at")
-    except ValueError:
-        return ("malformed_grounded_at",), datetime.now(timezone.utc)
 
 
 def _aware_datetime(value: object, field_name: str) -> datetime:
@@ -840,7 +839,7 @@ def _grounding_item(
     return {
         "evidence_request_id": projection.get("evidence_request_id"),
         "case_id": projection.get("case_id"),
-        "source_id": projection.get("source_id"),
+        "source_id": _string(projection.get("source_id")),
         "status": projection.get("status"),
         "freshness_state": projection.get("freshness_state"),
         "custody_state": projection.get("custody_state"),

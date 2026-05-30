@@ -8,7 +8,7 @@ The adapter consumes already reviewed Phase 63 evidence freshness and provenance
 
 The adapter entry point is `build_ai_grounding_adapter`.
 
-Input must use contract version `phase-63-7`, a directly bound case review anchor, the reviewed custody reference and evidence record id for each evidence request, and one or more evidence projections from `project_evidence_freshness_provenance` with `consumer=ai_grounding`. The optional `grounded_at` timestamp is used to recompute projection freshness before grounding; when omitted, the adapter uses the current UTC time.
+Input must use contract version `phase-63-7`, a directly bound case review anchor, the reviewed custody reference and evidence record id for each evidence request, and one or more evidence projections from `project_evidence_freshness_provenance` with `consumer=ai_grounding`. Projection freshness is recomputed against the adapter's current trusted grounding time before grounding; caller-supplied payload timestamps are not trusted to keep cached projections fresh.
 
 The adapter is registered as `ai_grounding_adapter` with the `evidence_grounding` tool in the executable AI agent and tool registries.
 
