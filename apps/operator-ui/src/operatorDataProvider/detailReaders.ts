@@ -57,6 +57,9 @@ const EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES = new Set([
 const EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE =
   "subordinate_evidence_context_only";
 const EVIDENCE_PACK_SUPPORTED_SOURCE_ID = "malwarebazaar_hash_reputation";
+const EVIDENCE_PACK_CONFIDENCE_POSTURE =
+  "external_hash_reputation_subordinate_context";
+const EVIDENCE_PACK_FRESHNESS_WINDOW_MS = 6 * 60 * 60 * 1000;
 const EVIDENCE_PACK_ALLOWED_LABELS = {
   consumer: new Set(["case_workbench"]),
   status: new Set(["available", "degraded", "unavailable"]),
@@ -105,6 +108,38 @@ const EVIDENCE_PACK_REQUIRED_CONFIDENCE_FIELDS = new Set([
   "freshness",
   "ambiguity_badge",
   "source_native_score_authority",
+]);
+const EVIDENCE_PACK_CONTRACT_FIELDS = new Set([
+  "evidence_request_id",
+  "case_id",
+  "source_id",
+  "consumer",
+  "status",
+  "freshness_state",
+  "custody_state",
+  "confidence_state",
+  "provenance_state",
+  "conflict_state",
+  "source_state",
+  "uncertainty_label",
+  "authority_posture",
+  "workflow_authority",
+  "degraded_reasons",
+  "unavailable_reasons",
+  "authoritative_workflow_truth",
+  "custody",
+  "provenance",
+  "confidence",
+]);
+const EVIDENCE_PACK_RECOGNIZED_FIELDS = new Set([
+  ...EVIDENCE_PACK_CONTRACT_FIELDS,
+  "cache_sourced",
+  "stale_cache",
+  "projection_source",
+  "operator_visible",
+  "release_readiness_claim",
+  "rc_readiness_claim",
+  "gate_readiness_claim",
 ]);
 const BUSINESS_HOURS_HANDOFF_CONTRACT_VERSION = "phase-56-6";
 
@@ -507,6 +542,30 @@ function validateEvidencePackMetadataFormats(
   }
 }
 
+function validateEvidencePackFreshnessWindow(
+  custody: Record<string, unknown>,
+  freshnessState: string,
+  evidenceRequestId: string,
+) {
+  const collectionTimestamp = asString(custody.collection_timestamp);
+  if (collectionTimestamp === null || !isAwareTimestamp(collectionTimestamp)) {
+    throw new OperatorDataProviderContractError(
+      `Resource cases linked_evidence_packs item ${evidenceRequestId} has invalid evidence-pack metadata.`,
+    );
+  }
+
+  const ageMs = Date.now() - Date.parse(collectionTimestamp);
+  if (
+    ageMs < 0 ||
+    (freshnessState === "fresh" && ageMs > EVIDENCE_PACK_FRESHNESS_WINDOW_MS) ||
+    (freshnessState === "stale" && ageMs <= EVIDENCE_PACK_FRESHNESS_WINDOW_MS)
+  ) {
+    throw new OperatorDataProviderContractError(
+      `Resource cases linked_evidence_packs item ${evidenceRequestId} has an invalid evidence-pack freshness window.`,
+    );
+  }
+}
+
 function expectedEvidencePackUncertaintyLabel(
   status: string,
   freshnessState: string,
@@ -733,6 +792,11 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
       evidenceRequestId,
     );
     validateEvidencePackMetadataFormats(custody, provenance, evidenceRequestId);
+    validateEvidencePackFreshnessWindow(
+      custody,
+      freshnessState,
+      evidenceRequestId,
+    );
     if (
       asString(provenance.request_binding) !== evidenceRequestId ||
       asString(provenance.case_binding) !== requestedCaseId ||
@@ -759,6 +823,11 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
     if (asString(confidence.source_native_score_authority) !== "none") {
       throw new OperatorDataProviderContractError(
         `Resource cases linked_evidence_packs item ${evidenceRequestId} cannot carry workflow authority.`,
+      );
+    }
+    if (asString(confidence.posture) !== EVIDENCE_PACK_CONFIDENCE_POSTURE) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases linked_evidence_packs item ${evidenceRequestId} has an unsupported confidence posture.`,
       );
     }
     validateEvidencePackReasonConsistency(pack, confidence, {
@@ -798,6 +867,15 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
     ) {
       throw new OperatorDataProviderContractError(
         `Resource cases linked_evidence_packs item ${evidenceRequestId} cannot claim release readiness.`,
+      );
+    }
+    if (
+      Object.keys(pack).some(
+        (fieldName) => !EVIDENCE_PACK_RECOGNIZED_FIELDS.has(fieldName),
+      )
+    ) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases linked_evidence_packs item ${evidenceRequestId} has unexpected evidence-pack fields.`,
       );
     }
   });

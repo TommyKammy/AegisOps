@@ -9,6 +9,11 @@ import {
   jsonResponse,
 } from "./OperatorRoutes.testSupport";
 
+const freshCollectionTimestamp = new Date().toISOString();
+const staleCollectionTimestamp = new Date(
+  Date.now() - 7 * 60 * 60 * 1000,
+).toISOString();
+
 function createEvidencePack(overrides: Record<string, unknown> = {}) {
   const caseId = typeof overrides.case_id === "string" ? overrides.case_id : "case-456";
   const evidenceRequestId =
@@ -19,6 +24,10 @@ function createEvidencePack(overrides: Record<string, unknown> = {}) {
     typeof overrides.source_id === "string"
       ? overrides.source_id
       : "malwarebazaar_hash_reputation";
+  const collectionTimestamp =
+    overrides.freshness_state === "fresh"
+      ? freshCollectionTimestamp
+      : staleCollectionTimestamp;
 
   return {
     authoritative_workflow_truth: false,
@@ -34,7 +43,7 @@ function createEvidencePack(overrides: Record<string, unknown> = {}) {
     consumer: "case_workbench",
     custody: {
       aegisops_evidence_record_id: "evidence-enrichment-001",
-      collection_timestamp: "2026-05-30T00:00:00+00:00",
+      collection_timestamp: collectionTimestamp,
       enrichment_request_id: "enrichment-request-001",
       response_digest: "sha256:" + "a".repeat(64),
       reviewed_file_hash: "b".repeat(64),
@@ -46,7 +55,7 @@ function createEvidencePack(overrides: Record<string, unknown> = {}) {
     provenance: {
       authority_posture: "subordinate_evidence_context_only",
       case_binding: caseId,
-      collection_timestamp: "2026-05-30T00:00:00+00:00",
+      collection_timestamp: collectionTimestamp,
       custody_reference: "custody-ref-enrichment-001",
       enrichment_request_id: "enrichment-request-001",
       request_binding: evidenceRequestId,
@@ -289,6 +298,19 @@ describe("case detail evidence pack UI", () => {
       createEvidencePack({ unavailable_reasons: ["approval_truth"] }),
     ],
     [
+      "stale pack inside source freshness window",
+      createEvidencePack({
+        custody: {
+          ...createEvidencePack().custody,
+          collection_timestamp: freshCollectionTimestamp,
+        },
+        provenance: {
+          ...createEvidencePack().provenance,
+          collection_timestamp: freshCollectionTimestamp,
+        },
+      }),
+    ],
+    [
       "available status with degraded reason",
       createEvidencePack({ status: "available" }),
     ],
@@ -451,6 +473,15 @@ describe("case detail evidence pack UI", () => {
         },
       }),
     ],
+    [
+      "unexpected confidence posture",
+      createEvidencePack({
+        confidence: {
+          ...createEvidencePack().confidence,
+          posture: "authoritative_aegisops_record",
+        },
+      }),
+    ],
     ["evidence truth", createEvidencePack({ authoritative_workflow_truth: true })],
     [
       "authoritative posture",
@@ -458,6 +489,7 @@ describe("case detail evidence pack UI", () => {
     ],
     ["workflow authority", createEvidencePack({ workflow_authority: "close_case" })],
     ["RC readiness claim", createEvidencePack({ release_readiness_claim: "rc_ready" })],
+    ["unexpected evidence-pack field", createEvidencePack({ workflow_truth: true })],
     ["role bypass", createEvidencePack({ operator_visible: false })],
   ])("fails closed on %s", async (_label, evidencePack) => {
     const dependencies = createDefaultDependencies({
