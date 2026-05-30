@@ -7,7 +7,7 @@
 
 ## Verdict
 
-Phase 63 is accepted as the Evidence Expansion v1 slice for bounded evidence source registration, reviewed evidence request records, osquery evidence packs, bounded enrichment evidence packs, freshness and provenance projection, evidence-pack UI visibility, AI grounding, and closeout evidence.
+Phase 63 Evidence Expansion v1 is accepted for bounded evidence source registration, reviewed evidence request records, osquery evidence packs, bounded enrichment evidence packs, freshness and provenance projection, evidence-pack UI visibility, AI grounding, and closeout evidence.
 
 This closeout evaluates the current Phase 63 Evidence Expansion v1 issue set only. It does not supply, accept, or close the legacy support-bundle evidence gap identified by `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` and `docs/phase-51-5-competitive-gap-matrix.md`.
 
@@ -20,6 +20,14 @@ Evidence packs, osquery output, enrichment output, source-native state, freshnes
 Phase 63 must reject missing child evidence, missing verifier output, missing issue-lint summary, missing authority-boundary statement, missing accepted limitations, missing Phase 66 handoff, workstation-local paths, production secrets, RC/GA readiness claims, endpoint remediation claims, broad evidence-source breadth claims, autonomous AI authority claims, source-native truth claims, and treating verifier or issue-lint output as release truth.
 
 This closeout does not claim Phase 64 limitation ownership is complete, Phase 65 upgrade work is complete, Phase 66 RC proof is complete, Phase 67 GA proof is complete, AegisOps is Beta, RC, GA, self-service commercially ready, or a commercial replacement for every SIEM/SOAR capability.
+
+## Support-Bundle Gap Disposition
+
+The legacy Phase 51.5 support-bundle mapping is not satisfied by this Phase 63 Evidence Expansion v1 closeout.
+
+Support-bundle evidence remains open until a separately reviewed support-bundle slice or Phase 66 RC evidence packet supplies the Phase 51.3 support bundle command, redaction review, included record identifiers, omitted private data classes, owner, retention expectation, and verifier evidence.
+
+Phase 66 must treat Phase 63 Evidence Expansion v1 as subordinate evidence input only and must not infer support-bundle completion from issue #1339, this closeout date, or Phase 63 child completion.
 
 ## Child Issue Outcomes
 

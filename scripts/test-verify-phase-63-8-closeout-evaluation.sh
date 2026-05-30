@@ -47,6 +47,7 @@ copy_valid_repo() {
 
   mkdir -p "${target}/docs" "${target}/scripts" "${target}/control-plane/aegisops/control_plane"
   cp "${repo_root}/docs/phase-63-closeout-evaluation.md" "${target}/docs/phase-63-closeout-evaluation.md"
+  cp "${repo_root}/docs/phase-51-5-competitive-gap-matrix.md" "${target}/docs/phase-51-5-competitive-gap-matrix.md"
   cp "${repo_root}/README.md" "${target}/README.md"
   cp "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${target}/scripts/verify-publishable-path-hygiene.sh"
   : >"${target}/control-plane/aegisops/__init__.py"
@@ -164,6 +165,14 @@ remove_doc_text "${missing_support_bundle_boundary_repo}" \
 assert_fails_with \
   "${missing_support_bundle_boundary_repo}" \
   "Missing Phase 63 support-bundle accepted limitations boundary"
+
+missing_support_bundle_disposition_repo="${workdir}/missing-support-bundle-disposition"
+copy_valid_repo "${missing_support_bundle_disposition_repo}"
+remove_doc_text "${missing_support_bundle_disposition_repo}" \
+  "Support-bundle evidence remains open until a separately reviewed support-bundle slice or Phase 66 RC evidence packet supplies the Phase 51.3 support bundle command, redaction review, included record identifiers, omitted private data classes, owner, retention expectation, and verifier evidence."
+assert_fails_with \
+  "${missing_support_bundle_disposition_repo}" \
+  "Missing Phase 63 support-bundle gap disposition"
 
 missing_handoff_repo="${workdir}/missing-handoff"
 copy_valid_repo "${missing_handoff_repo}"

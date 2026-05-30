@@ -189,6 +189,14 @@ assert_fails_with \
   "${future_gap_claim_repo}" \
   "Missing Phase 51.5 competitive gap matrix statement: AegisOps current state is pre-GA"
 
+stale_support_bundle_mapping_repo="${workdir}/stale-support-bundle-mapping"
+create_valid_repo "${stale_support_bundle_mapping_repo}"
+printf '%s\n' "Phase 63 support bundle" \
+  >>"${stale_support_bundle_mapping_repo}/docs/phase-51-5-competitive-gap-matrix.md"
+assert_fails_with \
+  "${stale_support_bundle_mapping_repo}" \
+  "Forbidden Phase 51.5 competitive gap matrix claim: Phase 63 support bundle"
+
 workstation_path_repo="${workdir}/workstation-local-path"
 create_valid_repo "${workstation_path_repo}"
 workstation_path="$(printf '/%s/%s/gap-matrix.md' "Users" "example")"

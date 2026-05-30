@@ -8,6 +8,7 @@ repo_root="${1:-${default_repo_root}}"
 doc_path="docs/phase-63-closeout-evaluation.md"
 absolute_doc_path="${repo_root}/${doc_path}"
 readme_path="${repo_root}/README.md"
+gap_matrix_path="${repo_root}/docs/phase-51-5-competitive-gap-matrix.md"
 
 require_phrase() {
   local file="$1"
@@ -26,9 +27,13 @@ section_text() {
   local next_heading="$3"
 
   awk -v heading="${heading}" -v next_heading="${next_heading}" '
-    $0 == heading { in_section = 1 }
+    {
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+    }
+    line == heading { in_section = 1 }
     in_section {
-      if (next_heading != "" && ($0 == next_heading || index($0, next_heading) == 1)) {
+      if (next_heading != "" && (line == next_heading || index(line, next_heading) == 1)) {
         exit
       }
       print
@@ -46,16 +51,30 @@ if [[ ! -s "${readme_path}" ]]; then
   exit 1
 fi
 
+if [[ ! -s "${gap_matrix_path}" ]]; then
+  echo "Missing Phase 51.5 competitive gap matrix for Phase 63 support-bundle disposition check: docs/phase-51-5-competitive-gap-matrix.md" >&2
+  exit 1
+fi
+
 require_phrase "${readme_path}" "- [Phase 63.8 closeout evaluation](docs/phase-63-closeout-evaluation.md)" "README canonical cross-phase boundary bullet"
 require_phrase "${readme_path}" "The Phase 63.8 closeout evaluation is defined by the [Phase 63.8 closeout evaluation](docs/phase-63-closeout-evaluation.md)." "README Product positioning reference"
+require_phrase "${gap_matrix_path}" "separately reviewed support-bundle slice before Phase 66 RC gate" "Phase 51.5 support-bundle handoff mapping"
+
+if grep -Fq -- "Phase 63 support bundle" "${gap_matrix_path}"; then
+  echo "Forbidden Phase 51.5 stale support-bundle mapping: Phase 63 support bundle" >&2
+  exit 1
+fi
 
 required_phrases=(
   "# Phase 63 Closeout Evaluation"
   "**Status**: Accepted as Evidence Expansion v1 before Phase 66 RC proof, Beta, RC, GA, and commercial replacement-readiness claims."
   "**Date**: 2026-05-30"
   "**Related Issues**: #1331, #1332, #1333, #1334, #1335, #1336, #1337, #1338, #1339"
-  "Phase 63 is accepted as the Evidence Expansion v1 slice for bounded evidence source registration, reviewed evidence request records, osquery evidence packs, bounded enrichment evidence packs, freshness and provenance projection, evidence-pack UI visibility, AI grounding, and closeout evidence."
+  "Phase 63 Evidence Expansion v1 is accepted for bounded evidence source registration, reviewed evidence request records, osquery evidence packs, bounded enrichment evidence packs, freshness and provenance projection, evidence-pack UI visibility, AI grounding, and closeout evidence."
   "This closeout evaluates the current Phase 63 Evidence Expansion v1 issue set only. It does not supply, accept, or close the legacy support-bundle evidence gap identified by \`docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md\` and \`docs/phase-51-5-competitive-gap-matrix.md\`."
+  "## Support-Bundle Gap Disposition"
+  "The legacy Phase 51.5 support-bundle mapping is not satisfied by this Phase 63 Evidence Expansion v1 closeout."
+  "Phase 66 must treat Phase 63 Evidence Expansion v1 as subordinate evidence input only and must not infer support-bundle completion from issue #1339, this closeout date, or Phase 63 child completion."
   "AegisOps records remain authoritative for alert, case, evidence request, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth."
   "Evidence packs, osquery output, enrichment output, source-native state, freshness and confidence projections, operator UI state, browser state, AI output, verifier output, and issue-lint output remain subordinate context and cannot approve, execute, reconcile, close, activate detectors, create source truth, gate release, or claim readiness by themselves."
   "Phase 63 must reject missing child evidence, missing verifier output, missing issue-lint summary, missing authority-boundary statement, missing accepted limitations, missing Phase 66 handoff, workstation-local paths, production secrets, RC/GA readiness claims, endpoint remediation claims, broad evidence-source breadth claims, autonomous AI authority claims, source-native truth claims, and treating verifier or issue-lint output as release truth."
@@ -73,6 +92,12 @@ required_phrases=(
 for phrase in "${required_phrases[@]}"; do
   require_phrase "${absolute_doc_path}" "${phrase}" "required Phase 63 closeout term in ${doc_path}"
 done
+
+support_bundle_disposition="$(section_text "${absolute_doc_path}" "## Support-Bundle Gap Disposition" "## Child Issue Outcomes")"
+if ! grep -Fq -- "Support-bundle evidence remains open until a separately reviewed support-bundle slice or Phase 66 RC evidence packet supplies the Phase 51.3 support bundle command, redaction review, included record identifiers, omitted private data classes, owner, retention expectation, and verifier evidence." <<<"${support_bundle_disposition}"; then
+  echo "Missing Phase 63 support-bundle gap disposition" >&2
+  exit 1
+fi
 
 child_issue_outcomes="$(section_text "${absolute_doc_path}" "## Child Issue Outcomes" "## Changed Files")"
 required_child_rows=(
