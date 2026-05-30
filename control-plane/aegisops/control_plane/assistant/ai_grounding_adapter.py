@@ -7,6 +7,7 @@ import re
 from .assistant_context import _advisory_text_claims_authority_or_scope_expansion
 from .live_assistant_workflow import phase24_live_assistant_prompt_injection_flags
 from ..evidence.bounded_enrichment_adapter import (
+    _require_supported_hash,
     _scan_for_authority_claim,
     _scan_for_endpoint_command_language,
 )
@@ -408,6 +409,7 @@ def _projection_reasons(
             )
         )
     if isinstance(custody, Mapping):
+        reasons.extend(_reviewed_hash_reasons(custody))
         reasons.extend(
             _evidence_record_binding_reasons(
                 custody=custody,
@@ -650,13 +652,31 @@ def _provenance_binding_reasons(
     anchor_id: str,
     expected_custody_reference: str | None,
 ) -> tuple[str, ...]:
+    target_binding = _normalized_supported_hash(custody.get("reviewed_file_hash"))
+    provenance_target_binding = _normalized_supported_hash(
+        provenance.get("target_binding")
+    )
+    if target_binding is None or provenance_target_binding != target_binding:
+        return ("grounding_provenance_binding_mismatch",)
+    try:
+        collection_timestamp = _aware_datetime(
+            custody.get("collection_timestamp"),
+            "custody.collection_timestamp",
+        )
+        provenance_collection_timestamp = _aware_datetime(
+            provenance.get("collection_timestamp"),
+            "provenance.collection_timestamp",
+        )
+    except ValueError:
+        return ("grounding_provenance_binding_mismatch",)
+    if provenance_collection_timestamp != collection_timestamp:
+        return ("grounding_provenance_binding_mismatch",)
+
     expected_values = {
         "request_binding": _string(projection.get("evidence_request_id")),
         "case_binding": anchor_id,
-        "target_binding": _string(custody.get("reviewed_file_hash")),
         "source_id": _string(projection.get("source_id")),
         "enrichment_request_id": _string(custody.get("enrichment_request_id")),
-        "collection_timestamp": _string(custody.get("collection_timestamp")),
         "response_digest": _string(custody.get("response_digest")),
         "custody_reference": expected_custody_reference,
         "authority_posture": _SUBORDINATE_AUTHORITY_POSTURE,
@@ -667,6 +687,19 @@ def _provenance_binding_reasons(
         if _string(provenance.get(field_name)) != expected_value:
             return ("grounding_provenance_binding_mismatch",)
     return ()
+
+
+def _reviewed_hash_reasons(custody: Mapping[str, object]) -> tuple[str, ...]:
+    if _normalized_supported_hash(custody.get("reviewed_file_hash")) is None:
+        return ("unsupported_grounding_reviewed_hash",)
+    return ()
+
+
+def _normalized_supported_hash(value: object) -> str | None:
+    try:
+        return _require_supported_hash(value, "reviewed_file_hash")
+    except ValueError:
+        return None
 
 
 def _citation_reasons(
@@ -837,8 +870,8 @@ def _grounding_item(
         or "missing_grounding_uncertainty"
     )
     return {
-        "evidence_request_id": projection.get("evidence_request_id"),
-        "case_id": projection.get("case_id"),
+        "evidence_request_id": _string(projection.get("evidence_request_id")),
+        "case_id": _string(projection.get("case_id")),
         "source_id": _string(projection.get("source_id")),
         "status": projection.get("status"),
         "freshness_state": projection.get("freshness_state"),

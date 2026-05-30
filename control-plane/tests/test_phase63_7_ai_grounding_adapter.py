@@ -485,6 +485,75 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
             payload["grounding_items"][0]["citation_ids"],
         )
 
+    def test_grounding_items_emit_normalized_case_and_request_ids(self) -> None:
+        projection = _projection()
+        projection["case_id"] = " case-637 "
+        projection["evidence_request_id"] = " evidence-request-637 "
+        projection["provenance"] = {
+            **projection["provenance"],
+            "case_binding": " case-637 ",
+            "request_binding": " evidence-request-637 ",
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "ground")
+        self.assertEqual(payload["grounding_items"][0]["case_id"], "case-637")
+        self.assertEqual(
+            payload["grounding_items"][0]["evidence_request_id"],
+            "evidence-request-637",
+        )
+        self.assertEqual(
+            payload["grounding_items"][0]["citation_ids"],
+            _expected_citation_ids(),
+        )
+
+    def test_provenance_timestamp_binding_compares_semantic_datetimes(self) -> None:
+        projection = _projection()
+        projection["custody"] = {
+            **projection["custody"],
+            "collection_timestamp": "2026-05-31T00:00:00Z",
+        }
+        projection["provenance"] = {
+            **projection["provenance"],
+            "collection_timestamp": "2026-05-31T00:00:00+00:00",
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "ground")
+        self.assertNotIn(
+            "grounding_provenance_binding_mismatch",
+            payload["unresolved_reasons"],
+        )
+
+    def test_reviewed_hash_binding_must_use_supported_hash_format(self) -> None:
+        projection = _projection()
+        projection["custody"] = {
+            **projection["custody"],
+            "reviewed_file_hash": "not-a-sha256",
+        }
+        projection["provenance"] = {
+            **projection["provenance"],
+            "target_binding": "not-a-sha256",
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn(
+            "unsupported_grounding_reviewed_hash",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
+
     def test_confidence_posture_must_match_source_registry(self) -> None:
         projection = _projection()
         projection["confidence"] = {
