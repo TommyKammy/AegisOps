@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import hashlib
+import json
 import pathlib
 import sys
 import unittest
@@ -20,6 +22,15 @@ from aegisops.control_plane.evidence.reviewed_evidence_requests import (  # noqa
 
 
 class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
+    def _response_digest(self, response: dict[str, object]) -> str:
+        response_bytes = json.dumps(
+            response,
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return "sha256:" + hashlib.sha256(response_bytes).hexdigest()
+
     def _reviewed_request(
         self,
         *,
@@ -88,18 +99,27 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
     ) -> BoundedEnrichmentAdapterInput:
         timestamp = now or datetime.now(timezone.utc)
         lookup_time = looked_up_at or timestamp
+        selected_response = (
+            response
+            if response is not None
+            else (
+                {}
+                if adapter_state == "unavailable"
+                else self._response(file_hash=file_hash)
+            )
+        )
         return BoundedEnrichmentAdapterInput(
             request=request or self._reviewed_request(now=timestamp, file_hash=file_hash),
             file_hash=file_hash,
             looked_up_at=lookup_time,
-            response=response if response is not None else self._response(file_hash=file_hash),
+            response=selected_response,
             custody=custody
             if custody is not None
             else {
                 "reviewed_file_hash": file_hash,
                 "enrichment_request_id": "enrichment-request-001",
                 "collection_timestamp": lookup_time.isoformat(),
-                "response_digest": "sha256:" + "b" * 64,
+                "response_digest": self._response_digest(selected_response),
                 "aegisops_evidence_record_id": "evidence-enrichment-001",
             },
             adapter_state=adapter_state,
@@ -119,6 +139,7 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
         self.assertEqual(pack.file_hash, "a" * 64)
         self.assertEqual(pack.freshness, "fresh")
         self.assertEqual(pack.provenance["request_binding"], "evidence-request-enrichment-001")
+        self.assertEqual(pack.provenance["response_digest"], self._response_digest(self._response()))
         self.assertEqual(pack.confidence["posture"], "external_hash_reputation_subordinate_context")
         self.assertEqual(pack.authority_posture, "subordinate_evidence_context_only")
         self.assertEqual(pack.content["reputation"]["signature"], "example-family")
@@ -218,6 +239,25 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
                 now=now,
             )
 
+    def test_response_digest_mismatch_fails_closed(self) -> None:
+        now = datetime.now(timezone.utc)
+        custody = {
+            "reviewed_file_hash": "a" * 64,
+            "enrichment_request_id": "enrichment-request-001",
+            "collection_timestamp": now.isoformat(),
+            "response_digest": "sha256:" + "0" * 64,
+            "aegisops_evidence_record_id": "evidence-enrichment-001",
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "response_digest must match canonical enrichment response",
+        ):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(now=now, custody=custody),
+                now=now,
+            )
+
     def test_no_authority_promotion_from_operation_or_response(self) -> None:
         now = datetime.now(timezone.utc)
 
@@ -234,6 +274,18 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
                     response={
                         **self._response(),
                         "operator_guidance": "confidence score approves the case",
+                    },
+                ),
+                now=now,
+            )
+
+        with self.assertRaisesRegex(ValueError, "enrichment response cannot claim workflow authority"):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(
+                    now=now,
+                    response={
+                        **self._response(),
+                        "source_truth": {"score": 99},
                     },
                 ),
                 now=now,

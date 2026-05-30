@@ -45,6 +45,7 @@ required_adapter_phrases=(
   '"bounded enrichment adapter is read-only"'
   '"file_hash must match reviewed request target"'
   '"response hash must match reviewed file hash"'
+  '"response_digest must match canonical enrichment response"'
   '"missing_enrichment_custody"'
   '"enrichment response cannot claim workflow authority"'
   '_ACTIVE_REVIEWED_REQUEST_STATES = frozenset({"reviewed", "approved", "active"})'
@@ -67,6 +68,7 @@ required_test_phrases=(
   'test_missing_custody_fails_closed'
   'test_source_mismatch_fails_closed'
   'test_hash_mismatch_fails_closed'
+  'test_response_digest_mismatch_fails_closed'
   'test_no_authority_promotion_from_operation_or_response'
 )
 
@@ -84,8 +86,8 @@ required_doc_phrases=(
   'Conflicting enrichment returns a `degraded` pack with `conflicting_enrichment` and an unresolved confidence ambiguity badge.'
   'Unavailable source state returns an `unavailable` pack with `source_unavailable` and no response body.'
   'The adapter is fixed to the `malwarebazaar_hash_reputation` source and rejects attempts to rebind the adapter or reviewed request to another evidence source.'
-  'It rejects responses whose hash does not match the reviewed file hash.'
-  'Missing custody, source mismatch, hash mismatch, collection before request review, future lookup timestamps, unavailable malformed states, non-read-only operations, and enrichment responses that claim workflow authority fail closed.'
+  'It rejects responses whose hash does not match the reviewed file hash and rejects custody `response_digest` values that do not match the canonical JSON digest of the response.'
+  'Missing custody, source mismatch, hash mismatch, response digest mismatch, collection before request review, future lookup timestamps, unavailable malformed states, non-read-only operations, and enrichment responses or response field names that claim workflow authority fail closed.'
   'MalwareBazaar output, enrichment output, confidence scores, freshness projections, evidence packs, source-native state, AI output, verifier output, issue-lint output, browser state, UI cache, and adapter state remain subordinate context only.'
   'The adapter cannot approve, execute, reconcile, close, activate detectors, create source truth, gate release, claim readiness, remediate endpoints, contain hosts, quarantine files, kill processes, mutate protected targets, or issue direct command authority.'
 )
@@ -97,9 +99,9 @@ done
 required_validation_phrases=(
   '# Phase 63.4 Bounded Intel Enrichment Adapter Validation'
   'Validation status: PASS'
-  'The focused adapter test suite accepts a normal reviewed MalwareBazaar hash reputation result and rejects or degrades the requested boundary cases: stale reputation, unavailable source state without a response body, conflicting enrichment, missing custody, source mismatch, response hash mismatch, and enrichment-driven approval or workflow-authority claims.'
+  'The focused adapter test suite accepts a normal reviewed MalwareBazaar hash reputation result and rejects or degrades the requested boundary cases: stale reputation, unavailable source state without a response body, conflicting enrichment, missing custody, source mismatch, response hash mismatch, response digest mismatch, and enrichment-driven approval or workflow-authority claims in values or field names.'
   'The adapter is bound to the Phase 63.1 `malwarebazaar_hash_reputation` source registry freshness and Phase 63.2 reviewed evidence request validation.'
-  'It binds reviewed file hash, enrichment request id, collection timestamp, response digest, source provenance, confidence posture, and freshness before pack construction.'
+  'It binds reviewed file hash, enrichment request id, collection timestamp, canonical response digest, source provenance, confidence posture, and freshness before pack construction.'
   'No Velociraptor, YARA, capa, MISP breadth, Suricata, IntelOwl breadth, endpoint remediation, containment, destructive response, Controlled Write, Hard Write, Beta, RC, GA, commercial replacement readiness, or Phase 64/65/66/67 work is implemented.'
 )
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+import hashlib
 import json
 import re
 from types import MappingProxyType
@@ -66,6 +67,19 @@ def _validate_json_serializable(value: object, error_message: str) -> None:
         json.dumps(_json_ready(value), allow_nan=False, sort_keys=True)
     except (TypeError, ValueError) as exc:
         raise ValueError(error_message) from exc
+
+
+def _canonical_response_digest(response: Mapping[str, object]) -> str:
+    try:
+        response_bytes = json.dumps(
+            _json_ready(response),
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("enrichment response digest requires canonical JSON") from exc
+    return "sha256:" + hashlib.sha256(response_bytes).hexdigest()
 
 
 def _require_non_empty_string(value: object, field_name: str) -> str:
@@ -134,7 +148,10 @@ def _response_hash(response: Mapping[str, object]) -> str | None:
 
 def _scan_for_authority_claim(value: object) -> bool:
     if isinstance(value, Mapping):
-        return any(_scan_for_authority_claim(item) for item in value.values())
+        return any(
+            _scan_for_authority_claim(key) or _scan_for_authority_claim(item)
+            for key, item in value.items()
+        )
     if isinstance(value, (tuple, list)):
         return any(_scan_for_authority_claim(item) for item in value)
     if isinstance(value, str):
@@ -287,6 +304,11 @@ class BoundedEnrichmentAdapter:
                 raise ValueError(
                     "enrichment response cannot claim workflow authority"
                 )
+
+        if str(custody["response_digest"]).strip() != _canonical_response_digest(response):
+            raise ValueError(
+                "response_digest must match canonical enrichment response"
+            )
 
         freshness_window = _parse_duration_seconds(
             PHASE63_EVIDENCE_SOURCE_REGISTRY[

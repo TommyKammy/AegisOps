@@ -13,7 +13,7 @@ This contract keeps AegisOps-owned records authoritative. Evidence sources, sour
 | Source id | Source type | Owner | Allowed target class | Custody requirements | Freshness window | Confidence posture | Disabled and degraded states |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `osquery_host_state` | `osquery` | IT Operations, Information Systems Department | `explicitly_bound_host` | Reviewed query id, operator or automation attribution, collection timestamp, host binding, and AegisOps evidence record id. | `PT24H` | Observed host state subordinate context only. | Degraded when host binding or collection freshness is incomplete; disabled by policy or missing custody. |
-| `malwarebazaar_hash_reputation` | `malwarebazaar_hash_reputation` | IT Operations, Information Systems Department | `reviewed_file_hash` | Reviewed file hash, enrichment request id, collection timestamp, response digest, and AegisOps evidence record id. | `PT6H` | External hash reputation subordinate context only. | Degraded when reputation freshness or response digest is incomplete; disabled by policy or missing hash custody. |
+| `malwarebazaar_hash_reputation` | `malwarebazaar_hash_reputation` | IT Operations, Information Systems Department | `reviewed_file_hash` | Reviewed file hash, enrichment request id, collection timestamp, response digest, and AegisOps evidence record id. | `PT6H` | External hash reputation subordinate context only. | Degraded when reputation freshness, response digest, or enrichment conflict state is incomplete or unresolved; disabled by policy or missing hash custody. |
 
 ## 3. Selected Bounded Enrichment Rationale
 
