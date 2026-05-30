@@ -303,11 +303,13 @@ export function CaseDetailPageBody({
                 const freshnessState = asString(pack.freshness_state);
                 const conflictState = asString(pack.conflict_state);
                 const sourceState = asString(pack.source_state);
-                const packId = asString(pack.evidence_pack_id);
+                const custody = asRecord(pack.custody);
+                const provenance = asRecord(pack.provenance);
+                const packId = asString(pack.evidence_request_id);
 
                 return (
                   <TableRow key={`${packId ?? "evidence-pack"}-${index}`}>
-                    <TableCell>{formatValue(pack.evidence_pack_id)}</TableCell>
+                    <TableCell>{formatValue(pack.evidence_request_id)}</TableCell>
                     <TableCell>{formatValue(pack.source_id)}</TableCell>
                     <TableCell>
                       <Chip
@@ -347,7 +349,11 @@ export function CaseDetailPageBody({
                       <Stack spacing={0.5}>
                         <Typography variant="body2">{formatValue(pack.custody_state)}</Typography>
                         <Typography color="text.secondary" variant="caption">
-                          {formatValue(pack.custody_reference)}
+                          {formatValue(
+                            custody?.aegisops_evidence_record_id ??
+                              custody?.enrichment_request_id ??
+                              custody?.collection_timestamp,
+                          )}
                         </Typography>
                       </Stack>
                     </TableCell>
@@ -355,7 +361,11 @@ export function CaseDetailPageBody({
                       <Stack spacing={0.5}>
                         <Typography variant="body2">{formatValue(pack.provenance_state)}</Typography>
                         <Typography color="text.secondary" variant="caption">
-                          {formatValue(pack.provenance_reference)}
+                          {formatValue(
+                            provenance?.custody_reference ??
+                              provenance?.request_binding ??
+                              provenance?.source_id,
+                          )}
                         </Typography>
                       </Stack>
                     </TableCell>

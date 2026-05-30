@@ -10,21 +10,55 @@ import {
 } from "./OperatorRoutes.testSupport";
 
 function createEvidencePack(overrides: Record<string, unknown> = {}) {
+  const caseId = typeof overrides.case_id === "string" ? overrides.case_id : "case-456";
+  const evidenceRequestId =
+    typeof overrides.evidence_request_id === "string"
+      ? overrides.evidence_request_id
+      : "evidence-request-001";
+  const sourceId =
+    typeof overrides.source_id === "string"
+      ? overrides.source_id
+      : "malwarebazaar_hash_reputation";
+
   return {
     authoritative_workflow_truth: false,
-    case_id: "case-456",
-    confidence_state: "related_entity_not_authoritative",
-    conflict_state: "unresolved_conflict",
-    custody_reference: "custody://case-456/evidence-pack-001",
+    case_id: caseId,
+    confidence: {
+      ambiguity_badge: "related-entity",
+      freshness: "stale",
+      posture: "subordinate",
+      source_native_score_authority: "none",
+    },
+    confidence_state: "present",
+    conflict_state: "conflicting",
+    consumer: "case_workbench",
+    custody: {
+      aegisops_evidence_record_id: "evidence-enrichment-001",
+      collection_timestamp: "2026-05-30T00:00:00+00:00",
+      enrichment_request_id: "enrichment-request-001",
+      response_digest: "sha256:" + "a".repeat(64),
+      reviewed_file_hash: "b".repeat(64),
+    },
     custody_state: "complete",
-    evidence_pack_id: "evidence-pack-001",
-    freshness_state: "stale_review_required",
-    operator_visible: true,
-    provenance_reference: "provenance://case-456/enrichment-001",
+    evidence_request_id: evidenceRequestId,
+    freshness_state: "stale",
+    provenance: {
+      authority_posture: "subordinate_evidence_context_only",
+      case_binding: caseId,
+      collection_timestamp: "2026-05-30T00:00:00+00:00",
+      custody_reference: "custody-ref-enrichment-001",
+      enrichment_request_id: "enrichment-request-001",
+      request_binding: evidenceRequestId,
+      response_digest: "sha256:" + "a".repeat(64),
+      source_id: sourceId,
+      target_binding: "b".repeat(64),
+    },
     provenance_state: "bound",
-    source_id: "malwarebazaar_hash_reputation",
+    source_id: sourceId,
     source_state: "degraded",
-    uncertainty_label: "review_required",
+    status: "degraded",
+    uncertainty_label: "stale_review_required",
+    authority_posture: "subordinate_evidence_context_only",
     workflow_authority: "none",
     ...overrides,
   };
@@ -88,29 +122,29 @@ describe("case detail evidence pack UI", () => {
 
     expect(rows).toHaveLength(1);
     expect(
-      within(rows[0] as HTMLElement).getByText("evidence-pack-001"),
+      within(rows[0] as HTMLElement).getByText("evidence-request-001"),
     ).toBeInTheDocument();
     expect(
       within(rows[0] as HTMLElement).getByText("malwarebazaar_hash_reputation"),
     ).toBeInTheDocument();
     expect(
+      within(rows[0] as HTMLElement).getByText("stale"),
+    ).toBeInTheDocument();
+    expect(
+      within(rows[0] as HTMLElement).getByText("conflicting"),
+    ).toBeInTheDocument();
+    expect(
+      within(rows[0] as HTMLElement).getByText("present"),
+    ).toBeInTheDocument();
+    expect(
       within(rows[0] as HTMLElement).getByText("stale_review_required"),
-    ).toBeInTheDocument();
-    expect(
-      within(rows[0] as HTMLElement).getByText("unresolved_conflict"),
-    ).toBeInTheDocument();
-    expect(
-      within(rows[0] as HTMLElement).getByText("related_entity_not_authoritative"),
-    ).toBeInTheDocument();
-    expect(
-      within(rows[0] as HTMLElement).getByText("review_required"),
     ).toBeInTheDocument();
     expect(within(rows[0] as HTMLElement).getByText("degraded")).toBeInTheDocument();
     expect(
-      within(rows[0] as HTMLElement).getByText("custody://case-456/evidence-pack-001"),
+      within(rows[0] as HTMLElement).getByText("evidence-enrichment-001"),
     ).toBeInTheDocument();
     expect(
-      within(rows[0] as HTMLElement).getByText("provenance://case-456/enrichment-001"),
+      within(rows[0] as HTMLElement).getByText("custody-ref-enrichment-001"),
     ).toBeInTheDocument();
     expect(
       within(rows[0] as HTMLElement).getByText("Subordinate evidence context only"),
@@ -148,8 +182,8 @@ describe("case detail evidence pack UI", () => {
     ["browser-state source", createEvidencePack({ projection_source: "browser_state" })],
     ["hidden stale label", createEvidencePack({ freshness_state: "" })],
     ["hidden conflict label", createEvidencePack({ conflict_state: "" })],
-    ["missing custody display", createEvidencePack({ custody_reference: null })],
-    ["missing provenance display", createEvidencePack({ provenance_reference: null })],
+    ["missing custody display", createEvidencePack({ custody: null })],
+    ["missing provenance display", createEvidencePack({ provenance: null })],
     ["evidence truth", createEvidencePack({ authoritative_workflow_truth: true })],
     ["workflow authority", createEvidencePack({ workflow_authority: "close_case" })],
     ["RC readiness claim", createEvidencePack({ release_readiness_claim: "rc_ready" })],
@@ -236,7 +270,7 @@ describe("case detail evidence pack UI", () => {
                 ? [createEvidencePack()]
                 : [
                     createEvidencePack({
-                      evidence_pack_id: "evidence-pack-reread",
+                      evidence_request_id: "evidence-request-reread",
                       freshness_state: "fresh",
                     }),
                   ],
@@ -266,7 +300,7 @@ describe("case detail evidence pack UI", () => {
     );
 
     expect(
-      await screen.findByText("evidence-pack-001", undefined, fullRouteWait),
+      await screen.findByText("evidence-request-001", undefined, fullRouteWait),
     ).toBeInTheDocument();
     const user = userEvent.setup();
     await user.type(
@@ -292,7 +326,7 @@ describe("case detail evidence pack UI", () => {
     await user.click(screen.getByRole("button", { name: "Record observation" }));
 
     expect(
-      await screen.findByText("evidence-pack-reread", undefined, fullRouteWait),
+      await screen.findByText("evidence-request-reread", undefined, fullRouteWait),
     ).toBeInTheDocument();
     expect(screen.queryByText("stale-evidence")).not.toBeInTheDocument();
   }, fullRouteTestTimeout);

@@ -355,34 +355,48 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
       packValue,
       "Resource cases linked_evidence_packs item must be an object.",
     );
-    const evidencePackId = asString(pack.evidence_pack_id);
+    const evidenceRequestId = asString(pack.evidence_request_id);
     const caseId = asString(pack.case_id);
     const sourceId = asString(pack.source_id);
+    const consumer = asString(pack.consumer);
+    const status = asString(pack.status);
     const freshnessState = asString(pack.freshness_state);
     const custodyState = asString(pack.custody_state);
-    const custodyReference = asString(pack.custody_reference);
     const confidenceState = asString(pack.confidence_state);
     const provenanceState = asString(pack.provenance_state);
-    const provenanceReference = asString(pack.provenance_reference);
     const conflictState = asString(pack.conflict_state);
     const sourceState = asString(pack.source_state);
     const uncertaintyLabel = asString(pack.uncertainty_label);
+    const authorityPosture = asString(pack.authority_posture);
     const workflowAuthority = asString(pack.workflow_authority);
     const projectionSource = asString(pack.projection_source);
+    const custody = asObject(
+      pack.custody,
+      "Resource cases linked_evidence_packs item custody must be an object.",
+    );
+    const provenance = asObject(
+      pack.provenance,
+      "Resource cases linked_evidence_packs item provenance must be an object.",
+    );
+    asObject(
+      pack.confidence,
+      "Resource cases linked_evidence_packs item confidence must be an object.",
+    );
 
     if (
-      evidencePackId === null ||
+      evidenceRequestId === null ||
       caseId === null ||
       sourceId === null ||
+      consumer === null ||
+      status === null ||
       freshnessState === null ||
       custodyState === null ||
-      custodyReference === null ||
       confidenceState === null ||
       provenanceState === null ||
-      provenanceReference === null ||
       conflictState === null ||
       sourceState === null ||
-      uncertaintyLabel === null
+      uncertaintyLabel === null ||
+      authorityPosture === null
     ) {
       throw new OperatorDataProviderContractError(
         "Resource cases linked_evidence_packs item is missing required evidence-pack labels.",
@@ -390,7 +404,16 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
     }
     if (caseId !== requestedCaseId) {
       throw new OperatorDataProviderContractError(
-        `Resource cases linked_evidence_packs item ${evidencePackId} must stay bound to case ${requestedCaseId}.`,
+        `Resource cases linked_evidence_packs item ${evidenceRequestId} must stay bound to case ${requestedCaseId}.`,
+      );
+    }
+    if (
+      asString(provenance.request_binding) !== evidenceRequestId ||
+      asString(provenance.case_binding) !== requestedCaseId ||
+      asString(provenance.source_id) !== sourceId
+    ) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases linked_evidence_packs item ${evidenceRequestId} must keep provenance bound to the evidence request and case.`,
       );
     }
     if (
@@ -398,12 +421,12 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
       workflowAuthority !== "none"
     ) {
       throw new OperatorDataProviderContractError(
-        `Resource cases linked_evidence_packs item ${evidencePackId} cannot carry workflow authority.`,
+        `Resource cases linked_evidence_packs item ${evidenceRequestId} cannot carry workflow authority.`,
       );
     }
-    if (pack.operator_visible !== true) {
+    if (pack.operator_visible !== undefined && pack.operator_visible !== true) {
       throw new OperatorDataProviderContractError(
-        `Resource cases linked_evidence_packs item ${evidencePackId} must stay operator visible.`,
+        `Resource cases linked_evidence_packs item ${evidenceRequestId} must stay operator visible.`,
       );
     }
     if (
@@ -421,7 +444,7 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
       pack.gate_readiness_claim !== undefined
     ) {
       throw new OperatorDataProviderContractError(
-        `Resource cases linked_evidence_packs item ${evidencePackId} cannot claim release readiness.`,
+        `Resource cases linked_evidence_packs item ${evidenceRequestId} cannot claim release readiness.`,
       );
     }
   });

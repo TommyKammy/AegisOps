@@ -35,6 +35,24 @@ _QUEUE_LANES = (
     "clean",
 )
 
+_EVIDENCE_PACK_PROJECTION_CONTENT_KEY = "evidence_pack_projection"
+_EVIDENCE_PACK_PROJECTION_REQUIRED_STRINGS = (
+    "evidence_request_id",
+    "case_id",
+    "source_id",
+    "consumer",
+    "status",
+    "freshness_state",
+    "custody_state",
+    "confidence_state",
+    "provenance_state",
+    "conflict_state",
+    "source_state",
+    "uncertainty_label",
+    "authority_posture",
+    "workflow_authority",
+)
+
 
 class InspectionStore(Protocol):
     def get(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
@@ -1132,6 +1150,10 @@ class OperatorInspectionReadSurface:
             linked_alert_records=context_snapshot.linked_alert_records,
             linked_evidence_records=context_snapshot.linked_evidence_records,
         )
+        linked_evidence_packs = self._build_linked_evidence_pack_projections(
+            case_id=case_id,
+            linked_evidence_records=context_snapshot.linked_evidence_records,
+        )
         return self._case_detail_snapshot_factory(
             read_only=True,
             case_id=case_id,
@@ -1150,6 +1172,7 @@ class OperatorInspectionReadSurface:
             linked_observation_records=observation_records,
             linked_lead_records=lead_records,
             linked_evidence_records=context_snapshot.linked_evidence_records,
+            linked_evidence_packs=linked_evidence_packs,
             linked_recommendation_records=context_snapshot.linked_recommendation_records,
             linked_reconciliation_records=context_snapshot.linked_reconciliation_records,
             lifecycle_transitions=context_snapshot.lifecycle_transitions,
@@ -1163,6 +1186,74 @@ class OperatorInspectionReadSurface:
                 linked_alert_records=context_snapshot.linked_alert_records,
             ),
         )
+
+    def _build_linked_evidence_pack_projections(
+        self,
+        *,
+        case_id: str,
+        linked_evidence_records: tuple[dict[str, object], ...],
+    ) -> tuple[dict[str, object], ...]:
+        projections: list[dict[str, object]] = []
+        for evidence_record in linked_evidence_records:
+            content = evidence_record.get("content")
+            if not isinstance(content, Mapping):
+                continue
+            projection = content.get(_EVIDENCE_PACK_PROJECTION_CONTENT_KEY)
+            if projection is None:
+                continue
+            if not isinstance(projection, Mapping):
+                raise ValueError("linked evidence-pack projection must be a mapping")
+            projections.append(
+                self._validated_linked_evidence_pack_projection(
+                    projection=projection,
+                    case_id=case_id,
+                )
+            )
+        return tuple(projections)
+
+    def _validated_linked_evidence_pack_projection(
+        self,
+        *,
+        projection: Mapping[str, object],
+        case_id: str,
+    ) -> dict[str, object]:
+        values = {
+            field_name: self._optional_string_from_mapping(projection, field_name)
+            for field_name in _EVIDENCE_PACK_PROJECTION_REQUIRED_STRINGS
+        }
+        if any(value is None for value in values.values()):
+            raise ValueError("linked evidence-pack projection is missing required fields")
+        if values["case_id"] != case_id:
+            raise ValueError("linked evidence-pack projection case binding mismatch")
+        if projection.get("authoritative_workflow_truth") is not False:
+            raise ValueError("linked evidence-pack projection cannot carry workflow truth")
+        if values["workflow_authority"] != "none":
+            raise ValueError("linked evidence-pack projection cannot carry workflow authority")
+
+        custody = projection.get("custody")
+        provenance = projection.get("provenance")
+        confidence = projection.get("confidence")
+        if (
+            not isinstance(custody, Mapping)
+            or not isinstance(provenance, Mapping)
+            or not isinstance(confidence, Mapping)
+        ):
+            raise ValueError(
+                "linked evidence-pack projection requires custody, provenance, and confidence maps"
+            )
+        if self._optional_string_from_mapping(
+            provenance,
+            "request_binding",
+        ) != values["evidence_request_id"] or self._optional_string_from_mapping(
+            provenance,
+            "case_binding",
+        ) != case_id or self._optional_string_from_mapping(
+            provenance,
+            "source_id",
+        ) != values["source_id"]:
+            raise ValueError("linked evidence-pack projection provenance binding mismatch")
+
+        return dict(projection)
 
     def _build_case_timeline_projection(
         self,

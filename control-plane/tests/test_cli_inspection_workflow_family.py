@@ -1120,6 +1120,124 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             ["github_audit", "wazuh", "unknown"],
         )
 
+    def test_cli_case_detail_exposes_direct_linked_evidence_pack_projections(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        projection = {
+            "evidence_request_id": "evidence-request-enrichment-001",
+            "case_id": promoted_case.case_id,
+            "source_id": "malwarebazaar_hash_reputation",
+            "consumer": "case_workbench",
+            "status": "degraded",
+            "freshness_state": "stale",
+            "custody_state": "complete",
+            "confidence_state": "present",
+            "provenance_state": "bound",
+            "conflict_state": "conflicting",
+            "source_state": "degraded",
+            "uncertainty_label": "stale_review_required",
+            "degraded_reasons": ["stale_reputation", "conflicting_enrichment"],
+            "unavailable_reasons": [],
+            "authority_posture": "subordinate_evidence_context_only",
+            "authoritative_workflow_truth": False,
+            "workflow_authority": "none",
+            "custody": {
+                "aegisops_evidence_record_id": "evidence-enrichment-001",
+                "collection_timestamp": reviewed_at.isoformat(),
+                "enrichment_request_id": "enrichment-request-001",
+                "response_digest": "sha256:" + "a" * 64,
+                "reviewed_file_hash": "b" * 64,
+            },
+            "provenance": {
+                "authority_posture": "subordinate_evidence_context_only",
+                "case_binding": promoted_case.case_id,
+                "collection_timestamp": reviewed_at.isoformat(),
+                "custody_reference": "custody-ref-enrichment-001",
+                "enrichment_request_id": "enrichment-request-001",
+                "request_binding": "evidence-request-enrichment-001",
+                "response_digest": "sha256:" + "a" * 64,
+                "source_id": "malwarebazaar_hash_reputation",
+                "target_binding": "b" * 64,
+            },
+            "confidence": {
+                "ambiguity_badge": "unresolved",
+                "freshness": "stale",
+                "posture": "subordinate",
+                "source_native_score_authority": "none",
+            },
+        }
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-enrichment-001",
+                source_record_id="phase63://evidence-request-enrichment-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="phase63_bounded_enrichment_adapter",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="bounded_enrichment_projection",
+                lifecycle_state="validated",
+                provenance=projection["provenance"],
+                content={"evidence_pack_projection": projection},
+            )
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-sibling-enrichment-001",
+                source_record_id="phase63://evidence-request-sibling-001",
+                alert_id=None,
+                case_id="case-sibling",
+                source_system="phase63_bounded_enrichment_adapter",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="bounded_enrichment_projection",
+                lifecycle_state="validated",
+                provenance={},
+                content={
+                    "evidence_pack_projection": {
+                        **projection,
+                        "evidence_request_id": "evidence-request-sibling-001",
+                        "case_id": "case-sibling",
+                        "provenance": {
+                            **projection["provenance"],
+                            "request_binding": "evidence-request-sibling-001",
+                            "case_binding": "case-sibling",
+                        },
+                    }
+                },
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "inspect-case-detail",
+                "--case-id",
+                promoted_case.case_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(
+            [pack["evidence_request_id"] for pack in payload["linked_evidence_packs"]],
+            ["evidence-request-enrichment-001"],
+        )
+        linked_pack = payload["linked_evidence_packs"][0]
+        self.assertEqual(linked_pack["case_id"], promoted_case.case_id)
+        self.assertEqual(linked_pack["freshness_state"], "stale")
+        self.assertEqual(linked_pack["conflict_state"], "conflicting")
+        self.assertEqual(
+            linked_pack["provenance"]["custody_reference"],
+            "custody-ref-enrichment-001",
+        )
+        self.assertFalse(linked_pack["authoritative_workflow_truth"])
+        self.assertEqual(linked_pack["workflow_authority"], "none")
+
     def test_cli_records_bounded_operator_casework_actions(self) -> None:
         _, service, alert, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_alert_without_case()
