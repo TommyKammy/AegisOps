@@ -48,6 +48,12 @@ const CASE_TIMELINE_SUMMARY_DECISIONS = new Set([
   "fallback",
   "blocked",
 ]);
+const EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES = new Set([
+  "browser_state",
+  "browser_cache",
+  "ui_cache",
+  "cache",
+]);
 const BUSINESS_HOURS_HANDOFF_CONTRACT_VERSION = "phase-56-6";
 
 const BUSINESS_HOURS_HANDOFF_STATES = new Set([
@@ -76,6 +82,7 @@ export async function getOneForStandardResource(
   if (resource === "cases") {
     validateCaseTimelineProjection(payload, String(params.id).trim());
     validateCaseTimelineSummary(payload);
+    validateLinkedEvidencePacks(payload, String(params.id).trim());
   }
 
   return {
@@ -322,6 +329,99 @@ function validateCaseTimelineSummary(payload: unknown) {
     ) {
       throw new OperatorDataProviderContractError(
         `Resource cases case_timeline_summary segment ${segmentName} must stay cited by top-level advisory-only context.`,
+      );
+    }
+  });
+}
+
+function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) {
+  const response = asObject(
+    payload,
+    "Resource cases returned a malformed detail payload.",
+  );
+  const evidencePacks = response.linked_evidence_packs;
+
+  if (evidencePacks === undefined || evidencePacks === null) {
+    return;
+  }
+  if (!Array.isArray(evidencePacks)) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases linked_evidence_packs must be an array.",
+    );
+  }
+
+  evidencePacks.forEach((packValue) => {
+    const pack = asObject(
+      packValue,
+      "Resource cases linked_evidence_packs item must be an object.",
+    );
+    const evidencePackId = asString(pack.evidence_pack_id);
+    const caseId = asString(pack.case_id);
+    const sourceId = asString(pack.source_id);
+    const freshnessState = asString(pack.freshness_state);
+    const custodyState = asString(pack.custody_state);
+    const custodyReference = asString(pack.custody_reference);
+    const confidenceState = asString(pack.confidence_state);
+    const provenanceState = asString(pack.provenance_state);
+    const provenanceReference = asString(pack.provenance_reference);
+    const conflictState = asString(pack.conflict_state);
+    const sourceState = asString(pack.source_state);
+    const uncertaintyLabel = asString(pack.uncertainty_label);
+    const workflowAuthority = asString(pack.workflow_authority);
+    const projectionSource = asString(pack.projection_source);
+
+    if (
+      evidencePackId === null ||
+      caseId === null ||
+      sourceId === null ||
+      freshnessState === null ||
+      custodyState === null ||
+      custodyReference === null ||
+      confidenceState === null ||
+      provenanceState === null ||
+      provenanceReference === null ||
+      conflictState === null ||
+      sourceState === null ||
+      uncertaintyLabel === null
+    ) {
+      throw new OperatorDataProviderContractError(
+        "Resource cases linked_evidence_packs item is missing required evidence-pack labels.",
+      );
+    }
+    if (caseId !== requestedCaseId) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases linked_evidence_packs item ${evidencePackId} must stay bound to case ${requestedCaseId}.`,
+      );
+    }
+    if (
+      pack.authoritative_workflow_truth !== false ||
+      workflowAuthority !== "none"
+    ) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases linked_evidence_packs item ${evidencePackId} cannot carry workflow authority.`,
+      );
+    }
+    if (pack.operator_visible !== true) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases linked_evidence_packs item ${evidencePackId} must stay operator visible.`,
+      );
+    }
+    if (
+      (pack.cache_sourced !== undefined && pack.cache_sourced !== false) ||
+      (pack.stale_cache !== undefined && pack.stale_cache !== false) ||
+      EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES.has(projectionSource ?? "")
+    ) {
+      throw new OperatorDataProviderContractError(
+        "Resource cases rejects cache or browser sourced evidence-pack truth.",
+      );
+    }
+    if (
+      pack.release_readiness_claim !== undefined ||
+      pack.rc_readiness_claim !== undefined ||
+      pack.gate_readiness_claim !== undefined
+    ) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases linked_evidence_packs item ${evidencePackId} cannot claim release readiness.`,
       );
     }
   });
