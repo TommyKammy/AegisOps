@@ -2,7 +2,7 @@
 
 Validation status: PASS
 
-Focused adapter tests cover fresh cited evidence grounding, stale evidence uncertainty, conflicting evidence uncertainty, missing citation refusal, missing custody refusal, prompt-pressure refusal, AI-disabled fallback, AI-degraded fallback, and no-authority-promotion refusal.
+Focused adapter tests cover fresh cited evidence grounding, stale evidence uncertainty, conflicting evidence uncertainty, missing citation refusal, missing custody refusal, prompt-pressure refusal, AI-disabled fallback, AI-degraded fallback, no-authority-promotion refusal, per-projection citation scoping, untrusted-projection citation dropping, provenance binding mismatch refusal, and advertised agent/tool registry coverage.
 
 The adapter remains subordinate context for AI-grounding consumers only.
 
@@ -13,6 +13,10 @@ Focused validation:
 - `python3 -m unittest control-plane.tests.test_phase63_7_ai_grounding_adapter`
 - `python3 -m json.tool docs/automation/ai-agent-registry.json`
 - `python3 -m json.tool docs/automation/ai-tool-registry.json`
+- `bash scripts/verify-phase-59-1-agent-registry-contract.sh`
+- `bash scripts/verify-phase-59-2-tool-registry-contract.sh`
+- `bash scripts/test-verify-phase-59-1-agent-registry-contract.sh`
+- `bash scripts/test-verify-phase-59-2-tool-registry-contract.sh`
 - `python3 -m unittest control-plane.tests.test_phase63_5_evidence_freshness_provenance_projection`
 
 Requested but unavailable in this local environment:

@@ -156,7 +156,7 @@ def build_ai_grounding_adapter(
 
     projections = validation["projections"]
     grounding_items = tuple(
-        _grounding_item(projection, base["citations"])
+        _grounding_item(projection)
         for projection in projections
     )
     uncertainty_flags = _uncertainty_flags(projections)
@@ -277,8 +277,10 @@ def _validated_grounding_payload(
         if not isinstance(raw_projection, Mapping):
             reasons.append("malformed_evidence_projection")
             continue
-        reasons.extend(_projection_reasons(raw_projection, anchor_id))
-        projections.append(raw_projection)
+        projection_reasons = _projection_reasons(raw_projection, anchor_id)
+        reasons.extend(projection_reasons)
+        if not projection_reasons:
+            projections.append(raw_projection)
 
     return {
         "reasons": _dedupe_strings(tuple(reasons)),
@@ -332,6 +334,15 @@ def _projection_reasons(
         reasons.append("missing_grounding_custody")
     if not _mapping_has_non_empty_fields(provenance, _REQUIRED_PROVENANCE_FIELDS):
         reasons.append("missing_grounding_provenance")
+    if isinstance(custody, Mapping) and isinstance(provenance, Mapping):
+        reasons.extend(
+            _provenance_binding_reasons(
+                provenance=provenance,
+                custody=custody,
+                projection=projection,
+                anchor_id=anchor_id,
+            )
+        )
     if not _mapping_has_non_empty_fields(confidence, _REQUIRED_CONFIDENCE_FIELDS):
         reasons.append("missing_grounding_confidence")
     if isinstance(provenance, Mapping):
@@ -342,6 +353,31 @@ def _projection_reasons(
             reasons.append("grounding_authority_promotion_attempt")
     reasons.extend(_citation_reasons(projection, anchor_id))
     return tuple(reasons)
+
+
+def _provenance_binding_reasons(
+    *,
+    provenance: Mapping[str, object],
+    custody: Mapping[str, object],
+    projection: Mapping[str, object],
+    anchor_id: str,
+) -> tuple[str, ...]:
+    expected_values = {
+        "request_binding": _string(projection.get("evidence_request_id")),
+        "case_binding": anchor_id,
+        "target_binding": _string(custody.get("reviewed_file_hash")),
+        "source_id": _string(projection.get("source_id")),
+        "enrichment_request_id": _string(custody.get("enrichment_request_id")),
+        "collection_timestamp": _string(custody.get("collection_timestamp")),
+        "response_digest": _string(custody.get("response_digest")),
+        "authority_posture": _SUBORDINATE_AUTHORITY_POSTURE,
+    }
+    for field_name, expected_value in expected_values.items():
+        if expected_value is None:
+            return ("grounding_provenance_binding_mismatch",)
+        if _string(provenance.get(field_name)) != expected_value:
+            return ("grounding_provenance_binding_mismatch",)
+    return ()
 
 
 def _citation_reasons(
@@ -372,7 +408,6 @@ def _citation_reasons(
 
 def _grounding_item(
     projection: Mapping[str, object],
-    citations: tuple[str, ...],
 ) -> dict[str, object]:
     uncertainty_label = (
         _string(projection.get("uncertainty_label"))
@@ -391,7 +426,7 @@ def _grounding_item(
         "source_state": projection.get("source_state"),
         "uncertainty_label": uncertainty_label,
         "uncertainty_required": uncertainty_label != "related_entity_not_authoritative",
-        "citation_ids": citations,
+        "citation_ids": _string_tuple(projection.get("citation_ids")),
         "advisory_only": True,
         "counts_as_workflow_truth": False,
         "can_approve_action": False,

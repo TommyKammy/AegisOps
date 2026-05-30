@@ -10,6 +10,8 @@ The adapter entry point is `build_ai_grounding_adapter`.
 
 Input must use contract version `phase-63-7`, a directly bound case review anchor, and one or more evidence projections from `project_evidence_freshness_provenance` with `consumer=ai_grounding`.
 
+The adapter is registered as `ai_grounding_adapter` with the `evidence_grounding` tool in the executable AI agent and tool registries.
+
 Each projection must preserve:
 
 - case, source, evidence request, and evidence-record citations;
@@ -25,6 +27,8 @@ Each projection must preserve:
 - subordinate evidence authority posture.
 
 Missing citation, missing custody, missing provenance, missing confidence, missing uncertainty, unsupported consumer, case-anchor mismatch, unsupported status, unsupported source state, unsupported conflict state, or any requested authority promotion fails closed with `decision=fallback`.
+
+Per-item citations remain scoped to the projection that produced that item. If any projection is malformed, cross-anchor, missing custody, or otherwise untrusted, its citations are not exported in the adapter response.
 
 Prompt pressure to hide citations, suppress uncertainty, treat evidence as case truth, approve, execute, reconcile, close a case, activate a detector, create source or evidence truth, or mark release/readiness/gate truth is blocked with `decision=blocked`.
 

@@ -103,6 +103,7 @@ required_tool_names = {
     "case_timeline_summary",
     "evidence_gap_detector",
     "runbook_guidance",
+    "evidence_grounding",
 }
 required_tool_fields = {
     "tool_name",

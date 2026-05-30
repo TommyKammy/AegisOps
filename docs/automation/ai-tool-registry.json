@@ -462,6 +462,47 @@
         "policy_bypass"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "tool_name": "evidence_grounding",
+      "purpose": "Build cited advisory AI grounding from directly linked reviewed Phase 63 evidence projections while preserving stale, conflicting, unavailable, untrusted, and uncertain evidence posture.",
+      "allowed_record_families": [
+        "case",
+        "evidence_request",
+        "evidence",
+        "source",
+        "ai_trace"
+      ],
+      "required_citations": [
+        "record_family must identify the directly linked reviewed case, evidence request, evidence record, source, or AI trace behind each grounding claim",
+        "record_id must identify the directly bound AegisOps record behind each grounding claim",
+        "evidence_reference must identify reviewed evidence projection citations, custody and provenance references, or an explicit missing, stale, conflicting, unavailable, or untrusted evidence prerequisite"
+      ],
+      "audit_fields": [
+        "tool_name",
+        "agent_name",
+        "trace_id",
+        "requested_by",
+        "record_family",
+        "record_id",
+        "citation_ids",
+        "decision",
+        "timestamp"
+      ],
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "evidence_truth_creation",
+        "conflict_resolution",
+        "workflow_progress",
+        "production_write",
+        "policy_bypass"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
     }
   ]
 }

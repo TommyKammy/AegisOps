@@ -9,6 +9,7 @@ import unittest
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 CONTROL_PLANE_ROOT = TESTS_ROOT.parent
+REPO_ROOT = CONTROL_PLANE_ROOT.parent
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
@@ -57,7 +58,11 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
             grounding_items[0]["uncertainty_label"],
             "related_entity_not_authoritative",
         )
-        self.assertEqual(grounding_items[0]["citation_ids"], payload["citations"])
+        self.assertEqual(grounding_items[0]["citation_ids"], _projection()["citation_ids"])
+        self.assertNotIn(
+            "docs/automation/ai-agent-registry.json",
+            grounding_items[0]["citation_ids"],
+        )
         self.assertFalse(grounding_items[0]["counts_as_workflow_truth"])
         self.assertFalse(grounding_items[0]["can_approve_action"])
         self.assertFalse(grounding_items[0]["can_execute_action"])
@@ -103,6 +108,31 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
             self.assertTrue(item["uncertainty_required"])
             self.assertFalse(item["counts_as_workflow_truth"])
 
+    def test_grounding_items_keep_projection_citations_scoped(self) -> None:
+        first_projection = _projection()
+        second_projection = _retarget_projection(
+            _projection(),
+            evidence_request_id="evidence-request-secondary",
+            evidence_record_id="evidence-secondary",
+            source_id="secondary_source",
+        )
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(
+                projections=(first_projection, second_projection)
+            )
+        )
+
+        self.assertEqual(payload["decision"], "ground")
+        first_item, second_item = payload["grounding_items"]
+        self.assertEqual(first_item["citation_ids"], first_projection["citation_ids"])
+        self.assertEqual(second_item["citation_ids"], second_projection["citation_ids"])
+        self.assertNotIn("evidence:evidence-secondary", first_item["citation_ids"])
+        self.assertNotIn(
+            "evidence:evidence-enrichment-637",
+            second_item["citation_ids"],
+        )
+
     def test_missing_citation_or_custody_fails_closed_without_grounding_items(self) -> None:
         cases = (
             (
@@ -128,6 +158,50 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
                 self.assertIn(expected_reason, payload["unresolved_reasons"])
                 self.assertFalse(payload["ai_generation_allowed"])
                 self.assertEqual(payload["grounding_items"], ())
+
+    def test_untrusted_projection_citations_are_not_exported(self) -> None:
+        projection = {
+            **_projection(),
+            "case_id": "case-other",
+            "citation_ids": (
+                "case:case-other",
+                "evidence_request:foreign-request",
+                "evidence:foreign-evidence",
+                "source:foreign-source",
+            ),
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn("grounding_not_bound_to_review_anchor", payload["unresolved_reasons"])
+        self.assertIn("case:case-637", payload["citations"])
+        self.assertNotIn("case:case-other", payload["citations"])
+        self.assertNotIn("evidence:foreign-evidence", payload["citations"])
+        self.assertEqual(payload["grounding_items"], ())
+
+    def test_mismatched_provenance_binding_fails_closed(self) -> None:
+        projection = _projection()
+        projection["provenance"] = {
+            **projection["provenance"],
+            "case_binding": "case-other",
+            "request_binding": "evidence-request-other",
+            "source_id": "source-other",
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn(
+            "grounding_provenance_binding_mismatch",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
 
     def test_prompt_pressure_to_widen_authority_or_hide_uncertainty_is_blocked(self) -> None:
         payload = build_ai_grounding_adapter(
@@ -182,6 +256,28 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertIn("grounding_authority_promotion_attempt", payload["unresolved_reasons"])
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertEqual(payload["grounding_items"], ())
+
+    def test_advertised_agent_and_tool_are_registered(self) -> None:
+        with (REPO_ROOT / "docs/automation/ai-agent-registry.json").open() as stream:
+            agent_registry = json.load(stream)
+        with (REPO_ROOT / "docs/automation/ai-tool-registry.json").open() as stream:
+            tool_registry = json.load(stream)
+
+        agent = next(
+            item
+            for item in agent_registry["agents"]
+            if item["agent_name"] == "ai_grounding_adapter"
+        )
+        tool = next(
+            item
+            for item in tool_registry["tools"]
+            if item["tool_name"] == "evidence_grounding"
+        )
+
+        self.assertIn("evidence_grounding", agent["allowed_tools"])
+        self.assertEqual(agent["authority_ceiling"], "advisory_only_subordinate_to_aegisops_records")
+        self.assertIn("case", tool["allowed_record_families"])
+        self.assertIn("evidence_truth_creation", tool["disallowed_authority"])
 
 
 def _response_digest(response: dict[str, object]) -> str:
@@ -303,6 +399,37 @@ def _projection(
             "evidence_request:evidence-request-637",
             "evidence:evidence-enrichment-637",
             "source:malwarebazaar_hash_reputation",
+        ),
+    }
+
+
+def _retarget_projection(
+    projection: dict[str, object],
+    *,
+    evidence_request_id: str,
+    evidence_record_id: str,
+    source_id: str,
+) -> dict[str, object]:
+    custody = {
+        **projection["custody"],
+        "aegisops_evidence_record_id": evidence_record_id,
+    }
+    provenance = {
+        **projection["provenance"],
+        "request_binding": evidence_request_id,
+        "source_id": source_id,
+    }
+    return {
+        **projection,
+        "evidence_request_id": evidence_request_id,
+        "source_id": source_id,
+        "custody": custody,
+        "provenance": provenance,
+        "citation_ids": (
+            "case:case-637",
+            "evidence_request:" + evidence_request_id,
+            "evidence:" + evidence_record_id,
+            "source:" + source_id,
         ),
     }
 
