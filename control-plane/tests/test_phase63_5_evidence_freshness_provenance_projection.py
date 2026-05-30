@@ -212,6 +212,7 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
         self.assertEqual(projection.status, "degraded")
         self.assertEqual(projection.conflict_state, "conflicting")
         self.assertEqual(projection.uncertainty_label, "unresolved_conflict")
+        self.assertEqual(projection.confidence["ambiguity_badge"], "unresolved")
         self.assertFalse(projection.authoritative_workflow_truth)
 
     def test_unavailable_source_projects_prerequisite_failure(self) -> None:
@@ -308,6 +309,34 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                         self._projection_input(malformed_pack)
                     )
 
+    def test_response_digest_must_match_packed_reputation_response(self) -> None:
+        pack = self._pack()
+        other_digest = self._response_digest(
+            {
+                **self._response(),
+                "signature": "other-family",
+            }
+        )
+        malformed_pack = BoundedEnrichmentEvidencePack(
+            **{
+                **pack.as_dict(),
+                "looked_up_at": pack.looked_up_at,
+                "custody": {
+                    **dict(pack.custody),
+                    "response_digest": other_digest,
+                },
+                "provenance": {
+                    **dict(pack.provenance),
+                    "response_digest": other_digest,
+                },
+            }
+        )
+
+        with self.assertRaisesRegex(ValueError, "response_digest_mismatch"):
+            project_evidence_freshness_provenance(
+                self._projection_input(malformed_pack)
+            )
+
     def test_confidence_posture_must_match_source_registry(self) -> None:
         pack = self._pack()
         malformed_pack = BoundedEnrichmentEvidencePack(
@@ -326,6 +355,34 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                 self._projection_input(malformed_pack)
             )
 
+    def test_conflicting_projection_requires_unresolved_confidence_badge(self) -> None:
+        response = {
+            **self._response(),
+            "conflict_marker": {
+                "state": "conflict",
+                "reason": "hash reputation conflicts with reviewed context",
+            },
+        }
+        pack = self._pack(response=response)
+        malformed_pack = BoundedEnrichmentEvidencePack(
+            **{
+                **pack.as_dict(),
+                "looked_up_at": pack.looked_up_at,
+                "confidence": {
+                    **dict(pack.confidence),
+                    "ambiguity_badge": "related-entity",
+                },
+            }
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "confidence_ambiguity_badge_mismatch",
+        ):
+            project_evidence_freshness_provenance(
+                self._projection_input(malformed_pack)
+            )
+
     def test_unexpected_pack_status_fails_closed(self) -> None:
         pack = self._pack()
         malformed_pack = BoundedEnrichmentEvidencePack(
@@ -340,6 +397,31 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
             project_evidence_freshness_provenance(
                 self._projection_input(malformed_pack)
             )
+
+    def test_projection_status_requires_matching_reason(self) -> None:
+        pack = self._pack()
+        malformed_cases = (
+            ("degraded", "degraded_reasons"),
+            ("unavailable", "unavailable_reasons"),
+        )
+
+        for status, reason_field in malformed_cases:
+            with self.subTest(status=status):
+                malformed_pack = BoundedEnrichmentEvidencePack(
+                    **{
+                        **pack.as_dict(),
+                        "looked_up_at": pack.looked_up_at,
+                        "status": status,
+                        reason_field: (),
+                    }
+                )
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "projection_status_requires_reason",
+                ):
+                    project_evidence_freshness_provenance(
+                        self._projection_input(malformed_pack)
+                    )
 
     def test_unknown_projection_reason_codes_fail_closed(self) -> None:
         pack = self._pack()

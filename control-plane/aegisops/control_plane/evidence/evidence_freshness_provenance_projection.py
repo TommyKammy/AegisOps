@@ -9,6 +9,7 @@ from typing import Mapping
 from .bounded_enrichment_adapter import (
     BoundedEnrichmentEvidencePack,
     _BOUNDED_ENRICHMENT_SOURCE_ID,
+    _canonical_response_digest,
     _scan_for_authority_claim,
     _scan_for_endpoint_command_language,
 )
@@ -239,6 +240,10 @@ def _source_registry_entry(source_id: str):
 def _validate_projection_fields(pack: BoundedEnrichmentEvidencePack) -> None:
     if pack.status not in _ALLOWED_PACK_STATUSES:
         raise ValueError("unexpected_projection_status")
+    if pack.status == "degraded" and not pack.degraded_reasons:
+        raise ValueError("projection_status_requires_reason")
+    if pack.status == "unavailable" and not pack.unavailable_reasons:
+        raise ValueError("projection_status_requires_reason")
     registry_entry = _source_registry_entry(pack.source_id)
     allowed_degraded_reasons = (
         frozenset(registry_entry.degraded_states) | _PROJECTION_DEGRADED_REASONS
@@ -279,6 +284,11 @@ def _validate_projection_fields(pack: BoundedEnrichmentEvidencePack) -> None:
         raise ValueError("projection cannot drive workflow authority")
     if pack.confidence["posture"] != registry_entry.confidence_posture:
         raise ValueError("confidence_posture_mismatch")
+    if (
+        pack.confidence["ambiguity_badge"]
+        != _projected_ambiguity_badge(pack.degraded_reasons)
+    ):
+        raise ValueError("confidence_ambiguity_badge_mismatch")
 
 
 def _validate_custody_bindings(
@@ -320,6 +330,17 @@ def _validate_provenance_bindings(
     )
     if collection_timestamp != looked_up_at:
         raise ValueError("provenance_binding_mismatch")
+
+
+def _validate_response_digest_binding(pack: BoundedEnrichmentEvidencePack) -> None:
+    reputation = pack.content.get("reputation")
+    if not isinstance(reputation, Mapping):
+        raise ValueError("response_digest_mismatch")
+    expected_digest = _canonical_response_digest(reputation)
+    if _mapping_string(pack.custody, "response_digest") != expected_digest:
+        raise ValueError("response_digest_mismatch")
+    if _mapping_string(pack.provenance, "response_digest") != expected_digest:
+        raise ValueError("response_digest_mismatch")
 
 
 def _projection_freshness(
@@ -377,10 +398,18 @@ def _projected_status(
 def _projected_confidence(
     pack: BoundedEnrichmentEvidencePack,
     freshness: str,
+    degraded_reasons: tuple[str, ...],
 ) -> Mapping[str, object]:
     confidence = dict(pack.confidence)
     confidence["freshness"] = freshness
+    confidence["ambiguity_badge"] = _projected_ambiguity_badge(degraded_reasons)
     return MappingProxyType(confidence)
+
+
+def _projected_ambiguity_badge(degraded_reasons: tuple[str, ...]) -> str:
+    if "conflicting_enrichment" in degraded_reasons:
+        return "unresolved"
+    return "related-entity"
 
 
 def _uncertainty_label(
@@ -433,10 +462,11 @@ def project_evidence_freshness_provenance(
     freshness, looked_up_at = _projection_freshness(pack, projected_at)
     _validate_custody_bindings(pack, looked_up_at)
     _validate_provenance_bindings(pack, looked_up_at)
+    _validate_response_digest_binding(pack)
     degraded_reasons = _projected_degraded_reasons(pack, freshness)
     unavailable_reasons = _projected_unavailable_reasons(pack)
     status = _projected_status(pack, degraded_reasons, unavailable_reasons)
-    confidence = _projected_confidence(pack, freshness)
+    confidence = _projected_confidence(pack, freshness, degraded_reasons)
 
     conflict_state = (
         "conflicting"
