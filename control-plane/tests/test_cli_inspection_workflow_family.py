@@ -1480,6 +1480,44 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         with self.assertRaisesRegex(ValueError, "provenance_binding_mismatch"):
             service.inspect_case_detail(promoted_case.case_id).to_dict()
 
+    def test_cli_case_detail_rejects_direct_pack_with_tampered_record_custody_reference(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        projection = self._phase63_evidence_pack_projection(
+            case_id=promoted_case.case_id,
+            evidence_record_id="evidence-enrichment-001",
+            reviewed_at=reviewed_at,
+        )
+        record_provenance = projection["provenance"]
+        projection = {
+            **projection,
+            "provenance": {
+                **projection["provenance"],
+                "custody_reference": "custody-ref-tampered",
+            },
+        }
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-enrichment-001",
+                source_record_id="phase63://evidence-request-enrichment-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="phase63_bounded_enrichment_adapter",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="bounded_enrichment_projection",
+                lifecycle_state="validated",
+                provenance=record_provenance,
+                content={"evidence_pack_projection": projection},
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "provenance binding mismatch"):
+            service.inspect_case_detail(promoted_case.case_id).to_dict()
+
     def test_cli_case_detail_rejects_malformed_linked_evidence_pack_projections(
         self,
     ) -> None:
@@ -1488,6 +1526,11 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 "non-subordinate posture",
                 {"authority_posture": "authoritative_aegisops_record"},
                 "must stay subordinate",
+            ),
+            (
+                "unsupported case detail consumer",
+                {"consumer": "ai_grounding"},
+                "unsupported evidence-pack projection label",
             ),
             (
                 "unsupported status label",
@@ -1602,6 +1645,42 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                     },
                 },
                 "provenance binding mismatch",
+            ),
+            (
+                "invalid reviewed file hash",
+                {
+                    "custody": {
+                        "reviewed_file_hash": "not-a-hash",
+                    },
+                    "provenance": {
+                        "target_binding": "not-a-hash",
+                    },
+                },
+                "invalid evidence-pack metadata",
+            ),
+            (
+                "invalid response digest",
+                {
+                    "custody": {
+                        "response_digest": "not-a-digest",
+                    },
+                    "provenance": {
+                        "response_digest": "not-a-digest",
+                    },
+                },
+                "invalid evidence-pack metadata",
+            ),
+            (
+                "non-aware collection timestamp",
+                {
+                    "custody": {
+                        "collection_timestamp": "2026-05-30T00:00:00",
+                    },
+                    "provenance": {
+                        "collection_timestamp": "2026-05-30T00:00:00",
+                    },
+                },
+                "timezone-aware timestamps",
             ),
             (
                 "cache sourced",

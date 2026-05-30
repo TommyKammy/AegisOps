@@ -59,7 +59,7 @@ _EVIDENCE_PACK_BOUNDED_ENRICHMENT_SOURCE_SYSTEM = "phase63_bounded_enrichment_ad
 _EVIDENCE_PACK_BOUNDED_ENRICHMENT_DERIVATION = "bounded_enrichment_projection"
 _EVIDENCE_PACK_BOUNDED_ENRICHMENT_ADAPTER = "phase63_bounded_enrichment_adapter"
 _EVIDENCE_PACK_ALLOWED_PROJECTION_LABELS = {
-    "consumer": frozenset({"case_workbench", "ai_grounding"}),
+    "consumer": frozenset({"case_workbench"}),
     "status": frozenset({"available", "degraded", "unavailable"}),
     "freshness_state": frozenset({"fresh", "stale"}),
     "custody_state": frozenset({"complete"}),
@@ -1306,6 +1306,15 @@ class OperatorInspectionReadSurface:
                 evidence_record,
                 "evidence_id",
             )
+            record_provenance = evidence_record.get("provenance")
+            record_custody_reference = (
+                self._optional_string_from_mapping(
+                    record_provenance,
+                    "custody_reference",
+                )
+                if isinstance(record_provenance, Mapping)
+                else None
+            )
             projection = self._linked_evidence_pack_projection_from_record(
                 evidence_record=evidence_record,
                 content=content,
@@ -1319,6 +1328,7 @@ class OperatorInspectionReadSurface:
                     projection=projection,
                     case_id=case_id,
                     evidence_record_id=evidence_record_id,
+                    record_custody_reference=record_custody_reference,
                 )
             )
         return tuple(projections)
@@ -1646,6 +1656,7 @@ class OperatorInspectionReadSurface:
         *,
         provenance: Mapping[str, object],
         custody: Mapping[str, object],
+        record_custody_reference: str | None,
     ) -> None:
         expected_values = {
             "target_binding": self._optional_string_from_mapping(
@@ -1664,6 +1675,7 @@ class OperatorInspectionReadSurface:
                 custody,
                 "response_digest",
             ),
+            "custody_reference": record_custody_reference,
         }
         if any(
             expected_value is None
@@ -1673,12 +1685,42 @@ class OperatorInspectionReadSurface:
         ):
             raise ValueError("linked evidence-pack projection provenance binding mismatch")
 
+    @staticmethod
+    def _is_sha256_hex(value: str | None) -> bool:
+        if value is None or len(value) != 64:
+            return False
+        return all(character in "0123456789abcdefABCDEF" for character in value)
+
+    @classmethod
+    def _is_sha256_digest(cls, value: str | None) -> bool:
+        if value is None or not value.startswith("sha256:"):
+            return False
+        return cls._is_sha256_hex(value.removeprefix("sha256:"))
+
+    def _validate_linked_evidence_pack_metadata_formats(
+        self,
+        *,
+        custody: Mapping[str, object],
+        provenance: Mapping[str, object],
+    ) -> None:
+        if not self._is_sha256_hex(
+            self._optional_string_from_mapping(custody, "reviewed_file_hash")
+        ) or not self._is_sha256_digest(
+            self._optional_string_from_mapping(custody, "response_digest")
+        ):
+            raise ValueError(
+                "linked evidence-pack projection has invalid evidence-pack metadata"
+            )
+        self._datetime_from_evidence_pack_content(custody, "collection_timestamp")
+        self._datetime_from_evidence_pack_content(provenance, "collection_timestamp")
+
     def _validated_linked_evidence_pack_projection(
         self,
         *,
         projection: Mapping[str, object],
         case_id: str,
         evidence_record_id: str | None,
+        record_custody_reference: str | None,
     ) -> dict[str, object]:
         values = {
             field_name: self._optional_string_from_mapping(projection, field_name)
@@ -1790,6 +1832,11 @@ class OperatorInspectionReadSurface:
         self._validate_linked_evidence_pack_provenance_bindings(
             provenance=provenance,
             custody=custody,
+            record_custody_reference=record_custody_reference,
+        )
+        self._validate_linked_evidence_pack_metadata_formats(
+            custody=custody,
+            provenance=provenance,
         )
         if self._optional_string_from_mapping(
             provenance,

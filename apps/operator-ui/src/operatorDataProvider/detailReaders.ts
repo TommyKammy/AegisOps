@@ -58,7 +58,7 @@ const EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE =
   "subordinate_evidence_context_only";
 const EVIDENCE_PACK_SUPPORTED_SOURCE_ID = "malwarebazaar_hash_reputation";
 const EVIDENCE_PACK_ALLOWED_LABELS = {
-  consumer: new Set(["case_workbench", "ai_grounding"]),
+  consumer: new Set(["case_workbench"]),
   status: new Set(["available", "degraded", "unavailable"]),
   freshness_state: new Set(["fresh", "stale"]),
   custody_state: new Set(["complete"]),
@@ -436,6 +436,39 @@ function validateEvidencePackMetadataMap(
   }
 }
 
+function isSha256Hex(value: string | null) {
+  return value !== null && /^[0-9a-fA-F]{64}$/.test(value);
+}
+
+function isSha256Digest(value: string | null) {
+  return value !== null && /^sha256:[0-9a-fA-F]{64}$/.test(value);
+}
+
+function isAwareTimestamp(value: string | null) {
+  return (
+    value !== null &&
+    !Number.isNaN(Date.parse(value)) &&
+    /(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+  );
+}
+
+function validateEvidencePackMetadataFormats(
+  custody: Record<string, unknown>,
+  provenance: Record<string, unknown>,
+  evidenceRequestId: string,
+) {
+  if (
+    !isSha256Hex(asString(custody.reviewed_file_hash)) ||
+    !isSha256Digest(asString(custody.response_digest)) ||
+    !isAwareTimestamp(asString(custody.collection_timestamp)) ||
+    !isAwareTimestamp(asString(provenance.collection_timestamp))
+  ) {
+    throw new OperatorDataProviderContractError(
+      `Resource cases linked_evidence_packs item ${evidenceRequestId} has invalid evidence-pack metadata.`,
+    );
+  }
+}
+
 function expectedEvidencePackUncertaintyLabel(
   status: string,
   freshnessState: string,
@@ -654,6 +687,7 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
       EVIDENCE_PACK_REQUIRED_CONFIDENCE_FIELDS,
       evidenceRequestId,
     );
+    validateEvidencePackMetadataFormats(custody, provenance, evidenceRequestId);
     if (
       asString(provenance.request_binding) !== evidenceRequestId ||
       asString(provenance.case_binding) !== requestedCaseId ||

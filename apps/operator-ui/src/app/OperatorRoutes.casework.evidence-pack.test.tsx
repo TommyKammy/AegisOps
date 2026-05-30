@@ -198,6 +198,7 @@ describe("case detail evidence pack UI", () => {
     ["hidden conflict label", createEvidencePack({ conflict_state: "" })],
     ["unsupported conflict label", createEvidencePack({ conflict_state: "ready_to_close" })],
     ["unsupported consumer", createEvidencePack({ consumer: "workflow_gate" })],
+    ["AI grounding consumer", createEvidencePack({ consumer: "ai_grounding" })],
     ["unsupported source", createEvidencePackWithSource("workflow_gate")],
     [
       "unsupported degraded reason",
@@ -237,6 +238,45 @@ describe("case detail evidence pack UI", () => {
         provenance: {
           ...createEvidencePack().provenance,
           target_binding: "c".repeat(64),
+        },
+      }),
+    ],
+    [
+      "invalid reviewed file hash",
+      createEvidencePack({
+        custody: {
+          ...createEvidencePack().custody,
+          reviewed_file_hash: "not-a-hash",
+        },
+        provenance: {
+          ...createEvidencePack().provenance,
+          target_binding: "not-a-hash",
+        },
+      }),
+    ],
+    [
+      "invalid response digest",
+      createEvidencePack({
+        custody: {
+          ...createEvidencePack().custody,
+          response_digest: "not-a-digest",
+        },
+        provenance: {
+          ...createEvidencePack().provenance,
+          response_digest: "not-a-digest",
+        },
+      }),
+    ],
+    [
+      "non-aware collection timestamp",
+      createEvidencePack({
+        custody: {
+          ...createEvidencePack().custody,
+          collection_timestamp: "2026-05-30T00:00:00",
+        },
+        provenance: {
+          ...createEvidencePack().provenance,
+          collection_timestamp: "2026-05-30T00:00:00",
         },
       }),
     ],
