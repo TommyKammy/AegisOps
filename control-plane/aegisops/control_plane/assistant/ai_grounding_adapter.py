@@ -149,19 +149,20 @@ _READINESS_PRESSURE_TERMS = (
     "production truth",
 )
 _PROMPT_DETERMINER_PATTERN = r"(?:a|all|an|any|the|this|that|these|those)\s+"
+_PROMPT_OBJECT_MODIFIER_PATTERN = r"(?:[\w-]+\s+){0,3}"
 _AUTHORITY_PRESSURE_PATTERNS = (
     rf"promote\s+(?:{_PROMPT_DETERMINER_PATTERN})?evidence\s+to\s+truth",
-    rf"approve\s+(?:{_PROMPT_DETERMINER_PATTERN})?actions?",
-    rf"execute\s+(?:{_PROMPT_DETERMINER_PATTERN})?actions?",
-    rf"reconcile\s+(?:{_PROMPT_DETERMINER_PATTERN})?receipts?",
-    rf"close\s+(?:{_PROMPT_DETERMINER_PATTERN})?cases?",
-    rf"activate\s+(?:{_PROMPT_DETERMINER_PATTERN})?detectors?",
+    rf"approve\s+(?:{_PROMPT_DETERMINER_PATTERN})?{_PROMPT_OBJECT_MODIFIER_PATTERN}actions?",
+    rf"execute\s+(?:{_PROMPT_DETERMINER_PATTERN})?{_PROMPT_OBJECT_MODIFIER_PATTERN}actions?",
+    rf"reconcile\s+(?:{_PROMPT_DETERMINER_PATTERN})?{_PROMPT_OBJECT_MODIFIER_PATTERN}receipts?",
+    rf"close\s+(?:{_PROMPT_DETERMINER_PATTERN})?{_PROMPT_OBJECT_MODIFIER_PATTERN}cases?",
+    rf"activate\s+(?:{_PROMPT_DETERMINER_PATTERN})?{_PROMPT_OBJECT_MODIFIER_PATTERN}detectors?",
     rf"create\s+(?:{_PROMPT_DETERMINER_PATTERN})?source\s+truth",
     rf"create\s+(?:{_PROMPT_DETERMINER_PATTERN})?evidence\s+truth",
-    rf"resolve\s+(?:{_PROMPT_DETERMINER_PATTERN})?conflicts?",
-    rf"advance\s+(?:{_PROMPT_DETERMINER_PATTERN})?workflows?",
+    rf"resolve\s+(?:{_PROMPT_DETERMINER_PATTERN})?{_PROMPT_OBJECT_MODIFIER_PATTERN}conflicts?",
+    rf"advance\s+(?:{_PROMPT_DETERMINER_PATTERN})?{_PROMPT_OBJECT_MODIFIER_PATTERN}workflows?",
     r"write\s+to\s+production",
-    rf"bypass\s+(?:{_PROMPT_DETERMINER_PATTERN})?polic(?:y|ies)",
+    rf"bypass\s+(?:{_PROMPT_DETERMINER_PATTERN})?{_PROMPT_OBJECT_MODIFIER_PATTERN}polic(?:y|ies)",
 )
 _READINESS_PRESSURE_PATTERNS = (
     rf"mark\s+(?:{_PROMPT_DETERMINER_PATTERN})?gates?\s+ready",
