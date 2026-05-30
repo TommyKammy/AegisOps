@@ -8,7 +8,7 @@ The adapter consumes already reviewed Phase 63 evidence freshness and provenance
 
 The adapter entry point is `build_ai_grounding_adapter`.
 
-Input must use contract version `phase-63-7`, a directly bound case review anchor, the reviewed custody reference for each evidence request, and one or more evidence projections from `project_evidence_freshness_provenance` with `consumer=ai_grounding`.
+Input must use contract version `phase-63-7`, a directly bound case review anchor, the reviewed custody reference and evidence record id for each evidence request, and one or more evidence projections from `project_evidence_freshness_provenance` with `consumer=ai_grounding`.
 
 The adapter is registered as `ai_grounding_adapter` with the `evidence_grounding` tool in the executable AI agent and tool registries.
 
@@ -25,9 +25,9 @@ Each projection must preserve:
 - `workflow_authority=none`;
 - subordinate evidence authority posture.
 
-The adapter derives case, evidence request, evidence-record, and source citations from the reviewed projection fields. If a caller supplies `citation_ids`, they must match that derived projection-local set exactly; missing required citation IDs or extra out-of-scope citation IDs fail closed.
+The adapter derives case, evidence request, evidence-record, and source citations from the reviewed projection fields after matching the projection source and evidence record id against the directly bound review anchor. If a caller supplies `citation_ids`, they must match that derived projection-local set exactly; missing required citation IDs or extra out-of-scope citation IDs fail closed.
 
-Missing custody-reference binding, missing custody, missing provenance, missing confidence, missing uncertainty, state/uncertainty mismatch, unsupported consumer, case-anchor mismatch, unsupported status, unsupported source state, unsupported conflict state, or any requested authority promotion fails closed with `decision=fallback`.
+Missing custody-reference binding, missing evidence-record binding, missing custody, missing provenance, missing confidence, missing uncertainty, state/uncertainty mismatch, internally inconsistent state fields, unsupported consumer, case-anchor mismatch, unsupported status, unsupported source, unsupported source state, unsupported conflict state, or any requested authority promotion fails closed with `decision=fallback`.
 
 Per-item citations remain scoped to the projection that produced that item. If any projection is malformed, cross-anchor, missing custody, or otherwise untrusted, its citations are not exported in the adapter response.
 

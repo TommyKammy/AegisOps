@@ -5,11 +5,14 @@ import re
 
 from .assistant_context import _advisory_text_claims_authority_or_scope_expansion
 from .live_assistant_workflow import phase24_live_assistant_prompt_injection_flags
+from ..evidence.evidence_source_registry import PHASE63_EVIDENCE_SOURCE_REGISTRY
 
 _AGENT_NAME = "ai_grounding_adapter"
 _TOOL_NAME = "evidence_grounding"
 _AUTHORITY_CEILING = "advisory_only"
 _CONTRACT_VERSION = "phase-63-7"
+_PHASE63_5_GROUNDING_SOURCE_ID = "malwarebazaar_hash_reputation"
+_SUPPORTED_GROUNDING_SOURCE_IDS = frozenset({_PHASE63_5_GROUNDING_SOURCE_ID})
 _REGISTRY_CITATIONS = (
     "docs/automation/ai-agent-registry.json",
     "docs/automation/ai-tool-registry.json",
@@ -124,7 +127,7 @@ def build_ai_grounding_adapter(
     validation = _validated_grounding_payload(grounding_context_payload)
     base = _base_payload(
         anchor_id=validation["anchor_id"],
-        projections=validation["projections"],
+        projections=() if validation["reasons"] else validation["projections"],
     )
     prompt_flags = _prompt_pressure_flags(prompt_text)
     if prompt_flags:
@@ -262,6 +265,7 @@ def _validated_grounding_payload(
     if anchor_family != "case" or anchor_id is None:
         return _invalid(("unsupported_review_anchor",))
     custody_reference_bindings = anchor.get("custody_reference_by_evidence_request_id")
+    evidence_record_bindings = anchor.get("evidence_record_id_by_evidence_request_id")
 
     raw_projections = grounding_context_payload.get("evidence_projections")
     if not isinstance(raw_projections, Sequence) or isinstance(
@@ -282,6 +286,7 @@ def _validated_grounding_payload(
             raw_projection,
             anchor_id,
             custody_reference_bindings,
+            evidence_record_bindings,
         )
         reasons.extend(projection_reasons)
         if not projection_reasons:
@@ -298,6 +303,7 @@ def _projection_reasons(
     projection: Mapping[str, object],
     anchor_id: str,
     custody_reference_bindings: object,
+    evidence_record_bindings: object,
 ) -> tuple[str, ...]:
     reasons: list[str] = []
     case_id = _string(projection.get("case_id"))
@@ -305,6 +311,10 @@ def _projection_reasons(
     source_id = _string(projection.get("source_id"))
     expected_custody_reference = _expected_custody_reference(
         custody_reference_bindings,
+        evidence_request_id,
+    )
+    expected_evidence_record_id = _expected_evidence_record_id(
+        evidence_record_bindings,
         evidence_request_id,
     )
     if projection.get("consumer") != "ai_grounding":
@@ -315,6 +325,8 @@ def _projection_reasons(
         reasons.append("missing_grounding_evidence_request_id")
     if source_id is None:
         reasons.append("missing_grounding_source_id")
+    else:
+        reasons.extend(_grounding_source_reasons(source_id))
     if projection.get("authoritative_workflow_truth") is not False:
         reasons.append("grounding_authority_promotion_attempt")
     if projection.get("workflow_authority") != _NO_WORKFLOW_AUTHORITY:
@@ -339,6 +351,7 @@ def _projection_reasons(
         reasons.append("missing_grounding_uncertainty")
     else:
         reasons.extend(_uncertainty_state_reasons(projection))
+    reasons.extend(_state_consistency_reasons(projection))
     custody = projection.get("custody")
     provenance = projection.get("provenance")
     confidence = projection.get("confidence")
@@ -356,8 +369,17 @@ def _projection_reasons(
                 expected_custody_reference=expected_custody_reference,
             )
         )
+    if isinstance(custody, Mapping):
+        reasons.extend(
+            _evidence_record_binding_reasons(
+                custody=custody,
+                expected_evidence_record_id=expected_evidence_record_id,
+            )
+        )
     if expected_custody_reference is None:
         reasons.append("missing_grounding_custody_reference_binding")
+    if expected_evidence_record_id is None:
+        reasons.append("missing_grounding_evidence_record_binding")
     if not _mapping_has_non_empty_fields(confidence, _REQUIRED_CONFIDENCE_FIELDS):
         reasons.append("missing_grounding_confidence")
     if isinstance(provenance, Mapping):
@@ -368,6 +390,28 @@ def _projection_reasons(
             reasons.append("grounding_authority_promotion_attempt")
     reasons.extend(_citation_reasons(projection, anchor_id))
     return tuple(reasons)
+
+
+def _grounding_source_reasons(source_id: str) -> tuple[str, ...]:
+    registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(source_id)
+    if registry_entry is None or source_id not in _SUPPORTED_GROUNDING_SOURCE_IDS:
+        return ("unsupported_grounding_source",)
+    if registry_entry.status not in {"enabled", "degraded", "disabled"}:
+        return ("unsupported_grounding_source",)
+    return ()
+
+
+def _evidence_record_binding_reasons(
+    *,
+    custody: Mapping[str, object],
+    expected_evidence_record_id: str | None,
+) -> tuple[str, ...]:
+    if expected_evidence_record_id is None:
+        return ()
+    evidence_record_id = _string(custody.get("aegisops_evidence_record_id"))
+    if evidence_record_id != expected_evidence_record_id:
+        return ("grounding_evidence_record_binding_mismatch",)
+    return ()
 
 
 def _provenance_binding_reasons(
@@ -454,6 +498,15 @@ def _expected_custody_reference(
     return _string(custody_reference_bindings.get(evidence_request_id))
 
 
+def _expected_evidence_record_id(
+    evidence_record_bindings: object,
+    evidence_request_id: str | None,
+) -> str | None:
+    if evidence_request_id is None or not isinstance(evidence_record_bindings, Mapping):
+        return None
+    return _string(evidence_record_bindings.get(evidence_request_id))
+
+
 def _uncertainty_state_reasons(
     projection: Mapping[str, object],
 ) -> tuple[str, ...]:
@@ -491,6 +544,60 @@ def _expected_uncertainty_label(
     ):
         return "stale_review_required"
     return "related_entity_not_authoritative"
+
+
+def _state_consistency_reasons(
+    projection: Mapping[str, object],
+) -> tuple[str, ...]:
+    status = projection.get("status")
+    source_state = projection.get("source_state")
+    freshness_state = projection.get("freshness_state")
+    conflict_state = projection.get("conflict_state")
+    degraded_reasons = _string_tuple(projection.get("degraded_reasons"))
+    unavailable_reasons = _string_tuple(projection.get("unavailable_reasons"))
+    confidence = projection.get("confidence")
+
+    mismatched = False
+    if status == "available":
+        mismatched = (
+            freshness_state != "fresh"
+            or conflict_state != "none"
+            or source_state != "available"
+            or bool(degraded_reasons)
+            or bool(unavailable_reasons)
+        )
+    if status == "degraded":
+        mismatched = mismatched or bool(unavailable_reasons) or not degraded_reasons
+    if status == "unavailable":
+        mismatched = mismatched or source_state != "unavailable" or not unavailable_reasons
+    if source_state == "unavailable" and status != "unavailable":
+        mismatched = True
+    if source_state == "degraded" and "source_stale" not in degraded_reasons:
+        mismatched = True
+    if source_state == "available" and "source_stale" in degraded_reasons:
+        mismatched = True
+    if conflict_state == "conflicting":
+        mismatched = mismatched or (
+            status != "degraded"
+            or "conflicting_enrichment" not in degraded_reasons
+        )
+    if conflict_state == "none" and "conflicting_enrichment" in degraded_reasons:
+        mismatched = True
+    if freshness_state == "stale":
+        mismatched = mismatched or (
+            status == "available" or "stale_reputation" not in degraded_reasons
+        )
+    if freshness_state == "fresh" and "stale_reputation" in degraded_reasons:
+        mismatched = True
+    if isinstance(confidence, Mapping):
+        expected_badge = (
+            "unresolved" if conflict_state == "conflicting" else "related-entity"
+        )
+        mismatched = mismatched or (
+            confidence.get("freshness") != freshness_state
+            or confidence.get("ambiguity_badge") != expected_badge
+        )
+    return ("grounding_state_mismatch",) if mismatched else ()
 
 
 def _grounding_item(
@@ -560,6 +667,7 @@ def _prompt_pressure_flags(prompt_text: object) -> tuple[str, ...]:
     flags = list(_advisory_text_claims_authority_or_scope_expansion(prompt_text))
     flags.extend(phase24_live_assistant_prompt_injection_flags(prompt_text))
     if not isinstance(prompt_text, str):
+        flags.append("malformed_prompt_payload")
         return _dedupe_strings(tuple(flags))
     if _contains_any_term(prompt_text, _UNCERTAINTY_SUPPRESSION_TERMS):
         flags.append("citation_suppression_attempt")

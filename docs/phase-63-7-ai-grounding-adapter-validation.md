@@ -2,7 +2,7 @@
 
 Validation status: PASS
 
-Focused adapter tests cover fresh cited evidence grounding from Phase 63.5 projection dictionaries, stale evidence uncertainty, conflicting evidence uncertainty, missing citation refusal, out-of-scope citation refusal, missing custody refusal, prompt-pressure refusal, AI-disabled fallback, AI-degraded fallback, no-authority-promotion refusal, per-projection citation scoping, untrusted-projection citation dropping, provenance custody-reference binding mismatch refusal, state/uncertainty mismatch refusal, and advertised agent/tool registry coverage.
+Focused adapter tests cover fresh cited evidence grounding from Phase 63.5 projection dictionaries, stale evidence uncertainty, conflicting evidence uncertainty, missing citation refusal, out-of-scope citation refusal, missing custody refusal, prompt-pressure refusal, malformed prompt refusal, AI-disabled fallback, AI-degraded fallback, no-authority-promotion refusal, per-projection citation scoping, untrusted-projection citation dropping, untrusted-payload citation dropping, unsupported source refusal, reviewed evidence-record binding refusal, provenance custody-reference binding mismatch refusal, state/uncertainty mismatch refusal, internally inconsistent state refusal, and advertised agent/tool registry coverage.
 
 The adapter remains subordinate context for AI-grounding consumers only.
 

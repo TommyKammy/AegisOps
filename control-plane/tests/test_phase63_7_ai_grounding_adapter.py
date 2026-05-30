@@ -115,7 +115,7 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
             _projection(),
             evidence_request_id="evidence-request-secondary",
             evidence_record_id="evidence-secondary",
-            source_id="secondary_source",
+            source_id="malwarebazaar_hash_reputation",
         )
 
         payload = build_ai_grounding_adapter(
@@ -132,7 +132,7 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
             _expected_citation_ids(
                 evidence_request_id="evidence-request-secondary",
                 evidence_record_id="evidence-secondary",
-                source_id="secondary_source",
+                source_id="malwarebazaar_hash_reputation",
             ),
         )
         self.assertNotIn("evidence:evidence-secondary", first_item["citation_ids"])
@@ -140,6 +140,23 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
             "evidence:evidence-enrichment-637",
             second_item["citation_ids"],
         )
+
+    def test_unregistered_grounding_source_fails_closed(self) -> None:
+        projection = _retarget_projection(
+            _projection(),
+            evidence_request_id="evidence-request-637",
+            evidence_record_id="evidence-enrichment-637",
+            source_id="fabricated_source",
+        )
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn("unsupported_grounding_source", payload["unresolved_reasons"])
+        self.assertNotIn("source:fabricated_source", payload["citations"])
+        self.assertEqual(payload["grounding_items"], ())
 
     def test_missing_citation_or_custody_fails_closed_without_grounding_items(self) -> None:
         cases = (
@@ -208,6 +225,45 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertIn("case:case-637", payload["citations"])
         self.assertNotIn("case:case-other", payload["citations"])
         self.assertNotIn("evidence:foreign-evidence", payload["citations"])
+        self.assertEqual(payload["grounding_items"], ())
+
+    def test_untrusted_payload_drops_projection_derived_citations(self) -> None:
+        trusted_projection = _projection()
+        untrusted_projection = {
+            **_projection(),
+            "case_id": "case-other",
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(
+                projections=(trusted_projection, untrusted_projection)
+            )
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn("grounding_not_bound_to_review_anchor", payload["unresolved_reasons"])
+        self.assertIn("case:case-637", payload["citations"])
+        self.assertNotIn("evidence_request:evidence-request-637", payload["citations"])
+        self.assertNotIn("evidence:evidence-enrichment-637", payload["citations"])
+        self.assertEqual(payload["grounding_items"], ())
+
+    def test_evidence_record_citation_must_match_reviewed_context(self) -> None:
+        projection = _projection()
+        projection["custody"] = {
+            **projection["custody"],
+            "aegisops_evidence_record_id": "foreign-evidence-record",
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn(
+            "grounding_evidence_record_binding_mismatch",
+            payload["unresolved_reasons"],
+        )
+        self.assertNotIn("evidence:foreign-evidence-record", payload["citations"])
         self.assertEqual(payload["grounding_items"], ())
 
     def test_mismatched_provenance_binding_fails_closed(self) -> None:
@@ -294,6 +350,26 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
                 self.assertFalse(payload["ai_generation_allowed"])
                 self.assertEqual(payload["grounding_items"], ())
 
+    def test_internally_inconsistent_state_fields_fail_closed(self) -> None:
+        projection = _projection()
+        projection["status"] = "available"
+        projection["conflict_state"] = "conflicting"
+        projection["uncertainty_label"] = "unresolved_conflict"
+        projection["degraded_reasons"] = ("conflicting_enrichment",)
+        projection["confidence"] = {
+            **projection["confidence"],
+            "ambiguity_badge": "unresolved",
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn("grounding_state_mismatch", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
+
     def test_prompt_pressure_to_widen_authority_or_hide_uncertainty_is_blocked(self) -> None:
         payload = build_ai_grounding_adapter(
             grounding_context_payload=_grounding_payload(projections=(_projection(),)),
@@ -313,6 +389,18 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertEqual(payload["grounding_items"], ())
         self.assertIn("case:case-637", payload["citations"])
+
+    def test_malformed_prompt_payload_is_blocked(self) -> None:
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(_projection(),)),
+            prompt_text=["hide citations", "approve the action"],
+        )
+
+        self.assertEqual(payload["decision"], "blocked")
+        self.assertEqual(payload["mode"], "prompt_pressure_blocked")
+        self.assertIn("malformed_prompt_payload", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
 
     def test_ai_disabled_and_degraded_fallback_preserves_non_ai_review_path(self) -> None:
         for posture, expected_reason in (
@@ -535,6 +623,10 @@ def _grounding_payload(*, projections: tuple[dict[str, object], ...]) -> dict[st
             "custody_reference_by_evidence_request_id": {
                 "evidence-request-637": "custody-ref-637",
                 "evidence-request-secondary": "custody-ref-637",
+            },
+            "evidence_record_id_by_evidence_request_id": {
+                "evidence-request-637": "evidence-enrichment-637",
+                "evidence-request-secondary": "evidence-secondary",
             },
         },
         "evidence_projections": projections,
