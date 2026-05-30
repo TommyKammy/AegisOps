@@ -1135,6 +1135,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         evidence_record_id: str,
         reviewed_at: datetime,
         evidence_request_id: str = "evidence-request-enrichment-001",
+        file_hash: str = "b" * 64,
     ) -> dict[str, object]:
         return {
             "evidence_request_id": evidence_request_id,
@@ -1159,7 +1160,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 "collection_timestamp": reviewed_at.isoformat(),
                 "enrichment_request_id": "enrichment-request-001",
                 "response_digest": "sha256:" + "a" * 64,
-                "reviewed_file_hash": "b" * 64,
+                "reviewed_file_hash": file_hash,
             },
             "provenance": {
                 "authority_posture": "subordinate_evidence_context_only",
@@ -1170,7 +1171,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 "request_binding": evidence_request_id,
                 "response_digest": "sha256:" + "a" * 64,
                 "source_id": "malwarebazaar_hash_reputation",
-                "target_binding": "b" * 64,
+                "target_binding": file_hash,
             },
             "confidence": {
                 "ambiguity_badge": "unresolved",
@@ -1338,6 +1339,49 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         self.assertFalse(linked_pack["authoritative_workflow_truth"])
         self.assertEqual(linked_pack["workflow_authority"], "none")
 
+    def test_cli_case_detail_accepts_supported_direct_pack_hash_algorithms(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        for label, file_hash in (
+            ("md5", "b" * 32),
+            ("sha1", "c" * 40),
+        ):
+            with self.subTest(label=label):
+                projection = self._phase63_evidence_pack_projection(
+                    case_id=promoted_case.case_id,
+                    evidence_record_id=f"evidence-enrichment-{label}",
+                    reviewed_at=reviewed_at,
+                    evidence_request_id=f"evidence-request-enrichment-{label}",
+                    file_hash=file_hash,
+                )
+                service.persist_record(
+                    EvidenceRecord(
+                        evidence_id=f"evidence-enrichment-{label}",
+                        source_record_id=f"phase63://evidence-request-enrichment-{label}",
+                        alert_id=promoted_case.alert_id,
+                        case_id=promoted_case.case_id,
+                        source_system="phase63_bounded_enrichment_adapter",
+                        collector_identity="case_workbench",
+                        acquired_at=reviewed_at,
+                        derivation_relationship="bounded_enrichment_projection",
+                        lifecycle_state="validated",
+                        provenance=projection["provenance"],
+                        content={"evidence_pack_projection": projection},
+                    )
+                )
+
+        payload = service.inspect_case_detail(promoted_case.case_id).to_dict()
+
+        linked_hashes = {
+            pack["custody"]["reviewed_file_hash"]
+            for pack in payload["linked_evidence_packs"]
+        }
+        self.assertIn("b" * 32, linked_hashes)
+        self.assertIn("c" * 40, linked_hashes)
+
     def test_cli_case_detail_projects_persisted_bounded_enrichment_pack(
         self,
     ) -> None:
@@ -1441,6 +1485,67 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         )
 
         payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["linked_evidence_packs"], [])
+
+    def test_cli_case_detail_rejects_direct_pack_without_producer_markers(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        projection = self._phase63_evidence_pack_projection(
+            case_id=promoted_case.case_id,
+            evidence_record_id="evidence-external-direct-001",
+            reviewed_at=reviewed_at,
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-external-direct-001",
+                source_record_id="external://evidence-request-enrichment-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="external_evidence_archive",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="related_evidence_context",
+                lifecycle_state="validated",
+                provenance=projection["provenance"],
+                content={"evidence_pack_projection": projection},
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "producer marker mismatch"):
+            service.inspect_case_detail(promoted_case.case_id).to_dict()
+
+    def test_cli_case_detail_skips_non_validated_evidence_pack_records(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        projection = self._phase63_evidence_pack_projection(
+            case_id=promoted_case.case_id,
+            evidence_record_id="evidence-under-review-direct-001",
+            reviewed_at=reviewed_at,
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-under-review-direct-001",
+                source_record_id="phase63://evidence-request-enrichment-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="phase63_bounded_enrichment_adapter",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="bounded_enrichment_projection",
+                lifecycle_state="collected",
+                provenance=projection["provenance"],
+                content={"evidence_pack_projection": projection},
+            )
+        )
+
+        payload = service.inspect_case_detail(promoted_case.case_id).to_dict()
+
         self.assertEqual(payload["linked_evidence_packs"], [])
 
     def test_cli_case_detail_rejects_raw_pack_with_tampered_custody_reference(

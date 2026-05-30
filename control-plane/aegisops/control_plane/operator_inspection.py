@@ -1300,6 +1300,14 @@ class OperatorInspectionReadSurface:
     ) -> tuple[dict[str, object], ...]:
         projections: list[dict[str, object]] = []
         for evidence_record in linked_evidence_records:
+            if (
+                self._optional_string_from_mapping(
+                    evidence_record,
+                    "lifecycle_state",
+                )
+                != "validated"
+            ):
+                continue
             content = evidence_record.get("content")
             if not isinstance(content, Mapping):
                 continue
@@ -1342,6 +1350,12 @@ class OperatorInspectionReadSurface:
     ) -> Mapping[str, object] | None:
         projection = content.get(_EVIDENCE_PACK_PROJECTION_CONTENT_KEY)
         if projection is not None:
+            if not self._has_bounded_enrichment_producer_markers(
+                evidence_record=evidence_record,
+            ):
+                raise ValueError(
+                    "linked evidence-pack projection producer marker mismatch"
+                )
             if not isinstance(projection, Mapping):
                 raise ValueError("linked evidence-pack projection must be a mapping")
             return projection
@@ -1438,13 +1452,9 @@ class OperatorInspectionReadSurface:
             else None
         )
         return (
-            self._optional_string_from_mapping(evidence_record, "source_system")
-            == _EVIDENCE_PACK_BOUNDED_ENRICHMENT_SOURCE_SYSTEM
-            and self._optional_string_from_mapping(
-                evidence_record,
-                "derivation_relationship",
+            self._has_bounded_enrichment_producer_markers(
+                evidence_record=evidence_record,
             )
-            == _EVIDENCE_PACK_BOUNDED_ENRICHMENT_DERIVATION
             and content_adapter == _EVIDENCE_PACK_BOUNDED_ENRICHMENT_ADAPTER
             and all(
                 field_name in content
@@ -1460,6 +1470,21 @@ class OperatorInspectionReadSurface:
                     "content",
                 )
             )
+        )
+
+    def _has_bounded_enrichment_producer_markers(
+        self,
+        *,
+        evidence_record: Mapping[str, object],
+    ) -> bool:
+        return (
+            self._optional_string_from_mapping(evidence_record, "source_system")
+            == _EVIDENCE_PACK_BOUNDED_ENRICHMENT_SOURCE_SYSTEM
+            and self._optional_string_from_mapping(
+                evidence_record,
+                "derivation_relationship",
+            )
+            == _EVIDENCE_PACK_BOUNDED_ENRICHMENT_DERIVATION
         )
 
     @staticmethod
@@ -1687,8 +1712,8 @@ class OperatorInspectionReadSurface:
             raise ValueError("linked evidence-pack projection provenance binding mismatch")
 
     @staticmethod
-    def _is_sha256_hex(value: str | None) -> bool:
-        if value is None or len(value) != 64:
+    def _is_supported_reviewed_hash(value: str | None) -> bool:
+        if value is None or len(value) not in {32, 40, 64}:
             return False
         return all(character in "0123456789abcdefABCDEF" for character in value)
 
@@ -1696,7 +1721,10 @@ class OperatorInspectionReadSurface:
     def _is_sha256_digest(cls, value: str | None) -> bool:
         if value is None or not value.startswith("sha256:"):
             return False
-        return cls._is_sha256_hex(value.removeprefix("sha256:"))
+        digest = value.removeprefix("sha256:")
+        if len(digest) != 64:
+            return False
+        return all(character in "0123456789abcdefABCDEF" for character in digest)
 
     def _validate_linked_evidence_pack_metadata_formats(
         self,
@@ -1704,7 +1732,7 @@ class OperatorInspectionReadSurface:
         custody: Mapping[str, object],
         provenance: Mapping[str, object],
     ) -> None:
-        if not self._is_sha256_hex(
+        if not self._is_supported_reviewed_hash(
             self._optional_string_from_mapping(custody, "reviewed_file_hash")
         ) or not self._is_sha256_digest(
             self._optional_string_from_mapping(custody, "response_digest")

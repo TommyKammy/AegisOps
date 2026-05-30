@@ -213,6 +213,39 @@ describe("case detail evidence pack UI", () => {
     );
   }, fullRouteTestTimeout);
 
+  it("renders supported non-SHA256 reviewed hash bindings", async () => {
+    const md5Hash = "c".repeat(32);
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-case-detail": createCaseDetailPayload({
+          linked_evidence_packs: [
+            createEvidencePack({
+              custody: {
+                ...createEvidencePack().custody,
+                reviewed_file_hash: md5Hash,
+              },
+              provenance: {
+                ...createEvidencePack().provenance,
+                target_binding: md5Hash,
+              },
+            }),
+          ],
+        }),
+      }),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/cases/case-456"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("table", { name: "Linked evidence packs" }, fullRouteWait),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Reviewed operator data could not be verified.")).not.toBeInTheDocument();
+  }, fullRouteTestTimeout);
+
   it("keeps empty and degraded evidence-pack states explicit", async () => {
     const dependencies = createDefaultDependencies({
       fetchFn: createAuthorizedFetch({

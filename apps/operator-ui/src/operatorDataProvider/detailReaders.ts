@@ -436,8 +436,11 @@ function validateEvidencePackMetadataMap(
   }
 }
 
-function isSha256Hex(value: string | null) {
-  return value !== null && /^[0-9a-fA-F]{64}$/.test(value);
+function isSupportedReviewedHash(value: string | null) {
+  return (
+    value !== null &&
+    /^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(value)
+  );
 }
 
 function isSha256Digest(value: string | null) {
@@ -458,7 +461,7 @@ function validateEvidencePackMetadataFormats(
   evidenceRequestId: string,
 ) {
   if (
-    !isSha256Hex(asString(custody.reviewed_file_hash)) ||
+    !isSupportedReviewedHash(asString(custody.reviewed_file_hash)) ||
     !isSha256Digest(asString(custody.response_digest)) ||
     !isAwareTimestamp(asString(custody.collection_timestamp)) ||
     !isAwareTimestamp(asString(provenance.collection_timestamp))
