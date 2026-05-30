@@ -115,12 +115,21 @@ def _mapping_string(value: Mapping[str, object], field_name: str) -> str:
     return _require_non_empty_string(value.get(field_name), field_name)
 
 
-def _projection_metadata_authority_value(field_name: str, item: object) -> object:
+def _projection_metadata_authority_values(
+    field_name: str,
+    item: object,
+) -> tuple[object, ...]:
     if field_name == "request_binding" and isinstance(item, str):
-        return re.sub(r"^evidence[-_\s]+request[-_\s]*", "", item.strip(), flags=re.I)
+        stripped_item = item.strip()
+        scan_values = [
+            re.sub(r"^evidence[-_\s]+request[-_\s]*", "", stripped_item, flags=re.I)
+        ]
+        if re.search(r"\bevidence[-_\s]*request[-_\s]*truths?\b", stripped_item, re.I):
+            scan_values.append(stripped_item)
+        return tuple(scan_values)
     if field_name == "authority_posture":
-        return ""
-    return item
+        return ("",)
+    return (item,)
 
 
 def _validate_projection_metadata_map(
@@ -130,17 +139,14 @@ def _validate_projection_metadata_map(
 ) -> None:
     if frozenset(value) != allowed_fields:
         raise ValueError("unexpected_projection_metadata")
-    if any(
-        _scan_for_authority_claim(
-            _projection_metadata_authority_value(field_name, item)
-        )
-        or _scan_for_endpoint_command_language(
-            _projection_metadata_authority_value(field_name, item)
-        )
-        for field_name, item in value.items()
-        if field_name in authority_scanned_fields
-    ):
-        raise ValueError("projection metadata cannot claim workflow authority")
+    for field_name, item in value.items():
+        if field_name not in authority_scanned_fields:
+            continue
+        for scan_value in _projection_metadata_authority_values(field_name, item):
+            if _scan_for_authority_claim(
+                scan_value
+            ) or _scan_for_endpoint_command_language(scan_value):
+                raise ValueError("projection metadata cannot claim workflow authority")
 
 
 @dataclass(frozen=True)
@@ -351,6 +357,15 @@ def _validate_response_digest_binding(pack: BoundedEnrichmentEvidencePack) -> No
     if not isinstance(reputation, Mapping):
         raise ValueError("response_digest_mismatch")
     if reputation:
+        if pack.status == "unavailable" or pack.unavailable_reasons:
+            raise ValueError("response_digest_mismatch")
+        query_status = reputation.get("query_status")
+        if not isinstance(query_status, str) or query_status.strip().lower() != "ok":
+            raise ValueError("response_digest_mismatch")
+        if _scan_for_authority_claim(reputation) or _scan_for_endpoint_command_language(
+            reputation
+        ):
+            raise ValueError("response_digest_mismatch")
         try:
             response_hashes = _response_hashes(reputation, file_hash=pack.file_hash)
         except ValueError as exc:
@@ -374,7 +389,9 @@ def _projection_freshness(
     registry_entry = _source_registry_entry(pack.source_id)
     freshness_window = _parse_duration_seconds(registry_entry.freshness_window)
     age_seconds = (projected_at - looked_up_at).total_seconds()
-    freshness = "stale" if age_seconds < 0 or age_seconds > freshness_window else "fresh"
+    if age_seconds < 0:
+        raise ValueError("future_lookup_timestamp")
+    freshness = "stale" if age_seconds > freshness_window else "fresh"
     return freshness, looked_up_at
 
 

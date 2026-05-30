@@ -275,12 +275,23 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
             "signature": "other-family",
         }
         other_digest = self._response_digest(other_response)
+        non_ok_response = {
+            **self._response(),
+            "query_status": "hash_not_found",
+        }
+        non_ok_digest = self._response_digest(non_ok_response)
+        authority_response = {
+            **self._response(),
+            "workflow_authority": "close_case",
+        }
+        authority_digest = self._response_digest(authority_response)
         digest_for_different_payload = self._response_digest(
             {
                 **self._response(),
                 "signature": "other-family",
             }
         )
+        future_lookup_time = pack.looked_up_at + timedelta(minutes=5)
         malformed_cases = (
             (
                 "custody_hash_drift",
@@ -347,6 +358,18 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                 "projection metadata cannot claim workflow authority",
             ),
             (
+                "hidden_request_binding_truth_value",
+                pack,
+                {
+                    "evidence_request_id": "evidence_request_truth",
+                    "provenance": {
+                        **dict(pack.provenance),
+                        "request_binding": "evidence_request_truth",
+                    },
+                },
+                "projection metadata cannot claim workflow authority",
+            ),
+            (
                 "digest_drift",
                 pack,
                 {
@@ -360,6 +383,22 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                     },
                 },
                 "response_digest_mismatch",
+            ),
+            (
+                "future_lookup_timestamp",
+                pack,
+                {
+                    "looked_up_at": future_lookup_time,
+                    "custody": {
+                        **dict(pack.custody),
+                        "collection_timestamp": future_lookup_time.isoformat(),
+                    },
+                    "provenance": {
+                        **dict(pack.provenance),
+                        "collection_timestamp": future_lookup_time.isoformat(),
+                    },
+                },
+                "future_lookup_timestamp",
             ),
             (
                 "reasonless_degraded_status",
@@ -388,6 +427,44 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                         **dict(pack.provenance),
                         "response_digest": other_digest,
                     },
+                },
+                "response_digest_mismatch",
+            ),
+            (
+                "non_ok_reputation_status",
+                pack,
+                {
+                    "content": {**dict(pack.content), "reputation": non_ok_response},
+                    "custody": {**dict(pack.custody), "response_digest": non_ok_digest},
+                    "provenance": {
+                        **dict(pack.provenance),
+                        "response_digest": non_ok_digest,
+                    },
+                },
+                "response_digest_mismatch",
+            ),
+            (
+                "authority_bearing_reputation_content",
+                pack,
+                {
+                    "content": {**dict(pack.content), "reputation": authority_response},
+                    "custody": {
+                        **dict(pack.custody),
+                        "response_digest": authority_digest,
+                    },
+                    "provenance": {
+                        **dict(pack.provenance),
+                        "response_digest": authority_digest,
+                    },
+                },
+                "response_digest_mismatch",
+            ),
+            (
+                "unavailable_pack_with_response",
+                pack,
+                {
+                    "status": "unavailable",
+                    "unavailable_reasons": ("source_unavailable",),
                 },
                 "response_digest_mismatch",
             ),
