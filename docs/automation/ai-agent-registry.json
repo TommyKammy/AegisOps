@@ -337,6 +337,35 @@
         "evidence_reference must identify linked reviewed evidence, queue context, runbook context, stale or conflicting evidence, or an explicit unresolved prerequisite"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "agent_name": "ai_grounding_adapter",
+      "purpose": "Surface cited AI grounding context from already reviewed Phase 63 evidence projections while preserving freshness, provenance, confidence, conflict, and uncertainty boundaries without creating workflow truth.",
+      "allowed_tools": [
+        "evidence_grounding"
+      ],
+      "disallowed_tools": [
+        "approve_action",
+        "execute_action",
+        "reconcile_execution",
+        "close_case",
+        "activate_detector",
+        "create_source_truth",
+        "bypass_policy"
+      ],
+      "record_families": [
+        "case",
+        "reviewed_evidence_request",
+        "evidence",
+        "source",
+        "ai_trace"
+      ],
+      "citation_requirements": [
+        "record_family must identify the directly linked reviewed case, reviewed evidence request, evidence record, source, or AI trace behind each grounding claim",
+        "record_id must identify the directly bound AegisOps record behind each grounding claim",
+        "evidence_reference must identify the reviewed evidence projection citation or an explicit missing, stale, conflicting, unavailable, or untrusted evidence prerequisite"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
     }
   ]
 }

@@ -102,6 +102,8 @@ required_agent_names = {
     "case_timeline_summary_agent",
     "evidence_gap_detector_agent",
     "runbook_guidance_agent",
+    "cited_recommendation_draft_agent",
+    "ai_grounding_adapter",
 }
 required_agent_fields = {
     "agent_name",
