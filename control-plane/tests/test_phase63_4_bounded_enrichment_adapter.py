@@ -16,6 +16,9 @@ from aegisops.control_plane.evidence.bounded_enrichment_adapter import (  # noqa
     BoundedEnrichmentAdapter,
     BoundedEnrichmentAdapterInput,
 )
+from aegisops.control_plane.evidence.evidence_source_registry import (  # noqa: E402
+    PHASE63_EVIDENCE_SOURCE_REGISTRY,
+)
 from aegisops.control_plane.evidence.reviewed_evidence_requests import (  # noqa: E402
     ReviewedEvidenceRequestRecord,
 )
@@ -191,6 +194,13 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
         self.assertEqual(pack.status, "degraded")
         self.assertIn("conflicting_enrichment", pack.degraded_reasons)
         self.assertEqual(pack.confidence["ambiguity_badge"], "unresolved")
+        registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[
+            "malwarebazaar_hash_reputation"
+        ]
+        self.assertLessEqual(
+            set(pack.degraded_reasons),
+            set(registry_entry.degraded_states),
+        )
 
     def test_missing_custody_fails_closed(self) -> None:
         now = datetime.now(timezone.utc)
@@ -307,6 +317,30 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
                 now=now,
             )
 
+    def test_tampered_response_with_matching_hash_rejects_stale_digest(self) -> None:
+        now = datetime.now(timezone.utc)
+        original_response = self._response()
+        tampered_response = {
+            **original_response,
+            "signature": "tampered-family",
+        }
+        custody = {
+            "reviewed_file_hash": "a" * 64,
+            "enrichment_request_id": "enrichment-request-001",
+            "collection_timestamp": now.isoformat(),
+            "response_digest": self._response_digest(original_response),
+            "aegisops_evidence_record_id": "evidence-enrichment-001",
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "response_digest must match canonical enrichment response",
+        ):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(now=now, response=tampered_response, custody=custody),
+                now=now,
+            )
+
     def test_no_authority_promotion_from_operation_or_response(self) -> None:
         now = datetime.now(timezone.utc)
 
@@ -351,6 +385,36 @@ class Phase634BoundedEnrichmentAdapterTests(unittest.TestCase):
                 ),
                 now=now,
             )
+
+        with self.assertRaisesRegex(ValueError, "enrichment response cannot claim workflow authority"):
+            BoundedEnrichmentAdapter().build_evidence_pack(
+                self._input(
+                    now=now,
+                    response={
+                        **self._response(),
+                        "workflow_authority": True,
+                    },
+                ),
+                now=now,
+            )
+
+        for phrase in (
+            "quarantine this file",
+            "contain the host",
+            "kill the process",
+        ):
+            with self.subTest(phrase=phrase):
+                with self.assertRaisesRegex(ValueError, "endpoint command authority"):
+                    BoundedEnrichmentAdapter().build_evidence_pack(
+                        self._input(
+                            now=now,
+                            response={
+                                **self._response(),
+                                "operator_guidance": phrase,
+                            },
+                        ),
+                        now=now,
+                    )
 
 
 if __name__ == "__main__":

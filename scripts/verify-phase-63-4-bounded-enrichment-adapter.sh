@@ -74,6 +74,7 @@ required_test_phrases=(
   'test_malformed_reviewed_hash_fails_closed'
   'test_available_response_requires_ok_query_status'
   'test_response_digest_mismatch_fails_closed'
+  'test_tampered_response_with_matching_hash_rejects_stale_digest'
   'test_no_authority_promotion_from_operation_or_response'
 )
 
