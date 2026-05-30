@@ -129,7 +129,9 @@ _READINESS_PRESSURE_TERMS = (
     "mark this release ready",
     "mark release ready",
     "release ready",
+    "release truth",
     "readiness truth",
+    "workflow truth",
     "mark this gate ready",
     "mark gate ready",
     "gate ready",
@@ -152,6 +154,8 @@ _AUTHORITY_PRESSURE_PATTERNS = (
 _READINESS_PRESSURE_PATTERNS = (
     rf"mark\s+(?:{_PROMPT_DETERMINER_PATTERN})?gate\s+ready",
     rf"mark\s+(?:{_PROMPT_DETERMINER_PATTERN})?release\s+ready",
+    rf"create\s+(?:{_PROMPT_DETERMINER_PATTERN})?release\s+truth",
+    rf"create\s+(?:{_PROMPT_DETERMINER_PATTERN})?workflow\s+truth",
     r"gate\s+is\s+ready",
     r"release\s+is\s+ready",
 )
@@ -332,6 +336,9 @@ def _validated_grounding_payload(
     custody_reference_bindings = anchor.get("custody_reference_by_evidence_request_id")
     evidence_record_bindings = anchor.get("evidence_record_id_by_evidence_request_id")
     reviewed_hash_bindings = anchor.get("reviewed_file_hash_by_evidence_request_id")
+    collection_timestamp_bindings = anchor.get(
+        "collection_timestamp_by_evidence_request_id"
+    )
 
     raw_projections = grounding_context_payload.get("evidence_projections")
     if not isinstance(raw_projections, Sequence) or isinstance(
@@ -354,6 +361,7 @@ def _validated_grounding_payload(
             custody_reference_bindings,
             evidence_record_bindings,
             reviewed_hash_bindings,
+            collection_timestamp_bindings,
             trusted_grounded_at,
         )
         reasons.extend(projection_reasons)
@@ -373,6 +381,7 @@ def _projection_reasons(
     custody_reference_bindings: object,
     evidence_record_bindings: object,
     reviewed_hash_bindings: object,
+    collection_timestamp_bindings: object,
     grounded_at: datetime,
 ) -> tuple[str, ...]:
     reasons: list[str] = []
@@ -389,6 +398,10 @@ def _projection_reasons(
     )
     expected_reviewed_file_hash = _expected_reviewed_file_hash(
         reviewed_hash_bindings,
+        evidence_request_id,
+    )
+    expected_collection_timestamp = _expected_collection_timestamp(
+        collection_timestamp_bindings,
         evidence_request_id,
     )
     if projection.get("consumer") != "ai_grounding":
@@ -441,6 +454,7 @@ def _projection_reasons(
                 projection=projection,
                 anchor_id=anchor_id,
                 expected_custody_reference=expected_custody_reference,
+                expected_collection_timestamp=expected_collection_timestamp,
             )
         )
     if isinstance(custody, Mapping):
@@ -465,6 +479,8 @@ def _projection_reasons(
         reasons.append("missing_grounding_evidence_record_binding")
     if expected_reviewed_file_hash is None:
         reasons.append("missing_grounding_reviewed_hash_binding")
+    if expected_collection_timestamp is None:
+        reasons.append("missing_grounding_collection_timestamp_binding")
     if not _mapping_has_non_empty_fields(confidence, _REQUIRED_CONFIDENCE_FIELDS):
         reasons.append("missing_grounding_confidence")
     if isinstance(provenance, Mapping):
@@ -488,7 +504,13 @@ def _projection_reasons(
         reasons.extend(_confidence_binding_reasons(confidence, source_id))
         if confidence.get("source_native_score_authority") != _NO_WORKFLOW_AUTHORITY:
             reasons.append("grounding_authority_promotion_attempt")
-    reasons.extend(_freshness_recomputation_reasons(projection, grounded_at))
+    reasons.extend(
+        _freshness_recomputation_reasons(
+            projection,
+            grounded_at,
+            expected_collection_timestamp,
+        )
+    )
     reasons.extend(_citation_reasons(projection, anchor_id))
     return tuple(reasons)
 
@@ -585,24 +607,22 @@ def _metadata_authority_values(
 def _freshness_recomputation_reasons(
     projection: Mapping[str, object],
     grounded_at: datetime,
+    expected_collection_timestamp: datetime | None,
 ) -> tuple[str, ...]:
     source_id = _string(projection.get("source_id"))
-    custody = projection.get("custody")
-    if source_id is None or not isinstance(custody, Mapping):
+    if source_id is None:
         return ()
     registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(source_id)
     if registry_entry is None:
         return ()
+    if expected_collection_timestamp is None:
+        return ("grounding_freshness_recompute_unavailable",)
     try:
         freshness_window_seconds = _parse_duration_seconds(registry_entry.freshness_window)
-        collection_timestamp = _aware_datetime(
-            custody.get("collection_timestamp"),
-            "custody.collection_timestamp",
-        )
     except ValueError:
         return ("grounding_freshness_recompute_unavailable",)
 
-    age_seconds = (grounded_at - collection_timestamp).total_seconds()
+    age_seconds = (grounded_at - expected_collection_timestamp).total_seconds()
     if age_seconds < 0:
         return ("grounding_freshness_recompute_mismatch",)
     expected_freshness = (
@@ -699,6 +719,7 @@ def _provenance_binding_reasons(
     projection: Mapping[str, object],
     anchor_id: str,
     expected_custody_reference: str | None,
+    expected_collection_timestamp: datetime | None,
 ) -> tuple[str, ...]:
     target_binding = _normalized_supported_hash(custody.get("reviewed_file_hash"))
     provenance_target_binding = _normalized_supported_hash(
@@ -717,7 +738,11 @@ def _provenance_binding_reasons(
         )
     except ValueError:
         return ("grounding_provenance_binding_mismatch",)
-    if provenance_collection_timestamp != collection_timestamp:
+    if (
+        expected_collection_timestamp is None
+        or collection_timestamp != expected_collection_timestamp
+        or provenance_collection_timestamp != expected_collection_timestamp
+    ):
         return ("grounding_provenance_binding_mismatch",)
 
     expected_values = {
@@ -832,6 +857,24 @@ def _expected_reviewed_file_hash(
     if evidence_request_id is None or not isinstance(reviewed_hash_bindings, Mapping):
         return None
     return _normalized_supported_hash(reviewed_hash_bindings.get(evidence_request_id))
+
+
+def _expected_collection_timestamp(
+    collection_timestamp_bindings: object,
+    evidence_request_id: str | None,
+) -> datetime | None:
+    if evidence_request_id is None or not isinstance(
+        collection_timestamp_bindings,
+        Mapping,
+    ):
+        return None
+    try:
+        return _aware_datetime(
+            collection_timestamp_bindings.get(evidence_request_id),
+            "review_anchor.collection_timestamp_by_evidence_request_id",
+        )
+    except ValueError:
+        return None
 
 
 def _uncertainty_state_reasons(

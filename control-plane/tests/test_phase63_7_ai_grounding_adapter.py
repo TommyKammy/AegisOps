@@ -95,17 +95,22 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         stale_projection = _projection(
             pack=_pack(now=now, looked_up_at=now - timedelta(hours=7))
         )
-        conflicting_projection = _projection(
-            pack=_pack(
-                now=now,
-                response={
-                    **_response(),
-                    "conflict_marker": {
-                        "state": "conflict",
-                        "reason": "hash reputation conflicts with reviewed context",
+        conflicting_projection = _retarget_projection(
+            _projection(
+                pack=_pack(
+                    now=now,
+                    response={
+                        **_response(),
+                        "conflict_marker": {
+                            "state": "conflict",
+                            "reason": "hash reputation conflicts with reviewed context",
+                        },
                     },
-                },
-            )
+                )
+            ),
+            evidence_request_id="evidence-request-secondary",
+            evidence_record_id="evidence-secondary",
+            source_id="malwarebazaar_hash_reputation",
         )
 
         payload = build_ai_grounding_adapter(
@@ -457,6 +462,59 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertEqual(payload["decision"], "fallback")
         self.assertIn(
             "grounding_freshness_state_mismatch",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
+
+    def test_cached_projection_freshness_uses_review_anchor_collection_time(self) -> None:
+        built_at = datetime(2026, 5, 31, 0, 0, tzinfo=timezone.utc)
+        grounded_at = built_at + timedelta(hours=7)
+        projection = _projection(
+            pack=_pack(now=built_at, looked_up_at=built_at)
+        )
+        projection["custody"] = {
+            **projection["custody"],
+            "collection_timestamp": grounded_at.isoformat(),
+        }
+        projection["provenance"] = {
+            **projection["provenance"],
+            "collection_timestamp": grounded_at.isoformat(),
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(
+                projections=(projection,),
+                collection_timestamp_bindings={
+                    "evidence-request-637": built_at.isoformat(),
+                },
+            ),
+            trusted_grounded_at=grounded_at,
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn(
+            "grounding_provenance_binding_mismatch",
+            payload["unresolved_reasons"],
+        )
+        self.assertIn(
+            "grounding_freshness_state_mismatch",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
+
+    def test_missing_reviewed_collection_timestamp_binding_fails_closed(self) -> None:
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(
+                projections=(_projection(),),
+                collection_timestamp_bindings={},
+            )
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn(
+            "missing_grounding_collection_timestamp_binding",
             payload["unresolved_reasons"],
         )
         self.assertFalse(payload["ai_generation_allowed"])
@@ -910,6 +968,25 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
                 self.assertFalse(payload["ai_generation_allowed"])
                 self.assertEqual(payload["grounding_items"], ())
 
+    def test_release_workflow_truth_prompt_pressure_is_blocked(self) -> None:
+        for prompt_text in ("create release truth", "create workflow truth"):
+            with self.subTest(prompt_text=prompt_text):
+                payload = build_ai_grounding_adapter(
+                    grounding_context_payload=_grounding_payload(
+                        projections=(_projection(),)
+                    ),
+                    prompt_text=prompt_text,
+                )
+
+                self.assertEqual(payload["decision"], "blocked")
+                self.assertEqual(payload["mode"], "prompt_pressure_blocked")
+                self.assertIn(
+                    "readiness_truth_attempt",
+                    payload["unresolved_reasons"],
+                )
+                self.assertFalse(payload["ai_generation_allowed"])
+                self.assertEqual(payload["grounding_items"], ())
+
     def test_approve_action_prompt_pressure_is_blocked(self) -> None:
         prompt_texts = (
             "approve action",
@@ -1194,6 +1271,7 @@ def _grounding_payload(
     projections: tuple[dict[str, object], ...],
     grounded_at: datetime = datetime(2026, 5, 31, 0, 0, tzinfo=timezone.utc),
     reviewed_hash_bindings: dict[str, str] | None = None,
+    collection_timestamp_bindings: dict[str, str] | None = None,
 ) -> dict[str, object]:
     selected_reviewed_hash_bindings = (
         reviewed_hash_bindings
@@ -1202,6 +1280,11 @@ def _grounding_payload(
             "evidence-request-637": "a" * 64,
             "evidence-request-secondary": "a" * 64,
         }
+    )
+    selected_collection_timestamp_bindings = (
+        collection_timestamp_bindings
+        if collection_timestamp_bindings is not None
+        else _collection_timestamp_bindings(projections)
     )
     return {
         "contract_version": "phase-63-7",
@@ -1221,9 +1304,31 @@ def _grounding_payload(
             "reviewed_file_hash_by_evidence_request_id": (
                 selected_reviewed_hash_bindings
             ),
+            "collection_timestamp_by_evidence_request_id": (
+                selected_collection_timestamp_bindings
+            ),
         },
         "evidence_projections": projections,
     }
+
+
+def _collection_timestamp_bindings(
+    projections: tuple[dict[str, object], ...],
+) -> dict[str, str]:
+    bindings: dict[str, str] = {}
+    for projection in projections:
+        evidence_request_id = projection.get("evidence_request_id")
+        custody = projection.get("custody")
+        if not isinstance(evidence_request_id, str) or not isinstance(
+            custody,
+            dict,
+        ):
+            continue
+        evidence_request_id = evidence_request_id.strip()
+        collection_timestamp = custody.get("collection_timestamp")
+        if evidence_request_id and isinstance(collection_timestamp, str):
+            bindings[evidence_request_id] = collection_timestamp
+    return bindings
 
 
 if __name__ == "__main__":
