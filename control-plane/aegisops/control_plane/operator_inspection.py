@@ -1481,6 +1481,130 @@ class OperatorInspectionReadSurface:
             reasons.append(item.strip())
         return tuple(reasons)
 
+    @staticmethod
+    def _linked_evidence_pack_expected_uncertainty_label(
+        *,
+        values: Mapping[str, str],
+        degraded_reasons: tuple[str, ...],
+        unavailable_reasons: tuple[str, ...],
+    ) -> str:
+        if values["status"] == "unavailable" or unavailable_reasons:
+            return "source_unavailable"
+        if "conflicting_enrichment" in degraded_reasons:
+            return "unresolved_conflict"
+        if (
+            values["freshness_state"] == "stale"
+            or "stale_reputation" in degraded_reasons
+            or "source_stale" in degraded_reasons
+        ):
+            return "stale_review_required"
+        return "related_entity_not_authoritative"
+
+    def _validate_linked_evidence_pack_reason_consistency(
+        self,
+        *,
+        values: Mapping[str, str],
+        degraded_reasons: tuple[str, ...],
+        unavailable_reasons: tuple[str, ...],
+        confidence: Mapping[str, object],
+    ) -> None:
+        if values["status"] == "available" and (
+            degraded_reasons or unavailable_reasons
+        ):
+            raise ValueError(
+                "linked evidence-pack projection has inconsistent evidence-pack projection reason"
+            )
+        if values["status"] == "degraded" and (
+            not degraded_reasons or unavailable_reasons
+        ):
+            raise ValueError(
+                "linked evidence-pack projection has inconsistent evidence-pack projection reason"
+            )
+        if values["status"] == "unavailable" and not unavailable_reasons:
+            raise ValueError(
+                "linked evidence-pack projection has inconsistent evidence-pack projection reason"
+            )
+        if (
+            "stale_reputation" in degraded_reasons
+        ) != (values["freshness_state"] == "stale"):
+            raise ValueError(
+                "linked evidence-pack projection has inconsistent evidence-pack projection reason"
+            )
+        expected_conflict_state = (
+            "conflicting" if "conflicting_enrichment" in degraded_reasons else "none"
+        )
+        if values["conflict_state"] != expected_conflict_state:
+            raise ValueError(
+                "linked evidence-pack projection has inconsistent evidence-pack projection reason"
+            )
+        expected_source_state = (
+            "unavailable"
+            if values["status"] == "unavailable" or unavailable_reasons
+            else "degraded"
+            if "source_stale" in degraded_reasons
+            else "available"
+        )
+        if values["source_state"] != expected_source_state:
+            raise ValueError(
+                "linked evidence-pack projection has inconsistent evidence-pack projection reason"
+            )
+        if values[
+            "uncertainty_label"
+        ] != self._linked_evidence_pack_expected_uncertainty_label(
+            values=values,
+            degraded_reasons=degraded_reasons,
+            unavailable_reasons=unavailable_reasons,
+        ):
+            raise ValueError(
+                "linked evidence-pack projection has inconsistent evidence-pack projection reason"
+            )
+        if self._optional_string_from_mapping(
+            confidence,
+            "freshness",
+        ) != values["freshness_state"] or self._optional_string_from_mapping(
+            confidence,
+            "ambiguity_badge",
+        ) != (
+            "unresolved"
+            if "conflicting_enrichment" in degraded_reasons
+            else "related-entity"
+        ):
+            raise ValueError(
+                "linked evidence-pack projection has inconsistent evidence-pack projection reason"
+            )
+
+    def _validate_linked_evidence_pack_provenance_bindings(
+        self,
+        *,
+        provenance: Mapping[str, object],
+        custody: Mapping[str, object],
+    ) -> None:
+        expected_values = {
+            "target_binding": self._optional_string_from_mapping(
+                custody,
+                "reviewed_file_hash",
+            ),
+            "enrichment_request_id": self._optional_string_from_mapping(
+                custody,
+                "enrichment_request_id",
+            ),
+            "collection_timestamp": self._optional_string_from_mapping(
+                custody,
+                "collection_timestamp",
+            ),
+            "response_digest": self._optional_string_from_mapping(
+                custody,
+                "response_digest",
+            ),
+        }
+        if any(
+            expected_value is None
+            or self._optional_string_from_mapping(provenance, field_name)
+            != expected_value
+            for field_name, expected_value in expected_values.items()
+        ):
+            raise ValueError("linked evidence-pack projection provenance binding mismatch")
+
     def _validated_linked_evidence_pack_projection(
         self,
         *,
@@ -1521,15 +1645,16 @@ class OperatorInspectionReadSurface:
             raise ValueError(
                 "linked evidence-pack projection has unsupported evidence-pack projection reason"
             )
-        if values["case_id"] != case_id:
+        typed_values = {key: value for key, value in values.items() if value is not None}
+        if typed_values["case_id"] != case_id:
             raise ValueError("linked evidence-pack projection case binding mismatch")
         if projection.get("authoritative_workflow_truth") is not False:
             raise ValueError("linked evidence-pack projection cannot carry workflow truth")
-        if values["workflow_authority"] != "none":
+        if typed_values["workflow_authority"] != "none":
             raise ValueError(
                 "linked evidence-pack projection cannot carry workflow authority"
             )
-        if values["authority_posture"] != _EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE:
+        if typed_values["authority_posture"] != _EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE:
             raise ValueError("linked evidence-pack projection must stay subordinate")
         if projection.get("operator_visible") is not None and projection.get(
             "operator_visible"
@@ -1586,14 +1711,18 @@ class OperatorInspectionReadSurface:
         if self._optional_string_from_mapping(
             provenance,
             "request_binding",
-        ) != values["evidence_request_id"] or self._optional_string_from_mapping(
+        ) != typed_values["evidence_request_id"] or self._optional_string_from_mapping(
             provenance,
             "case_binding",
         ) != case_id or self._optional_string_from_mapping(
             provenance,
             "source_id",
-        ) != values["source_id"]:
+        ) != typed_values["source_id"]:
             raise ValueError("linked evidence-pack projection provenance binding mismatch")
+        self._validate_linked_evidence_pack_provenance_bindings(
+            provenance=provenance,
+            custody=custody,
+        )
         if self._optional_string_from_mapping(
             provenance,
             "authority_posture",
@@ -1604,6 +1733,12 @@ class OperatorInspectionReadSurface:
             "source_native_score_authority",
         ) != "none":
             raise ValueError("linked evidence-pack projection cannot carry workflow authority")
+        self._validate_linked_evidence_pack_reason_consistency(
+            values=typed_values,
+            degraded_reasons=degraded_reasons,
+            unavailable_reasons=unavailable_reasons,
+            confidence=confidence,
+        )
 
         return dict(projection)
 

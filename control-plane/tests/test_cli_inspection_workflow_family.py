@@ -1147,8 +1147,8 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             "confidence_state": "present",
             "provenance_state": "bound",
             "conflict_state": "conflicting",
-            "source_state": "degraded",
-            "uncertainty_label": "stale_review_required",
+            "source_state": "available",
+            "uncertainty_label": "unresolved_conflict",
             "degraded_reasons": ["stale_reputation", "conflicting_enrichment"],
             "unavailable_reasons": [],
             "authority_posture": "subordinate_evidence_context_only",
@@ -1175,7 +1175,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             "confidence": {
                 "ambiguity_badge": "unresolved",
                 "freshness": "stale",
-                "posture": "subordinate",
+                "posture": "external_hash_reputation_subordinate_context",
                 "source_native_score_authority": "none",
             },
         }
@@ -1452,6 +1452,30 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 "unsupported evidence-pack projection reason",
             ),
             (
+                "available status with degraded reason",
+                {"status": "available"},
+                "inconsistent evidence-pack projection reason",
+            ),
+            (
+                "degraded status without degraded reason",
+                {
+                    "degraded_reasons": [],
+                    "freshness_state": "fresh",
+                    "conflict_state": "none",
+                    "uncertainty_label": "related_entity_not_authoritative",
+                    "confidence": {
+                        "ambiguity_badge": "related-entity",
+                        "freshness": "fresh",
+                    },
+                },
+                "inconsistent evidence-pack projection reason",
+            ),
+            (
+                "stale state without stale reason",
+                {"degraded_reasons": ["conflicting_enrichment"]},
+                "inconsistent evidence-pack projection reason",
+            ),
+            (
                 "missing custody field",
                 {
                     "custody": {
@@ -1486,6 +1510,15 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                     },
                 },
                 "custody binding mismatch",
+            ),
+            (
+                "provenance target mismatch",
+                {
+                    "provenance": {
+                        "target_binding": "c" * 64,
+                    },
+                },
+                "provenance binding mismatch",
             ),
             (
                 "cache sourced",

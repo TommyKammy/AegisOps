@@ -436,6 +436,98 @@ function validateEvidencePackMetadataMap(
   }
 }
 
+function expectedEvidencePackUncertaintyLabel(
+  status: string,
+  freshnessState: string,
+  degradedReasons: string[],
+  unavailableReasons: string[],
+) {
+  if (status === "unavailable" || unavailableReasons.length > 0) {
+    return "source_unavailable";
+  }
+  if (degradedReasons.includes("conflicting_enrichment")) {
+    return "unresolved_conflict";
+  }
+  if (
+    freshnessState === "stale" ||
+    degradedReasons.includes("stale_reputation") ||
+    degradedReasons.includes("source_stale")
+  ) {
+    return "stale_review_required";
+  }
+  return "related_entity_not_authoritative";
+}
+
+function evidencePackReasonList(value: unknown): string[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  return Array.isArray(value)
+    ? value.map((reason) => asString(reason)).filter((reason): reason is string => reason !== null)
+    : [];
+}
+
+function validateEvidencePackReasonConsistency(
+  pack: Record<string, unknown>,
+  confidence: Record<string, unknown>,
+  labels: {
+    status: string;
+    freshnessState: string;
+    conflictState: string;
+    sourceState: string;
+    uncertaintyLabel: string;
+  },
+) {
+  const degradedReasons = evidencePackReasonList(pack.degraded_reasons);
+  const unavailableReasons = evidencePackReasonList(pack.unavailable_reasons);
+  const inconsistentMessage =
+    "Resource cases linked_evidence_packs item has inconsistent evidence-pack reasons.";
+
+  if (
+    (labels.status === "available" &&
+      (degradedReasons.length > 0 || unavailableReasons.length > 0)) ||
+    (labels.status === "degraded" &&
+      (degradedReasons.length === 0 || unavailableReasons.length > 0)) ||
+    (labels.status === "unavailable" && unavailableReasons.length === 0)
+  ) {
+    throw new OperatorDataProviderContractError(inconsistentMessage);
+  }
+  if (
+    degradedReasons.includes("stale_reputation") !==
+    (labels.freshnessState === "stale")
+  ) {
+    throw new OperatorDataProviderContractError(inconsistentMessage);
+  }
+  const expectedConflictState = degradedReasons.includes("conflicting_enrichment")
+    ? "conflicting"
+    : "none";
+  const expectedSourceState =
+    labels.status === "unavailable" || unavailableReasons.length > 0
+      ? "unavailable"
+      : degradedReasons.includes("source_stale")
+        ? "degraded"
+        : "available";
+
+  if (
+    labels.conflictState !== expectedConflictState ||
+    labels.sourceState !== expectedSourceState ||
+    labels.uncertaintyLabel !==
+      expectedEvidencePackUncertaintyLabel(
+        labels.status,
+        labels.freshnessState,
+        degradedReasons,
+        unavailableReasons,
+      ) ||
+    asString(confidence.freshness) !== labels.freshnessState ||
+    asString(confidence.ambiguity_badge) !==
+      (degradedReasons.includes("conflicting_enrichment")
+        ? "unresolved"
+        : "related-entity")
+  ) {
+    throw new OperatorDataProviderContractError(inconsistentMessage);
+  }
+}
+
 function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) {
   const response = asObject(
     payload,
@@ -565,7 +657,13 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
     if (
       asString(provenance.request_binding) !== evidenceRequestId ||
       asString(provenance.case_binding) !== requestedCaseId ||
-      asString(provenance.source_id) !== sourceId
+      asString(provenance.source_id) !== sourceId ||
+      asString(provenance.target_binding) !== asString(custody.reviewed_file_hash) ||
+      asString(provenance.enrichment_request_id) !==
+        asString(custody.enrichment_request_id) ||
+      asString(provenance.collection_timestamp) !==
+        asString(custody.collection_timestamp) ||
+      asString(provenance.response_digest) !== asString(custody.response_digest)
     ) {
       throw new OperatorDataProviderContractError(
         `Resource cases linked_evidence_packs item ${evidenceRequestId} must keep provenance bound to the evidence request and case.`,
@@ -584,6 +682,13 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
         `Resource cases linked_evidence_packs item ${evidenceRequestId} cannot carry workflow authority.`,
       );
     }
+    validateEvidencePackReasonConsistency(pack, confidence, {
+      status,
+      freshnessState,
+      conflictState,
+      sourceState,
+      uncertaintyLabel,
+    });
     if (
       pack.authoritative_workflow_truth !== false ||
       authorityPosture !== EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE ||

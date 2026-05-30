@@ -24,9 +24,9 @@ function createEvidencePack(overrides: Record<string, unknown> = {}) {
     authoritative_workflow_truth: false,
     case_id: caseId,
     confidence: {
-      ambiguity_badge: "related-entity",
+      ambiguity_badge: "unresolved",
       freshness: "stale",
-      posture: "subordinate",
+      posture: "external_hash_reputation_subordinate_context",
       source_native_score_authority: "none",
     },
     confidence_state: "present",
@@ -40,6 +40,7 @@ function createEvidencePack(overrides: Record<string, unknown> = {}) {
       reviewed_file_hash: "b".repeat(64),
     },
     custody_state: "complete",
+    degraded_reasons: ["stale_reputation", "conflicting_enrichment"],
     evidence_request_id: evidenceRequestId,
     freshness_state: "stale",
     provenance: {
@@ -55,9 +56,10 @@ function createEvidencePack(overrides: Record<string, unknown> = {}) {
     },
     provenance_state: "bound",
     source_id: sourceId,
-    source_state: "degraded",
+    source_state: "available",
     status: "degraded",
-    uncertainty_label: "stale_review_required",
+    uncertainty_label: "unresolved_conflict",
+    unavailable_reasons: [],
     authority_posture: "subordinate_evidence_context_only",
     workflow_authority: "none",
     ...overrides,
@@ -148,9 +150,9 @@ describe("case detail evidence pack UI", () => {
       within(rows[0] as HTMLElement).getByText("present"),
     ).toBeInTheDocument();
     expect(
-      within(rows[0] as HTMLElement).getByText("stale_review_required"),
+      within(rows[0] as HTMLElement).getByText("unresolved_conflict"),
     ).toBeInTheDocument();
-    expect(within(rows[0] as HTMLElement).getByText("degraded")).toBeInTheDocument();
+    expect(within(rows[0] as HTMLElement).getByText("available")).toBeInTheDocument();
     expect(
       within(rows[0] as HTMLElement).getByText("evidence-enrichment-001"),
     ).toBeInTheDocument();
@@ -204,6 +206,39 @@ describe("case detail evidence pack UI", () => {
     [
       "unsupported unavailable reason",
       createEvidencePack({ unavailable_reasons: ["approval_truth"] }),
+    ],
+    [
+      "available status with degraded reason",
+      createEvidencePack({ status: "available" }),
+    ],
+    [
+      "degraded status without degraded reason",
+      createEvidencePack({
+        degraded_reasons: [],
+        conflict_state: "none",
+        freshness_state: "fresh",
+        uncertainty_label: "related_entity_not_authoritative",
+        confidence: {
+          ...createEvidencePack().confidence,
+          ambiguity_badge: "related-entity",
+          freshness: "fresh",
+        },
+      }),
+    ],
+    [
+      "stale state without stale reason",
+      createEvidencePack({
+        degraded_reasons: ["conflicting_enrichment"],
+      }),
+    ],
+    [
+      "provenance target mismatch",
+      createEvidencePack({
+        provenance: {
+          ...createEvidencePack().provenance,
+          target_binding: "c".repeat(64),
+        },
+      }),
     ],
     ["missing custody display", createEvidencePack({ custody: null })],
     [
@@ -342,7 +377,16 @@ describe("case detail evidence pack UI", () => {
                 : [
                     createEvidencePack({
                       evidence_request_id: "evidence-request-reread",
+                      status: "available",
+                      degraded_reasons: [],
                       freshness_state: "fresh",
+                      conflict_state: "none",
+                      uncertainty_label: "related_entity_not_authoritative",
+                      confidence: {
+                        ...createEvidencePack().confidence,
+                        ambiguity_badge: "related-entity",
+                        freshness: "fresh",
+                      },
                     }),
                   ],
           }),
