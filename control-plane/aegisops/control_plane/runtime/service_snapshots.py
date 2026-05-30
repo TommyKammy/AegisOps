@@ -219,6 +219,7 @@ class CaseDetailSnapshot:
     linked_observation_records: tuple[dict[str, object], ...]
     linked_lead_records: tuple[dict[str, object], ...]
     linked_evidence_records: tuple[dict[str, object], ...]
+    linked_evidence_packs: tuple[dict[str, object], ...]
     linked_recommendation_records: tuple[dict[str, object], ...]
     linked_reconciliation_records: tuple[dict[str, object], ...]
     lifecycle_transitions: tuple[dict[str, object], ...]
@@ -247,6 +248,7 @@ class CaseDetailSnapshot:
                 "linked_observation_records": self.linked_observation_records,
                 "linked_lead_records": self.linked_lead_records,
                 "linked_evidence_records": self.linked_evidence_records,
+                "linked_evidence_packs": self.linked_evidence_packs,
                 "linked_recommendation_records": self.linked_recommendation_records,
                 "linked_reconciliation_records": self.linked_reconciliation_records,
                 "lifecycle_transitions": self.lifecycle_transitions,

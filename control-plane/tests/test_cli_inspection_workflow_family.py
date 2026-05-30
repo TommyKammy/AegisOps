@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import pathlib
 import sys
 import unittest
@@ -10,6 +11,13 @@ if str(TESTS_ROOT) not in sys.path:
 
 from _cli_inspection_support import *  # noqa: F403
 from _cli_inspection_support import _approved_payload_binding_hash, _load_wazuh_fixture
+from aegisops.control_plane.evidence.bounded_enrichment_adapter import (
+    BoundedEnrichmentAdapter,
+    BoundedEnrichmentAdapterInput,
+)
+from aegisops.control_plane.evidence.reviewed_evidence_requests import (
+    ReviewedEvidenceRequestRecord,
+)
 
 
 class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
@@ -1119,6 +1127,873 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             payload["provenance_summary"]["source_families"],
             ["github_audit", "wazuh", "unknown"],
         )
+
+    def _phase63_evidence_pack_projection(
+        self,
+        *,
+        case_id: str,
+        evidence_record_id: str,
+        reviewed_at: datetime,
+        evidence_request_id: str = "evidence-request-enrichment-001",
+        file_hash: str = "b" * 64,
+    ) -> dict[str, object]:
+        collection_timestamp = (reviewed_at - timedelta(days=2)).isoformat()
+        return {
+            "evidence_request_id": evidence_request_id,
+            "case_id": case_id,
+            "source_id": "malwarebazaar_hash_reputation",
+            "consumer": "case_workbench",
+            "status": "degraded",
+            "freshness_state": "stale",
+            "custody_state": "complete",
+            "confidence_state": "present",
+            "provenance_state": "bound",
+            "conflict_state": "conflicting",
+            "source_state": "available",
+            "uncertainty_label": "unresolved_conflict",
+            "degraded_reasons": ["stale_reputation", "conflicting_enrichment"],
+            "unavailable_reasons": [],
+            "authority_posture": "subordinate_evidence_context_only",
+            "authoritative_workflow_truth": False,
+            "workflow_authority": "none",
+            "custody": {
+                "aegisops_evidence_record_id": evidence_record_id,
+                "collection_timestamp": collection_timestamp,
+                "enrichment_request_id": "enrichment-request-001",
+                "response_digest": "sha256:" + "a" * 64,
+                "reviewed_file_hash": file_hash,
+            },
+            "provenance": {
+                "authority_posture": "subordinate_evidence_context_only",
+                "case_binding": case_id,
+                "collection_timestamp": collection_timestamp,
+                "custody_reference": "custody-ref-enrichment-001",
+                "enrichment_request_id": "enrichment-request-001",
+                "request_binding": evidence_request_id,
+                "response_digest": "sha256:" + "a" * 64,
+                "source_id": "malwarebazaar_hash_reputation",
+                "target_binding": file_hash,
+            },
+            "confidence": {
+                "ambiguity_badge": "unresolved",
+                "freshness": "stale",
+                "posture": "external_hash_reputation_subordinate_context",
+                "source_native_score_authority": "none",
+            },
+        }
+
+    def _phase63_response_digest(self, response: dict[str, object]) -> str:
+        response_bytes = json.dumps(
+            response,
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return "sha256:" + hashlib.sha256(response_bytes).hexdigest()
+
+    def _phase63_bounded_enrichment_pack_content(
+        self,
+        *,
+        case_id: str,
+        evidence_record_id: str,
+        reviewed_at: datetime,
+        evidence_request_id: str = "evidence-request-enrichment-001",
+    ) -> dict[str, object]:
+        file_hash = "b" * 64
+        response = {
+            "query_status": "ok",
+            "sha256_hash": file_hash,
+            "signature": "example-family",
+            "first_seen": "2026-05-29T00:00:00Z",
+            "last_seen": "2026-05-30T00:00:00Z",
+        }
+        request = ReviewedEvidenceRequestRecord(
+            evidence_request_id=evidence_request_id,
+            case_id=case_id,
+            requester_identity="analyst-001",
+            requester_role="security_analyst",
+            target={
+                "target_class": "reviewed_file_hash",
+                "file_hash": file_hash,
+                "case_id": case_id,
+            },
+            source_id="malwarebazaar_hash_reputation",
+            requested_scope="bounded_read_only_hash_reputation",
+            custody={
+                "reviewed_by": "reviewer-001",
+                "custody_owner": "IT Operations, Information Systems Department",
+                "custody_reference": "custody-ref-enrichment-001",
+                "provenance_chain": "AegisOps evidence record custody",
+            },
+            authorization={
+                "authorized": True,
+                "reviewed_scope": "bounded_read_only_hash_reputation",
+                "decision_id": "approval-decision-001",
+            },
+            linked_case_context={
+                "case_id": case_id,
+                "admitting_evidence_id": evidence_record_id,
+                "reviewed_context_id": "reviewed-context-001",
+            },
+            requested_at=reviewed_at - timedelta(minutes=5),
+            expires_at=reviewed_at + timedelta(hours=2),
+            lifecycle_state="reviewed",
+            authority_posture=(
+                "aegisops_owned_workflow_context_subordinate_evidence_output"
+            ),
+        )
+        pack = BoundedEnrichmentAdapter().build_evidence_pack(
+            BoundedEnrichmentAdapterInput(
+                request=request,
+                file_hash=file_hash,
+                looked_up_at=reviewed_at,
+                response=response,
+                custody={
+                    "reviewed_file_hash": file_hash,
+                    "enrichment_request_id": "enrichment-request-001",
+                    "collection_timestamp": reviewed_at.isoformat(),
+                    "response_digest": self._phase63_response_digest(response),
+                    "aegisops_evidence_record_id": evidence_record_id,
+                },
+            ),
+            now=reviewed_at,
+        )
+        return pack.as_dict()
+
+    def test_cli_case_detail_exposes_direct_linked_evidence_pack_projections(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        projection = self._phase63_evidence_pack_projection(
+            case_id=promoted_case.case_id,
+            evidence_record_id="evidence-enrichment-001",
+            reviewed_at=reviewed_at,
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-enrichment-001",
+                source_record_id="phase63://evidence-request-enrichment-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="phase63_bounded_enrichment_adapter",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="bounded_enrichment_projection",
+                lifecycle_state="validated",
+                provenance=projection["provenance"],
+                content={"evidence_pack_projection": projection},
+            )
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-sibling-enrichment-001",
+                source_record_id="phase63://evidence-request-sibling-001",
+                alert_id=None,
+                case_id="case-sibling",
+                source_system="phase63_bounded_enrichment_adapter",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="bounded_enrichment_projection",
+                lifecycle_state="validated",
+                provenance={},
+                content={
+                    "evidence_pack_projection": {
+                        **projection,
+                        "evidence_request_id": "evidence-request-sibling-001",
+                        "case_id": "case-sibling",
+                        "provenance": {
+                            **projection["provenance"],
+                            "request_binding": "evidence-request-sibling-001",
+                            "case_binding": "case-sibling",
+                        },
+                    }
+                },
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "inspect-case-detail",
+                "--case-id",
+                promoted_case.case_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(
+            [pack["evidence_request_id"] for pack in payload["linked_evidence_packs"]],
+            ["evidence-request-enrichment-001"],
+        )
+        linked_pack = payload["linked_evidence_packs"][0]
+        self.assertEqual(linked_pack["case_id"], promoted_case.case_id)
+        self.assertEqual(linked_pack["freshness_state"], "stale")
+        self.assertEqual(linked_pack["conflict_state"], "conflicting")
+        self.assertEqual(
+            linked_pack["provenance"]["custody_reference"],
+            "custody-ref-enrichment-001",
+        )
+        self.assertFalse(linked_pack["authoritative_workflow_truth"])
+        self.assertEqual(linked_pack["workflow_authority"], "none")
+
+    def test_cli_case_detail_accepts_supported_direct_pack_hash_algorithms(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        for label, file_hash in (
+            ("md5", "b" * 32),
+            ("sha1", "c" * 40),
+        ):
+            with self.subTest(label=label):
+                projection = self._phase63_evidence_pack_projection(
+                    case_id=promoted_case.case_id,
+                    evidence_record_id=f"evidence-enrichment-{label}",
+                    reviewed_at=reviewed_at,
+                    evidence_request_id=f"evidence-request-enrichment-{label}",
+                    file_hash=file_hash,
+                )
+                service.persist_record(
+                    EvidenceRecord(
+                        evidence_id=f"evidence-enrichment-{label}",
+                        source_record_id=f"phase63://evidence-request-enrichment-{label}",
+                        alert_id=promoted_case.alert_id,
+                        case_id=promoted_case.case_id,
+                        source_system="phase63_bounded_enrichment_adapter",
+                        collector_identity="case_workbench",
+                        acquired_at=reviewed_at,
+                        derivation_relationship="bounded_enrichment_projection",
+                        lifecycle_state="validated",
+                        provenance=projection["provenance"],
+                        content={"evidence_pack_projection": projection},
+                    )
+                )
+
+        payload = service.inspect_case_detail(promoted_case.case_id).to_dict()
+
+        linked_hashes = {
+            pack["custody"]["reviewed_file_hash"]
+            for pack in payload["linked_evidence_packs"]
+        }
+        self.assertIn("b" * 32, linked_hashes)
+        self.assertIn("c" * 40, linked_hashes)
+
+    def test_cli_case_detail_projects_persisted_bounded_enrichment_pack(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        pack_content = self._phase63_bounded_enrichment_pack_content(
+            case_id=promoted_case.case_id,
+            evidence_record_id="evidence-enrichment-001",
+            reviewed_at=reviewed_at,
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-enrichment-001",
+                source_record_id="phase63://evidence-request-enrichment-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="phase63_bounded_enrichment_adapter",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="bounded_enrichment_projection",
+                lifecycle_state="validated",
+                provenance=pack_content["provenance"],
+                content=pack_content,
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "inspect-case-detail",
+                "--case-id",
+                promoted_case.case_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(len(payload["linked_evidence_packs"]), 1)
+        linked_pack = payload["linked_evidence_packs"][0]
+        self.assertEqual(
+            linked_pack["evidence_request_id"],
+            "evidence-request-enrichment-001",
+        )
+        self.assertEqual(linked_pack["case_id"], promoted_case.case_id)
+        self.assertEqual(
+            linked_pack["custody"]["aegisops_evidence_record_id"],
+            "evidence-enrichment-001",
+        )
+        self.assertEqual(
+            linked_pack["provenance"]["authority_posture"],
+            "subordinate_evidence_context_only",
+        )
+        self.assertEqual(
+            linked_pack["confidence"]["source_native_score_authority"],
+            "none",
+        )
+
+    def test_cli_case_detail_ignores_unmarked_evidence_pack_lookalikes(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-lookalike-001",
+                source_record_id="phase63://lookalike",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="external_evidence_archive",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="related_evidence_context",
+                lifecycle_state="validated",
+                provenance={},
+                content={
+                    "evidence_request_id": "evidence-request-lookalike-001",
+                    "case_id": promoted_case.case_id,
+                    "source_id": "malwarebazaar_hash_reputation",
+                    "file_hash": "b" * 64,
+                    "looked_up_at": reviewed_at.isoformat(),
+                    "custody": {},
+                    "provenance": {},
+                    "confidence": {},
+                    "content": {},
+                },
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "inspect-case-detail",
+                "--case-id",
+                promoted_case.case_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["linked_evidence_packs"], [])
+
+    def test_cli_case_detail_rejects_direct_pack_without_producer_markers(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        projection = self._phase63_evidence_pack_projection(
+            case_id=promoted_case.case_id,
+            evidence_record_id="evidence-external-direct-001",
+            reviewed_at=reviewed_at,
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-external-direct-001",
+                source_record_id="external://evidence-request-enrichment-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="external_evidence_archive",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="related_evidence_context",
+                lifecycle_state="validated",
+                provenance=projection["provenance"],
+                content={"evidence_pack_projection": projection},
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "producer marker mismatch"):
+            service.inspect_case_detail(promoted_case.case_id).to_dict()
+
+    def test_cli_case_detail_skips_non_validated_evidence_pack_records(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        projection = self._phase63_evidence_pack_projection(
+            case_id=promoted_case.case_id,
+            evidence_record_id="evidence-under-review-direct-001",
+            reviewed_at=reviewed_at,
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-under-review-direct-001",
+                source_record_id="phase63://evidence-request-enrichment-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="phase63_bounded_enrichment_adapter",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="bounded_enrichment_projection",
+                lifecycle_state="collected",
+                provenance=projection["provenance"],
+                content={"evidence_pack_projection": projection},
+            )
+        )
+
+        payload = service.inspect_case_detail(promoted_case.case_id).to_dict()
+
+        self.assertEqual(payload["linked_evidence_packs"], [])
+
+    def test_cli_case_detail_rejects_raw_pack_with_tampered_custody_reference(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        pack_content = self._phase63_bounded_enrichment_pack_content(
+            case_id=promoted_case.case_id,
+            evidence_record_id="evidence-enrichment-001",
+            reviewed_at=reviewed_at,
+        )
+        tampered_pack_content = {
+            **pack_content,
+            "provenance": {
+                **pack_content["provenance"],
+                "custody_reference": "custody-ref-tampered",
+            },
+        }
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-enrichment-001",
+                source_record_id="phase63://evidence-request-enrichment-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="phase63_bounded_enrichment_adapter",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="bounded_enrichment_projection",
+                lifecycle_state="validated",
+                provenance=pack_content["provenance"],
+                content=tampered_pack_content,
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "provenance_binding_mismatch"):
+            service.inspect_case_detail(promoted_case.case_id).to_dict()
+
+    def test_cli_case_detail_rejects_direct_pack_with_tampered_record_custody_reference(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        projection = self._phase63_evidence_pack_projection(
+            case_id=promoted_case.case_id,
+            evidence_record_id="evidence-enrichment-001",
+            reviewed_at=reviewed_at,
+        )
+        record_provenance = projection["provenance"]
+        projection = {
+            **projection,
+            "provenance": {
+                **projection["provenance"],
+                "custody_reference": "custody-ref-tampered",
+            },
+        }
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-enrichment-001",
+                source_record_id="phase63://evidence-request-enrichment-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="phase63_bounded_enrichment_adapter",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="bounded_enrichment_projection",
+                lifecycle_state="validated",
+                provenance=record_provenance,
+                content={"evidence_pack_projection": projection},
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "provenance binding mismatch"):
+            service.inspect_case_detail(promoted_case.case_id).to_dict()
+
+    def test_cli_case_detail_rejects_malformed_linked_evidence_pack_projections(
+        self,
+    ) -> None:
+        expired_timestamp = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+        current_timestamp = datetime.now(timezone.utc).isoformat()
+        omit_field = object()
+        cases = (
+            (
+                "non-subordinate posture",
+                {"authority_posture": "authoritative_aegisops_record"},
+                "must stay subordinate",
+            ),
+            (
+                "unsupported case detail consumer",
+                {"consumer": "ai_grounding"},
+                "unsupported evidence-pack projection label",
+            ),
+            (
+                "unsupported status label",
+                {"status": "rc_ready"},
+                "unsupported evidence-pack projection label",
+            ),
+            (
+                "unsupported freshness label",
+                {"freshness_state": "rc_ready"},
+                "unsupported evidence-pack projection label",
+            ),
+            (
+                "unsupported conflict label",
+                {"conflict_state": "ready_to_close"},
+                "unsupported evidence-pack projection label",
+            ),
+            (
+                "unsupported source label",
+                {"source_state": "ready_to_close"},
+                "unsupported evidence-pack projection label",
+            ),
+            (
+                "unsupported uncertainty label",
+                {"uncertainty_label": "case_truth"},
+                "unsupported evidence-pack projection label",
+            ),
+            (
+                "unsupported source id",
+                {
+                    "source_id": "workflow_gate",
+                    "provenance": {
+                        "source_id": "workflow_gate",
+                    },
+                },
+                "unsupported evidence-pack projection source",
+            ),
+            (
+                "unsupported degraded reason",
+                {"degraded_reasons": ["case_truth"]},
+                "unsupported evidence-pack projection reason",
+            ),
+            (
+                "unsupported unavailable reason",
+                {"unavailable_reasons": ["approval_truth"]},
+                "unsupported evidence-pack projection reason",
+            ),
+            (
+                "missing degraded reason array",
+                {"degraded_reasons": omit_field},
+                "unsupported evidence-pack projection reason",
+            ),
+            (
+                "null unavailable reason array",
+                {"unavailable_reasons": None},
+                "unsupported evidence-pack projection reason",
+            ),
+            (
+                "available status with degraded reason",
+                {"status": "available"},
+                "inconsistent evidence-pack projection reason",
+            ),
+            (
+                "degraded status without degraded reason",
+                {
+                    "degraded_reasons": [],
+                    "freshness_state": "fresh",
+                    "conflict_state": "none",
+                    "uncertainty_label": "related_entity_not_authoritative",
+                    "custody": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "provenance": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "confidence": {
+                        "ambiguity_badge": "related-entity",
+                        "freshness": "fresh",
+                    },
+                },
+                "inconsistent evidence-pack projection reason",
+            ),
+            (
+                "stale state without stale reason",
+                {"degraded_reasons": ["conflicting_enrichment"]},
+                "inconsistent evidence-pack projection reason",
+            ),
+            (
+                "missing custody field",
+                {
+                    "custody": {
+                        "reviewed_file_hash": "",
+                    },
+                },
+                "missing required metadata fields",
+            ),
+            (
+                "missing provenance field",
+                {
+                    "provenance": {
+                        "custody_reference": "",
+                    },
+                },
+                "missing required metadata fields",
+            ),
+            (
+                "missing confidence field",
+                {
+                    "confidence": {
+                        "posture": "",
+                    },
+                },
+                "missing required metadata fields",
+            ),
+            (
+                "custody mismatch",
+                {
+                    "custody": {
+                        "aegisops_evidence_record_id": "evidence-other",
+                    },
+                },
+                "custody binding mismatch",
+            ),
+            (
+                "provenance target mismatch",
+                {
+                    "provenance": {
+                        "target_binding": "c" * 64,
+                    },
+                },
+                "provenance binding mismatch",
+            ),
+            (
+                "invalid reviewed file hash",
+                {
+                    "custody": {
+                        "reviewed_file_hash": "not-a-hash",
+                    },
+                    "provenance": {
+                        "target_binding": "not-a-hash",
+                    },
+                },
+                "invalid evidence-pack metadata",
+            ),
+            (
+                "invalid response digest",
+                {
+                    "custody": {
+                        "response_digest": "not-a-digest",
+                    },
+                    "provenance": {
+                        "response_digest": "not-a-digest",
+                    },
+                },
+                "invalid evidence-pack metadata",
+            ),
+            (
+                "non-aware collection timestamp",
+                {
+                    "custody": {
+                        "collection_timestamp": "2026-05-30T00:00:00",
+                    },
+                    "provenance": {
+                        "collection_timestamp": "2026-05-30T00:00:00",
+                    },
+                },
+                "timezone-aware timestamps",
+            ),
+            (
+                "cache sourced",
+                {"cache_sourced": True},
+                "cannot be cache sourced",
+            ),
+            (
+                "stale cache",
+                {"stale_cache": True},
+                "cannot be cache sourced",
+            ),
+            (
+                "browser projection source",
+                {"projection_source": "browser_state"},
+                "cannot be cache sourced",
+            ),
+            (
+                "hidden operator pack",
+                {"operator_visible": False},
+                "must stay operator visible",
+            ),
+            (
+                "release readiness claim",
+                {"release_readiness_claim": "rc_ready"},
+                "cannot claim release readiness",
+            ),
+            (
+                "nested provenance authority",
+                {
+                    "provenance": {
+                        "authority_posture": "authoritative_aegisops_record",
+                    },
+                },
+                "must stay subordinate",
+            ),
+            (
+                "nested confidence authority",
+                {
+                    "confidence": {
+                        "source_native_score_authority": "workflow_truth",
+                    },
+                },
+                "cannot carry workflow authority",
+            ),
+            (
+                "spoofed confidence posture",
+                {
+                    "confidence": {
+                        "posture": "workflow_truth_confidence",
+                    },
+                },
+                "confidence posture mismatch",
+            ),
+            (
+                "enabled source claims stale registry state",
+                {
+                    "degraded_reasons": ["source_stale"],
+                    "freshness_state": "fresh",
+                    "conflict_state": "none",
+                    "source_state": "degraded",
+                    "uncertainty_label": "stale_review_required",
+                    "custody": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "provenance": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "confidence": {
+                        "ambiguity_badge": "related-entity",
+                        "freshness": "fresh",
+                    },
+                },
+                "source state reason mismatch",
+            ),
+            (
+                "enabled source claims denied registry state",
+                {
+                    "status": "unavailable",
+                    "degraded_reasons": [],
+                    "unavailable_reasons": ["source_denied"],
+                    "freshness_state": "fresh",
+                    "conflict_state": "none",
+                    "source_state": "unavailable",
+                    "uncertainty_label": "source_unavailable",
+                    "custody": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "provenance": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "confidence": {
+                        "ambiguity_badge": "related-entity",
+                        "freshness": "fresh",
+                    },
+                },
+                "source state reason mismatch",
+            ),
+            (
+                "fresh direct projection outside registry freshness window",
+                {
+                    "status": "available",
+                    "degraded_reasons": [],
+                    "unavailable_reasons": [],
+                    "freshness_state": "fresh",
+                    "conflict_state": "none",
+                    "source_state": "available",
+                    "uncertainty_label": "related_entity_not_authoritative",
+                    "custody": {
+                        "collection_timestamp": expired_timestamp,
+                    },
+                    "provenance": {
+                        "collection_timestamp": expired_timestamp,
+                    },
+                    "confidence": {
+                        "ambiguity_badge": "related-entity",
+                        "freshness": "fresh",
+                    },
+                },
+                "freshness window",
+            ),
+            (
+                "stale direct projection inside registry freshness window",
+                {
+                    "status": "degraded",
+                    "degraded_reasons": ["stale_reputation"],
+                    "unavailable_reasons": [],
+                    "freshness_state": "stale",
+                    "conflict_state": "none",
+                    "source_state": "available",
+                    "uncertainty_label": "stale_review_required",
+                    "custody": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "provenance": {
+                        "collection_timestamp": current_timestamp,
+                    },
+                    "confidence": {
+                        "ambiguity_badge": "related-entity",
+                        "freshness": "stale",
+                    },
+                },
+                "freshness window",
+            ),
+            (
+                "unrecognized workflow truth field",
+                {"can_complete_workflow": True},
+                "unexpected evidence-pack projection field",
+            ),
+        )
+
+        for label, overrides, expected_message in cases:
+            with self.subTest(label=label):
+                _, service, promoted_case, _evidence_id, reviewed_at = (
+                    self._build_phase19_in_scope_case()
+                )
+                projection = self._phase63_evidence_pack_projection(
+                    case_id=promoted_case.case_id,
+                    evidence_record_id="evidence-enrichment-001",
+                    reviewed_at=reviewed_at,
+                )
+                for field_name, override in overrides.items():
+                    if override is omit_field:
+                        projection.pop(field_name, None)
+                    elif field_name in {"custody", "provenance", "confidence"}:
+                        projection[field_name] = {
+                            **projection[field_name],
+                            **override,
+                        }
+                    else:
+                        projection[field_name] = override
+                service.persist_record(
+                    EvidenceRecord(
+                        evidence_id="evidence-enrichment-001",
+                        source_record_id="phase63://evidence-request-enrichment-001",
+                        alert_id=promoted_case.alert_id,
+                        case_id=promoted_case.case_id,
+                        source_system="phase63_bounded_enrichment_adapter",
+                        collector_identity="case_workbench",
+                        acquired_at=reviewed_at,
+                        derivation_relationship="bounded_enrichment_projection",
+                        lifecycle_state="validated",
+                        provenance=projection["provenance"],
+                        content={"evidence_pack_projection": projection},
+                    )
+                )
+
+                with self.assertRaisesRegex(ValueError, expected_message):
+                    service.inspect_case_detail(promoted_case.case_id).to_dict()
 
     def test_cli_records_bounded_operator_casework_actions(self) -> None:
         _, service, alert, evidence_id, reviewed_at = (
