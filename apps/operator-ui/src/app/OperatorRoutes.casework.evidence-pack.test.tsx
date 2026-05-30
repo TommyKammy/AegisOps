@@ -233,6 +233,24 @@ describe("case detail evidence pack UI", () => {
         },
       }),
     ],
+    [
+      "nested provenance authority",
+      createEvidencePack({
+        provenance: {
+          ...createEvidencePack().provenance,
+          authority_posture: "authoritative_aegisops_record",
+        },
+      }),
+    ],
+    [
+      "nested confidence authority",
+      createEvidencePack({
+        confidence: {
+          ...createEvidencePack().confidence,
+          source_native_score_authority: "workflow_truth",
+        },
+      }),
+    ],
     ["evidence truth", createEvidencePack({ authoritative_workflow_truth: true })],
     [
       "authoritative posture",

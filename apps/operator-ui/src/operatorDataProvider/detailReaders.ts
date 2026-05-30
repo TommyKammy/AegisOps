@@ -572,6 +572,19 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
       );
     }
     if (
+      asString(provenance.authority_posture) !==
+      EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE
+    ) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases linked_evidence_packs item ${evidenceRequestId} must keep provenance subordinate.`,
+      );
+    }
+    if (asString(confidence.source_native_score_authority) !== "none") {
+      throw new OperatorDataProviderContractError(
+        `Resource cases linked_evidence_packs item ${evidenceRequestId} cannot carry workflow authority.`,
+      );
+    }
+    if (
       pack.authoritative_workflow_truth !== false ||
       authorityPosture !== EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE ||
       workflowAuthority !== "none"
