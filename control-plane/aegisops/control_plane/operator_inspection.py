@@ -36,6 +36,13 @@ _QUEUE_LANES = (
 )
 
 _EVIDENCE_PACK_PROJECTION_CONTENT_KEY = "evidence_pack_projection"
+_EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE = "subordinate_evidence_context_only"
+_EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES = {
+    "browser_state",
+    "browser_cache",
+    "ui_cache",
+    "cache",
+}
 _EVIDENCE_PACK_PROJECTION_REQUIRED_STRINGS = (
     "evidence_request_id",
     "case_id",
@@ -1207,6 +1214,10 @@ class OperatorInspectionReadSurface:
                 self._validated_linked_evidence_pack_projection(
                     projection=projection,
                     case_id=case_id,
+                    evidence_record_id=self._optional_string_from_mapping(
+                        evidence_record,
+                        "evidence_id",
+                    ),
                 )
             )
         return tuple(projections)
@@ -1216,6 +1227,7 @@ class OperatorInspectionReadSurface:
         *,
         projection: Mapping[str, object],
         case_id: str,
+        evidence_record_id: str | None,
     ) -> dict[str, object]:
         values = {
             field_name: self._optional_string_from_mapping(projection, field_name)
@@ -1229,6 +1241,20 @@ class OperatorInspectionReadSurface:
             raise ValueError("linked evidence-pack projection cannot carry workflow truth")
         if values["workflow_authority"] != "none":
             raise ValueError("linked evidence-pack projection cannot carry workflow authority")
+        if values["authority_posture"] != _EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE:
+            raise ValueError("linked evidence-pack projection must stay subordinate")
+        projection_source = self._optional_string_from_mapping(
+            projection,
+            "projection_source",
+        )
+        cache_sourced = projection.get("cache_sourced")
+        stale_cache = projection.get("stale_cache")
+        if (
+            (cache_sourced is not None and cache_sourced is not False)
+            or (stale_cache is not None and stale_cache is not False)
+            or projection_source in _EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES
+        ):
+            raise ValueError("linked evidence-pack projection cannot be cache sourced")
 
         custody = projection.get("custody")
         provenance = projection.get("provenance")
@@ -1241,6 +1267,11 @@ class OperatorInspectionReadSurface:
             raise ValueError(
                 "linked evidence-pack projection requires custody, provenance, and confidence maps"
             )
+        if evidence_record_id is None or self._optional_string_from_mapping(
+            custody,
+            "aegisops_evidence_record_id",
+        ) != evidence_record_id:
+            raise ValueError("linked evidence-pack projection custody binding mismatch")
         if self._optional_string_from_mapping(
             provenance,
             "request_binding",

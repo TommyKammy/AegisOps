@@ -1120,15 +1120,17 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             ["github_audit", "wazuh", "unknown"],
         )
 
-    def test_cli_case_detail_exposes_direct_linked_evidence_pack_projections(
+    def _phase63_evidence_pack_projection(
         self,
-    ) -> None:
-        store, service, promoted_case, _evidence_id, reviewed_at = (
-            self._build_phase19_in_scope_case()
-        )
-        projection = {
-            "evidence_request_id": "evidence-request-enrichment-001",
-            "case_id": promoted_case.case_id,
+        *,
+        case_id: str,
+        evidence_record_id: str,
+        reviewed_at: datetime,
+        evidence_request_id: str = "evidence-request-enrichment-001",
+    ) -> dict[str, object]:
+        return {
+            "evidence_request_id": evidence_request_id,
+            "case_id": case_id,
             "source_id": "malwarebazaar_hash_reputation",
             "consumer": "case_workbench",
             "status": "degraded",
@@ -1145,7 +1147,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             "authoritative_workflow_truth": False,
             "workflow_authority": "none",
             "custody": {
-                "aegisops_evidence_record_id": "evidence-enrichment-001",
+                "aegisops_evidence_record_id": evidence_record_id,
                 "collection_timestamp": reviewed_at.isoformat(),
                 "enrichment_request_id": "enrichment-request-001",
                 "response_digest": "sha256:" + "a" * 64,
@@ -1153,11 +1155,11 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             },
             "provenance": {
                 "authority_posture": "subordinate_evidence_context_only",
-                "case_binding": promoted_case.case_id,
+                "case_binding": case_id,
                 "collection_timestamp": reviewed_at.isoformat(),
                 "custody_reference": "custody-ref-enrichment-001",
                 "enrichment_request_id": "enrichment-request-001",
-                "request_binding": "evidence-request-enrichment-001",
+                "request_binding": evidence_request_id,
                 "response_digest": "sha256:" + "a" * 64,
                 "source_id": "malwarebazaar_hash_reputation",
                 "target_binding": "b" * 64,
@@ -1169,6 +1171,18 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 "source_native_score_authority": "none",
             },
         }
+
+    def test_cli_case_detail_exposes_direct_linked_evidence_pack_projections(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        projection = self._phase63_evidence_pack_projection(
+            case_id=promoted_case.case_id,
+            evidence_record_id="evidence-enrichment-001",
+            reviewed_at=reviewed_at,
+        )
         service.persist_record(
             EvidenceRecord(
                 evidence_id="evidence-enrichment-001",
@@ -1237,6 +1251,77 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         )
         self.assertFalse(linked_pack["authoritative_workflow_truth"])
         self.assertEqual(linked_pack["workflow_authority"], "none")
+
+    def test_cli_case_detail_rejects_malformed_linked_evidence_pack_projections(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "non-subordinate posture",
+                {"authority_posture": "authoritative_aegisops_record"},
+                "must stay subordinate",
+            ),
+            (
+                "custody mismatch",
+                {
+                    "custody": {
+                        "aegisops_evidence_record_id": "evidence-other",
+                    },
+                },
+                "custody binding mismatch",
+            ),
+            (
+                "cache sourced",
+                {"cache_sourced": True},
+                "cannot be cache sourced",
+            ),
+            (
+                "stale cache",
+                {"stale_cache": True},
+                "cannot be cache sourced",
+            ),
+            (
+                "browser projection source",
+                {"projection_source": "browser_state"},
+                "cannot be cache sourced",
+            ),
+        )
+
+        for label, overrides, expected_message in cases:
+            with self.subTest(label=label):
+                _, service, promoted_case, _evidence_id, reviewed_at = (
+                    self._build_phase19_in_scope_case()
+                )
+                projection = self._phase63_evidence_pack_projection(
+                    case_id=promoted_case.case_id,
+                    evidence_record_id="evidence-enrichment-001",
+                    reviewed_at=reviewed_at,
+                )
+                if "custody" in overrides:
+                    projection["custody"] = {
+                        **projection["custody"],
+                        **overrides["custody"],
+                    }
+                else:
+                    projection.update(overrides)
+                service.persist_record(
+                    EvidenceRecord(
+                        evidence_id="evidence-enrichment-001",
+                        source_record_id="phase63://evidence-request-enrichment-001",
+                        alert_id=promoted_case.alert_id,
+                        case_id=promoted_case.case_id,
+                        source_system="phase63_bounded_enrichment_adapter",
+                        collector_identity="case_workbench",
+                        acquired_at=reviewed_at,
+                        derivation_relationship="bounded_enrichment_projection",
+                        lifecycle_state="validated",
+                        provenance=projection["provenance"],
+                        content={"evidence_pack_projection": projection},
+                    )
+                )
+
+                with self.assertRaisesRegex(ValueError, expected_message):
+                    service.inspect_case_detail(promoted_case.case_id).to_dict()
 
     def test_cli_records_bounded_operator_casework_actions(self) -> None:
         _, service, alert, evidence_id, reviewed_at = (
