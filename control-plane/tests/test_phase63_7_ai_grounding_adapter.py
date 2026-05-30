@@ -554,6 +554,129 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertEqual(payload["grounding_items"], ())
 
+    def test_repeated_review_thread_cluster_stays_fail_closed(self) -> None:
+        with self.subTest("untrusted_projection_drops_derived_citations"):
+            trusted_projection = _projection()
+            untrusted_projection = {
+                **_projection(),
+                "case_id": "case-other",
+                "citation_ids": (
+                    "case:case-other",
+                    "evidence_request:foreign-request",
+                    "evidence:foreign-evidence",
+                    "source:foreign-source",
+                ),
+            }
+
+            payload = build_ai_grounding_adapter(
+                grounding_context_payload=_grounding_payload(
+                    projections=(trusted_projection, untrusted_projection)
+                )
+            )
+
+            self.assertEqual(payload["decision"], "fallback")
+            self.assertIn(
+                "grounding_not_bound_to_review_anchor",
+                payload["unresolved_reasons"],
+            )
+            self.assertIn("case:case-637", payload["citations"])
+            self.assertNotIn("evidence:foreign-evidence", payload["citations"])
+            self.assertEqual(payload["grounding_items"], ())
+
+        with self.subTest("phase_63_5_projection_derives_citations"):
+            projection = _projection()
+
+            payload = build_ai_grounding_adapter(
+                grounding_context_payload=_grounding_payload(projections=(projection,))
+            )
+
+            self.assertNotIn("citation_ids", projection)
+            self.assertEqual(payload["decision"], "ground")
+            self.assertEqual(
+                payload["grounding_items"][0]["citation_ids"],
+                _expected_citation_ids(),
+            )
+
+        with self.subTest("extra_projection_citations_fail_closed"):
+            projection = {
+                **_projection(),
+                "citation_ids": (
+                    *_expected_citation_ids(),
+                    "evidence:foreign-evidence",
+                    "source:foreign-source",
+                ),
+            }
+
+            payload = build_ai_grounding_adapter(
+                grounding_context_payload=_grounding_payload(projections=(projection,))
+            )
+
+            self.assertEqual(payload["decision"], "fallback")
+            self.assertIn(
+                "out_of_scope_grounding_citation",
+                payload["unresolved_reasons"],
+            )
+            self.assertNotIn("source:foreign-source", payload["citations"])
+            self.assertEqual(payload["grounding_items"], ())
+
+        with self.subTest("freshness_uses_trusted_grounding_time"):
+            built_at = datetime(2026, 5, 31, 0, 0, tzinfo=timezone.utc)
+            projection = _projection(
+                pack=_pack(now=built_at, looked_up_at=built_at)
+            )
+
+            payload = build_ai_grounding_adapter(
+                grounding_context_payload=_grounding_payload(
+                    projections=(projection,),
+                    grounded_at=built_at,
+                ),
+                trusted_grounded_at=built_at + timedelta(hours=7),
+            )
+
+            self.assertEqual(payload["decision"], "fallback")
+            self.assertIn(
+                "grounding_freshness_state_mismatch",
+                payload["unresolved_reasons"],
+            )
+            self.assertEqual(payload["grounding_items"], ())
+
+        with self.subTest("grounding_items_emit_normalized_source_id"):
+            projection = _projection()
+            projection["source_id"] = " malwarebazaar_hash_reputation "
+            projection["provenance"] = {
+                **projection["provenance"],
+                "source_id": " malwarebazaar_hash_reputation ",
+            }
+
+            payload = build_ai_grounding_adapter(
+                grounding_context_payload=_grounding_payload(projections=(projection,))
+            )
+
+            self.assertEqual(payload["decision"], "ground")
+            self.assertEqual(
+                payload["grounding_items"][0]["source_id"],
+                "malwarebazaar_hash_reputation",
+            )
+            self.assertNotIn(
+                "source: malwarebazaar_hash_reputation ",
+                payload["grounding_items"][0]["citation_ids"],
+            )
+
+        with self.subTest("gate_ready_pressure_is_blocked"):
+            payload = build_ai_grounding_adapter(
+                grounding_context_payload=_grounding_payload(projections=(_projection(),)),
+                prompt_text="mark this gate-ready before closeout",
+            )
+
+            self.assertEqual(payload["decision"], "blocked")
+            self.assertEqual(payload["mode"], "prompt_pressure_blocked")
+            self.assertIn(
+                "readiness_truth_attempt",
+                payload["unresolved_reasons"],
+            )
+            self.assertFalse(payload["ai_generation_allowed"])
+            self.assertEqual(payload["grounding_items"], ())
+
     def test_confidence_posture_must_match_source_registry(self) -> None:
         projection = _projection()
         projection["confidence"] = {
