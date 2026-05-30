@@ -72,6 +72,7 @@ required_test_phrases=(
   'test_conflicting_projection_is_unresolved_not_case_truth'
   'test_unavailable_source_projects_prerequisite_failure'
   'test_missing_custody_confidence_provenance_or_uncertainty_fails_closed'
+  'test_malformed_persisted_pack_review_thread_cluster_fails_closed'
   'test_provenance_bindings_must_match_pack_authority_fields'
   'test_custody_bindings_must_match_pack_hash_and_lookup_time'
   'test_response_digest_must_match_packed_reputation_response'
@@ -114,7 +115,7 @@ done
 required_validation_phrases=(
   '# Phase 63.5 Evidence Freshness and Provenance Projection Validation'
   'Validation status: PASS'
-  'Focused projection tests cover fresh, normalized consumers, stale, projection-time aging, conflicting, unavailable source, missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, non-bounded-enrichment source rejection, custody binding mismatch, provenance binding mismatch, response digest mismatch, response hash mismatch, confidence posture mismatch, confidence ambiguity badge mismatch, unexpected pack status, status without a matching reason, unexpected reason codes, unexpected metadata fields, hidden metadata authority claims, unexpected source status, projection-time source registry status changes, and no-authority-promotion paths.'
+  'Focused projection tests cover fresh, normalized consumers, stale, projection-time aging, conflicting, unavailable source, missing custody, missing confidence, missing provenance, missing uncertainty, source mismatch, case mismatch, non-bounded-enrichment source rejection, custody binding mismatch, provenance binding mismatch, response digest mismatch, response hash mismatch, confidence posture mismatch, confidence ambiguity badge mismatch, unexpected pack status, status without a matching reason, unexpected reason codes, unexpected metadata fields, hidden metadata authority claims, unexpected source status, projection-time source registry status changes, malformed persisted-pack review-thread cluster rejection, and no-authority-promotion paths.'
   'The projection remains subordinate context for case workbench and AI-grounding consumers only.'
   'No projection field becomes alert, case, evidence request, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, or closeout truth.'
 )

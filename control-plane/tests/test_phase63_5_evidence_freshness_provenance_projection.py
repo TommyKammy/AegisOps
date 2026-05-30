@@ -259,6 +259,154 @@ class Phase635EvidenceFreshnessProvenanceProjectionTests(unittest.TestCase):
                         self._projection_input(malformed_pack)
                     )
 
+    def test_malformed_persisted_pack_review_thread_cluster_fails_closed(self) -> None:
+        pack = self._pack()
+        conflicting_response = {
+            **self._response(),
+            "conflict_marker": {
+                "state": "conflict",
+                "reason": "hash reputation conflicts with reviewed context",
+            },
+        }
+        conflicting_pack = self._pack(response=conflicting_response)
+        other_response = {
+            **self._response(),
+            "sha256_hash": "b" * 64,
+            "signature": "other-family",
+        }
+        other_digest = self._response_digest(other_response)
+        digest_for_different_payload = self._response_digest(
+            {
+                **self._response(),
+                "signature": "other-family",
+            }
+        )
+        malformed_cases = (
+            (
+                "custody_hash_drift",
+                pack,
+                {"custody": {**dict(pack.custody), "reviewed_file_hash": "b" * 64}},
+                "custody_binding_mismatch",
+            ),
+            (
+                "custody_timestamp_drift",
+                pack,
+                {
+                    "custody": {
+                        **dict(pack.custody),
+                        "collection_timestamp": (
+                            pack.looked_up_at + timedelta(minutes=1)
+                        ).isoformat(),
+                    },
+                },
+                "custody_binding_mismatch",
+            ),
+            (
+                "confidence_posture_drift",
+                pack,
+                {
+                    "confidence": {
+                        **dict(pack.confidence),
+                        "posture": "case_truth_authority",
+                    },
+                },
+                "confidence_posture_mismatch",
+            ),
+            (
+                "unknown_projection_status",
+                pack,
+                {"status": "case_truth"},
+                "unexpected_projection_status",
+            ),
+            (
+                "unknown_degraded_reason",
+                pack,
+                {"degraded_reasons": ("case_truth",)},
+                "unexpected_projection_reason",
+            ),
+            (
+                "hidden_authority_metadata_field",
+                pack,
+                {
+                    "custody": {
+                        **dict(pack.custody),
+                        "workflow_authority": "close_case",
+                    },
+                },
+                "unexpected_projection_metadata",
+            ),
+            (
+                "hidden_authority_metadata_value",
+                pack,
+                {
+                    "provenance": {
+                        **dict(pack.provenance),
+                        "target_binding": "approval_truth",
+                    },
+                },
+                "projection metadata cannot claim workflow authority",
+            ),
+            (
+                "digest_drift",
+                pack,
+                {
+                    "custody": {
+                        **dict(pack.custody),
+                        "response_digest": digest_for_different_payload,
+                    },
+                    "provenance": {
+                        **dict(pack.provenance),
+                        "response_digest": digest_for_different_payload,
+                    },
+                },
+                "response_digest_mismatch",
+            ),
+            (
+                "reasonless_degraded_status",
+                pack,
+                {"status": "degraded", "degraded_reasons": ()},
+                "projection_status_requires_reason",
+            ),
+            (
+                "conflict_badge_drift",
+                conflicting_pack,
+                {
+                    "confidence": {
+                        **dict(conflicting_pack.confidence),
+                        "ambiguity_badge": "related-entity",
+                    },
+                },
+                "confidence_ambiguity_badge_mismatch",
+            ),
+            (
+                "reputation_hash_drift",
+                pack,
+                {
+                    "content": {**dict(pack.content), "reputation": other_response},
+                    "custody": {**dict(pack.custody), "response_digest": other_digest},
+                    "provenance": {
+                        **dict(pack.provenance),
+                        "response_digest": other_digest,
+                    },
+                },
+                "response_digest_mismatch",
+            ),
+        )
+
+        for label, base_pack, pack_updates, expected_error in malformed_cases:
+            with self.subTest(label=label):
+                malformed_pack = BoundedEnrichmentEvidencePack(
+                    **{
+                        **base_pack.as_dict(),
+                        "looked_up_at": base_pack.looked_up_at,
+                        **pack_updates,
+                    }
+                )
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    project_evidence_freshness_provenance(
+                        self._projection_input(malformed_pack)
+                    )
+
     def test_provenance_bindings_must_match_pack_authority_fields(self) -> None:
         pack = self._pack()
         mismatch_cases = (
