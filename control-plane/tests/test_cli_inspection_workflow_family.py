@@ -1397,6 +1397,89 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             "none",
         )
 
+    def test_cli_case_detail_ignores_unmarked_evidence_pack_lookalikes(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-lookalike-001",
+                source_record_id="phase63://lookalike",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="external_evidence_archive",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="related_evidence_context",
+                lifecycle_state="validated",
+                provenance={},
+                content={
+                    "evidence_request_id": "evidence-request-lookalike-001",
+                    "case_id": promoted_case.case_id,
+                    "source_id": "malwarebazaar_hash_reputation",
+                    "file_hash": "b" * 64,
+                    "looked_up_at": reviewed_at.isoformat(),
+                    "custody": {},
+                    "provenance": {},
+                    "confidence": {},
+                    "content": {},
+                },
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "inspect-case-detail",
+                "--case-id",
+                promoted_case.case_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["linked_evidence_packs"], [])
+
+    def test_cli_case_detail_rejects_raw_pack_with_tampered_custody_reference(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        pack_content = self._phase63_bounded_enrichment_pack_content(
+            case_id=promoted_case.case_id,
+            evidence_record_id="evidence-enrichment-001",
+            reviewed_at=reviewed_at,
+        )
+        tampered_pack_content = {
+            **pack_content,
+            "provenance": {
+                **pack_content["provenance"],
+                "custody_reference": "custody-ref-tampered",
+            },
+        }
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-enrichment-001",
+                source_record_id="phase63://evidence-request-enrichment-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="phase63_bounded_enrichment_adapter",
+                collector_identity="case_workbench",
+                acquired_at=reviewed_at,
+                derivation_relationship="bounded_enrichment_projection",
+                lifecycle_state="validated",
+                provenance=pack_content["provenance"],
+                content=tampered_pack_content,
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "provenance_binding_mismatch"):
+            service.inspect_case_detail(promoted_case.case_id).to_dict()
+
     def test_cli_case_detail_rejects_malformed_linked_evidence_pack_projections(
         self,
     ) -> None:

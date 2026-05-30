@@ -54,6 +54,9 @@ _EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS = {
     "gate_readiness_claim",
 }
 _EVIDENCE_PACK_SUPPORTED_SOURCE_ID = "malwarebazaar_hash_reputation"
+_EVIDENCE_PACK_BOUNDED_ENRICHMENT_SOURCE_SYSTEM = "phase63_bounded_enrichment_adapter"
+_EVIDENCE_PACK_BOUNDED_ENRICHMENT_DERIVATION = "bounded_enrichment_projection"
+_EVIDENCE_PACK_BOUNDED_ENRICHMENT_ADAPTER = "phase63_bounded_enrichment_adapter"
 _EVIDENCE_PACK_ALLOWED_PROJECTION_LABELS = {
     "consumer": frozenset({"case_workbench", "ai_grounding"}),
     "status": frozenset({"available", "degraded", "unavailable"}),
@@ -1281,9 +1284,9 @@ class OperatorInspectionReadSurface:
                 evidence_record,
                 "evidence_id",
             )
-            projection = self._linked_evidence_pack_projection_from_content(
+            projection = self._linked_evidence_pack_projection_from_record(
+                evidence_record=evidence_record,
                 content=content,
-                evidence_record_id=evidence_record_id,
             )
             if projection is None:
                 continue
@@ -1298,30 +1301,37 @@ class OperatorInspectionReadSurface:
             )
         return tuple(projections)
 
-    def _linked_evidence_pack_projection_from_content(
+    def _linked_evidence_pack_projection_from_record(
         self,
         *,
+        evidence_record: Mapping[str, object],
         content: Mapping[str, object],
-        evidence_record_id: str | None,
     ) -> Mapping[str, object] | None:
         projection = content.get(_EVIDENCE_PACK_PROJECTION_CONTENT_KEY)
         if projection is not None:
             if not isinstance(projection, Mapping):
                 raise ValueError("linked evidence-pack projection must be a mapping")
             return projection
-        if not self._looks_like_bounded_enrichment_pack(content):
+        if not self._is_bounded_enrichment_evidence_record(
+            evidence_record=evidence_record,
+            content=content,
+        ):
             return None
         return self._project_bounded_enrichment_evidence_pack(
             content=content,
-            evidence_record_id=evidence_record_id,
+            evidence_record=evidence_record,
         )
 
     def _project_bounded_enrichment_evidence_pack(
         self,
         *,
         content: Mapping[str, object],
-        evidence_record_id: str | None,
+        evidence_record: Mapping[str, object],
     ) -> Mapping[str, object]:
+        evidence_record_id = self._optional_string_from_mapping(
+            evidence_record,
+            "evidence_id",
+        )
         if evidence_record_id is None:
             raise ValueError("linked evidence-pack projection custody binding mismatch")
         looked_up_at = self._datetime_from_evidence_pack_content(
@@ -1331,8 +1341,11 @@ class OperatorInspectionReadSurface:
         provenance = content.get("provenance")
         if not isinstance(provenance, Mapping):
             raise ValueError("linked evidence-pack projection requires provenance map")
+        record_provenance = evidence_record.get("provenance")
+        if not isinstance(record_provenance, Mapping):
+            raise ValueError("linked evidence-pack projection requires provenance map")
         expected_custody_reference = self._optional_string_from_mapping(
-            provenance,
+            record_provenance,
             "custody_reference",
         )
         if expected_custody_reference is None:
@@ -1379,20 +1392,40 @@ class OperatorInspectionReadSurface:
         ).as_dict()
         return projection
 
-    @staticmethod
-    def _looks_like_bounded_enrichment_pack(content: Mapping[str, object]) -> bool:
-        return all(
-            field_name in content
-            for field_name in (
-                "evidence_request_id",
-                "case_id",
-                "source_id",
-                "file_hash",
-                "looked_up_at",
-                "custody",
-                "provenance",
-                "confidence",
-                "content",
+    def _is_bounded_enrichment_evidence_record(
+        self,
+        *,
+        evidence_record: Mapping[str, object],
+        content: Mapping[str, object],
+    ) -> bool:
+        content_payload = content.get("content")
+        content_adapter = (
+            self._optional_string_from_mapping(content_payload, "adapter")
+            if isinstance(content_payload, Mapping)
+            else None
+        )
+        return (
+            self._optional_string_from_mapping(evidence_record, "source_system")
+            == _EVIDENCE_PACK_BOUNDED_ENRICHMENT_SOURCE_SYSTEM
+            and self._optional_string_from_mapping(
+                evidence_record,
+                "derivation_relationship",
+            )
+            == _EVIDENCE_PACK_BOUNDED_ENRICHMENT_DERIVATION
+            and content_adapter == _EVIDENCE_PACK_BOUNDED_ENRICHMENT_ADAPTER
+            and all(
+                field_name in content
+                for field_name in (
+                    "evidence_request_id",
+                    "case_id",
+                    "source_id",
+                    "file_hash",
+                    "looked_up_at",
+                    "custody",
+                    "provenance",
+                    "confidence",
+                    "content",
+                )
             )
         )
 
