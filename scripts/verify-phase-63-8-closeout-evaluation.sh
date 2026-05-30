@@ -28,7 +28,7 @@ section_text() {
   awk -v heading="${heading}" -v next_heading="${next_heading}" '
     $0 == heading { in_section = 1 }
     in_section {
-      if (next_heading != "" && $0 == next_heading) {
+      if (next_heading != "" && ($0 == next_heading || index($0, next_heading) == 1)) {
         exit
       }
       print
@@ -52,8 +52,10 @@ require_phrase "${readme_path}" "The Phase 63.8 closeout evaluation is defined b
 required_phrases=(
   "# Phase 63 Closeout Evaluation"
   "**Status**: Accepted as Evidence Expansion v1 before Phase 66 RC proof, Beta, RC, GA, and commercial replacement-readiness claims."
+  "**Date**: 2026-05-30"
   "**Related Issues**: #1331, #1332, #1333, #1334, #1335, #1336, #1337, #1338, #1339"
   "Phase 63 is accepted as the Evidence Expansion v1 slice for bounded evidence source registration, reviewed evidence request records, osquery evidence packs, bounded enrichment evidence packs, freshness and provenance projection, evidence-pack UI visibility, AI grounding, and closeout evidence."
+  "This closeout evaluates the current Phase 63 Evidence Expansion v1 issue set only. It does not supply, accept, or close the legacy support-bundle evidence gap identified by \`docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md\` and \`docs/phase-51-5-competitive-gap-matrix.md\`."
   "AegisOps records remain authoritative for alert, case, evidence request, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth."
   "Evidence packs, osquery output, enrichment output, source-native state, freshness and confidence projections, operator UI state, browser state, AI output, verifier output, and issue-lint output remain subordinate context and cannot approve, execute, reconcile, close, activate detectors, create source truth, gate release, or claim readiness by themselves."
   "Phase 63 must reject missing child evidence, missing verifier output, missing issue-lint summary, missing authority-boundary statement, missing accepted limitations, missing Phase 66 handoff, workstation-local paths, production secrets, RC/GA readiness claims, endpoint remediation claims, broad evidence-source breadth claims, autonomous AI authority claims, source-native truth claims, and treating verifier or issue-lint output as release truth."
@@ -64,6 +66,7 @@ required_phrases=(
   "Issue-lint output is planning and metadata evidence only. It does not become release truth, closeout truth, workflow truth, evidence truth, or readiness truth."
   "Path hygiene rejects workstation-local absolute paths in publishable docs, scripts, tests, prompts, and validation output."
   "Phase 66 can consume Phase 63 as one RC evidence input for Evidence Expansion v1."
+  "Phase 66 or a separately reviewed support-bundle slice must still provide the support-bundle artifact and verifier evidence required by Phase 51.3 before any Pilot, Beta, RC, GA, or replacement-readiness gate can treat support evidence as satisfied."
   "Phase 63 closeout is release and planning evidence only."
 )
 
@@ -101,6 +104,11 @@ for issue_number in 1331 1332 1333 1334 1335 1336 1337 1338 1339; do
 done
 
 accepted_limitations="$(section_text "${absolute_doc_path}" "## Accepted Limitations" "## Phase 66 Handoff")"
+if ! grep -Fq -- "Phase 63 Evidence Expansion v1 does not implement or close support-bundle evidence, support-bundle command capture, redaction review, included record identifiers, omitted private data classes, owner, or retention expectation required by the Phase 51.3 gate contract." <<<"${accepted_limitations}"; then
+  echo "Missing Phase 63 support-bundle accepted limitations boundary" >&2
+  exit 1
+fi
+
 if ! grep -Fq -- "Phase 63 does not implement Phase 64 limitation ownership, Phase 65 upgrade work, Phase 66 RC proof, Phase 67 GA proof, Beta readiness, RC readiness, GA readiness, self-service commercial readiness, or commercial replacement readiness." <<<"${accepted_limitations}"; then
   echo "Missing Phase 63 accepted limitations boundary" >&2
   exit 1
@@ -129,6 +137,10 @@ forbidden_claims=(
   "issue-lint output is release truth"
   "endpoint remediation is implemented"
   "broad evidence-source marketplace is implemented"
+  "support-bundle evidence is complete"
+  "support bundle evidence is complete"
+  "phase 63 closes support-bundle evidence"
+  "phase 63 closes support bundle evidence"
   "autonomous ai authority is implemented"
   "controlled write is default enabled"
   "hard write is default enabled"

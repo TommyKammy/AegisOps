@@ -122,6 +122,17 @@ assert_fails_with \
   "${missing_issue_lint_repo}" \
   "Missing Phase 63 issue-lint evidence line in Issue-lint evidence section"
 
+issue_lint_outside_section_repo="${workdir}/issue-lint-outside-section"
+copy_valid_repo "${issue_lint_outside_section_repo}"
+perl -0pi -e 's/- `node <codex-supervisor-root>\/dist\/index\.js issue-lint 1339 --config <supervisor-config-path>`.*\n//m' \
+  "${issue_lint_outside_section_repo}/docs/phase-63-closeout-evaluation.md"
+printf '%s\n' \
+  '- `node <codex-supervisor-root>/dist/index.js issue-lint 1339 --config <supervisor-config-path>`' \
+  >>"${issue_lint_outside_section_repo}/docs/phase-63-closeout-evaluation.md"
+assert_fails_with \
+  "${issue_lint_outside_section_repo}" \
+  "Missing Phase 63 issue-lint evidence line in Issue-lint evidence section"
+
 missing_issue_lint_summary_repo="${workdir}/missing-issue-lint-summary"
 copy_valid_repo "${missing_issue_lint_summary_repo}"
 remove_doc_text "${missing_issue_lint_summary_repo}" \
@@ -145,6 +156,14 @@ remove_doc_text "${missing_limitations_repo}" \
 assert_fails_with \
   "${missing_limitations_repo}" \
   "Missing Phase 63 accepted limitations boundary"
+
+missing_support_bundle_boundary_repo="${workdir}/missing-support-bundle-boundary"
+copy_valid_repo "${missing_support_bundle_boundary_repo}"
+remove_doc_text "${missing_support_bundle_boundary_repo}" \
+  "Phase 63 Evidence Expansion v1 does not implement or close support-bundle evidence, support-bundle command capture, redaction review, included record identifiers, omitted private data classes, owner, or retention expectation required by the Phase 51.3 gate contract."
+assert_fails_with \
+  "${missing_support_bundle_boundary_repo}" \
+  "Missing Phase 63 support-bundle accepted limitations boundary"
 
 missing_handoff_repo="${workdir}/missing-handoff"
 copy_valid_repo "${missing_handoff_repo}"
@@ -188,6 +207,13 @@ printf '%s\n' "Broad evidence-source marketplace is implemented." >>"${broad_sou
 assert_fails_with \
   "${broad_source_repo}" \
   "Forbidden Phase 63 closeout evaluation claim: broad evidence-source marketplace is implemented"
+
+support_bundle_complete_repo="${workdir}/support-bundle-complete"
+copy_valid_repo "${support_bundle_complete_repo}"
+printf '%s\n' "Support-bundle evidence is complete." >>"${support_bundle_complete_repo}/docs/phase-63-closeout-evaluation.md"
+assert_fails_with \
+  "${support_bundle_complete_repo}" \
+  "Forbidden Phase 63 closeout evaluation claim: support-bundle evidence is complete"
 
 ui_authority_repo="${workdir}/ui-authority"
 copy_valid_repo "${ui_authority_repo}"

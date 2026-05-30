@@ -1,13 +1,15 @@
 # Phase 63 Closeout Evaluation
 
 - **Status**: Accepted as Evidence Expansion v1 before Phase 66 RC proof, Beta, RC, GA, and commercial replacement-readiness claims.
-- **Date**: 2026-05-31
+- **Date**: 2026-05-30
 - **Owner**: AegisOps maintainers
 - **Related Issues**: #1331, #1332, #1333, #1334, #1335, #1336, #1337, #1338, #1339
 
 ## Verdict
 
 Phase 63 is accepted as the Evidence Expansion v1 slice for bounded evidence source registration, reviewed evidence request records, osquery evidence packs, bounded enrichment evidence packs, freshness and provenance projection, evidence-pack UI visibility, AI grounding, and closeout evidence.
+
+This closeout evaluates the current Phase 63 Evidence Expansion v1 issue set only. It does not supply, accept, or close the legacy support-bundle evidence gap identified by `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` and `docs/phase-51-5-competitive-gap-matrix.md`.
 
 The accepted breadth is enough to show reviewed evidence can be requested, collected, projected, rendered, and cited as subordinate case context. It is not endpoint remediation, containment, quarantine, destructive response, broad evidence-source marketplace coverage, autonomous AI authority, source-native truth, Controlled Write, Hard Write, Phase 64 limitation ownership, Phase 65 upgrade work, Phase 66 RC proof, Phase 67 GA proof, Beta, RC, GA, or commercial replacement readiness.
 
@@ -147,11 +149,14 @@ Issue-lint output is planning and metadata evidence only. It does not become rel
 - Phase 63 does not implement endpoint remediation, containment, quarantine, destructive response, protected-target mutation, direct command authority, approval bypass, execution receipt bypass, reconciliation bypass, case closure shortcuts, detector activation, suppression activation, or policy bypass.
 - Phase 63 does not implement broad evidence-source marketplace coverage, Velociraptor, YARA, capa, MISP breadth, Suricata, IntelOwl breadth, arbitrary public-internet pivots, arbitrary enrichment marketplace import, source-truth creation, or source-native authority.
 - Phase 63 does not implement production secret material, customer-private data handling expansion, live credential custody expansion, autonomous AI authority, production write authority, Controlled Write, or Hard Write.
+- Phase 63 Evidence Expansion v1 does not implement or close support-bundle evidence, support-bundle command capture, redaction review, included record identifiers, omitted private data classes, owner, or retention expectation required by the Phase 51.3 gate contract.
 - Phase 63 does not implement Phase 64 limitation ownership, Phase 65 upgrade work, Phase 66 RC proof, Phase 67 GA proof, Beta readiness, RC readiness, GA readiness, self-service commercial readiness, or commercial replacement readiness.
 - Phase 63 evidence packs, osquery output, enrichment output, source-native state, freshness projections, confidence projections, operator UI state, browser state, AI output, verifier output, and issue-lint output are context only; they do not replace authoritative AegisOps alert, case, evidence request, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, or closeout records.
 
 ## Phase 66 Handoff
 
 Phase 66 can consume Phase 63 as one RC evidence input for Evidence Expansion v1. Phase 66 must still prove RC gates, first-user RC readiness, issue-lint and verifier completeness, rollout operational hygiene, support and restore evidence, SIEM breadth evidence, SOAR breadth evidence, known limitation ownership, upgrade and rollback readiness, production rollout readiness, and real RC gate acceptance outside this closeout.
+
+Phase 66 or a separately reviewed support-bundle slice must still provide the support-bundle artifact and verifier evidence required by Phase 51.3 before any Pilot, Beta, RC, GA, or replacement-readiness gate can treat support evidence as satisfied.
 
 Phase 63 closeout is release and planning evidence only. It does not add endpoint remediation authority, source-native truth, AI authority, UI authority, browser authority, verifier authority, issue-lint authority, approval bypass, execution bypass, reconciliation bypass, Controlled Write, Hard Write, Phase 64 limitation ownership, Phase 65 upgrade work, Phase 66 RC proof, Phase 67 GA proof, or readiness and replacement claims.
