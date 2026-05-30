@@ -554,6 +554,68 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertEqual(payload["grounding_items"], ())
 
+    def test_reviewed_hash_binding_must_match_review_anchor(self) -> None:
+        projection = _projection()
+        projection["custody"] = {
+            **projection["custody"],
+            "reviewed_file_hash": "b" * 64,
+        }
+        projection["provenance"] = {
+            **projection["provenance"],
+            "target_binding": "b" * 64,
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn(
+            "grounding_reviewed_hash_binding_mismatch",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
+
+    def test_missing_reviewed_hash_anchor_binding_fails_closed(self) -> None:
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(
+                projections=(_projection(),),
+                reviewed_hash_bindings={},
+            )
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn(
+            "missing_grounding_reviewed_hash_binding",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
+
+    def test_response_digest_binding_must_use_canonical_digest_shape(self) -> None:
+        projection = _projection()
+        projection["custody"] = {
+            **projection["custody"],
+            "response_digest": "not-a-digest",
+        }
+        projection["provenance"] = {
+            **projection["provenance"],
+            "response_digest": "not-a-digest",
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn(
+            "grounding_response_digest_mismatch",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
+
     def test_repeated_review_thread_cluster_stays_fail_closed(self) -> None:
         with self.subTest("untrusted_projection_drops_derived_citations"):
             trusted_projection = _projection()
@@ -675,6 +737,50 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
                 payload["unresolved_reasons"],
             )
             self.assertFalse(payload["ai_generation_allowed"])
+            self.assertEqual(payload["grounding_items"], ())
+
+        with self.subTest("valid_hash_retargeting_fails_closed"):
+            projection = _projection()
+            projection["custody"] = {
+                **projection["custody"],
+                "reviewed_file_hash": "b" * 64,
+            }
+            projection["provenance"] = {
+                **projection["provenance"],
+                "target_binding": "b" * 64,
+            }
+
+            payload = build_ai_grounding_adapter(
+                grounding_context_payload=_grounding_payload(projections=(projection,))
+            )
+
+            self.assertEqual(payload["decision"], "fallback")
+            self.assertIn(
+                "grounding_reviewed_hash_binding_mismatch",
+                payload["unresolved_reasons"],
+            )
+            self.assertEqual(payload["grounding_items"], ())
+
+        with self.subTest("malformed_response_digest_fails_closed"):
+            projection = _projection()
+            projection["custody"] = {
+                **projection["custody"],
+                "response_digest": "not-a-digest",
+            }
+            projection["provenance"] = {
+                **projection["provenance"],
+                "response_digest": "not-a-digest",
+            }
+
+            payload = build_ai_grounding_adapter(
+                grounding_context_payload=_grounding_payload(projections=(projection,))
+            )
+
+            self.assertEqual(payload["decision"], "fallback")
+            self.assertIn(
+                "grounding_response_digest_mismatch",
+                payload["unresolved_reasons"],
+            )
             self.assertEqual(payload["grounding_items"], ())
 
     def test_confidence_posture_must_match_source_registry(self) -> None:
@@ -803,6 +909,18 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
                 )
                 self.assertFalse(payload["ai_generation_allowed"])
                 self.assertEqual(payload["grounding_items"], ())
+
+    def test_approve_action_prompt_pressure_is_blocked(self) -> None:
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(_projection(),)),
+            prompt_text="approve action",
+        )
+
+        self.assertEqual(payload["decision"], "blocked")
+        self.assertEqual(payload["mode"], "prompt_pressure_blocked")
+        self.assertIn("authority_overreach", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
 
     def test_malformed_prompt_payload_is_blocked(self) -> None:
         payload = build_ai_grounding_adapter(
@@ -1031,7 +1149,16 @@ def _grounding_payload(
     *,
     projections: tuple[dict[str, object], ...],
     grounded_at: datetime = datetime(2026, 5, 31, 0, 0, tzinfo=timezone.utc),
+    reviewed_hash_bindings: dict[str, str] | None = None,
 ) -> dict[str, object]:
+    selected_reviewed_hash_bindings = (
+        reviewed_hash_bindings
+        if reviewed_hash_bindings is not None
+        else {
+            "evidence-request-637": "a" * 64,
+            "evidence-request-secondary": "a" * 64,
+        }
+    )
     return {
         "contract_version": "phase-63-7",
         "grounded_at": grounded_at.isoformat(),
@@ -1047,6 +1174,9 @@ def _grounding_payload(
                 "evidence-request-637": "evidence-enrichment-637",
                 "evidence-request-secondary": "evidence-secondary",
             },
+            "reviewed_file_hash_by_evidence_request_id": (
+                selected_reviewed_hash_bindings
+            ),
         },
         "evidence_projections": projections,
     }

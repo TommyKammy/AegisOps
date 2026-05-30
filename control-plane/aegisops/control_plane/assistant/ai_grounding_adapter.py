@@ -106,6 +106,7 @@ _AUTHORITY_PRESSURE_TERMS = (
     "evidence as workflow truth",
     "evidence is authoritative",
     "promote evidence to truth",
+    "approve action",
     "approve the action",
     "execute the action",
     "reconcile the receipt",
@@ -148,6 +149,7 @@ _DURATION_PATTERN = re.compile(
     r"(?:(?P<minutes>\d+)M)?"
     r"(?:(?P<seconds>\d+)S)?"
 )
+_SHA256_DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 
 
 def build_ai_grounding_adapter(
@@ -303,6 +305,7 @@ def _validated_grounding_payload(
         return _invalid(("unsupported_review_anchor",))
     custody_reference_bindings = anchor.get("custody_reference_by_evidence_request_id")
     evidence_record_bindings = anchor.get("evidence_record_id_by_evidence_request_id")
+    reviewed_hash_bindings = anchor.get("reviewed_file_hash_by_evidence_request_id")
 
     raw_projections = grounding_context_payload.get("evidence_projections")
     if not isinstance(raw_projections, Sequence) or isinstance(
@@ -324,6 +327,7 @@ def _validated_grounding_payload(
             anchor_id,
             custody_reference_bindings,
             evidence_record_bindings,
+            reviewed_hash_bindings,
             trusted_grounded_at,
         )
         reasons.extend(projection_reasons)
@@ -342,6 +346,7 @@ def _projection_reasons(
     anchor_id: str,
     custody_reference_bindings: object,
     evidence_record_bindings: object,
+    reviewed_hash_bindings: object,
     grounded_at: datetime,
 ) -> tuple[str, ...]:
     reasons: list[str] = []
@@ -354,6 +359,10 @@ def _projection_reasons(
     )
     expected_evidence_record_id = _expected_evidence_record_id(
         evidence_record_bindings,
+        evidence_request_id,
+    )
+    expected_reviewed_file_hash = _expected_reviewed_file_hash(
+        reviewed_hash_bindings,
         evidence_request_id,
     )
     if projection.get("consumer") != "ai_grounding":
@@ -409,7 +418,8 @@ def _projection_reasons(
             )
         )
     if isinstance(custody, Mapping):
-        reasons.extend(_reviewed_hash_reasons(custody))
+        reasons.extend(_reviewed_hash_reasons(custody, expected_reviewed_file_hash))
+        reasons.extend(_response_digest_reasons(custody))
         reasons.extend(
             _evidence_record_binding_reasons(
                 custody=custody,
@@ -427,6 +437,8 @@ def _projection_reasons(
         reasons.append("missing_grounding_custody_reference_binding")
     if expected_evidence_record_id is None:
         reasons.append("missing_grounding_evidence_record_binding")
+    if expected_reviewed_file_hash is None:
+        reasons.append("missing_grounding_reviewed_hash_binding")
     if not _mapping_has_non_empty_fields(confidence, _REQUIRED_CONFIDENCE_FIELDS):
         reasons.append("missing_grounding_confidence")
     if isinstance(provenance, Mapping):
@@ -644,6 +656,16 @@ def _evidence_record_binding_reasons(
     return ()
 
 
+def _response_digest_reasons(custody: Mapping[str, object]) -> tuple[str, ...]:
+    response_digest = _string(custody.get("response_digest"))
+    if (
+        response_digest is None
+        or _SHA256_DIGEST_PATTERN.fullmatch(response_digest) is None
+    ):
+        return ("grounding_response_digest_mismatch",)
+    return ()
+
+
 def _provenance_binding_reasons(
     *,
     provenance: Mapping[str, object],
@@ -689,9 +711,18 @@ def _provenance_binding_reasons(
     return ()
 
 
-def _reviewed_hash_reasons(custody: Mapping[str, object]) -> tuple[str, ...]:
-    if _normalized_supported_hash(custody.get("reviewed_file_hash")) is None:
+def _reviewed_hash_reasons(
+    custody: Mapping[str, object],
+    expected_reviewed_file_hash: str | None,
+) -> tuple[str, ...]:
+    reviewed_file_hash = _normalized_supported_hash(custody.get("reviewed_file_hash"))
+    if reviewed_file_hash is None:
         return ("unsupported_grounding_reviewed_hash",)
+    if (
+        expected_reviewed_file_hash is not None
+        and reviewed_file_hash != expected_reviewed_file_hash
+    ):
+        return ("grounding_reviewed_hash_binding_mismatch",)
     return ()
 
 
@@ -766,6 +797,15 @@ def _expected_evidence_record_id(
     if evidence_request_id is None or not isinstance(evidence_record_bindings, Mapping):
         return None
     return _string(evidence_record_bindings.get(evidence_request_id))
+
+
+def _expected_reviewed_file_hash(
+    reviewed_hash_bindings: object,
+    evidence_request_id: str | None,
+) -> str | None:
+    if evidence_request_id is None or not isinstance(reviewed_hash_bindings, Mapping):
+        return None
+    return _normalized_supported_hash(reviewed_hash_bindings.get(evidence_request_id))
 
 
 def _uncertainty_state_reasons(
