@@ -29,7 +29,7 @@ _REGISTRY_CITATIONS = (
 )
 _SUPPORTED_RECORD_FAMILIES = (
     "case",
-    "evidence_request",
+    "reviewed_evidence_request",
     "evidence",
     "source",
     "ai_trace",
@@ -140,7 +140,7 @@ _READINESS_PRESSURE_TERMS = (
     "closeout truth",
     "production truth",
 )
-_PROMPT_DETERMINER_PATTERN = r"(?:a|an|any|the|this|that|these|those)\s+"
+_PROMPT_DETERMINER_PATTERN = r"(?:a|all|an|any|the|this|that|these|those)\s+"
 _AUTHORITY_PRESSURE_PATTERNS = (
     rf"approve\s+(?:{_PROMPT_DETERMINER_PATTERN})?actions?",
     rf"execute\s+(?:{_PROMPT_DETERMINER_PATTERN})?actions?",
@@ -545,6 +545,12 @@ def _grounding_source_reasons(
             reasons.append("grounding_source_registry_status_mismatch")
     if registry_entry.status == "enabled":
         if (
+            status == "unavailable"
+            or source_state == "unavailable"
+            or "source_unavailable" in unavailable_reasons
+        ):
+            reasons.append("unavailable_evidence_source")
+        if (
             "source_denied" in unavailable_reasons
             or "source_stale" in degraded_reasons
         ):
@@ -826,7 +832,7 @@ def _projection_citation_ids(
         return ()
     return (
         "case:" + anchor_id,
-        "evidence_request:" + evidence_request_id,
+        "reviewed_evidence_request:" + evidence_request_id,
         "evidence:" + evidence_record_id,
         "source:" + source_id,
     )

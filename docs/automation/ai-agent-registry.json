@@ -355,13 +355,13 @@
       ],
       "record_families": [
         "case",
-        "evidence_request",
+        "reviewed_evidence_request",
         "evidence",
         "source",
         "ai_trace"
       ],
       "citation_requirements": [
-        "record_family must identify the directly linked reviewed case, evidence request, evidence record, source, or AI trace behind each grounding claim",
+        "record_family must identify the directly linked reviewed case, reviewed evidence request, evidence record, source, or AI trace behind each grounding claim",
         "record_id must identify the directly bound AegisOps record behind each grounding claim",
         "evidence_reference must identify the reviewed evidence projection citation or an explicit missing, stale, conflicting, unavailable, or untrusted evidence prerequisite"
       ],

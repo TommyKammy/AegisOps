@@ -66,7 +66,10 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertFalse(payload["case_closure_authority"])
         self.assertFalse(payload["detector_activation_authority"])
         self.assertIn("case:case-637", payload["citations"])
-        self.assertIn("evidence_request:evidence-request-637", payload["citations"])
+        self.assertIn(
+            "reviewed_evidence_request:evidence-request-637",
+            payload["citations"],
+        )
         self.assertIn("evidence:evidence-enrichment-637", payload["citations"])
         self.assertIn("source:malwarebazaar_hash_reputation", payload["citations"])
 
@@ -234,7 +237,7 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
             "case_id": "case-other",
             "citation_ids": (
                 "case:case-other",
-                "evidence_request:foreign-request",
+                "reviewed_evidence_request:foreign-request",
                 "evidence:foreign-evidence",
                 "source:foreign-source",
             ),
@@ -267,7 +270,10 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertEqual(payload["decision"], "fallback")
         self.assertIn("grounding_not_bound_to_review_anchor", payload["unresolved_reasons"])
         self.assertIn("case:case-637", payload["citations"])
-        self.assertNotIn("evidence_request:evidence-request-637", payload["citations"])
+        self.assertNotIn(
+            "reviewed_evidence_request:evidence-request-637",
+            payload["citations"],
+        )
         self.assertNotIn("evidence:evidence-enrichment-637", payload["citations"])
         self.assertEqual(payload["grounding_items"], ())
 
@@ -422,6 +428,25 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
                     self.assertEqual(payload["grounding_items"], ())
         finally:
             PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id] = original_entry
+
+    def test_unavailable_source_projection_fails_closed(self) -> None:
+        projection = _projection()
+        projection = {
+            **projection,
+            "status": "unavailable",
+            "source_state": "unavailable",
+            "unavailable_reasons": ("source_unavailable",),
+            "uncertainty_label": "source_unavailable",
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn("unavailable_evidence_source", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
 
     def test_cached_projection_freshness_is_recomputed_before_grounding(self) -> None:
         built_at = datetime(2026, 5, 31, 0, 0, tzinfo=timezone.utc)
@@ -682,7 +707,7 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
                 "case_id": "case-other",
                 "citation_ids": (
                     "case:case-other",
-                    "evidence_request:foreign-request",
+                    "reviewed_evidence_request:foreign-request",
                     "evidence:foreign-evidence",
                     "source:foreign-source",
                 ),
@@ -1016,11 +1041,15 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
     def test_authority_prompt_pressure_with_determiners_is_blocked(self) -> None:
         prompt_texts = (
             "approve this action",
+            "approve all actions",
             "close this case",
+            "close all cases",
             "activate this detector",
+            "activate all detectors",
             "create the source truth",
             "create the evidence truth",
             "bypass the policy",
+            "bypass all policies",
             "quarantine the host",
             "delete the file",
             "remediate the endpoint",
@@ -1108,7 +1137,11 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
 
         self.assertIn("evidence_grounding", agent["allowed_tools"])
         self.assertEqual(agent["authority_ceiling"], "advisory_only_subordinate_to_aegisops_records")
+        self.assertIn("reviewed_evidence_request", agent["record_families"])
+        self.assertNotIn("evidence_request", agent["record_families"])
         self.assertIn("case", tool["allowed_record_families"])
+        self.assertIn("reviewed_evidence_request", tool["allowed_record_families"])
+        self.assertNotIn("evidence_request", tool["allowed_record_families"])
         self.assertIn("evidence_truth_creation", tool["disallowed_authority"])
 
 
@@ -1260,7 +1293,7 @@ def _expected_citation_ids(
 ) -> tuple[str, ...]:
     return (
         "case:case-637",
-        "evidence_request:" + evidence_request_id,
+        "reviewed_evidence_request:" + evidence_request_id,
         "evidence:" + evidence_record_id,
         "source:" + source_id,
     )

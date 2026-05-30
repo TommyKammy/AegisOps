@@ -25,7 +25,7 @@ Each projection must preserve:
 - `workflow_authority=none`;
 - subordinate evidence authority posture.
 
-The adapter derives case, evidence request, evidence-record, and source citations from the reviewed projection fields after matching the projection source and evidence record id against the directly bound review anchor. If a caller supplies `citation_ids`, they must match that derived projection-local set exactly; missing required citation IDs or extra out-of-scope citation IDs fail closed.
+The adapter derives case, reviewed-evidence-request, evidence-record, and source citations from the reviewed projection fields after matching the projection source and evidence record id against the directly bound review anchor. If a caller supplies `citation_ids`, they must match that derived projection-local set exactly; missing required citation IDs or extra out-of-scope citation IDs fail closed.
 
 Custody, provenance, and confidence metadata maps must match the Phase 63.5 projection contract exactly. Extra metadata fields or authority-bearing metadata values fail closed before grounding.
 
