@@ -1117,6 +1117,9 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         for prompt_text in (
             "mark this gate ready",
             "mark all gates ready",
+            "gate release",
+            "gate this release",
+            "gate the current release",
             "gate is ready",
         ):
             with self.subTest(prompt_text=prompt_text):
@@ -1323,6 +1326,15 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertIn("evidence_truth_creation", tool["disallowed_authority"])
         self.assertIn("endpoint_remediation", tool["disallowed_authority"])
         self.assertIn("protected_target_mutation", tool["disallowed_authority"])
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(_projection(),))
+        )
+        self.assertTrue(
+            set(tool["disallowed_authority"]).issubset(
+                set(payload["negative_authority"])
+            )
+        )
 
 
 def _response_digest(response: dict[str, object]) -> str:
