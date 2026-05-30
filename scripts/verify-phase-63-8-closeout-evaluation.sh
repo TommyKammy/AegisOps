@@ -21,6 +21,17 @@ require_phrase() {
   fi
 }
 
+require_section_phrase() {
+  local section="$1"
+  local phrase="$2"
+  local description="$3"
+
+  if ! grep -Fq -- "${phrase}" <<<"${section}"; then
+    echo "Missing ${description}: ${phrase}" >&2
+    exit 1
+  fi
+}
+
 section_text() {
   local file="$1"
   local heading="$2"
@@ -122,10 +133,7 @@ done
 issue_lint_evidence="$(section_text "${absolute_doc_path}" "Issue-lint evidence:" "Each command should report")"
 for issue_number in 1331 1332 1333 1334 1335 1336 1337 1338 1339; do
   issue_lint_line="- \`node <codex-supervisor-root>/dist/index.js issue-lint ${issue_number} --config <supervisor-config-path>\`"
-  if ! grep -Fq -- "${issue_lint_line}" <<<"${issue_lint_evidence}"; then
-    echo "Missing Phase 63 issue-lint evidence line in Issue-lint evidence section: ${issue_lint_line}" >&2
-    exit 1
-  fi
+  require_section_phrase "${issue_lint_evidence}" "${issue_lint_line}" "Phase 63 issue-lint evidence line in Issue-lint evidence section"
 done
 
 accepted_limitations="$(section_text "${absolute_doc_path}" "## Accepted Limitations" "## Phase 66 Handoff")"
