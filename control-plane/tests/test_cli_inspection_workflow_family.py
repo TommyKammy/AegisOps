@@ -1629,6 +1629,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
     ) -> None:
         expired_timestamp = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
         current_timestamp = datetime.now(timezone.utc).isoformat()
+        omit_field = object()
         cases = (
             (
                 "non-subordinate posture",
@@ -1683,6 +1684,16 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             (
                 "unsupported unavailable reason",
                 {"unavailable_reasons": ["approval_truth"]},
+                "unsupported evidence-pack projection reason",
+            ),
+            (
+                "missing degraded reason array",
+                {"degraded_reasons": omit_field},
+                "unsupported evidence-pack projection reason",
+            ),
+            (
+                "null unavailable reason array",
+                {"unavailable_reasons": None},
                 "unsupported evidence-pack projection reason",
             ),
             (
@@ -1956,7 +1967,9 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                     reviewed_at=reviewed_at,
                 )
                 for field_name, override in overrides.items():
-                    if field_name in {"custody", "provenance", "confidence"}:
+                    if override is omit_field:
+                        projection.pop(field_name, None)
+                    elif field_name in {"custody", "provenance", "confidence"}:
                         projection[field_name] = {
                             **projection[field_name],
                             **override,

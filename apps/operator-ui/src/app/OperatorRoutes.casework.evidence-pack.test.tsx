@@ -115,7 +115,14 @@ function createCaseDetailPayload(overrides: Record<string, unknown> = {}) {
     linked_alert_records: [],
     linked_evidence_ids: ["evidence-123"],
     linked_evidence_packs: [createEvidencePack()],
-    linked_evidence_records: [],
+    linked_evidence_records: [
+      {
+        evidence_id: "evidence-enrichment-001",
+        provenance: {
+          custody_reference: "custody-ref-enrichment-001",
+        },
+      },
+    ],
     linked_lead_ids: [],
     linked_observation_ids: [],
     linked_recommendation_ids: [],
@@ -298,6 +305,14 @@ describe("case detail evidence pack UI", () => {
       createEvidencePack({ unavailable_reasons: ["approval_truth"] }),
     ],
     [
+      "missing degraded reason array",
+      createEvidencePack({ degraded_reasons: undefined }),
+    ],
+    [
+      "null unavailable reason array",
+      createEvidencePack({ unavailable_reasons: null }),
+    ],
+    [
       "stale pack inside source freshness window",
       createEvidencePack({
         custody: {
@@ -340,6 +355,15 @@ describe("case detail evidence pack UI", () => {
         provenance: {
           ...createEvidencePack().provenance,
           target_binding: "c".repeat(64),
+        },
+      }),
+    ],
+    [
+      "provenance custody reference mismatch",
+      createEvidencePack({
+        provenance: {
+          ...createEvidencePack().provenance,
+          custody_reference: "custody-ref-tampered",
         },
       }),
     ],

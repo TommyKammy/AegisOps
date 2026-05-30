@@ -1558,7 +1558,9 @@ class OperatorInspectionReadSurface:
     ) -> tuple[str, ...]:
         value = projection.get(key)
         if value is None:
-            return ()
+            raise ValueError(
+                "linked evidence-pack projection has unsupported evidence-pack projection reason"
+            )
         if not isinstance(value, (tuple, list)):
             raise ValueError(
                 "linked evidence-pack projection has unsupported evidence-pack projection reason"

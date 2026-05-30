@@ -438,7 +438,9 @@ function validateEvidencePackReasons(
   allowedReasons: Set<string>,
 ) {
   if (value === undefined || value === null) {
-    return;
+    throw new OperatorDataProviderContractError(
+      "Resource cases linked_evidence_packs item has unsupported evidence-pack reasons.",
+    );
   }
   if (!Array.isArray(value)) {
     throw new OperatorDataProviderContractError(
@@ -589,12 +591,46 @@ function expectedEvidencePackUncertaintyLabel(
 }
 
 function evidencePackReasonList(value: unknown): string[] {
-  if (value === undefined || value === null) {
-    return [];
-  }
   return Array.isArray(value)
     ? value.map((reason) => asString(reason)).filter((reason): reason is string => reason !== null)
     : [];
+}
+
+function linkedEvidenceRecordCustodyReference(
+  response: Record<string, unknown>,
+  evidenceRecordId: string,
+  evidenceRequestId: string,
+) {
+  if (!Array.isArray(response.linked_evidence_records)) {
+    throw new OperatorDataProviderContractError(
+      `Resource cases linked_evidence_packs item ${evidenceRequestId} must be backed by linked evidence records.`,
+    );
+  }
+
+  for (const recordValue of response.linked_evidence_records) {
+    const record = asObject(
+      recordValue,
+      "Resource cases linked_evidence_records item must be an object.",
+    );
+    if (asString(record.evidence_id) !== evidenceRecordId) {
+      continue;
+    }
+    const provenance = asObject(
+      record.provenance,
+      `Resource cases linked_evidence_packs item ${evidenceRequestId} must be backed by linked evidence provenance.`,
+    );
+    const custodyReference = asString(provenance.custody_reference);
+    if (custodyReference === null) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases linked_evidence_packs item ${evidenceRequestId} must keep custody reference bound to the linked evidence record.`,
+      );
+    }
+    return custodyReference;
+  }
+
+  throw new OperatorDataProviderContractError(
+    `Resource cases linked_evidence_packs item ${evidenceRequestId} must be backed by linked evidence records.`,
+  );
 }
 
 function validateEvidencePackReasonConsistency(
@@ -797,7 +833,9 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
       freshnessState,
       evidenceRequestId,
     );
+    const evidenceRecordId = asString(custody.aegisops_evidence_record_id);
     if (
+      evidenceRecordId === null ||
       asString(provenance.request_binding) !== evidenceRequestId ||
       asString(provenance.case_binding) !== requestedCaseId ||
       asString(provenance.source_id) !== sourceId ||
@@ -806,7 +844,13 @@ function validateLinkedEvidencePacks(payload: unknown, requestedCaseId: string) 
         asString(custody.enrichment_request_id) ||
       asString(provenance.collection_timestamp) !==
         asString(custody.collection_timestamp) ||
-      asString(provenance.response_digest) !== asString(custody.response_digest)
+      asString(provenance.response_digest) !== asString(custody.response_digest) ||
+      asString(provenance.custody_reference) !==
+        linkedEvidenceRecordCustodyReference(
+          response,
+          evidenceRecordId,
+          evidenceRequestId,
+        )
     ) {
       throw new OperatorDataProviderContractError(
         `Resource cases linked_evidence_packs item ${evidenceRequestId} must keep provenance bound to the evidence request and case.`,
