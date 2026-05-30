@@ -156,7 +156,7 @@ def build_ai_grounding_adapter(
 
     projections = validation["projections"]
     grounding_items = tuple(
-        _grounding_item(projection)
+        _grounding_item(projection, validation["anchor_id"])
         for projection in projections
     )
     uncertainty_flags = _uncertainty_flags(projections)
@@ -186,7 +186,7 @@ def _base_payload(
             *(
                 citation
                 for projection in projections
-                for citation in _string_tuple(projection.get("citation_ids"))
+                for citation in _projection_citation_ids(projection, anchor_id)
             ),
         )
     )
@@ -261,6 +261,7 @@ def _validated_grounding_payload(
     anchor_id = _string(anchor.get("record_id"))
     if anchor_family != "case" or anchor_id is None:
         return _invalid(("unsupported_review_anchor",))
+    custody_reference_bindings = anchor.get("custody_reference_by_evidence_request_id")
 
     raw_projections = grounding_context_payload.get("evidence_projections")
     if not isinstance(raw_projections, Sequence) or isinstance(
@@ -277,7 +278,11 @@ def _validated_grounding_payload(
         if not isinstance(raw_projection, Mapping):
             reasons.append("malformed_evidence_projection")
             continue
-        projection_reasons = _projection_reasons(raw_projection, anchor_id)
+        projection_reasons = _projection_reasons(
+            raw_projection,
+            anchor_id,
+            custody_reference_bindings,
+        )
         reasons.extend(projection_reasons)
         if not projection_reasons:
             projections.append(raw_projection)
@@ -292,11 +297,16 @@ def _validated_grounding_payload(
 def _projection_reasons(
     projection: Mapping[str, object],
     anchor_id: str,
+    custody_reference_bindings: object,
 ) -> tuple[str, ...]:
     reasons: list[str] = []
     case_id = _string(projection.get("case_id"))
     evidence_request_id = _string(projection.get("evidence_request_id"))
     source_id = _string(projection.get("source_id"))
+    expected_custody_reference = _expected_custody_reference(
+        custody_reference_bindings,
+        evidence_request_id,
+    )
     if projection.get("consumer") != "ai_grounding":
         reasons.append("unsupported_grounding_consumer")
     if case_id != anchor_id:
@@ -327,6 +337,8 @@ def _projection_reasons(
         reasons.append("unsupported_grounding_source_state")
     if projection.get("uncertainty_label") not in _ALLOWED_UNCERTAINTY:
         reasons.append("missing_grounding_uncertainty")
+    else:
+        reasons.extend(_uncertainty_state_reasons(projection))
     custody = projection.get("custody")
     provenance = projection.get("provenance")
     confidence = projection.get("confidence")
@@ -341,8 +353,11 @@ def _projection_reasons(
                 custody=custody,
                 projection=projection,
                 anchor_id=anchor_id,
+                expected_custody_reference=expected_custody_reference,
             )
         )
+    if expected_custody_reference is None:
+        reasons.append("missing_grounding_custody_reference_binding")
     if not _mapping_has_non_empty_fields(confidence, _REQUIRED_CONFIDENCE_FIELDS):
         reasons.append("missing_grounding_confidence")
     if isinstance(provenance, Mapping):
@@ -361,6 +376,7 @@ def _provenance_binding_reasons(
     custody: Mapping[str, object],
     projection: Mapping[str, object],
     anchor_id: str,
+    expected_custody_reference: str | None,
 ) -> tuple[str, ...]:
     expected_values = {
         "request_binding": _string(projection.get("evidence_request_id")),
@@ -370,6 +386,7 @@ def _provenance_binding_reasons(
         "enrichment_request_id": _string(custody.get("enrichment_request_id")),
         "collection_timestamp": _string(custody.get("collection_timestamp")),
         "response_digest": _string(custody.get("response_digest")),
+        "custody_reference": expected_custody_reference,
         "authority_posture": _SUBORDINATE_AUTHORITY_POSTURE,
     }
     for field_name, expected_value in expected_values.items():
@@ -384,9 +401,28 @@ def _citation_reasons(
     projection: Mapping[str, object],
     anchor_id: str,
 ) -> tuple[str, ...]:
-    citation_ids = _string_tuple(projection.get("citation_ids"))
-    if not citation_ids:
+    required = _projection_citation_ids(projection, anchor_id)
+    if not required:
         return ("missing_required_grounding_citation",)
+    supplied = _string_tuple(projection.get("citation_ids"))
+    if not supplied:
+        return ()
+    reasons: list[str] = []
+    required_set = frozenset(required)
+    supplied_set = frozenset(supplied)
+    if not required_set.issubset(supplied_set):
+        reasons.append("missing_required_grounding_citation")
+    if not supplied_set.issubset(required_set):
+        reasons.append("out_of_scope_grounding_citation")
+    return tuple(reasons)
+
+
+def _projection_citation_ids(
+    projection: Mapping[str, object],
+    anchor_id: str | None,
+) -> tuple[str, ...]:
+    if anchor_id is None:
+        return ()
     evidence_request_id = _string(projection.get("evidence_request_id"))
     source_id = _string(projection.get("source_id"))
     custody = projection.get("custody")
@@ -395,19 +431,71 @@ def _citation_reasons(
         if isinstance(custody, Mapping)
         else None
     )
-    required = [
+    if (
+        evidence_request_id is None
+        or evidence_record_id is None
+        or source_id is None
+    ):
+        return ()
+    return (
         "case:" + anchor_id,
-        *(("evidence_request:" + evidence_request_id,) if evidence_request_id else ()),
-        *(("source:" + source_id,) if source_id else ()),
-        *(("evidence:" + evidence_record_id,) if evidence_record_id else ()),
-    ]
-    if any(citation not in citation_ids for citation in required):
-        return ("missing_required_grounding_citation",)
+        "evidence_request:" + evidence_request_id,
+        "evidence:" + evidence_record_id,
+        "source:" + source_id,
+    )
+
+
+def _expected_custody_reference(
+    custody_reference_bindings: object,
+    evidence_request_id: str | None,
+) -> str | None:
+    if evidence_request_id is None or not isinstance(custody_reference_bindings, Mapping):
+        return None
+    return _string(custody_reference_bindings.get(evidence_request_id))
+
+
+def _uncertainty_state_reasons(
+    projection: Mapping[str, object],
+) -> tuple[str, ...]:
+    expected = _expected_uncertainty_label(projection)
+    if expected is None:
+        return ("grounding_uncertainty_state_mismatch",)
+    if projection.get("uncertainty_label") != expected:
+        return ("grounding_uncertainty_state_mismatch",)
     return ()
+
+
+def _expected_uncertainty_label(
+    projection: Mapping[str, object],
+) -> str | None:
+    status = projection.get("status")
+    source_state = projection.get("source_state")
+    freshness_state = projection.get("freshness_state")
+    conflict_state = projection.get("conflict_state")
+    if status not in _ALLOWED_STATUS:
+        return None
+    if source_state not in _ALLOWED_SOURCE_STATE:
+        return None
+    if freshness_state not in _ALLOWED_FRESHNESS:
+        return None
+    if conflict_state not in _ALLOWED_CONFLICT:
+        return None
+    if status == "unavailable" or source_state == "unavailable":
+        return "source_unavailable"
+    if conflict_state == "conflicting":
+        return "unresolved_conflict"
+    if (
+        freshness_state == "stale"
+        or source_state == "degraded"
+        or status == "degraded"
+    ):
+        return "stale_review_required"
+    return "related_entity_not_authoritative"
 
 
 def _grounding_item(
     projection: Mapping[str, object],
+    anchor_id: str,
 ) -> dict[str, object]:
     uncertainty_label = (
         _string(projection.get("uncertainty_label"))
@@ -426,7 +514,7 @@ def _grounding_item(
         "source_state": projection.get("source_state"),
         "uncertainty_label": uncertainty_label,
         "uncertainty_required": uncertainty_label != "related_entity_not_authoritative",
-        "citation_ids": _string_tuple(projection.get("citation_ids")),
+        "citation_ids": _projection_citation_ids(projection, anchor_id),
         "advisory_only": True,
         "counts_as_workflow_truth": False,
         "can_approve_action": False,
