@@ -346,7 +346,10 @@ def _operator_ui_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContrac
             source,
             "EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE",
         ),
-        no_workflow_authority="none",
+        no_workflow_authority=_ts_rejected_pack_string_field(
+            source,
+            "workflow_authority",
+        ),
         confidence_posture=_ts_string_constant(
             source,
             "EVIDENCE_PACK_CONFIDENCE_POSTURE",
@@ -356,12 +359,9 @@ def _operator_ui_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContrac
             source,
             "EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES",
         ),
-        forbidden_readiness_claim_fields=frozenset(
-            {
-                "release_readiness_claim",
-                "rc_readiness_claim",
-                "gate_readiness_claim",
-            }
+        forbidden_readiness_claim_fields=_ts_forbidden_defined_pack_fields(
+            source,
+            "cannot claim release readiness",
         ),
         authority_truth_denials=frozenset(),
     )
@@ -412,6 +412,93 @@ def _ts_number_expression(source: str, name: str) -> int:
     if not re.fullmatch(r"[0-9\s*+/()-]+", expression):
         raise AssertionError(f"operator UI constant {name} is not a safe expression")
     return _safe_integer_expression(expression)
+
+
+def _ts_rejected_pack_string_field(source: str, field_name: str) -> str:
+    variable_name = _ts_pack_string_variable(source, field_name)
+    match = re.search(
+        rf"\b{re.escape(variable_name)}\s*!==\s*\"([^\"]+)\"",
+        source,
+    )
+    if match is None:
+        raise AssertionError(
+            f"operator UI pack field {field_name} rejection is not discoverable"
+        )
+    return match.group(1)
+
+
+def _ts_pack_string_variable(source: str, field_name: str) -> str:
+    match = re.search(
+        rf"\bconst\s+(\w+)\s*=\s*asString\(pack\.{re.escape(field_name)}\);",
+        source,
+    )
+    if match is None:
+        raise AssertionError(f"operator UI pack field {field_name} is not discoverable")
+    return match.group(1)
+
+
+def _ts_forbidden_defined_pack_fields(source: str, error_message: str) -> frozenset[str]:
+    condition = _ts_condition_for_error(source, error_message)
+    fields = frozenset(
+        re.findall(r"\bpack\.([A-Za-z0-9_]+)\s*!==\s*undefined", condition)
+    )
+    if not fields:
+        raise AssertionError(
+            f"operator UI forbidden pack fields for {error_message} are not discoverable"
+        )
+    return fields
+
+
+def _ts_condition_for_error(source: str, error_message: str) -> str:
+    message_index = source.find(error_message)
+    if message_index == -1:
+        raise AssertionError(
+            f"operator UI rejection message {error_message} is not discoverable"
+        )
+    throw_index = source.rfind(
+        "throw new OperatorDataProviderContractError",
+        0,
+        message_index,
+    )
+    if throw_index == -1:
+        raise AssertionError(
+            f"operator UI rejection for {error_message} is not discoverable"
+        )
+    if_index = source.rfind("if (", 0, throw_index)
+    if if_index == -1:
+        raise AssertionError(
+            f"operator UI rejection condition for {error_message} is not discoverable"
+        )
+    return _extract_parenthesized(source, if_index + len("if "))
+
+
+def _extract_parenthesized(source: str, open_index: int) -> str:
+    if open_index >= len(source) or source[open_index] != "(":
+        raise AssertionError("operator UI condition is not parenthesized")
+    depth = 0
+    string_quote: str | None = None
+    escaped = False
+    condition_start = open_index + 1
+    for index in range(open_index, len(source)):
+        character = source[index]
+        if string_quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == string_quote:
+                string_quote = None
+            continue
+        if character in {'"', "'", "`"}:
+            string_quote = character
+            continue
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth == 0:
+                return source[condition_start:index]
+    raise AssertionError("operator UI condition is not closed")
 
 
 def _safe_integer_expression(expression: str) -> int:

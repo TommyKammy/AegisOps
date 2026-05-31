@@ -15,6 +15,18 @@ from scripts.phase63_evidence_pack_contract_guard import (  # noqa: E402
     contract_with_drift,
     contract_with_label_drift,
     load_phase63_evidence_pack_contracts,
+    _ts_forbidden_defined_pack_fields,
+    _ts_rejected_pack_string_field,
+)
+
+
+OPERATOR_UI_VALIDATOR = (
+    REPO_ROOT
+    / "apps"
+    / "operator-ui"
+    / "src"
+    / "operatorDataProvider"
+    / "linkedEvidencePackValidator.ts"
 )
 
 
@@ -175,6 +187,50 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                             ai,
                         ),
                     )
+
+    def test_operator_ui_authority_and_readiness_denials_are_parsed(self) -> None:
+        source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+        self.assertEqual(
+            _ts_rejected_pack_string_field(source, "workflow_authority"),
+            "none",
+        )
+        self.assertEqual(
+            _ts_forbidden_defined_pack_fields(
+                source,
+                "cannot claim release readiness",
+            ),
+            frozenset(
+                {
+                    "release_readiness_claim",
+                    "rc_readiness_claim",
+                    "gate_readiness_claim",
+                }
+            ),
+        )
+
+    def test_operator_ui_denial_parser_observes_representative_drift(self) -> None:
+        source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+
+        workflow_drift = source.replace(
+            'workflowAuthority !== "none"',
+            'workflowAuthority !== "advisory_only"',
+        )
+        self.assertEqual(
+            _ts_rejected_pack_string_field(workflow_drift, "workflow_authority"),
+            "advisory_only",
+        )
+
+        readiness_drift = source.replace(
+            "      pack.gate_readiness_claim !== undefined\n",
+            "",
+        )
+        self.assertEqual(
+            _ts_forbidden_defined_pack_fields(
+                readiness_drift,
+                "cannot claim release readiness",
+            ),
+            frozenset({"release_readiness_claim", "rc_readiness_claim"}),
+        )
 
 
 if __name__ == "__main__":
