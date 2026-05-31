@@ -29,6 +29,7 @@ _BACKUP_TUPLE_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "detector_lifecycle": ("lifecycle_audit_references",),
     "false_positive_review": ("evidence_ids", "review_evidence_references"),
     "suppression_proposal": ("evidence_ids", "citation_references"),
+    "known_limitation_ownership": ("evidence_references",),
     "ai_trace": ("material_input_refs",),
     "reconciliation": ("linked_execution_run_ids",),
 }

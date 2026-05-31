@@ -51,6 +51,8 @@ alter table aegisops_control.lifecycle_transition_records
   drop constraint if exists lifecycle_transition_records_subject_record_family_check,
   drop constraint if exists lifecycle_transition_records_lifecycle_state_check,
   drop constraint if exists lifecycle_transition_records_previous_lifecycle_state_check,
+  drop constraint if exists lifecycle_transition_records_lifecycle_state_known,
+  drop constraint if exists lifecycle_transition_records_previous_lifecycle_state_known,
   drop constraint if exists lifecycle_transition_records_subject_family_matches,
   drop constraint if exists lifecycle_transition_records_state_matches_subject_family,
   drop constraint if exists lifecycle_transition_records_previous_state_matches_subject_family,

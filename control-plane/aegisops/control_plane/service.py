@@ -306,16 +306,14 @@ AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES: tuple[Type[ControlPlaneRecord], ...] = 
     LeadRecord,
     CaseRecord,
     RecommendationRecord, DetectorLifecycleRecord, FalsePositiveReviewRecord,
-    SuppressionProposalRecord, LifecycleTransitionRecord, ApprovalDecisionRecord,
+    SuppressionProposalRecord, KnownLimitationOwnershipRecord, LifecycleTransitionRecord, ApprovalDecisionRecord,
     ActionRequestRecord, ActionExecutionRecord, HuntRecord, HuntRunRecord,
     AITraceRecord, ReconciliationRecord,
 )
 AUTHORITATIVE_RECORD_CHAIN_FAMILIES: tuple[str, ...] = tuple(
     record_type.record_family for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
 )
-AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION = (
-    "phase23.authoritative-record-chain.v5"
-)
+AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION = "phase23.authoritative-record-chain.v6"
 _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "analytic_signal": "analytic_signal_id",
     "alert": "alert_id",
@@ -323,6 +321,7 @@ _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "observation": "observation_id",
     "detector_lifecycle": "detector_lifecycle_id",
     "false_positive_review": "false_positive_review_id", "suppression_proposal": "suppression_proposal_id",
+    "known_limitation_ownership": "limitation_id",
     "lead": "lead_id",
     "case": "case_id",
     "recommendation": "recommendation_id",

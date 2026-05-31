@@ -16,6 +16,7 @@ from aegisops.control_plane.models import (
 from aegisops.control_plane.record_validation import _validate_record
 from aegisops.control_plane.service import (
     AegisOpsControlPlaneService,
+    AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION,
     RECORD_TYPES_BY_FAMILY,
 )
 from aegisops.control_plane.validation import phase64_record_validators
@@ -126,6 +127,57 @@ class Phase64KnownLimitationOwnershipContractTests(unittest.TestCase):
             "known_limitation_ownership",
         )
         self.assertEqual(transitions[0].lifecycle_state, "under_review")
+
+    def test_known_limitation_ownership_is_authoritative_backup_family(
+        self,
+    ) -> None:
+        store, _backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        record = _known_limitation_ownership_record(review_state="accepted_risk")
+        service.persist_record(record)
+
+        backup = service.export_authoritative_record_chain_backup()
+
+        self.assertEqual(
+            backup["backup_schema_version"],
+            AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION,
+        )
+        self.assertEqual(backup["record_counts"]["known_limitation_ownership"], 1)
+        self.assertEqual(
+            backup["record_families"]["known_limitation_ownership"][0][
+                "limitation_id"
+            ],
+            record.limitation_id,
+        )
+        self.assertTrue(
+            any(
+                transition["subject_record_family"]
+                == "known_limitation_ownership"
+                and transition["subject_record_id"] == record.limitation_id
+                for transition in backup["record_families"]["lifecycle_transition"]
+            )
+        )
+
+        restored_store, _backend = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+        restore_summary = restored_service.restore_authoritative_record_chain_backup(
+            backup
+        )
+
+        self.assertEqual(
+            restore_summary.restored_record_counts["known_limitation_ownership"],
+            1,
+        )
+        self.assertEqual(
+            restored_store.get(KnownLimitationOwnershipRecord, record.limitation_id),
+            record,
+        )
 
     def test_known_limitation_ownership_default_lifecycle_state_follows_review_state(
         self,

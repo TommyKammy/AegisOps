@@ -565,6 +565,14 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         schema_sql = (
             CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
         ).read_text(encoding="utf-8").lower()
+        self.assertIn(
+            "drop constraint if exists lifecycle_transition_records_lifecycle_state_known",
+            migration_sql,
+        )
+        self.assertIn(
+            "drop constraint if exists lifecycle_transition_records_previous_lifecycle_state_known",
+            migration_sql,
+        )
         expected_states_by_family = {
             family: states
             for family, states in _LIFECYCLE_STATES_BY_FAMILY.items()

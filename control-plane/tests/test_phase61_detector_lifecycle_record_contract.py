@@ -688,7 +688,7 @@ class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
         )
         self.assertEqual(
             AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION,
-            "phase23.authoritative-record-chain.v5",
+            "phase23.authoritative-record-chain.v6",
         )
 
     def test_suppression_proposal_record_is_proposal_only_and_reviewable(self) -> None:
