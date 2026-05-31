@@ -248,6 +248,17 @@ assert_fails_with \
   "${invalid_reviewed_record_state_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 record severity is unsupported"
 
+missing_review_schedule_repo="${workdir}/missing-review-schedule"
+copy_valid_repo "${missing_review_schedule_repo}"
+insert_after_reviewed_record_row \
+  "${missing_review_schedule_repo}" \
+  '| `limitation-phase64-extra-new-001` | Extra limitation remains separately tracked. | material | release_gate_evidence | extra-owner | Keep the extra limitation subordinate before Phase 66 RC proof. | `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` | mitigation_planned |  | none | extra_risk | handoff_required | reviewed_evidence_input_only |'
+insert_after_handoff_row "${missing_review_schedule_repo}" "${extra_handoff_row}"
+insert_after_reviewed_record_anchor "${missing_review_schedule_repo}" "${extra_reviewed_record_anchor}"
+assert_fails_with \
+  "${missing_review_schedule_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 record requires review cadence or due date"
+
 duplicate_handoff_row_repo="${workdir}/duplicate-handoff-row"
 copy_valid_repo "${duplicate_handoff_row_repo}"
 perl -0pi -e 's/(\| `limitation-phase64-support-bundle-001`[^\n]*\n)/$1$1/' \
@@ -277,6 +288,14 @@ perl -0pi -e 's/Phase 51\.3 support bundle command, redaction review, included r
   "${no_open_blockers_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
 assert_fails_with \
   "${no_open_blockers_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: open blockers must list remaining blockers"
+
+none_remaining_blockers_repo="${workdir}/none-remaining-blockers"
+copy_valid_repo "${none_remaining_blockers_repo}"
+perl -0pi -e 's/Phase 51\.3 support bundle command, redaction review, included record identifiers, omitted private data classes, owner, retention expectation, and verifier evidence remain required before RC proof can treat support evidence as satisfied\./None remaining./' \
+  "${none_remaining_blockers_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${none_remaining_blockers_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: open blockers must list remaining blockers"
 
 malformed_extra_row_repo="${workdir}/malformed-extra-row"
@@ -335,6 +354,14 @@ assert_fails_with \
   "${negated_rc_gate_notes_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: RC-gate consumption notes must preserve subordinate handoff boundary"
 
+independent_rc_gate_satisfaction_repo="${workdir}/independent-rc-gate-satisfaction"
+copy_valid_repo "${independent_rc_gate_satisfaction_repo}"
+perl -0pi -e 's/Phase 66 may use the owner, mitigation, risk, and review-date fields as subordinate RC proof planning; it does not accept any RC gate\./Independent evidence satisfies the RC gate./' \
+  "${independent_rc_gate_satisfaction_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${independent_rc_gate_satisfaction_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-rc-gate-consumption-001: RC-gate consumption notes must not satisfy RC gates"
+
 missing_remaining_obligations_repo="${workdir}/missing-remaining-obligations"
 copy_valid_repo "${missing_remaining_obligations_repo}"
 remove_doc_text "${missing_remaining_obligations_repo}" "Remaining Phase 66 proof obligations: independent RC gate packet, support bundle evidence, restore evidence, upgrade and rollback evidence, first-user RC behavior, daily-operator RC behavior, supportability evidence, security review, packaging evidence, issue-lint evidence, verifier evidence, and explicit gate acceptance outside this handoff."
@@ -376,6 +403,13 @@ printf '%s\n' "AegisOps is RC-ready because Phase 64.5 has owners." >>"${rc_read
 assert_fails_with \
   "${rc_ready_variant_repo}" \
   "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: AegisOps is RC-ready because Phase 64.5 has owners."
+
+generic_rc_ready_repo="${workdir}/generic-rc-ready"
+copy_valid_repo "${generic_rc_ready_repo}"
+printf '%s\n' "This handoff is RC ready." >>"${generic_rc_ready_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${generic_rc_ready_repo}" \
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: This handoff is RC ready."
 
 readme_overclaim_repo="${workdir}/readme-overclaim"
 copy_valid_repo "${readme_overclaim_repo}"
