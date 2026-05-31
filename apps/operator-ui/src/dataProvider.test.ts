@@ -505,6 +505,58 @@ describe("createOperatorDataProvider", () => {
     );
   });
 
+  it("lists reviewed limitation ownership records before detail inspection", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        records: [
+          {
+            affected_surface: "supportability_evidence",
+            authority_boundary: "reviewed_evidence_input_only",
+            due_date: "2026-06-15",
+            evidence_references: ["docs/phase-63-closeout-evaluation.md"],
+            limitation_id: "limitation-phase64-support-bundle-001",
+            mitigation: "Track the support bundle slice before Phase 66 RC proof.",
+            owner: "supportability-owner",
+            phase66_handoff_posture: "handoff_required",
+            readiness_claim: null,
+            review_cadence: "weekly",
+            review_state: "accepted_risk",
+            severity: "material",
+            title: "Support bundle evidence remains separately tracked.",
+          },
+        ],
+        total_records: 1,
+      }),
+    );
+    const dataProvider = createOperatorDataProvider({ fetchFn });
+
+    await expect(
+      dataProvider.getList("limitationOwnership", {
+        filter: {},
+        pagination: { page: 1, perPage: 25 },
+        sort: { field: "limitation_id", order: "ASC" },
+      }),
+    ).resolves.toEqual({
+      data: [
+        expect.objectContaining({
+          id: "limitation-phase64-support-bundle-001",
+          limitation_id: "limitation-phase64-support-bundle-001",
+        }),
+      ],
+      total: 1,
+    });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      "/inspect-records?family=known_limitation_ownership&order=ASC&page=1&per_page=25&sort=limitation_id",
+      {
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+  });
+
   it("rejects action-review detail payloads whose selected review is missing or mismatched", async () => {
     const missingSelectedReviewId = createOperatorDataProvider({
       fetchFn: vi.fn<typeof fetch>().mockResolvedValue(

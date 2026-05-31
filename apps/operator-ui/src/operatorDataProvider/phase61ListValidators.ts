@@ -89,6 +89,42 @@ const RECORD_SEARCH_REVIEWED_ROUTE_PATTERNS_BY_FAMILY = new Map<string, RegExp[]
   ["source_health", [/^\/operator\/source-health$/]],
 ]);
 
+const LIMITATION_OWNERSHIP_REVIEW_STATES = new Set([
+  "identified",
+  "under_review",
+  "accepted_risk",
+  "mitigation_planned",
+  "mitigation_in_progress",
+  "closed",
+]);
+
+const LIMITATION_OWNERSHIP_SEVERITIES = new Set([
+  "low",
+  "medium",
+  "material",
+  "high",
+  "blocking",
+]);
+
+const LIMITATION_OWNERSHIP_HANDOFF_POSTURES = new Set([
+  "not_ready_for_handoff",
+  "handoff_required",
+  "handoff_ready_as_subordinate_evidence",
+  "blocked_until_mitigated",
+]);
+
+const LIMITATION_OWNERSHIP_REQUIRED_FIELDS = [
+  "limitation_id",
+  "title",
+  "severity",
+  "affected_surface",
+  "owner",
+  "mitigation",
+  "review_state",
+  "phase66_handoff_posture",
+  "authority_boundary",
+] as const;
+
 const REVIEWED_SOURCE_CATALOG_ENTRIES_BY_FAMILY = new Map<string, Set<string>>([
   [
     "wazuh_detection",
@@ -284,6 +320,74 @@ export function validateRecordSearchResult(record: Record<string, unknown>) {
   if (record.stale_cache === true || record.cache_sourced === true) {
     throw new OperatorDataProviderContractError(
       "Resource recordSearch rejects stale-cache results.",
+    );
+  }
+}
+
+export function validateLimitationOwnershipListRecord(record: Record<string, unknown>) {
+  for (const field of LIMITATION_OWNERSHIP_REQUIRED_FIELDS) {
+    if (asString(record[field]) === null) {
+      throw new OperatorDataProviderContractError(
+        "Resource limitationOwnership list record is missing reviewed ownership fields.",
+      );
+    }
+  }
+
+  const severity = asString(record.severity);
+  if (severity === null || !LIMITATION_OWNERSHIP_SEVERITIES.has(severity)) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership list record has unsupported severity.",
+    );
+  }
+
+  const reviewState = asString(record.review_state);
+  if (
+    reviewState === null ||
+    !LIMITATION_OWNERSHIP_REVIEW_STATES.has(reviewState)
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership list record has unsupported review_state.",
+    );
+  }
+
+  const handoffPosture = asString(record.phase66_handoff_posture);
+  if (
+    handoffPosture === null ||
+    !LIMITATION_OWNERSHIP_HANDOFF_POSTURES.has(handoffPosture)
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership list record has unsupported phase66_handoff_posture.",
+    );
+  }
+
+  if (asString(record.review_cadence) === null && asString(record.due_date) === null) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership list record requires review_cadence or due_date.",
+    );
+  }
+
+  if (
+    !Array.isArray(record.evidence_references) ||
+    record.evidence_references.length === 0 ||
+    record.evidence_references.some((reference) => asString(reference) === null)
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership list record requires explicit evidence references.",
+    );
+  }
+
+  if (
+    asString(record.authority_boundary) !== "reviewed_evidence_input_only" ||
+    (record.readiness_claim !== undefined && record.readiness_claim !== null)
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership list record must remain subordinate and cannot claim readiness truth.",
+    );
+  }
+
+  if (record.stale_cache === true || record.cache_sourced === true) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership list record rejects stale-cache limitation truth.",
     );
   }
 }

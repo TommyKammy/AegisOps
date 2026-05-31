@@ -32,6 +32,22 @@ const normalLimitationOwnership = {
   workflow_truth: false,
 };
 
+const normalLimitationOwnershipListRecord = {
+  affected_surface: normalLimitationOwnership.affected_surface,
+  authority_boundary: normalLimitationOwnership.authority_boundary,
+  due_date: normalLimitationOwnership.due_date,
+  evidence_references: normalLimitationOwnership.evidence_references,
+  limitation_id: normalLimitationOwnership.limitation_id,
+  mitigation: normalLimitationOwnership.mitigation,
+  owner: normalLimitationOwnership.owner,
+  phase66_handoff_posture: normalLimitationOwnership.phase66_handoff_posture,
+  readiness_claim: null,
+  review_cadence: normalLimitationOwnership.review_cadence,
+  review_state: normalLimitationOwnership.review_state,
+  severity: normalLimitationOwnership.severity,
+  title: normalLimitationOwnership.title,
+};
+
 export function registerOperatorRoutesLimitationOwnershipTests() {
   describe("limitation ownership route", () => {
     it("renders reviewed limitation ownership as subordinate backend context", async () => {
@@ -90,17 +106,59 @@ export function registerOperatorRoutesLimitationOwnershipTests() {
       );
     });
 
+    it("requires operators to choose a concrete limitation before detail inspection", async () => {
+      const fetchFn = createAuthorizedFetch({
+        "/inspect-records?family=known_limitation_ownership": {
+          records: [normalLimitationOwnershipListRecord],
+          total_records: 1,
+        },
+      });
+      const dependencies = createDefaultDependencies({
+        fetchFn,
+      });
+
+      renderOperatorRoute("/operator/limitations", dependencies);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("heading", { name: "Limitation ownership" }),
+        ).toBeInTheDocument();
+      });
+
+      expect(
+        screen.getByText(
+          "Limitation ownership detail remains subordinate backend context and requires a concrete reviewed limitation id.",
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", {
+          name: "Support bundle evidence remains separately tracked.",
+        }),
+      ).toHaveAttribute(
+        "href",
+        "/operator/limitations?limitation_id=limitation-phase64-support-bundle-001",
+      );
+      expect(
+        fetchFn.mock.calls.some(([url]) =>
+          String(url).startsWith("/inspect-limitation-ownership"),
+        ),
+      ).toBe(false);
+    });
+
     it("fails closed on browser or cache sourced limitation ownership truth", async () => {
       const dependencies = createDefaultDependencies({
         fetchFn: createAuthorizedFetch({
-          "/inspect-limitation-ownership": {
+          "/inspect-limitation-ownership?limitation_id=limitation-phase64-support-bundle-001": {
             ...normalLimitationOwnership,
             projection_source: "browser_cache",
           },
         }),
       });
 
-      renderOperatorRoute("/operator/limitations", dependencies);
+      renderOperatorRoute(
+        "/operator/limitations?limitation_id=limitation-phase64-support-bundle-001",
+        dependencies,
+      );
 
       await waitFor(() => {
         expect(
@@ -128,14 +186,17 @@ export function registerOperatorRoutesLimitationOwnershipTests() {
       delete payloadWithoutReviewTiming.review_cadence;
       const dependencies = createDefaultDependencies({
         fetchFn: createAuthorizedFetch({
-          "/inspect-limitation-ownership": {
+          "/inspect-limitation-ownership?limitation_id=limitation-phase64-support-bundle-001": {
             ...payloadWithoutReviewTiming,
             review_due_date_status: "not_specified",
           },
         }),
       });
 
-      renderOperatorRoute("/operator/limitations", dependencies);
+      renderOperatorRoute(
+        "/operator/limitations?limitation_id=limitation-phase64-support-bundle-001",
+        dependencies,
+      );
 
       await waitFor(() => {
         expect(

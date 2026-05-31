@@ -48,7 +48,6 @@ export type StandardOperatorResourceName = Exclude<
   | "advisoryOutput"
   | "actionReview"
   | "businessHoursHandoff"
-  | "limitationOwnership"
   | "todayView"
 >;
 

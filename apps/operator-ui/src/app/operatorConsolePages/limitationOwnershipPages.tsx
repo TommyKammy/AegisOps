@@ -1,17 +1,39 @@
 import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
-import { Alert, Chip, Grid, Stack, Typography } from "@mui/material";
+import {
+  Alert,
+  Chip,
+  Grid,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   asString,
   asStringArray,
+  AuditedRouteLink,
+  EmptyState,
+  ErrorState,
   LoadingState,
   PageFrame,
+  QueryStateNotice,
   SectionCard,
   formatLabel,
   statusTone,
+  useOperatorList,
   useOperatorRecord,
+  type UnknownRecord,
 } from "./shared";
+
+const LIMITATION_OWNERSHIP_LIST_SORT = {
+  field: "limitation_id",
+  order: "ASC",
+} as const;
 
 function lowerLabel(value: string | null) {
   return formatLabel(value ?? "unknown").toLowerCase();
@@ -32,13 +54,116 @@ function LimitationOwnershipUnavailable() {
 }
 
 export function LimitationOwnershipPage() {
-  const meta = useMemo(() => ({}), []);
   const [searchParams] = useSearchParams();
-  const requestedLimitationId =
-    searchParams.get("limitation_id")?.trim() || "current";
+  const requestedLimitationId = searchParams.get("limitation_id")?.trim();
+
+  if (!requestedLimitationId) {
+    return <LimitationOwnershipSelectionPage />;
+  }
+
+  return <LimitationOwnershipDetailPage limitationId={requestedLimitationId} />;
+}
+
+function limitationOwnershipRoute(recordId: string) {
+  const params = new URLSearchParams({ limitation_id: recordId });
+
+  return `/operator/limitations?${params.toString()}`;
+}
+
+function LimitationOwnershipSelectionTable({ records }: { records: UnknownRecord[] }) {
+  if (records.length === 0) {
+    return <EmptyState message="No reviewed limitation ownership records are available." />;
+  }
+
+  return (
+    <Table size="small">
+      <TableHead>
+        <TableRow>
+          <TableCell>Limitation</TableCell>
+          <TableCell>Owner</TableCell>
+          <TableCell>Severity</TableCell>
+          <TableCell>Review</TableCell>
+          <TableCell>Handoff</TableCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {records.map((record) => {
+          const limitationId = asString(record.limitation_id) ?? String(record.id);
+          const title = asString(record.title) ?? limitationId;
+
+          return (
+            <TableRow hover key={limitationId}>
+              <TableCell>
+                <AuditedRouteLink
+                  label="Open reviewed limitation ownership"
+                  to={limitationOwnershipRoute(limitationId)}
+                >
+                  {title}
+                </AuditedRouteLink>
+              </TableCell>
+              <TableCell>{asString(record.owner)}</TableCell>
+              <TableCell>{formatLabel(asString(record.severity) ?? "unknown")}</TableCell>
+              <TableCell>{formatLabel(asString(record.review_state) ?? "unknown")}</TableCell>
+              <TableCell>
+                {formatLabel(asString(record.phase66_handoff_posture) ?? "unknown")}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}
+
+function LimitationOwnershipSelectionPage() {
+  const filter = useMemo(() => ({}), []);
+  const results = useOperatorList(
+    "limitationOwnership",
+    filter,
+    LIMITATION_OWNERSHIP_LIST_SORT,
+    25,
+  );
+
+  if (results.loading && results.data === null) {
+    return (
+      <PageFrame
+        subtitle="Loading backend-reviewed limitation ownership records before detail inspection."
+        title="Limitation ownership"
+      >
+        <LoadingState label="Loading limitation ownership records" />
+      </PageFrame>
+    );
+  }
+
+  return (
+    <PageFrame
+      subtitle="Choose a reviewed limitation record before loading the backend projection; detail inspection requires an explicit limitation id."
+      title="Limitation ownership"
+    >
+      {results.error && results.data === null ? (
+        <ErrorState error={results.error} />
+      ) : (
+        <Stack spacing={2}>
+          <Alert severity="info" variant="outlined">
+            Limitation ownership detail remains subordinate backend context and
+            requires a concrete reviewed limitation id.
+          </Alert>
+          <QueryStateNotice
+            error={results.error}
+            refreshing={results.refreshing}
+          />
+          <LimitationOwnershipSelectionTable records={results.data ?? []} />
+        </Stack>
+      )}
+    </PageFrame>
+  );
+}
+
+function LimitationOwnershipDetailPage({ limitationId }: { limitationId: string }) {
+  const meta = useMemo(() => ({}), []);
   const { data, error, loading } = useOperatorRecord(
     "limitationOwnership",
-    requestedLimitationId,
+    limitationId,
     meta,
   );
   const title = asString(data?.title) ?? "Reviewed limitation";

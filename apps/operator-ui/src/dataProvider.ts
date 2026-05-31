@@ -36,8 +36,7 @@ export function createOperatorDataProvider({
     getList(resource, params) {
       if (
         resource === "advisoryOutput" ||
-        resource === "actionReview" ||
-        resource === "limitationOwnership"
+        resource === "actionReview"
       ) {
         return rejectUnsupported("getList", resource);
       }
