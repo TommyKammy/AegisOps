@@ -120,6 +120,7 @@ const LIMITATION_OWNERSHIP_REQUIRED_FIELDS = [
   "affected_surface",
   "owner",
   "mitigation",
+  "lifecycle_state",
   "review_state",
   "phase66_handoff_posture",
   "authority_boundary",
@@ -341,12 +342,18 @@ export function validateLimitationOwnershipListRecord(record: Record<string, unk
   }
 
   const reviewState = asString(record.review_state);
+  const lifecycleState = asString(record.lifecycle_state);
   if (
     reviewState === null ||
     !LIMITATION_OWNERSHIP_REVIEW_STATES.has(reviewState)
   ) {
     throw new OperatorDataProviderContractError(
       "Resource limitationOwnership list record has unsupported review_state.",
+    );
+  }
+  if (lifecycleState !== reviewState) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership list record requires lifecycle_state to match review_state.",
     );
   }
 
@@ -385,7 +392,10 @@ export function validateLimitationOwnershipListRecord(record: Record<string, unk
     );
   }
 
-  if (record.stale_cache === true || record.cache_sourced === true) {
+  if (
+    (record.stale_cache !== undefined && record.stale_cache !== false) ||
+    (record.cache_sourced !== undefined && record.cache_sourced !== false)
+  ) {
     throw new OperatorDataProviderContractError(
       "Resource limitationOwnership list record rejects stale-cache limitation truth.",
     );

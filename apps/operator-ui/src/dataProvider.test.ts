@@ -630,7 +630,7 @@ describe("createOperatorDataProvider", () => {
     );
   });
 
-  it("requires accepted-risk limitation ownership detail to include reviewed risk posture", async () => {
+  it("requires every limitation ownership detail to include reviewed risk posture", async () => {
     const dataProvider = createOperatorDataProvider({
       fetchFn: vi.fn<typeof fetch>().mockResolvedValue(
         jsonResponse({
@@ -646,7 +646,7 @@ describe("createOperatorDataProvider", () => {
           readiness_truth: false,
           release_truth: false,
           review_due_date_status: "current",
-          review_state: "accepted_risk",
+          review_state: "under_review",
           severity: "material",
           title: "Support bundle evidence remains separately tracked.",
           affected_surface: "supportability_evidence",
@@ -661,7 +661,7 @@ describe("createOperatorDataProvider", () => {
         id: "limitation-phase64-support-bundle-001",
       }),
     ).rejects.toThrow(
-      "Resource limitationOwnership accepted-risk detail requires accepted_risk_posture.",
+      "Resource limitationOwnership detail payload is missing reviewed ownership fields.",
     );
   });
 
@@ -675,6 +675,7 @@ describe("createOperatorDataProvider", () => {
             due_date: "2026-06-15",
             evidence_references: ["docs/phase-63-closeout-evaluation.md"],
             limitation_id: "limitation-phase64-support-bundle-001",
+            lifecycle_state: "accepted_risk",
             mitigation: "Track the support bundle slice before Phase 66 RC proof.",
             owner: "supportability-owner",
             phase66_handoff_posture: "handoff_required",
@@ -714,6 +715,83 @@ describe("createOperatorDataProvider", () => {
           Accept: "application/json",
         },
       },
+    );
+  });
+
+  it("rejects malformed cache markers in limitation ownership list records", async () => {
+    const dataProvider = createOperatorDataProvider({
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          records: [
+            {
+              affected_surface: "supportability_evidence",
+              authority_boundary: "reviewed_evidence_input_only",
+              cache_sourced: "true",
+              due_date: "2026-06-15",
+              evidence_references: ["docs/phase-63-closeout-evaluation.md"],
+              limitation_id: "limitation-phase64-support-bundle-001",
+              lifecycle_state: "accepted_risk",
+              mitigation: "Track the support bundle slice before Phase 66 RC proof.",
+              owner: "supportability-owner",
+              phase66_handoff_posture: "handoff_required",
+              readiness_claim: null,
+              review_cadence: "weekly",
+              review_state: "accepted_risk",
+              severity: "material",
+              title: "Support bundle evidence remains separately tracked.",
+            },
+          ],
+          total_records: 1,
+        }),
+      ),
+    });
+
+    await expect(
+      dataProvider.getList("limitationOwnership", {
+        filter: {},
+        pagination: { page: 1, perPage: 25 },
+        sort: { field: "limitation_id", order: "ASC" },
+      }),
+    ).rejects.toThrow(
+      "Resource limitationOwnership list record rejects stale-cache limitation truth.",
+    );
+  });
+
+  it("rejects lifecycle drift in limitation ownership list records", async () => {
+    const dataProvider = createOperatorDataProvider({
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          records: [
+            {
+              affected_surface: "supportability_evidence",
+              authority_boundary: "reviewed_evidence_input_only",
+              due_date: "2026-06-15",
+              evidence_references: ["docs/phase-63-closeout-evaluation.md"],
+              limitation_id: "limitation-phase64-support-bundle-001",
+              lifecycle_state: "under_review",
+              mitigation: "Track the support bundle slice before Phase 66 RC proof.",
+              owner: "supportability-owner",
+              phase66_handoff_posture: "handoff_required",
+              readiness_claim: null,
+              review_cadence: "weekly",
+              review_state: "accepted_risk",
+              severity: "material",
+              title: "Support bundle evidence remains separately tracked.",
+            },
+          ],
+          total_records: 1,
+        }),
+      ),
+    });
+
+    await expect(
+      dataProvider.getList("limitationOwnership", {
+        filter: {},
+        pagination: { page: 1, perPage: 25 },
+        sort: { field: "limitation_id", order: "ASC" },
+      }),
+    ).rejects.toThrow(
+      "Resource limitationOwnership list record requires lifecycle_state to match review_state.",
     );
   });
 

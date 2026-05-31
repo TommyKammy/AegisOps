@@ -683,6 +683,7 @@ export async function getOneForLimitationOwnership(
     owner === null ||
     mitigation === null ||
     reviewState === null ||
+    acceptedRiskPosture === null ||
     phase66HandoffPosture === null ||
     reviewDueDateStatus === null ||
     authorityBoundary === null ||
@@ -708,11 +709,6 @@ export async function getOneForLimitationOwnership(
   if (!LIMITATION_OWNERSHIP_REVIEW_STATES.has(reviewState)) {
     throw new OperatorDataProviderContractError(
       "Resource limitationOwnership has unsupported review_state.",
-    );
-  }
-  if (reviewState === "accepted_risk" && acceptedRiskPosture === null) {
-    throw new OperatorDataProviderContractError(
-      "Resource limitationOwnership accepted-risk detail requires accepted_risk_posture.",
     );
   }
   if (!LIMITATION_OWNERSHIP_HANDOFF_POSTURES.has(phase66HandoffPosture)) {

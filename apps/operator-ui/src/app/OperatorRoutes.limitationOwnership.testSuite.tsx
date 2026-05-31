@@ -39,6 +39,7 @@ const normalLimitationOwnershipListRecord = {
   due_date: normalLimitationOwnership.due_date,
   evidence_references: normalLimitationOwnership.evidence_references,
   limitation_id: normalLimitationOwnership.limitation_id,
+  lifecycle_state: normalLimitationOwnership.review_state,
   mitigation: normalLimitationOwnership.mitigation,
   owner: normalLimitationOwnership.owner,
   phase66_handoff_posture: normalLimitationOwnership.phase66_handoff_posture,
