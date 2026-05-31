@@ -244,6 +244,7 @@ Focused backend, UI, AI, registry, path hygiene, and maintainability commands th
 
 - `python3 -m unittest control-plane.tests.test_phase63_5_evidence_freshness_provenance_projection`
 - `python3 -m unittest control-plane.tests.test_phase63_7_ai_grounding_adapter`
+- `python3 -m unittest control-plane.tests.test_phase63_evidence_pack_contract_drift_guard`
 - `python3 -m unittest control-plane.tests.test_phase63_evidence_source_registry`
 - `npm run test --workspace @aegisops/operator-ui -- detailReaders.evidence-pack-extraction.test.ts OperatorRoutes.casework.evidence-pack.test.tsx`
 - `npm run typecheck --workspace @aegisops/operator-ui`
@@ -266,6 +267,8 @@ Issue-lint evidence:
 Each Phase 63.R issue-lint command should report `execution_ready=yes`, `missing_required=none`, `missing_recommended=none`, `metadata_errors=none`, and `high_risk_blocking_ambiguity=none`.
 
 The maintainability hotspot verifier remains unchanged and continues to report only the reviewed `service.py` baseline rather than hiding a new Phase 63.R hotspot.
+
+The Phase 63 evidence-pack contract drift guard compares the overlapping backend projection, operator-ui validation, and AI grounding validation contract for labels, reason sets, custody/provenance/confidence fields, source IDs, freshness window, uncertainty labels, forbidden projection sources, readiness-claim rejection, and no-authority posture. The guard is review evidence only and does not add product behavior, evidence-source breadth, UI authority, AI authority, verifier authority, source-native truth, issue-lint truth, or readiness truth.
 
 Observed closeout results from this branch:
 
