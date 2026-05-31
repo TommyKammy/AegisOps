@@ -463,6 +463,7 @@ describe("createOperatorDataProvider", () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({
         authority_posture: "subordinate_limitation_context_only",
+        authority_boundary: "reviewed_evidence_input_only",
         due_date: "2026-06-15",
         evidence_references: ["docs/phase-63-closeout-evaluation.md"],
         gate_truth: false,
@@ -502,6 +503,90 @@ describe("createOperatorDataProvider", () => {
           Accept: "application/json",
         },
       },
+    );
+  });
+
+  it("requires a concrete limitation ownership id before detail inspection", async () => {
+    const fetchFn = vi.fn<typeof fetch>();
+    const dataProvider = createOperatorDataProvider({ fetchFn });
+
+    await expect(
+      dataProvider.getOne("limitationOwnership", {
+        id: "current",
+      }),
+    ).rejects.toThrow(
+      "Resource limitationOwnership getOne requires a non-empty limitation identifier.",
+    );
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("rejects limitation ownership detail payloads whose id does not match the request", async () => {
+    const dataProvider = createOperatorDataProvider({
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          authority_posture: "subordinate_limitation_context_only",
+          authority_boundary: "reviewed_evidence_input_only",
+          due_date: "2026-06-15",
+          evidence_references: ["docs/phase-63-closeout-evaluation.md"],
+          gate_truth: false,
+          limitation_id: "limitation-phase64-support-bundle-999",
+          mitigation: "Track the support bundle slice before Phase 66 RC proof.",
+          owner: "supportability-owner",
+          phase66_handoff_posture: "handoff_required",
+          readiness_truth: false,
+          release_truth: false,
+          review_due_date_status: "current",
+          review_state: "accepted_risk",
+          severity: "material",
+          title: "Support bundle evidence remains separately tracked.",
+          affected_surface: "supportability_evidence",
+          workflow_authority: "none",
+          workflow_truth: false,
+        }),
+      ),
+    });
+
+    await expect(
+      dataProvider.getOne("limitationOwnership", {
+        id: "limitation-phase64-support-bundle-001",
+      }),
+    ).rejects.toThrow(
+      "Resource limitationOwnership requires limitation_id to match limitation-phase64-support-bundle-001.",
+    );
+  });
+
+  it("rejects limitation ownership detail payloads with authority boundary drift", async () => {
+    const dataProvider = createOperatorDataProvider({
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          authority_posture: "subordinate_limitation_context_only",
+          authority_boundary: "workflow_authority",
+          due_date: "2026-06-15",
+          evidence_references: ["docs/phase-63-closeout-evaluation.md"],
+          gate_truth: false,
+          limitation_id: "limitation-phase64-support-bundle-001",
+          mitigation: "Track the support bundle slice before Phase 66 RC proof.",
+          owner: "supportability-owner",
+          phase66_handoff_posture: "handoff_required",
+          readiness_truth: false,
+          release_truth: false,
+          review_due_date_status: "current",
+          review_state: "accepted_risk",
+          severity: "material",
+          title: "Support bundle evidence remains separately tracked.",
+          affected_surface: "supportability_evidence",
+          workflow_authority: "none",
+          workflow_truth: false,
+        }),
+      ),
+    });
+
+    await expect(
+      dataProvider.getOne("limitationOwnership", {
+        id: "limitation-phase64-support-bundle-001",
+      }),
+    ).rejects.toThrow(
+      "Resource limitationOwnership must remain subordinate and cannot claim readiness, release, gate, or workflow truth.",
     );
   });
 

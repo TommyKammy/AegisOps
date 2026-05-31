@@ -644,9 +644,12 @@ export async function getOneForLimitationOwnership(
     "/inspect-limitation-ownership",
     "http://operator-ui.local",
   );
-  if (requestedId && requestedId !== "current") {
-    url.searchParams.set("limitation_id", requestedId);
+  if (!requestedId || requestedId === "current") {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership getOne requires a non-empty limitation identifier.",
+    );
   }
+  url.searchParams.set("limitation_id", requestedId);
 
   const payload = asObject(
     await fetchJson(fetchFn, `${url.pathname}${url.search}`),
@@ -661,6 +664,7 @@ export async function getOneForLimitationOwnership(
   const reviewState = asString(payload.review_state);
   const phase66HandoffPosture = asString(payload.phase66_handoff_posture);
   const reviewDueDateStatus = asString(payload.review_due_date_status);
+  const authorityBoundary = asString(payload.authority_boundary);
   const authorityPosture = asString(payload.authority_posture);
   const workflowAuthority = asString(payload.workflow_authority);
   const projectionSource = asString(payload.projection_source);
@@ -680,6 +684,7 @@ export async function getOneForLimitationOwnership(
     reviewState === null ||
     phase66HandoffPosture === null ||
     reviewDueDateStatus === null ||
+    authorityBoundary === null ||
     authorityPosture === null ||
     workflowAuthority === null ||
     evidenceReferences === null ||
@@ -687,6 +692,11 @@ export async function getOneForLimitationOwnership(
   ) {
     throw new OperatorDataProviderContractError(
       "Resource limitationOwnership detail payload is missing reviewed ownership fields.",
+    );
+  }
+  if (limitationId !== requestedId) {
+    throw new OperatorDataProviderContractError(
+      `Resource limitationOwnership requires limitation_id to match ${requestedId}.`,
     );
   }
   if (!LIMITATION_OWNERSHIP_SEVERITIES.has(severity)) {
@@ -731,6 +741,7 @@ export async function getOneForLimitationOwnership(
     );
   }
   if (
+    authorityBoundary !== "reviewed_evidence_input_only" ||
     authorityPosture !== "subordinate_limitation_context_only" ||
     payload.readiness_truth !== false ||
     payload.release_truth !== false ||

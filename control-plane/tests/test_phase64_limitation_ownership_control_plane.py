@@ -176,6 +176,20 @@ class Phase64LimitationOwnershipControlPlaneTests(unittest.TestCase):
         with self.assertRaisesRegex(LookupError, "explicit limitation_id"):
             read_surface.inspect_limitation_ownership_detail()
 
+    def test_read_surface_requires_explicit_limitation_for_single_record(
+        self,
+    ) -> None:
+        store, _backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        service.persist_record(_known_limitation_ownership_record())
+
+        read_surface = service._operator_inspection_read_surface
+        with self.assertRaisesRegex(LookupError, "explicit limitation_id"):
+            read_surface.inspect_limitation_ownership_detail()
+
 
 if __name__ == "__main__":
     unittest.main()

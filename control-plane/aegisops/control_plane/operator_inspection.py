@@ -1704,14 +1704,9 @@ class OperatorInspectionReadSurface:
                 )
             return project_limitation_ownership_context(record, consumer="inspection")
 
-        records = self._service._store.list(KnownLimitationOwnershipRecord)
-        if not records:
-            raise LookupError("Missing limitation ownership record for inspection")
-        if len(records) > 1:
-            raise LookupError(
-                "Limitation ownership inspection requires an explicit limitation_id"
-            )
-        return project_limitation_ownership_context(records[0], consumer="inspection")
+        raise LookupError(
+            "Limitation ownership inspection requires an explicit limitation_id"
+        )
 
     def _build_alert_external_ticket_reference_surface(
         self,
