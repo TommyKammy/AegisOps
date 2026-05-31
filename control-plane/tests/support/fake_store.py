@@ -16,6 +16,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops.control_plane.models import ReconciliationRecord
 from aegisops.control_plane.models import ActionRequestRecord
+from aegisops.control_plane.models import KnownLimitationOwnershipRecord
 from aegisops.control_plane.models import LifecycleTransitionRecord
 
 
@@ -80,6 +81,9 @@ class TransactionMutationStore:
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
+
+    def inspect_limitation_ownership_records(self) -> object:
+        return self.inner.list(KnownLimitationOwnershipRecord)
 
     def inspect_readiness_review_path_records(
         self,
@@ -278,6 +282,9 @@ class CommitFailingStore:
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
+
+    def inspect_limitation_ownership_records(self) -> object:
+        return self.inner.list(KnownLimitationOwnershipRecord)
 
     def inspect_readiness_review_path_records(
         self,
@@ -492,6 +499,9 @@ class ListCountingStore:
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
+
+    def inspect_limitation_ownership_records(self) -> object:
+        return self.inner.list(KnownLimitationOwnershipRecord)
 
     def inspect_readiness_review_path_records(
         self,
