@@ -3,6 +3,7 @@ from __future__ import annotations
 import pathlib
 import sys
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parent
@@ -15,18 +16,23 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from scripts import phase63_evidence_pack_contract_guard as contract_guard  # noqa: E402
 from scripts.phase63_evidence_pack_contract_guard import (  # noqa: E402
+    _ai_confidence_posture_rejection,
+    _ai_no_workflow_authority_rejection,
     assert_phase63_evidence_pack_contract_aligned,
     contract_with_drift,
     contract_with_label_drift,
     load_phase63_evidence_pack_contracts,
     _backend_no_workflow_authority_rejection,
     _backend_confidence_posture_rejection,
+    _py_enforced_metadata_fields,
     _py_projection_get_string_rejection_labels,
+    _py_rejected_boolean_value,
     _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
     _operator_ui_contract_from_source,
     _py_string_constant,
     _ts_forbidden_defined_pack_fields,
     _ts_no_workflow_authority_rejection,
+    _ts_rejected_pack_boolean_field,
     _ts_rejected_pack_string_field,
 )
 
@@ -210,6 +216,17 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                     )
                 },
                 "no workflow authority",
+            ),
+            (
+                "workflow truth denial",
+                {
+                    "ai_grounding_contract": contract_with_drift(
+                        ai,
+                        "authoritative_workflow_truth",
+                        True,
+                    )
+                },
+                "authoritative workflow truth denial",
             ),
         )
 
@@ -415,6 +432,118 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                 _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
             )["custody_state"],
             frozenset({"reviewed"}),
+        )
+
+    def test_ai_no_workflow_authority_parser_observes_representative_drift(
+        self,
+    ) -> None:
+        source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
+        self.assertEqual(_ai_no_workflow_authority_rejection(source), "none")
+
+        workflow_drift = source.replace(
+            'projection.get("workflow_authority") != _NO_WORKFLOW_AUTHORITY',
+            'projection.get("workflow_authority") != "advisory_only"',
+        )
+        with self.assertRaisesRegex(AssertionError, "AI workflow authority"):
+            _ai_no_workflow_authority_rejection(workflow_drift)
+
+        confidence_authority_drift = source.replace(
+            'confidence.get("source_native_score_authority") != _NO_WORKFLOW_AUTHORITY',
+            'confidence.get("source_native_score_authority") != "advisory_only"',
+        )
+        with self.assertRaisesRegex(AssertionError, "AI workflow authority"):
+            _ai_no_workflow_authority_rejection(confidence_authority_drift)
+
+    def test_ai_confidence_posture_parser_observes_representative_drift(self) -> None:
+        source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
+        self.assertEqual(
+            _ai_confidence_posture_rejection(
+                source,
+                "external_hash_reputation_subordinate_context",
+            ),
+            "external_hash_reputation_subordinate_context",
+        )
+
+        literal_drift = source.replace(
+            'confidence.get("posture") != registry_entry.confidence_posture',
+            'confidence.get("posture") != "workflow_truth_confidence"',
+        )
+        self.assertEqual(
+            _ai_confidence_posture_rejection(
+                literal_drift,
+                "external_hash_reputation_subordinate_context",
+            ),
+            "workflow_truth_confidence",
+        )
+
+        missing_reason_drift = source.replace(
+            '"grounding_confidence_posture_mismatch"',
+            '"grounding_confidence_posture_changed"',
+        )
+        with self.assertRaisesRegex(AssertionError, "AI confidence posture"):
+            _ai_confidence_posture_rejection(
+                missing_reason_drift,
+                "external_hash_reputation_subordinate_context",
+            )
+
+    def test_ai_metadata_contract_uses_validator_allowed_fields(self) -> None:
+        from aegisops.control_plane.assistant import ai_grounding_validation
+
+        source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
+        fields = _py_enforced_metadata_fields(source, ai_grounding_validation)
+        self.assertEqual(
+            fields["confidence"],
+            ai_grounding_validation._ALLOWED_CONFIDENCE_FIELDS,
+        )
+
+        drifted_namespace = SimpleNamespace(
+            _ALLOWED_CUSTODY_FIELDS=ai_grounding_validation._ALLOWED_CUSTODY_FIELDS,
+            _ALLOWED_PROVENANCE_FIELDS=(
+                ai_grounding_validation._ALLOWED_PROVENANCE_FIELDS
+            ),
+            _ALLOWED_CONFIDENCE_FIELDS=(
+                ai_grounding_validation._ALLOWED_CONFIDENCE_FIELDS
+                - frozenset({"ambiguity_badge"})
+            ),
+        )
+        self.assertNotEqual(
+            _py_enforced_metadata_fields(source, drifted_namespace)["confidence"],
+            ai_grounding_validation._REQUIRED_CONFIDENCE_FIELDS,
+        )
+
+    def test_workflow_truth_boolean_rejections_are_parsed(self) -> None:
+        backend_source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
+        ai_source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
+        ui_source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+
+        self.assertFalse(
+            _py_rejected_boolean_value(
+                backend_source,
+                ("get", "projection", "authoritative_workflow_truth"),
+            )
+        )
+        self.assertFalse(
+            _py_rejected_boolean_value(
+                ai_source,
+                ("get", "projection", "authoritative_workflow_truth"),
+            )
+        )
+        self.assertFalse(
+            _ts_rejected_pack_boolean_field(
+                ui_source,
+                "authoritative_workflow_truth",
+            )
+        )
+
+        ui_drift = ui_source.replace(
+            "pack.authoritative_workflow_truth !== false",
+            "pack.authoritative_workflow_truth !== true",
+        )
+        self.assertTrue(
+            _ts_rejected_pack_boolean_field(
+                ui_drift,
+                "authoritative_workflow_truth",
+            )
         )
 
     def test_ai_authority_truth_denials_follow_scanner(self) -> None:

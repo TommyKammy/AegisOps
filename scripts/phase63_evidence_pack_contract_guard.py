@@ -56,6 +56,7 @@ class Phase63EvidencePackContract:
     supported_source_ids: frozenset[str]
     subordinate_authority_posture: str
     no_workflow_authority: str
+    authoritative_workflow_truth: bool
     confidence_posture: str
     freshness_window_milliseconds: int
     forbidden_projection_sources: frozenset[str]
@@ -153,6 +154,12 @@ def assert_phase63_evidence_pack_contract_aligned(
         backend.no_workflow_authority,
         ui.no_workflow_authority,
         ai.no_workflow_authority,
+    )
+    _assert_equal(
+        "authoritative workflow truth denial",
+        backend.authoritative_workflow_truth,
+        ui.authoritative_workflow_truth,
+        ai.authoritative_workflow_truth,
     )
     _assert_equal(
         "confidence posture",
@@ -260,6 +267,10 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
         no_workflow_authority=_backend_no_workflow_authority_rejection(
             validator_source
         ),
+        authoritative_workflow_truth=_py_rejected_boolean_value(
+            validator_source,
+            ("get", "projection", "authoritative_workflow_truth"),
+        ),
         confidence_posture=_backend_confidence_posture_rejection(
             validator_source,
             registry_entry.confidence_posture,
@@ -305,6 +316,10 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
         validator_source,
         _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
     )
+    metadata_fields = _py_enforced_metadata_fields(
+        validator_source,
+        ai_grounding_validation,
+    )
     labels = {
         "consumer": frozenset({"ai_grounding"}),
         "status": frozenset(ai_grounding_validation._ALLOWED_STATUS),
@@ -322,23 +337,26 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
         unavailable_reasons=frozenset(
             ai_grounding_validation._ALLOWED_UNAVAILABLE_REASONS
         ),
-        required_custody_fields=frozenset(
-            ai_grounding_validation._REQUIRED_CUSTODY_FIELDS
-        ),
-        required_provenance_fields=frozenset(
-            ai_grounding_validation._REQUIRED_PROVENANCE_FIELDS
-        ),
-        required_confidence_fields=frozenset(
-            ai_grounding_validation._REQUIRED_CONFIDENCE_FIELDS
-        ),
+        required_custody_fields=metadata_fields["custody"],
+        required_provenance_fields=metadata_fields["provenance"],
+        required_confidence_fields=metadata_fields["confidence"],
         contract_fields=frozenset(),
         recognized_fields=frozenset(),
         supported_source_ids=source_ids,
         subordinate_authority_posture=(
             ai_grounding_validation._SUBORDINATE_AUTHORITY_POSTURE
         ),
-        no_workflow_authority=ai_grounding_validation._NO_WORKFLOW_AUTHORITY,
-        confidence_posture=registry_entry.confidence_posture,
+        no_workflow_authority=_ai_no_workflow_authority_rejection(
+            validator_source
+        ),
+        authoritative_workflow_truth=_py_rejected_boolean_value(
+            validator_source,
+            ("get", "projection", "authoritative_workflow_truth"),
+        ),
+        confidence_posture=_ai_confidence_posture_rejection(
+            validator_source,
+            registry_entry.confidence_posture,
+        ),
         freshness_window_milliseconds=(
             source_projection._parse_duration_seconds(registry_entry.freshness_window)
             * 1000
@@ -393,6 +411,10 @@ def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContrac
             "EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE",
         ),
         no_workflow_authority=_ts_no_workflow_authority_rejection(source),
+        authoritative_workflow_truth=_ts_rejected_pack_boolean_field(
+            source,
+            "authoritative_workflow_truth",
+        ),
         confidence_posture=_ts_string_constant(
             source,
             "EVIDENCE_PACK_CONFIDENCE_POSTURE",
@@ -545,6 +567,23 @@ def _backend_no_workflow_authority_rejection(source: str) -> str:
     return next(iter(values))
 
 
+def _ai_no_workflow_authority_rejection(source: str) -> str:
+    targets = (
+        ("get", "projection", "workflow_authority"),
+        ("get", "confidence", "source_native_score_authority"),
+    )
+    values = frozenset(
+        value
+        for target in targets
+        for value in _py_rejected_string_values(source, target)
+    )
+    if len(values) != 1:
+        raise AssertionError(
+            "AI workflow authority rejection is not consistently discoverable"
+        )
+    return next(iter(values))
+
+
 def _backend_confidence_posture_rejection(
     source: str,
     registry_confidence_posture: str,
@@ -573,6 +612,66 @@ def _backend_confidence_posture_rejection(
     return next(iter(values))
 
 
+def _ai_confidence_posture_rejection(
+    source: str,
+    registry_confidence_posture: str,
+) -> str:
+    values: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.If):
+            continue
+        compared_value = _py_compare_rejection_value(
+            node.test,
+            ("get", "confidence", "posture"),
+            registry_confidence_posture=registry_confidence_posture,
+        )
+        if compared_value is None:
+            continue
+        if not _py_body_contains_string(
+            node.body,
+            "grounding_confidence_posture_mismatch",
+        ):
+            continue
+        values.add(compared_value)
+    if len(values) != 1:
+        raise AssertionError(
+            "AI confidence posture rejection is not consistently discoverable"
+        )
+    return next(iter(values))
+
+
+def _py_compare_rejection_value(
+    node: ast.AST,
+    target: tuple[str, str, str],
+    *,
+    registry_confidence_posture: str | None = None,
+) -> str | None:
+    if not isinstance(node, ast.Compare):
+        return None
+    if len(node.ops) != 1 or not isinstance(node.ops[0], ast.NotEq):
+        return None
+    if len(node.comparators) != 1:
+        return None
+    if _py_rejection_target(node.left) != target:
+        return None
+    compared_value = _py_string_constant(node.comparators[0])
+    if (
+        compared_value is None
+        and registry_confidence_posture is not None
+        and _py_registry_confidence_posture_reference(node.comparators[0])
+    ):
+        compared_value = registry_confidence_posture
+    return compared_value
+
+
+def _py_body_contains_string(body: list[ast.stmt], value: str) -> bool:
+    return any(
+        isinstance(child, ast.Constant) and child.value == value
+        for statement in body
+        for child in ast.walk(statement)
+    )
+
+
 def _py_registry_confidence_posture_reference(node: ast.AST) -> bool:
     return (
         isinstance(node, ast.Attribute)
@@ -597,10 +696,38 @@ def _py_projection_get_string_rejection_labels(
     return labels
 
 
+def _py_enforced_metadata_fields(
+    source: str,
+    namespace: object,
+) -> dict[str, frozenset[str]]:
+    fields: dict[str, frozenset[str]] = {}
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name):
+            continue
+        if node.func.id != "_metadata_contract_reasons" or len(node.args) < 2:
+            continue
+        value_argument = node.args[0]
+        allowed_argument = node.args[1]
+        if not isinstance(value_argument, ast.Name):
+            continue
+        if not isinstance(allowed_argument, ast.Name):
+            continue
+        if value_argument.id not in {"custody", "provenance", "confidence"}:
+            continue
+        fields[value_argument.id] = frozenset(getattr(namespace, allowed_argument.id))
+    expected_fields = frozenset({"custody", "provenance", "confidence"})
+    if frozenset(fields) != expected_fields:
+        raise AssertionError("AI grounding metadata enforcement drift")
+    return fields
+
+
 def _py_rejected_string_values(
     source: str,
     target: tuple[str, str, str],
 ) -> frozenset[str]:
+    string_constants = _py_source_string_constants(source)
     values: set[str] = set()
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, ast.Compare):
@@ -609,7 +736,7 @@ def _py_rejected_string_values(
             continue
         if len(node.comparators) != 1:
             continue
-        compared_value = _py_string_constant(node.comparators[0])
+        compared_value = _py_string_constant(node.comparators[0], string_constants)
         if compared_value is None:
             continue
         if _py_rejection_target(node.left) == target:
@@ -620,6 +747,31 @@ def _py_rejected_string_values(
             f"Python string rejection for {mapping_name}.{field_name} is not discoverable"
         )
     return frozenset(values)
+
+
+def _py_rejected_boolean_value(
+    source: str,
+    target: tuple[str, str, str],
+) -> bool:
+    values: set[bool] = set()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Compare):
+            continue
+        if len(node.ops) != 1 or not isinstance(node.ops[0], (ast.IsNot, ast.NotEq)):
+            continue
+        if len(node.comparators) != 1:
+            continue
+        if _py_rejection_target(node.left) != target:
+            continue
+        compared_value = _py_boolean_constant(node.comparators[0])
+        if compared_value is not None:
+            values.add(compared_value)
+    if len(values) != 1:
+        _, mapping_name, field_name = target
+        raise AssertionError(
+            f"Python boolean rejection for {mapping_name}.{field_name} is not discoverable"
+        )
+    return next(iter(values))
 
 
 def _py_rejection_target(node: ast.AST) -> tuple[str, str, str] | None:
@@ -656,10 +808,43 @@ def _py_subscript_key(node: ast.AST) -> str | None:
     return _py_string_constant(node)
 
 
-def _py_string_constant(node: ast.AST) -> str | None:
+def _py_string_constant(
+    node: ast.AST,
+    string_constants: Mapping[str, str] | None = None,
+) -> str | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
+    if (
+        isinstance(node, ast.Name)
+        and string_constants is not None
+        and node.id in string_constants
+    ):
+        return string_constants[node.id]
     return None
+
+
+def _py_boolean_constant(node: ast.AST) -> bool | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, bool):
+        return node.value
+    return None
+
+
+def _py_source_string_constants(source: str) -> Mapping[str, str]:
+    constants: dict[str, str] = {}
+    if not source:
+        return constants
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+            if isinstance(target, ast.Name):
+                value = _py_string_constant(node.value)
+                if value is not None:
+                    constants[target.id] = value
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            value = _py_string_constant(node.value) if node.value is not None else None
+            if value is not None:
+                constants[node.target.id] = value
+    return constants
 
 
 def _ts_set(source: str, name: str) -> frozenset[str]:
@@ -771,6 +956,18 @@ def _ts_pack_string_variable(source: str, field_name: str) -> str:
     if match is None:
         raise AssertionError(f"operator UI pack field {field_name} is not discoverable")
     return match.group(1)
+
+
+def _ts_rejected_pack_boolean_field(source: str, field_name: str) -> bool:
+    match = re.search(
+        rf"\bpack\.{re.escape(field_name)}\s*!==\s*(true|false)",
+        source,
+    )
+    if match is None:
+        raise AssertionError(
+            f"operator UI pack field {field_name} boolean rejection is not discoverable"
+        )
+    return match.group(1) == "true"
 
 
 def _ts_forbidden_defined_pack_fields(source: str, error_message: str) -> frozenset[str]:
