@@ -9,6 +9,7 @@ doc_path="docs/phase-64-5-phase66-limitation-handoff.md"
 absolute_doc_path="${repo_root}/${doc_path}"
 readme_path="${repo_root}/README.md"
 phase64_contract_path="${repo_root}/docs/phase-64-1-known-limitation-ownership-record-contract.md"
+phase64_records_path="${repo_root}/docs/phase-64-1-reviewed-limitation-ownership-records.md"
 phase63_closeout_path="${repo_root}/docs/phase-63-closeout-evaluation.md"
 gate_contract_path="${repo_root}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
 
@@ -36,6 +37,7 @@ require_phrase() {
 require_file "${absolute_doc_path}" "Phase 64.5 Phase 66 limitation handoff evidence"
 require_file "${readme_path}" "README for Phase 64.5 handoff link check"
 require_file "${phase64_contract_path}" "Phase 64.1 known limitation ownership contract"
+require_file "${phase64_records_path}" "Phase 64.1 reviewed limitation ownership records"
 require_file "${phase63_closeout_path}" "Phase 63 closeout evaluation"
 require_file "${gate_contract_path}" "Phase 51.3 gate contract"
 
@@ -52,12 +54,10 @@ done <<'EOF_PHRASE'
 Phase 64.5 records how Phase 66 may consume reviewed Phase 64 limitation ownership records as subordinate RC proof input without satisfying RC gates by itself.
 Phase 66 limitation handoff evidence is planning and review evidence only. It cannot satisfy RC gates, release gates, readiness truth, case truth, approval truth, execution truth, reconciliation truth, closeout truth, gate truth, or limitation truth by itself.
 AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth.
-The handoff references Phase 64 known limitation ownership records as subordinate evidence only.
+The handoff references reviewed Phase 64 known limitation ownership records in `docs/phase-64-1-reviewed-limitation-ownership-records.md` as subordinate evidence only.
 Every Phase 66 limitation handoff entry requires limitation id, owner, mitigation status, evidence references, open blockers, accepted risks, next review date, and RC-gate consumption notes.
 Missing limitation owner, missing mitigation, missing evidence references, missing open blocker list, missing next review date, inferred RC pass, gate truth shortcut, release truth shortcut, verifier-as-readiness-truth, issue-lint-as-readiness-truth, Beta readiness claim, RC readiness claim, GA readiness claim, or commercial readiness claim must fail.
 The Phase 66 limitation handoff cannot mark any Pilot, Beta, RC, GA, release, readiness, case, approval, execution, reconciliation, closeout, gate, or limitation truth accepted.
-| `limitation-phase64-support-bundle-001` | supportability-owner | accepted risk; support bundle evidence remains separately tracked | `docs/phase-63-closeout-evaluation.md#support-bundle-gap-disposition`; `docs/phase-64-1-known-limitation-ownership-record-contract.md` | Phase 51.3 support bundle command, redaction review, included record identifiers, omitted private data classes, owner, retention expectation, and verifier evidence remain required before RC proof can treat support evidence as satisfied. | bounded pre-RC limitation accepted only as reviewed ownership evidence | 2026-06-15 | Phase 66 may cite this as subordinate limitation ownership evidence only; it does not satisfy support bundle evidence, RC readiness, release truth, or gate truth. |
-| `limitation-phase64-rc-gate-consumption-001` | release-gate-owner | mitigation planned; RC packet assembly still needs independent gate proof | `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`; `docs/phase-64-1-known-limitation-ownership-record-contract.md` | RC gate packet must still prove install, Wazuh signal, Shuffle execution, AI trace, report export, restore dry-run, upgrade plan, support bundle, and limitations ownership evidence against the approved RC gate. | gate consumption risk accepted only when limitation ownership stays subordinate | 2026-06-15 | Phase 66 may use the owner, mitigation, risk, and review-date fields to plan RC proof; no RC gate is accepted by this handoff. |
 `bash scripts/verify-phase-64-1-known-limitation-ownership-record-contract.sh`
 `bash scripts/verify-phase-64-5-phase66-limitation-handoff.sh`
 `bash scripts/test-verify-phase-64-5-phase66-limitation-handoff.sh`
@@ -72,6 +72,117 @@ EOF_PHRASE
 for phrase in "${required_phrases[@]}"; do
   require_phrase "${absolute_doc_path}" "${phrase}" "required Phase 64.5 handoff term in ${doc_path}"
 done
+
+required_record_phrases=()
+while IFS= read -r phrase; do
+  required_record_phrases+=("${phrase}")
+done <<'EOF_RECORD_PHRASE'
+# Phase 64.1 Reviewed Limitation Ownership Records
+These records instantiate the Phase 64.1 `known_limitation_ownership` contract as reviewed evidence inputs only.
+They do not resolve limitations, satisfy RC gates, prove release readiness, approve GA readiness, replace support evidence, create release truth, create gate truth, or create readiness truth.
+Phase 66 may consume these records only as subordinate limitation ownership evidence while proving RC gates independently.
+| `limitation-phase64-support-bundle-001` | Support bundle evidence remains separately tracked. | material | supportability_evidence | supportability-owner | Track the support bundle slice before Phase 66 RC proof. | `docs/phase-63-closeout-evaluation.md#support-bundle-gap-disposition` | accepted_risk | weekly | none | bounded_pre_rc_limitation | handoff_required | reviewed_evidence_input_only |
+| `limitation-phase64-rc-gate-consumption-001` | RC gate packet still needs independent proof. | material | release_gate_evidence | release-gate-owner | Keep limitation ownership as subordinate RC packet planning evidence only. | `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`; `docs/phase-64-1-known-limitation-ownership-record-contract.md` | mitigation_planned | weekly | none | gate_consumption_risk_requires_independent_proof | handoff_required | reviewed_evidence_input_only |
+### limitation-phase64-support-bundle-001
+### limitation-phase64-rc-gate-consumption-001
+No product behavior, source behavior, workflow behavior, RC proof, GA proof, release gate execution, or production rollout readiness claim is implemented here.
+EOF_RECORD_PHRASE
+
+for phrase in "${required_record_phrases[@]}"; do
+  require_phrase "${phase64_records_path}" "${phrase}" "required Phase 64.1 reviewed limitation record term"
+done
+
+trim_cell() {
+  local value="$1"
+
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "${value}"
+}
+
+reject_blank_or_placeholder() {
+  local value="$1"
+  local description="$2"
+  local limitation_id="$3"
+  local normalized
+
+  value="$(trim_cell "${value}")"
+  normalized="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]')"
+
+  if [[ -z "${value}" || "${normalized}" =~ ^(\`?)(none|n/a|na|tbd|todo|placeholder|-)(\`?)$ ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: missing ${description}" >&2
+    exit 1
+  fi
+}
+
+validate_handoff_row() {
+  local row="$1"
+  local empty_prefix
+  local limitation_id_cell
+  local owner
+  local mitigation_status
+  local evidence_references
+  local open_blockers
+  local accepted_risks
+  local next_review_date
+  local rc_gate_notes
+  local empty_suffix
+  local limitation_id
+  local reviewed_record_reference
+
+  IFS='|' read -r empty_prefix limitation_id_cell owner mitigation_status evidence_references open_blockers accepted_risks next_review_date rc_gate_notes empty_suffix <<<"${row}"
+
+  limitation_id_cell="$(trim_cell "${limitation_id_cell}")"
+  limitation_id="${limitation_id_cell#\`}"
+  limitation_id="${limitation_id%\`}"
+
+  if [[ ! "${limitation_id}" =~ ^limitation-phase64-[a-z0-9-]+-[0-9]{3}$ ]]; then
+    echo "Invalid Phase 64.5 handoff row limitation id: ${limitation_id_cell}" >&2
+    exit 1
+  fi
+
+  reject_blank_or_placeholder "${owner}" "owner" "${limitation_id}"
+  reject_blank_or_placeholder "${mitigation_status}" "mitigation status" "${limitation_id}"
+  reject_blank_or_placeholder "${evidence_references}" "evidence references" "${limitation_id}"
+  reject_blank_or_placeholder "${open_blockers}" "open blockers" "${limitation_id}"
+  reject_blank_or_placeholder "${accepted_risks}" "accepted risks" "${limitation_id}"
+  reject_blank_or_placeholder "${next_review_date}" "next review date" "${limitation_id}"
+  reject_blank_or_placeholder "${rc_gate_notes}" "RC-gate consumption notes" "${limitation_id}"
+
+  if [[ ! "$(trim_cell "${next_review_date}")" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: next review date must use YYYY-MM-DD" >&2
+    exit 1
+  fi
+
+  reviewed_record_reference="docs/phase-64-1-reviewed-limitation-ownership-records.md#${limitation_id}"
+  if ! grep -Fq -- "${reviewed_record_reference}" <<<"${evidence_references}"; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: missing reviewed Phase 64 limitation record reference" >&2
+    exit 1
+  fi
+
+  if ! grep -Fq -- "| \`${limitation_id}\` |" "${phase64_records_path}"; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 limitation record is absent" >&2
+    exit 1
+  fi
+
+  if ! grep -Eiq '(subordinate|no rc gate|does not satisfy|independent)' <<<"${rc_gate_notes}"; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: RC-gate consumption notes must preserve subordinate handoff boundary" >&2
+    exit 1
+  fi
+}
+
+handoff_row_count=0
+while IFS= read -r row; do
+  if [[ "${row}" =~ ^\|\ \`limitation-phase64- ]]; then
+    validate_handoff_row "${row}"
+    handoff_row_count=$((handoff_row_count + 1))
+  fi
+done < "${absolute_doc_path}"
+
+if (( handoff_row_count == 0 )); then
+  echo "Missing Phase 64.5 handoff table rows" >&2
+  exit 1
+fi
 
 path_hygiene_text() {
   local file="$1"
@@ -104,10 +215,13 @@ generic_windows_absolute_path_pattern='(^|[[:space:](){}<>;,!`"'\''?&])([a-z]:\\
 
 if path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${absolute_path_pattern}" || \
    path_hygiene_text "${readme_path}" | grep -Eq -- "${absolute_path_pattern}" || \
+   path_hygiene_text "${phase64_records_path}" | grep -Eq -- "${absolute_path_pattern}" || \
    path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${generic_unix_local_absolute_path_pattern}" || \
    path_hygiene_text "${readme_path}" | grep -Eq -- "${generic_unix_local_absolute_path_pattern}" || \
+   path_hygiene_text "${phase64_records_path}" | grep -Eq -- "${generic_unix_local_absolute_path_pattern}" || \
    path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${generic_windows_absolute_path_pattern}" || \
-   path_hygiene_text "${readme_path}" | grep -Eq -- "${generic_windows_absolute_path_pattern}"; then
+   path_hygiene_text "${readme_path}" | grep -Eq -- "${generic_windows_absolute_path_pattern}" || \
+   path_hygiene_text "${phase64_records_path}" | grep -Eq -- "${generic_windows_absolute_path_pattern}"; then
   echo "Forbidden Phase 64.5 handoff: workstation-local absolute path detected" >&2
   exit 1
 fi
@@ -117,16 +231,33 @@ allowed_non_claim_line_lower="$(printf '%s' "${allowed_non_claim_line}" | tr '[:
 required_rejection_line="Missing limitation owner, missing mitigation, missing evidence references, missing open blocker list, missing next review date, inferred RC pass, gate truth shortcut, release truth shortcut, verifier-as-readiness-truth, issue-lint-as-readiness-truth, Beta readiness claim, RC readiness claim, GA readiness claim, or commercial readiness claim must fail."
 required_rejection_line_lower="$(printf '%s' "${required_rejection_line}" | tr '[:upper:]' '[:lower:]')"
 
-while IFS= read -r line; do
-  line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
-  if [[ "${line_lower}" == "${allowed_non_claim_line_lower}" || "${line_lower}" == "${required_rejection_line_lower}" ]]; then
-    continue
-  fi
+scan_forbidden_claims() {
+  local file="$1"
+  local file_label="$2"
+  local line
+  local line_lower
+  local normalized_line
+  local compact_line
 
-  if grep -Eiq '(aegisops is beta ready|aegisops is rc ready|aegisops is ga ready|phase 66 rc proof is complete|phase 66 proves rc readiness|phase 64\.5 proves rc readiness|phase 64\.5 satisfies rc gates|phase 64\.5 satisfies release gates|handoff evidence is gate truth|handoff evidence is release truth|handoff evidence is readiness truth|verifier output is readiness truth|issue-lint output is readiness truth|release truth shortcut|gate truth shortcut|commercial readiness is complete|production rollout readiness is complete)' <<<"${line_lower}"; then
-    echo "Forbidden Phase 64.5 handoff claim: ${line}" >&2
-    exit 1
-  fi
-done < "${absolute_doc_path}"
+  while IFS= read -r line; do
+    line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
+    if [[ "${line_lower}" == "${allowed_non_claim_line_lower}" || "${line_lower}" == "${required_rejection_line_lower}" ]]; then
+      continue
+    fi
+
+    normalized_line="$(printf '%s' "${line_lower}" | sed -E 's/[-_]+/ /g; s/[[:space:]]+/ /g')"
+    compact_line="$(printf '%s' "${line_lower}" | tr -cd '[:alnum:]')"
+
+    if grep -Eiq '(aegisops is beta ready|aegisops is rc ready|aegisops is ga ready|aegisops is release ready|phase 66 rc proof is complete|phase 66 proves rc readiness|phase 64\.5 proves rc readiness|phase 64\.5 satisfies rc gates|phase 64\.5 satisfies release gates|handoff evidence is gate truth|handoff evidence is release truth|handoff evidence is readiness truth|verifier output is readiness truth|issue lint output is readiness truth|release truth shortcut|gate truth shortcut|commercial readiness is complete|production rollout readiness is complete)' <<<"${normalized_line}" || \
+       grep -Eiq '(aegisopsisbetaready|aegisopsisrcready|aegisopsisgaready|aegisopsisreleaseready|phase66rcproofiscomplete|phase66provesrcreadiness|phase645provesrcreadiness|phase645satisfiesrcgates|phase645satisfiesreleasegates|handoffevidenceisgatetruth|handoffevidenceisreleasetruth|handoffevidenceisreadinesstruth|verifieroutputisreadinesstruth|issuelintoutputisreadinesstruth|releasetruthshortcut|gatetruthshortcut|commercialreadinessiscomplete|productionrolloutreadinessiscomplete)' <<<"${compact_line}"; then
+      echo "Forbidden Phase 64.5 handoff claim in ${file_label}: ${line}" >&2
+      exit 1
+    fi
+  done < "${file}"
+}
+
+scan_forbidden_claims "${absolute_doc_path}" "${doc_path}"
+scan_forbidden_claims "${readme_path}" "README.md"
+scan_forbidden_claims "${phase64_records_path}" "docs/phase-64-1-reviewed-limitation-ownership-records.md"
 
 echo "Phase 64.5 Phase 66 limitation handoff evidence verifier passes."

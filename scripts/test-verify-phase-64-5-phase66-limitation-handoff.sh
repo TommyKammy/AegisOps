@@ -49,6 +49,7 @@ copy_valid_repo() {
   cp "${repo_root}/README.md" "${target}/README.md"
   cp "${repo_root}/docs/phase-64-5-phase66-limitation-handoff.md" "${target}/docs/phase-64-5-phase66-limitation-handoff.md"
   cp "${repo_root}/docs/phase-64-1-known-limitation-ownership-record-contract.md" "${target}/docs/phase-64-1-known-limitation-ownership-record-contract.md"
+  cp "${repo_root}/docs/phase-64-1-reviewed-limitation-ownership-records.md" "${target}/docs/phase-64-1-reviewed-limitation-ownership-records.md"
   cp "${repo_root}/docs/phase-63-closeout-evaluation.md" "${target}/docs/phase-63-closeout-evaluation.md"
   cp "${repo_root}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "${target}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
 }
@@ -69,6 +70,7 @@ missing_doc_repo="${workdir}/missing-doc"
 mkdir -p "${missing_doc_repo}/docs"
 cp "${repo_root}/README.md" "${missing_doc_repo}/README.md"
 cp "${repo_root}/docs/phase-64-1-known-limitation-ownership-record-contract.md" "${missing_doc_repo}/docs/phase-64-1-known-limitation-ownership-record-contract.md"
+cp "${repo_root}/docs/phase-64-1-reviewed-limitation-ownership-records.md" "${missing_doc_repo}/docs/phase-64-1-reviewed-limitation-ownership-records.md"
 cp "${repo_root}/docs/phase-63-closeout-evaluation.md" "${missing_doc_repo}/docs/phase-63-closeout-evaluation.md"
 cp "${repo_root}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "${missing_doc_repo}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
 assert_fails_with \
@@ -106,10 +108,32 @@ assert_fails_with \
 
 missing_subordinate_repo="${workdir}/missing-subordinate"
 copy_valid_repo "${missing_subordinate_repo}"
-remove_doc_text "${missing_subordinate_repo}" "The handoff references Phase 64 known limitation ownership records as subordinate evidence only."
+remove_doc_text "${missing_subordinate_repo}" 'The handoff references reviewed Phase 64 known limitation ownership records in `docs/phase-64-1-reviewed-limitation-ownership-records.md` as subordinate evidence only.'
 assert_fails_with \
   "${missing_subordinate_repo}" \
-  "Missing required Phase 64.5 handoff term in docs/phase-64-5-phase66-limitation-handoff.md: The handoff references Phase 64 known limitation ownership records as subordinate evidence only."
+  "Missing required Phase 64.5 handoff term in docs/phase-64-5-phase66-limitation-handoff.md: The handoff references reviewed Phase 64 known limitation ownership records"
+
+missing_reviewed_record_reference_repo="${workdir}/missing-reviewed-record-reference"
+copy_valid_repo "${missing_reviewed_record_reference_repo}"
+remove_doc_text "${missing_reviewed_record_reference_repo}" '`docs/phase-64-1-reviewed-limitation-ownership-records.md#limitation-phase64-rc-gate-consumption-001`; '
+assert_fails_with \
+  "${missing_reviewed_record_reference_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-rc-gate-consumption-001: missing reviewed Phase 64 limitation record reference"
+
+missing_reviewed_record_repo="${workdir}/missing-reviewed-record"
+copy_valid_repo "${missing_reviewed_record_repo}"
+perl -0pi -e 's/\| `limitation-phase64-rc-gate-consumption-001`[^\n]*\n//' \
+  "${missing_reviewed_record_repo}/docs/phase-64-1-reviewed-limitation-ownership-records.md"
+assert_fails_with \
+  "${missing_reviewed_record_repo}" \
+  "Missing required Phase 64.1 reviewed limitation record term"
+
+missing_row_blocker_repo="${workdir}/missing-row-blocker"
+copy_valid_repo "${missing_row_blocker_repo}"
+remove_doc_text "${missing_row_blocker_repo}" "RC gate packet must still prove install, Wazuh signal, Shuffle execution, AI trace, report export, restore dry-run, upgrade plan, support bundle, and limitations ownership evidence against the approved RC gate."
+assert_fails_with \
+  "${missing_row_blocker_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-rc-gate-consumption-001: missing open blockers"
 
 missing_remaining_obligations_repo="${workdir}/missing-remaining-obligations"
 copy_valid_repo "${missing_remaining_obligations_repo}"
@@ -123,35 +147,49 @@ copy_valid_repo "${rc_overclaim_repo}"
 printf '%s\n' "AegisOps is RC ready because Phase 64.5 has owners." >>"${rc_overclaim_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
 assert_fails_with \
   "${rc_overclaim_repo}" \
-  "Forbidden Phase 64.5 handoff claim: AegisOps is RC ready because Phase 64.5 has owners."
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: AegisOps is RC ready because Phase 64.5 has owners."
+
+rc_ready_variant_repo="${workdir}/rc-ready-variant"
+copy_valid_repo "${rc_ready_variant_repo}"
+printf '%s\n' "AegisOps is RC-ready because Phase 64.5 has owners." >>"${rc_ready_variant_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${rc_ready_variant_repo}" \
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: AegisOps is RC-ready because Phase 64.5 has owners."
+
+readme_overclaim_repo="${workdir}/readme-overclaim"
+copy_valid_repo "${readme_overclaim_repo}"
+printf '%s\n' "AegisOps is GA ready because the handoff exists." >>"${readme_overclaim_repo}/README.md"
+assert_fails_with \
+  "${readme_overclaim_repo}" \
+  "Forbidden Phase 64.5 handoff claim in README.md: AegisOps is GA ready because the handoff exists."
 
 gate_truth_repo="${workdir}/gate-truth"
 copy_valid_repo "${gate_truth_repo}"
 printf '%s\n' "Handoff evidence is gate truth." >>"${gate_truth_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
 assert_fails_with \
   "${gate_truth_repo}" \
-  "Forbidden Phase 64.5 handoff claim: Handoff evidence is gate truth."
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: Handoff evidence is gate truth."
 
 release_truth_repo="${workdir}/release-truth"
 copy_valid_repo "${release_truth_repo}"
 printf '%s\n' "Handoff evidence is release truth." >>"${release_truth_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
 assert_fails_with \
   "${release_truth_repo}" \
-  "Forbidden Phase 64.5 handoff claim: Handoff evidence is release truth."
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: Handoff evidence is release truth."
 
 verifier_truth_repo="${workdir}/verifier-truth"
 copy_valid_repo "${verifier_truth_repo}"
 printf '%s\n' "Verifier output is readiness truth." >>"${verifier_truth_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
 assert_fails_with \
   "${verifier_truth_repo}" \
-  "Forbidden Phase 64.5 handoff claim: Verifier output is readiness truth."
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: Verifier output is readiness truth."
 
 issue_lint_truth_repo="${workdir}/issue-lint-truth"
 copy_valid_repo "${issue_lint_truth_repo}"
 printf '%s\n' "Issue-lint output is readiness truth." >>"${issue_lint_truth_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
 assert_fails_with \
   "${issue_lint_truth_repo}" \
-  "Forbidden Phase 64.5 handoff claim: Issue-lint output is readiness truth."
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: Issue-lint output is readiness truth."
 
 absolute_path_repo="${workdir}/absolute-path"
 copy_valid_repo "${absolute_path_repo}"
