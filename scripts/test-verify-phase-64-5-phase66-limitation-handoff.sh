@@ -133,6 +133,14 @@ assert_fails_with \
   "${missing_owner_repo}" \
   "Missing required Phase 64.5 handoff term in docs/phase-64-5-phase66-limitation-handoff.md: Every Phase 66 limitation handoff entry requires limitation id, owner"
 
+commented_required_boundary_repo="${workdir}/commented-required-boundary"
+copy_valid_repo "${commented_required_boundary_repo}"
+perl -0pi -e 's/(Phase 66 limitation handoff evidence is planning and review evidence only\. It cannot satisfy RC gates, release gates, readiness truth, case truth, approval truth, execution truth, reconciliation truth, closeout truth, gate truth, or limitation truth by itself\.)/<!-- $1 -->/' \
+  "${commented_required_boundary_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${commented_required_boundary_repo}" \
+  "Missing required Phase 64.5 handoff term in docs/phase-64-5-phase66-limitation-handoff.md: Phase 66 limitation handoff evidence is planning and review evidence only."
+
 missing_open_blocker_repo="${workdir}/missing-open-blocker"
 copy_valid_repo "${missing_open_blocker_repo}"
 remove_doc_text "${missing_open_blocker_repo}" "Every Phase 66 limitation handoff entry requires limitation id, owner, mitigation status, evidence references, open blockers, accepted risks, next review date, and RC-gate consumption notes."
@@ -314,6 +322,15 @@ assert_fails_with \
   "${trailing_reviewed_record_cell_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 record row must end after 13 columns"
 
+malformed_reviewed_record_id_repo="${workdir}/malformed-reviewed-record-id"
+copy_valid_repo "${malformed_reviewed_record_id_repo}"
+insert_after_reviewed_record_row \
+  "${malformed_reviewed_record_id_repo}" \
+  '| `limitation-phase64-extra-new-01` | Extra limitation remains separately tracked. | material | release_gate_evidence | extra-owner | Keep the extra limitation subordinate before Phase 66 RC proof. | `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` | mitigation_planned | weekly | none | extra_risk | handoff_required | reviewed_evidence_input_only |'
+assert_fails_with \
+  "${malformed_reviewed_record_id_repo}" \
+  "Invalid Phase 64.5 reviewed Phase 64 record limitation id: \`limitation-phase64-extra-new-01\`"
+
 missing_reviewed_evidence_target_repo="${workdir}/missing-reviewed-evidence-target"
 copy_valid_repo "${missing_reviewed_evidence_target_repo}"
 insert_after_reviewed_record_row \
@@ -488,6 +505,14 @@ assert_fails_with \
   "${bare_rc_gate_acceptance_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-rc-gate-consumption-001: RC-gate consumption notes must not satisfy RC gates"
 
+rc_gate_passes_repo="${workdir}/rc-gate-passes"
+copy_valid_repo "${rc_gate_passes_repo}"
+perl -0pi -e 's/Phase 66 may use the owner, mitigation, risk, and review-date fields as subordinate RC proof planning; it does not accept any RC gate\./Subordinate evidence only; RC gate passes./' \
+  "${rc_gate_passes_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${rc_gate_passes_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-rc-gate-consumption-001: RC-gate consumption notes must not satisfy RC gates"
+
 missing_remaining_obligations_repo="${workdir}/missing-remaining-obligations"
 copy_valid_repo "${missing_remaining_obligations_repo}"
 remove_doc_text "${missing_remaining_obligations_repo}" "Remaining Phase 66 proof obligations: independent RC gate packet, support bundle evidence, restore evidence, upgrade and rollback evidence, first-user RC behavior, daily-operator RC behavior, supportability evidence, security review, packaging evidence, issue-lint evidence, verifier evidence, and explicit gate acceptance outside this handoff."
@@ -571,6 +596,27 @@ printf '%s\n' "AegisOps is production ready because the handoff exists." >>"${pr
 assert_fails_with \
   "${production_ready_repo}" \
   "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: AegisOps is production ready because the handoff exists."
+
+handoff_pilot_ready_repo="${workdir}/handoff-pilot-ready"
+copy_valid_repo "${handoff_pilot_ready_repo}"
+printf '%s\n' "This handoff is pilot ready." >>"${handoff_pilot_ready_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${handoff_pilot_ready_repo}" \
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: This handoff is pilot ready."
+
+handoff_release_ready_repo="${workdir}/handoff-release-ready"
+copy_valid_repo "${handoff_release_ready_repo}"
+printf '%s\n' "This handoff is release ready." >>"${handoff_release_ready_repo}/README.md"
+assert_fails_with \
+  "${handoff_release_ready_repo}" \
+  "Forbidden Phase 64.5 handoff claim in README.md: This handoff is release ready."
+
+handoff_production_ready_repo="${workdir}/handoff-production-ready"
+copy_valid_repo "${handoff_production_ready_repo}"
+printf '%s\n' "This handoff is production ready." >>"${handoff_production_ready_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${handoff_production_ready_repo}" \
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: This handoff is production ready."
 
 commercial_ready_repo="${workdir}/commercial-ready"
 copy_valid_repo "${commercial_ready_repo}"
