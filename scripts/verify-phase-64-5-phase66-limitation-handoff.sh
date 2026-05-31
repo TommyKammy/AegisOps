@@ -270,8 +270,12 @@ reject_no_open_blocker_assertion() {
         "${normalized}" =~ (^|[[:space:]])no[[:space:]]+remaining[[:space:]]+blockers?($|[[:space:]]) || \
         "${normalized}" =~ (^|[[:space:]])none[[:space:]]+remaining($|[[:space:]]) || \
         "${normalized}" =~ (^|[[:space:]])nothing[[:space:]]+remaining($|[[:space:]]) || \
-        "${normalized}" =~ (^|[[:space:]])zero[[:space:]]+remaining[[:space:]]+blockers?($|[[:space:]]) || \
-        "${normalized}" =~ (^|[[:space:]])all[[:space:]]+blockers?[[:space:]]+(resolved|closed|cleared)($|[[:space:]]) ]]; then
+        "${normalized}" =~ (^|[[:space:]])zero[[:space:]]+remaining[[:space:]]+blockers?($|[[:space:]]) ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: open blockers must list remaining blockers" >&2
+    exit 1
+  fi
+
+  if [[ "${normalized}" =~ (^|[[:space:]])all[[:space:]]+blockers?[[:space:]]+(resolved|closed|cleared|removed)($|[[:space:]]) ]]; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: open blockers must list remaining blockers" >&2
     exit 1
   fi
