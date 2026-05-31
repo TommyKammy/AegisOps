@@ -39,6 +39,7 @@ _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES = (
     "detector_lifecycle",
     "false_positive_review",
     "suppression_proposal",
+    "known_limitation_ownership",
 )
 
 

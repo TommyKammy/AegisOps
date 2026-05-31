@@ -17,6 +17,7 @@ from .models import (
     EvidenceRecord,
     HuntRecord,
     HuntRunRecord,
+    KnownLimitationOwnershipRecord,
     LeadRecord,
     LifecycleTransitionRecord,
     ObservationRecord,
@@ -27,6 +28,10 @@ from .models import (
 from .validation.phase61_record_validators import (
     _DETECTOR_LIFECYCLE_STATES,
     validate_phase61_record,
+)
+from .validation.phase64_record_validators import (
+    _KNOWN_LIMITATION_REVIEW_STATES,
+    validate_phase64_record,
 )
 
 
@@ -201,6 +206,7 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
         {"proposed", "under_review", "rejected", "withdrawn", "expired", "superseded"}
     ),
     "source_health": frozenset({"reviewed", "superseded", "withdrawn"}),
+    "known_limitation_ownership": frozenset(_KNOWN_LIMITATION_REVIEW_STATES),
 }
 
 _RECONCILIATION_INGEST_DISPOSITIONS = frozenset(
@@ -250,6 +256,13 @@ def _validate_lifecycle_state(record: ControlPlaneRecord) -> None:
                 f"detector_lifecycle record {record.record_id!r} has invalid lifecycle_state "
                 f"{record.lifecycle_state!r}; expected one of "
                 f"{sorted(_DETECTOR_LIFECYCLE_STATES)!r}"
+            )
+        return
+    if isinstance(record, KnownLimitationOwnershipRecord):
+        if record.lifecycle_state != record.review_state:
+            raise ValueError(
+                "known_limitation_ownership record "
+                f"{record.record_id!r} requires lifecycle_state to match review_state"
             )
         return
     if isinstance(record, LifecycleTransitionRecord):
@@ -364,6 +377,8 @@ def _validate_record(record: ControlPlaneRecord) -> None:
     _validate_lifecycle_state(record)
 
     if validate_phase61_record(record):
+        return
+    if validate_phase64_record(record):
         return
     if isinstance(record, AnalyticSignalRecord):
         _require_any_linkage(

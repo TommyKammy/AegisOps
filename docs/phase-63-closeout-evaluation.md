@@ -278,7 +278,7 @@ Observed closeout results from this branch:
 | Operator UI focused tests | `npm run test --workspace @aegisops/operator-ui -- detailReaders.evidence-pack-extraction.test.ts OperatorRoutes.casework.evidence-pack.test.tsx` reported 2 test files and 47 tests passed. |
 | Operator UI typecheck | `npm run typecheck --workspace @aegisops/operator-ui` completed `tsc --noEmit`. |
 | Registry verifier | `bash scripts/verify-phase-63-1-evidence-source-registry-v1.sh` ran 51 focused tests and reported the Phase 63.1 registry contract passes. |
-| Maintainability hotspot verifier | `bash scripts/verify-maintainability-hotspots.sh` reported the known `service.py` baseline only: 1379 lines, 1227 effective lines, 95 facade methods, and 7 signals. |
+| Maintainability hotspot verifier | `bash scripts/verify-maintainability-hotspots.sh` reported the known `service.py` baseline only: 1378 lines, 1226 effective lines, 95 facade methods, and 7 signals. |
 | Publishable path hygiene | `bash scripts/verify-publishable-path-hygiene.sh` reported publishable tracked content does not contain workstation-local absolute paths. |
 | Closeout verifier | `bash scripts/verify-phase-63-r-closeout-evaluation.sh` reported Phase 63.R closeout evidence, behavior preservation, verifier evidence, authority limits, and handoff boundaries pass. |
 | Closeout verifier self-test | `bash scripts/test-verify-phase-63-r-closeout-evaluation.sh` reported Phase 63.R closeout evaluation verifier tests passed. |

@@ -17,6 +17,7 @@ from ..models import (
     FalsePositiveReviewRecord,
     HuntRecord,
     HuntRunRecord,
+    KnownLimitationOwnershipRecord,
     LeadRecord,
     LifecycleTransitionRecord,
     ObservationRecord,
@@ -42,6 +43,7 @@ class _RestoreRecordFamilies:
     detector_lifecycles: tuple[DetectorLifecycleRecord, ...]
     false_positive_reviews: tuple[FalsePositiveReviewRecord, ...]
     suppression_proposals: tuple[SuppressionProposalRecord, ...]
+    known_limitation_ownership_records: tuple[KnownLimitationOwnershipRecord, ...]
     lifecycle_transitions: tuple[LifecycleTransitionRecord, ...]
     approval_decisions: tuple[ApprovalDecisionRecord, ...]
     action_requests: tuple[ActionRequestRecord, ...]
@@ -64,6 +66,10 @@ class _RestoreRecordFamilies:
             ("detector_lifecycle", self.detector_lifecycles),
             ("false_positive_review", self.false_positive_reviews),
             ("suppression_proposal", self.suppression_proposals),
+            (
+                "known_limitation_ownership",
+                self.known_limitation_ownership_records,
+            ),
             ("lifecycle_transition", self.lifecycle_transitions),
             ("approval_decision", self.approval_decisions),
             ("action_request", self.action_requests),
@@ -87,6 +93,7 @@ class _RestoreRecordIndexes:
     detector_lifecycles: Mapping[str, DetectorLifecycleRecord]
     false_positive_reviews: Mapping[str, FalsePositiveReviewRecord]
     suppression_proposals: Mapping[str, SuppressionProposalRecord]
+    known_limitation_ownership_records: Mapping[str, KnownLimitationOwnershipRecord]
     approval_decisions: Mapping[str, ApprovalDecisionRecord]
     action_requests: Mapping[str, ActionRequestRecord]
     action_executions: Mapping[str, ActionExecutionRecord]
@@ -109,6 +116,9 @@ class _RestoreRecordIndexes:
             "detector_lifecycle": set(self.detector_lifecycles),
             "false_positive_review": set(self.false_positive_reviews),
             "suppression_proposal": set(self.suppression_proposals),
+            "known_limitation_ownership": set(
+                self.known_limitation_ownership_records
+            ),
             "approval_decision": set(self.approval_decisions),
             "action_request": set(self.action_requests),
             "action_execution": set(self.action_executions),
@@ -133,6 +143,9 @@ class _RestoreRecordIndexes:
             "detector_lifecycle": self.detector_lifecycles,
             "false_positive_review": self.false_positive_reviews,
             "suppression_proposal": self.suppression_proposals,
+            "known_limitation_ownership": (
+                self.known_limitation_ownership_records
+            ),
             "approval_decision": self.approval_decisions,
             "action_request": self.action_requests,
             "action_execution": self.action_executions,
@@ -262,6 +275,13 @@ class RestoreValidationBoundary:
                     SuppressionProposalRecord,
                 )
             ),
+            known_limitation_ownership_records=tuple(
+                self._require_restore_family_records(
+                    records_by_family,
+                    "known_limitation_ownership",
+                    KnownLimitationOwnershipRecord,
+                )
+            ),
             lifecycle_transitions=tuple(
                 self._require_restore_family_records(
                     records_by_family,
@@ -364,6 +384,7 @@ class RestoreValidationBoundary:
             *families.recommendations,
             *families.detector_lifecycles,
             *families.false_positive_reviews,
+            *families.known_limitation_ownership_records,
         ):
             _validate_record(record)
 
@@ -398,6 +419,10 @@ class RestoreValidationBoundary:
             suppression_proposals={
                 record.suppression_proposal_id: record
                 for record in families.suppression_proposals
+            },
+            known_limitation_ownership_records={
+                record.limitation_id: record
+                for record in families.known_limitation_ownership_records
             },
             approval_decisions={
                 record.approval_decision_id: record

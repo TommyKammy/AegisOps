@@ -489,6 +489,32 @@ class SourceHealthRecord(ControlPlaneRecord):
     lifecycle_state: str = "reviewed"
 
 
+@dataclass(frozen=True)
+class KnownLimitationOwnershipRecord(ControlPlaneRecord):
+    record_family: ClassVar[str] = "known_limitation_ownership"
+    identifier_field: ClassVar[str] = "limitation_id"
+
+    limitation_id: str
+    title: str
+    severity: str
+    affected_surface: str
+    owner: str
+    mitigation: str
+    evidence_references: tuple[str, ...]
+    review_state: str
+    review_cadence: str | None
+    due_date: str | None
+    accepted_risk_posture: str
+    phase66_handoff_posture: str
+    authority_boundary: str
+    readiness_claim: str | None = None
+    lifecycle_state: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.lifecycle_state is None:
+            object.__setattr__(self, "lifecycle_state", self.review_state)
+
+
 AnyControlPlaneRecord = Union[
     AlertRecord,
     AnalyticSignalRecord,
@@ -509,4 +535,5 @@ AnyControlPlaneRecord = Union[
     FalsePositiveReviewRecord,
     SuppressionProposalRecord,
     SourceHealthRecord,
+    KnownLimitationOwnershipRecord,
 ]

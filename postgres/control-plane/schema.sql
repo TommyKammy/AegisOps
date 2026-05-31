@@ -237,6 +237,33 @@ create table if not exists aegisops_control.source_health_records (
   check (credential_posture in ('reviewed','degraded','unavailable'))
 );
 
+create table if not exists aegisops_control.known_limitation_ownership_records (
+  limitation_id text primary key,
+  title text not null,
+  severity text not null,
+  affected_surface text not null,
+  owner text not null,
+  mitigation text not null,
+  evidence_references text[] not null default '{}'::text[],
+  review_state text not null,
+  review_cadence text,
+  due_date text,
+  accepted_risk_posture text not null,
+  phase66_handoff_posture text not null,
+  authority_boundary text not null,
+  readiness_claim text,
+  lifecycle_state text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (cardinality(evidence_references) >= 1),
+  check (nullif(btrim(review_cadence), '') is not null or nullif(btrim(due_date), '') is not null),
+  check (severity in ('low','medium','material','high','blocking')),
+  check (review_state in ('identified','under_review','accepted_risk','mitigation_planned','mitigation_in_progress','closed')),
+  check (phase66_handoff_posture in ('not_ready_for_handoff','handoff_required','handoff_ready_as_subordinate_evidence','blocked_until_mitigated')),
+  check (authority_boundary = 'reviewed_evidence_input_only'),
+  check (lifecycle_state = review_state)
+);
+
 create table if not exists aegisops_control.evidence_records (
   evidence_id text primary key,
   source_record_id text not null,
@@ -498,7 +525,8 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'detector_lifecycle',
       'false_positive_review',
       'suppression_proposal',
-      'source_health'
+      'source_health',
+      'known_limitation_ownership'
     )
   ),
   check (
@@ -558,7 +586,11 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'rollback',
       'review-overdue',
       'reviewed',
-      'disputed'
+      'disputed',
+      'identified',
+      'accepted_risk',
+      'mitigation_planned',
+      'mitigation_in_progress'
     )
   ),
   check (
@@ -618,7 +650,11 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'rollback',
       'review-overdue',
       'reviewed',
-      'disputed'
+      'disputed',
+      'identified',
+      'accepted_risk',
+      'mitigation_planned',
+      'mitigation_in_progress'
     )
   ),
   constraint lifecycle_transition_records_state_matches_subject_family check (
@@ -765,6 +801,14 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'superseded',
       'withdrawn'
     ))
+    or (subject_record_family = 'known_limitation_ownership' and lifecycle_state in (
+      'identified',
+      'under_review',
+      'accepted_risk',
+      'mitigation_planned',
+      'mitigation_in_progress',
+      'closed'
+    ))
   ),
   constraint lifecycle_transition_records_previous_state_matches_subject_family check (
     previous_lifecycle_state is null or (
@@ -910,6 +954,14 @@ create table if not exists aegisops_control.lifecycle_transition_records (
         'reviewed',
         'superseded',
         'withdrawn'
+      ))
+      or (subject_record_family = 'known_limitation_ownership' and previous_lifecycle_state in (
+        'identified',
+        'under_review',
+        'accepted_risk',
+        'mitigation_planned',
+        'mitigation_in_progress',
+        'closed'
       ))
     )
   )

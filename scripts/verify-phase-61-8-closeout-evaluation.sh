@@ -87,7 +87,7 @@ Phase 61.R preserved the accepted Phase 61 behavior contract while reducing revi
 #1306 extracted Phase 61 record validators from `control-plane/aegisops/control_plane/record_validation.py` into `control-plane/aegisops/control_plane/validation/phase61_record_validators.py` while preserving fail-closed detector lifecycle, false-positive, suppression proposal, and source-health validation behavior.
 #1307 extracted operator-ui Phase 61 list validators from `apps/operator-ui/src/operatorDataProvider/listSemantics.ts` into `apps/operator-ui/src/operatorDataProvider/phase61ListValidators.ts` while preserving operator-facing list semantics and rejection behavior.
 #1308 fenced record-search inspection boundaries in `control-plane/aegisops/control_plane/inspection/record_search.py` so reviewed-field assembly stays explicit and directly linked to authoritative records.
-`docs/maintainability-hotspot-baseline.txt` records the refreshed `AegisOpsControlPlaneService` ceiling as `max_lines=1379`, `max_effective_lines=1227`, and `max_facade_methods=95`
+`docs/maintainability-hotspot-baseline.txt` records the refreshed `AegisOpsControlPlaneService` ceiling as `max_lines=1378`, `max_effective_lines=1226`, and `max_facade_methods=95`
 Phase 61.R did not add product behavior, source-native authority, active suppression, raw query replacement, Phase 62 SOAR behavior, Phase 66 RC proof, or commercial replacement-readiness claims.
 EOF_PHRASE
 

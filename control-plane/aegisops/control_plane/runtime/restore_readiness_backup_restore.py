@@ -19,6 +19,7 @@ from ..models import (
     FalsePositiveReviewRecord,
     HuntRecord,
     HuntRunRecord,
+    KnownLimitationOwnershipRecord,
     LeadRecord,
     LifecycleTransitionRecord,
     ObservationRecord,
@@ -43,6 +44,7 @@ _LEGACY_PHASE21_MISSING_RECORD_FAMILIES = frozenset(
         DetectorLifecycleRecord.record_family,
         FalsePositiveReviewRecord.record_family,
         SuppressionProposalRecord.record_family,
+        KnownLimitationOwnershipRecord.record_family,
     }
 )
 _COMPATIBLE_SCHEMA_MISSING_RECORD_FAMILIES_BY_VERSION: dict[str, frozenset[str]] = {
@@ -52,16 +54,24 @@ _COMPATIBLE_SCHEMA_MISSING_RECORD_FAMILIES_BY_VERSION: dict[str, frozenset[str]]
             DetectorLifecycleRecord.record_family,
             FalsePositiveReviewRecord.record_family,
             SuppressionProposalRecord.record_family,
+            KnownLimitationOwnershipRecord.record_family,
         }
     ),
     "phase23.authoritative-record-chain.v3": frozenset(
         {
             FalsePositiveReviewRecord.record_family,
             SuppressionProposalRecord.record_family,
+            KnownLimitationOwnershipRecord.record_family,
         }
     ),
     "phase23.authoritative-record-chain.v4": frozenset(
-        {SuppressionProposalRecord.record_family}
+        {
+            SuppressionProposalRecord.record_family,
+            KnownLimitationOwnershipRecord.record_family,
+        }
+    ),
+    "phase23.authoritative-record-chain.v5": frozenset(
+        {KnownLimitationOwnershipRecord.record_family}
     ),
 }
 _LEGACY_RESTORE_FALLBACK_TRANSITION_ANCHOR = datetime(
