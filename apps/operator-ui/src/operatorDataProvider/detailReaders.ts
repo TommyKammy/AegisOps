@@ -662,6 +662,7 @@ export async function getOneForLimitationOwnership(
   const owner = asString(payload.owner);
   const mitigation = asString(payload.mitigation);
   const reviewState = asString(payload.review_state);
+  const acceptedRiskPosture = asString(payload.accepted_risk_posture);
   const phase66HandoffPosture = asString(payload.phase66_handoff_posture);
   const reviewDueDateStatus = asString(payload.review_due_date_status);
   const authorityBoundary = asString(payload.authority_boundary);
@@ -707,6 +708,11 @@ export async function getOneForLimitationOwnership(
   if (!LIMITATION_OWNERSHIP_REVIEW_STATES.has(reviewState)) {
     throw new OperatorDataProviderContractError(
       "Resource limitationOwnership has unsupported review_state.",
+    );
+  }
+  if (reviewState === "accepted_risk" && acceptedRiskPosture === null) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership accepted-risk detail requires accepted_risk_posture.",
     );
   }
   if (!LIMITATION_OWNERSHIP_HANDOFF_POSTURES.has(phase66HandoffPosture)) {

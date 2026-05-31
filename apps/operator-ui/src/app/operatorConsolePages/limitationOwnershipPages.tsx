@@ -121,7 +121,7 @@ function LimitationOwnershipSelectionPage() {
     "limitationOwnership",
     filter,
     LIMITATION_OWNERSHIP_LIST_SORT,
-    25,
+    null,
   );
 
   if (results.loading && results.data === null) {
@@ -172,6 +172,7 @@ function LimitationOwnershipDetailPage({ limitationId }: { limitationId: string 
   const owner = asString(data?.owner);
   const mitigation = asString(data?.mitigation);
   const affectedSurface = asString(data?.affected_surface);
+  const acceptedRiskPosture = asString(data?.accepted_risk_posture);
   const handoffPosture = asString(data?.phase66_handoff_posture);
   const dueDate = asString(data?.due_date);
   const reviewCadence = asString(data?.review_cadence);
@@ -252,6 +253,12 @@ function LimitationOwnershipDetailPage({ limitationId }: { limitationId: string 
                   <Typography color="text.secondary" variant="body2">
                     Phase 66 handoff: {lowerLabel(handoffPosture)}
                   </Typography>
+                  {reviewState === "accepted_risk" ? (
+                    <Typography color="text.secondary" variant="body2">
+                      Accepted risk posture:{" "}
+                      {formatLabel(acceptedRiskPosture ?? "unknown")}
+                    </Typography>
+                  ) : null}
                   <Typography color="text.secondary" variant="body2">
                     Due date: {dueDate ?? "Not specified"}
                   </Typography>

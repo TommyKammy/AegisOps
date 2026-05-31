@@ -7,6 +7,7 @@ import {
 } from "./OperatorRoutes.testSupport";
 
 const normalLimitationOwnership = {
+  accepted_risk_posture: "bounded_pre_rc_limitation",
   authority_boundary: "reviewed_evidence_input_only",
   authority_posture: "subordinate_limitation_context_only",
   consumer: "inspection",
@@ -84,6 +85,9 @@ export function registerOperatorRoutesLimitationOwnershipTests() {
       ).toBeInTheDocument();
       expect(screen.getByText("Affected surface: supportability evidence")).toBeInTheDocument();
       expect(screen.getByText("Phase 66 handoff: handoff required")).toBeInTheDocument();
+      expect(
+        screen.getByText("Accepted risk posture: Bounded Pre Rc Limitation"),
+      ).toBeInTheDocument();
       expect(screen.getByText("Due date: 2026-06-15")).toBeInTheDocument();
       expect(screen.getByText("Cadence: weekly")).toBeInTheDocument();
       expect(screen.getByText("Subordinate limitation context only")).toBeInTheDocument();
@@ -141,6 +145,15 @@ export function registerOperatorRoutesLimitationOwnershipTests() {
       expect(screen.getByRole("menuitem", { name: "Limitations" })).toHaveAttribute(
         "href",
         expect.stringContaining("/operator/limitations?view=selection"),
+      );
+      expect(fetchFn).toHaveBeenCalledWith(
+        "/inspect-records?family=known_limitation_ownership&order=ASC&sort=limitation_id",
+        {
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+          },
+        },
       );
       expect(
         fetchFn.mock.calls.some(([url]) =>
