@@ -106,6 +106,14 @@ assert_fails_with \
   "${missing_next_review_repo}" \
   "Missing required Phase 64.5 handoff term in docs/phase-64-5-phase66-limitation-handoff.md: Every Phase 66 limitation handoff entry requires"
 
+stale_next_review_repo="${workdir}/stale-next-review"
+copy_valid_repo "${stale_next_review_repo}"
+perl -0pi -e 's/2026-06-15/2020-01-01/g' \
+  "${stale_next_review_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${stale_next_review_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: next review date must be after the handoff document date"
+
 missing_subordinate_repo="${workdir}/missing-subordinate"
 copy_valid_repo "${missing_subordinate_repo}"
 remove_doc_text "${missing_subordinate_repo}" 'The handoff references reviewed Phase 64 known limitation ownership records in `docs/phase-64-1-reviewed-limitation-ownership-records.md` as subordinate evidence only.'
@@ -127,6 +135,14 @@ perl -0pi -e 's/\| `limitation-phase64-rc-gate-consumption-001`[^\n]*\n//' \
 assert_fails_with \
   "${missing_reviewed_record_repo}" \
   "Missing required Phase 64.1 reviewed limitation record term"
+
+duplicate_reviewed_record_repo="${workdir}/duplicate-reviewed-record"
+copy_valid_repo "${duplicate_reviewed_record_repo}"
+printf '%s\n' '| `limitation-phase64-support-bundle-001` | Duplicate support bundle evidence. | material | supportability_evidence | duplicate-owner | Contradict the reviewed support bundle slice. | `docs/phase-63-closeout-evaluation.md#support-bundle-gap-disposition` | mitigation_planned | weekly | none | duplicate_posture | handoff_required | reviewed_evidence_input_only |' \
+  >>"${duplicate_reviewed_record_repo}/docs/phase-64-1-reviewed-limitation-ownership-records.md"
+assert_fails_with \
+  "${duplicate_reviewed_record_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: duplicate reviewed Phase 64 limitation records"
 
 missing_row_blocker_repo="${workdir}/missing-row-blocker"
 copy_valid_repo "${missing_row_blocker_repo}"
@@ -167,9 +183,17 @@ assert_fails_with \
   "${wrong_mitigation_status_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: mitigation status does not match reviewed Phase 64 record"
 
+negated_mitigation_status_repo="${workdir}/negated-mitigation-status"
+copy_valid_repo "${negated_mitigation_status_repo}"
+perl -0pi -e 's/accepted risk; support bundle evidence remains separately tracked/not accepted risk; support bundle evidence remains separately tracked/' \
+  "${negated_mitigation_status_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${negated_mitigation_status_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: mitigation status does not match reviewed Phase 64 record"
+
 wrong_accepted_risk_repo="${workdir}/wrong-accepted-risk"
 copy_valid_repo "${wrong_accepted_risk_repo}"
-perl -0pi -e 's/bounded pre-RC limitation accepted only as reviewed ownership evidence/wrong accepted risk posture/' \
+perl -0pi -e 's/bounded pre-RC limitation; accepted only as reviewed ownership evidence/wrong accepted risk posture/' \
   "${wrong_accepted_risk_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
 assert_fails_with \
   "${wrong_accepted_risk_repo}" \

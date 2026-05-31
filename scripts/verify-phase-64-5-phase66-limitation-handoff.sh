@@ -126,17 +126,25 @@ require_normalized_contains() {
   local expected="$2"
   local description="$3"
   local limitation_id="$4"
+  local value_posture
   local normalized_value
   local normalized_expected
 
-  normalized_value="$(normalize_comparison_text "${value}")"
+  value_posture="${value%%;*}"
+  normalized_value="$(normalize_comparison_text "${value_posture}")"
   normalized_expected="$(normalize_comparison_text "${expected}")"
 
-  if [[ -z "${normalized_expected}" || "${normalized_value}" != *"${normalized_expected}"* ]]; then
+  if [[ -z "${normalized_expected}" || "${normalized_value}" != "${normalized_expected}" ]]; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: ${description} does not match reviewed Phase 64 record" >&2
     exit 1
   fi
 }
+
+handoff_document_date="$(sed -nE 's/^- \*\*Date\*\*: ([0-9]{4}-[0-9]{2}-[0-9]{2})$/\1/p' "${absolute_doc_path}" | head -n 1)"
+if [[ -z "${handoff_document_date}" ]]; then
+  echo "Missing Phase 64.5 handoff document date" >&2
+  exit 1
+fi
 
 handoff_ids=""
 
@@ -155,6 +163,8 @@ validate_handoff_row() {
   local empty_suffix
   local limitation_id
   local reviewed_record_reference
+  local reviewed_record_matches
+  local reviewed_record_count
   local reviewed_record_row
   local record_limitation_id_cell
   local record_title
@@ -205,17 +215,31 @@ validate_handoff_row() {
     exit 1
   fi
 
+  next_review_date="$(trim_cell "${next_review_date}")"
+  if [[ "${next_review_date}" < "${handoff_document_date}" || "${next_review_date}" == "${handoff_document_date}" ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: next review date must be after the handoff document date" >&2
+    exit 1
+  fi
+
   reviewed_record_reference="docs/phase-64-1-reviewed-limitation-ownership-records.md#${limitation_id}"
   if ! grep -Fq -- "${reviewed_record_reference}" <<<"${evidence_references}"; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: missing reviewed Phase 64 limitation record reference" >&2
     exit 1
   fi
 
-  reviewed_record_row="$(grep -F -- "| \`${limitation_id}\` |" "${phase64_records_path}" || true)"
-  if [[ -z "${reviewed_record_row}" ]]; then
+  reviewed_record_matches="$(grep -F -- "| \`${limitation_id}\` |" "${phase64_records_path}" || true)"
+  if [[ -z "${reviewed_record_matches}" ]]; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 limitation record is absent" >&2
     exit 1
   fi
+
+  reviewed_record_count="$(printf '%s\n' "${reviewed_record_matches}" | wc -l | tr -d '[:space:]')"
+  if [[ "${reviewed_record_count}" != "1" ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: duplicate reviewed Phase 64 limitation records" >&2
+    exit 1
+  fi
+
+  reviewed_record_row="${reviewed_record_matches}"
 
   IFS='|' read -r empty_prefix record_limitation_id_cell record_title record_severity record_affected_surface record_owner record_mitigation record_evidence_references record_review_state record_review_cadence record_due_date record_accepted_risk_posture record_handoff_posture record_authority_boundary empty_suffix <<<"${reviewed_record_row}"
 
