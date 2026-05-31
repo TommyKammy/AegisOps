@@ -61,6 +61,7 @@ This addendum does not claim new product behavior, evidence-source breadth, work
 | Evidence source registry catalogs | `evidence_source_registry.py` | Registry data and validation catalog rules lived with registry entrypoints. | Registry data and validation catalog helpers are split while preserving the bounded `osquery_host_state` and `malwarebazaar_hash_reputation` registry. |
 `python3 -m unittest control-plane.tests.test_phase63_5_evidence_freshness_provenance_projection`
 `python3 -m unittest control-plane.tests.test_phase63_7_ai_grounding_adapter`
+`python3 -m unittest control-plane.tests.test_phase63_evidence_pack_contract_drift_guard`
 `python3 -m unittest control-plane.tests.test_phase63_evidence_source_registry`
 `npm run test --workspace @aegisops/operator-ui -- detailReaders.evidence-pack-extraction.test.ts OperatorRoutes.casework.evidence-pack.test.tsx`
 `npm run typecheck --workspace @aegisops/operator-ui`
