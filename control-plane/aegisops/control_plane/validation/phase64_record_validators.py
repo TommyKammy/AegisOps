@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 
 from ..models import ControlPlaneRecord, KnownLimitationOwnershipRecord
 from .phase61_record_validators import (
@@ -40,6 +41,7 @@ _FORBIDDEN_READINESS_CLAIM_PATTERN = re.compile(
     r"self-service\s+commercial|readiness\s+truth|release\s+truth|"
     r"support-bundle\s+completion|support\s+bundle\s+completion|"
     r"gate\s+truth|case\s+closure|"
+    r"(?:ui|ai|verifier|issue-lint)[-\s]+truth|"
     r"proves\s+(?:approval|execution|reconciliation)|"
     r"siem/soar\s+replacement\s+readiness|siem\s+soar\s+replacement\s+readiness|"
     r"verifier\s+output\s+is\s+readiness\s+truth|"
@@ -55,9 +57,49 @@ def is_phase64_record_family(record: ControlPlaneRecord) -> bool:
 
 def validate_phase64_record(record: ControlPlaneRecord) -> bool:
     if isinstance(record, KnownLimitationOwnershipRecord):
-        _validate_known_limitation_ownership_record(record)
+        validate_known_limitation_ownership_record_contract(record)
         return True
     return False
+
+
+def validate_known_limitation_ownership_record_contract(
+    record: KnownLimitationOwnershipRecord,
+) -> None:
+    if record.lifecycle_state != record.review_state:
+        raise ValueError(
+            "known_limitation_ownership record "
+            f"{record.record_id!r} requires lifecycle_state to match review_state"
+        )
+    _validate_known_limitation_ownership_record(record)
+
+
+def validate_known_limitation_current_review(
+    record: KnownLimitationOwnershipRecord,
+    *,
+    as_of: date | None = None,
+) -> None:
+    validate_known_limitation_ownership_record_contract(record)
+    if known_limitation_review_due_date_status(record, as_of=as_of) == "expired":
+        raise ValueError(
+            "known_limitation_ownership record "
+            f"{record.record_id!r} has expired review due_date"
+        )
+
+
+def known_limitation_review_due_date_status(
+    record: KnownLimitationOwnershipRecord,
+    *,
+    as_of: date | None = None,
+) -> str:
+    if not _has_linkage_value(record.due_date):
+        return "not_specified"
+    due_date = _parse_review_due_date(record)
+    comparison_date = as_of if as_of is not None else date.today()
+    if due_date < comparison_date:
+        return "expired"
+    if due_date == comparison_date:
+        return "due_today"
+    return "current"
 
 
 def _validate_known_limitation_ownership_record(
@@ -104,6 +146,8 @@ def _validate_known_limitation_ownership_record(
             "known_limitation_ownership record "
             f"{record.record_id!r} requires review_cadence or due_date"
         )
+    if _has_linkage_value(record.due_date):
+        _validate_review_due_date(record)
     if record.phase66_handoff_posture not in _KNOWN_LIMITATION_HANDOFF_POSTURES:
         raise ValueError(
             "known_limitation_ownership record "
@@ -142,7 +186,30 @@ def _contains_forbidden_readiness_claim(value: object) -> bool:
     return isinstance(value, str) and bool(_FORBIDDEN_READINESS_CLAIM_PATTERN.search(value))
 
 
+def _validate_review_due_date(record: KnownLimitationOwnershipRecord) -> None:
+    _parse_review_due_date(record)
+
+
+def _parse_review_due_date(record: KnownLimitationOwnershipRecord) -> date:
+    if not isinstance(record.due_date, str):
+        raise ValueError(
+            "known_limitation_ownership record "
+            f"{record.record_id!r} requires due_date to be an ISO date"
+        )
+    try:
+        due_date = date.fromisoformat(record.due_date)
+    except ValueError as exc:
+        raise ValueError(
+            "known_limitation_ownership record "
+            f"{record.record_id!r} requires due_date to be an ISO date"
+        ) from exc
+    return due_date
+
+
 __all__ = [
+    "known_limitation_review_due_date_status",
     "is_phase64_record_family",
+    "validate_known_limitation_current_review",
+    "validate_known_limitation_ownership_record_contract",
     "validate_phase64_record",
 ]
