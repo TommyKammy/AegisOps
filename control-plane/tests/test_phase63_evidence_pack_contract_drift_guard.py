@@ -25,6 +25,8 @@ from scripts.phase63_evidence_pack_contract_guard import (  # noqa: E402
     load_phase63_evidence_pack_contracts,
     _backend_no_workflow_authority_rejection,
     _backend_confidence_posture_rejection,
+    _py_backend_enforced_label_sets,
+    _py_backend_enforced_metadata_fields,
     _py_ai_state_reason_consistency_rules,
     _py_backend_state_reason_consistency_rules,
     _py_enforced_metadata_fields,
@@ -33,6 +35,7 @@ from scripts.phase63_evidence_pack_contract_guard import (  # noqa: E402
     _py_rejected_boolean_value,
     _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
     _ts_enforced_freshness_window_milliseconds,
+    _ts_forbidden_projection_sources_rejection,
     _operator_ui_contract_from_source,
     _py_string_constant,
     _ts_forbidden_defined_pack_fields,
@@ -408,6 +411,49 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "metadata enforcement"):
             _operator_ui_contract_from_source(metadata_drift)
 
+    def test_operator_ui_source_authority_and_projection_source_checks_are_parsed(
+        self,
+    ) -> None:
+        source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+        contract = _operator_ui_contract_from_source(source)
+        self.assertEqual(
+            contract.supported_source_ids,
+            frozenset({"malwarebazaar_hash_reputation"}),
+        )
+        self.assertEqual(
+            contract.subordinate_authority_posture,
+            "subordinate_evidence_context_only",
+        )
+        self.assertEqual(
+            _ts_forbidden_projection_sources_rejection(source),
+            frozenset({"browser_state", "browser_cache", "ui_cache", "cache"}),
+        )
+
+        source_id_drift = source.replace(
+            "    if (sourceId !== EVIDENCE_PACK_SUPPORTED_SOURCE_ID) {\n"
+            "      throw new OperatorDataProviderContractError(\n"
+            "        `Resource cases linked_evidence_packs item ${evidenceRequestId} has an unsupported evidence-pack source.`,\n"
+            "      );\n"
+            "    }\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "source_id"):
+            _operator_ui_contract_from_source(source_id_drift)
+
+        authority_posture_drift = source.replace(
+            "      authorityPosture !== EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE ||\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "authority_posture"):
+            _operator_ui_contract_from_source(authority_posture_drift)
+
+        projection_source_drift = source.replace(
+            "      EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES.has(projectionSource ?? \"\")\n",
+            "      false\n",
+        )
+        with self.assertRaisesRegex(AssertionError, "projection-source"):
+            _operator_ui_contract_from_source(projection_source_drift)
+
     def test_operator_ui_recognized_fields_follow_spread_set(self) -> None:
         source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
         contract = _operator_ui_contract_from_source(source)
@@ -429,6 +475,69 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(AssertionError, "backend workflow authority"):
             _backend_no_workflow_authority_rejection(drifted_source)
+
+    def test_backend_label_source_and_metadata_enforcement_are_parsed(self) -> None:
+        from aegisops.control_plane.inspection import evidence_pack_projection
+
+        source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
+        self.assertEqual(
+            _py_backend_enforced_label_sets(
+                source,
+                evidence_pack_projection,
+            )["status"],
+            frozenset({"available", "degraded", "unavailable"}),
+        )
+        self.assertEqual(
+            contract_guard._py_rejected_string_values(
+                source,
+                ("subscript", "values", "source_id"),
+            ),
+            frozenset({"malwarebazaar_hash_reputation"}),
+        )
+        self.assertEqual(
+            _py_backend_enforced_metadata_fields(
+                source,
+                evidence_pack_projection,
+            )["confidence"],
+            evidence_pack_projection._EVIDENCE_PACK_REQUIRED_CONFIDENCE_FIELDS,
+        )
+
+        label_drift = source.replace(
+            "    for field_name, allowed_values in _EVIDENCE_PACK_ALLOWED_PROJECTION_LABELS.items():\n"
+            "        if values[field_name] not in allowed_values:\n"
+            "            raise ValueError(\n"
+            "                \"linked evidence-pack projection has unsupported evidence-pack projection label\"\n"
+            "            )\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "label enforcement"):
+            _py_backend_enforced_label_sets(label_drift, evidence_pack_projection)
+
+        source_id_drift = source.replace(
+            "    if values[\"source_id\"] != _EVIDENCE_PACK_SUPPORTED_SOURCE_ID:\n"
+            "        raise ValueError(\n"
+            "            \"linked evidence-pack projection has unsupported evidence-pack projection source\"\n"
+            "        )\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "source_id"):
+            contract_guard._py_rejected_string_values(
+                source_id_drift,
+                ("subscript", "values", "source_id"),
+            )
+
+        metadata_drift = source.replace(
+            "    _required_metadata_map_fields(\n"
+            "        confidence,\n"
+            "        _EVIDENCE_PACK_REQUIRED_CONFIDENCE_FIELDS,\n"
+            "    )\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "metadata enforcement"):
+            _py_backend_enforced_metadata_fields(
+                metadata_drift,
+                evidence_pack_projection,
+            )
 
     def test_backend_confidence_posture_parser_observes_representative_drift(
         self,

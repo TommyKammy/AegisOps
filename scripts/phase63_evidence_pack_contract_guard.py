@@ -262,12 +262,11 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
         / "inspection"
         / "evidence_pack_projection.py"
     ).read_text(encoding="utf-8")
-    labels = {
-        key: frozenset(
-            inspection_projection._EVIDENCE_PACK_ALLOWED_PROJECTION_LABELS[key]
-        )
-        for key in _LABEL_KEYS
-    }
+    labels = _py_backend_enforced_label_sets(validator_source, inspection_projection)
+    metadata_fields = _py_backend_enforced_metadata_fields(
+        validator_source,
+        inspection_projection,
+    )
     return Phase63EvidencePackContract(
         labels=MappingProxyType(labels),
         degraded_reasons=frozenset(
@@ -276,22 +275,19 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
         unavailable_reasons=frozenset(
             inspection_projection._EVIDENCE_PACK_ALLOWED_UNAVAILABLE_REASONS
         ),
-        required_custody_fields=frozenset(
-            inspection_projection._EVIDENCE_PACK_REQUIRED_CUSTODY_FIELDS
-        ),
-        required_provenance_fields=frozenset(
-            inspection_projection._EVIDENCE_PACK_REQUIRED_PROVENANCE_FIELDS
-        ),
-        required_confidence_fields=frozenset(
-            inspection_projection._EVIDENCE_PACK_REQUIRED_CONFIDENCE_FIELDS
-        ),
+        required_custody_fields=metadata_fields["custody"],
+        required_provenance_fields=metadata_fields["provenance"],
+        required_confidence_fields=metadata_fields["confidence"],
         contract_fields=frozenset(
             inspection_projection._EVIDENCE_PACK_PROJECTION_CONTRACT_FIELDS
         ),
         recognized_fields=frozenset(
             inspection_projection._EVIDENCE_PACK_PROJECTION_RECOGNIZED_FIELDS
         ),
-        supported_source_ids=frozenset({source_id}),
+        supported_source_ids=_py_rejected_string_values(
+            validator_source,
+            ("subscript", "values", "source_id"),
+        ),
         subordinate_authority_posture=(
             inspection_projection._EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE
         ),
@@ -442,11 +438,11 @@ def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContrac
             "EVIDENCE_PACK_RECOGNIZED_FIELDS",
         ),
         supported_source_ids=frozenset(
-            {_ts_string_constant(source, "EVIDENCE_PACK_SUPPORTED_SOURCE_ID")}
+            {_ts_rejected_pack_string_field(source, "source_id")}
         ),
-        subordinate_authority_posture=_ts_string_constant(
+        subordinate_authority_posture=_ts_rejected_pack_string_field(
             source,
-            "EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE",
+            "authority_posture",
         ),
         no_workflow_authority=_ts_no_workflow_authority_rejection(source),
         authoritative_workflow_truth=_ts_rejected_pack_boolean_field(
@@ -462,10 +458,7 @@ def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContrac
             source
         ),
         state_reason_consistency_rules=_ts_state_reason_consistency_rules(source),
-        forbidden_projection_sources=_ts_set(
-            source,
-            "EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES",
-        ),
+        forbidden_projection_sources=_ts_forbidden_projection_sources_rejection(source),
         forbidden_readiness_claim_fields=_ts_forbidden_defined_pack_fields(
             source,
             "cannot claim release readiness",
@@ -800,6 +793,54 @@ def _py_enforced_metadata_fields(
     ):
         raise AssertionError("AI grounding metadata enforcement drift")
     return required_fields
+
+
+def _py_backend_enforced_label_sets(
+    source: str,
+    namespace: object,
+) -> dict[str, frozenset[str]]:
+    body = _py_function_source(source, "_validated_linked_evidence_pack_projection")
+    _require_substrings(
+        body,
+        (
+            "for field_name, allowed_values in "
+            "_EVIDENCE_PACK_ALLOWED_PROJECTION_LABELS.items():",
+            "values[field_name] not in allowed_values",
+        ),
+        "backend evidence-pack label enforcement",
+    )
+    labels = getattr(namespace, "_EVIDENCE_PACK_ALLOWED_PROJECTION_LABELS")
+    if frozenset(labels) != frozenset(_LABEL_KEYS):
+        raise AssertionError("backend evidence-pack label enforcement drift")
+    return {key: frozenset(labels[key]) for key in _LABEL_KEYS}
+
+
+def _py_backend_enforced_metadata_fields(
+    source: str,
+    namespace: object,
+) -> dict[str, frozenset[str]]:
+    metadata_fields: dict[str, frozenset[str]] = {}
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name):
+            continue
+        if node.func.id != "_required_metadata_map_fields" or len(node.args) < 2:
+            continue
+        value_argument = node.args[0]
+        required_argument = node.args[1]
+        if (
+            isinstance(value_argument, ast.Name)
+            and value_argument.id in {"custody", "provenance", "confidence"}
+            and isinstance(required_argument, ast.Name)
+        ):
+            metadata_fields[value_argument.id] = frozenset(
+                getattr(namespace, required_argument.id)
+            )
+    expected_fields = frozenset({"custody", "provenance", "confidence"})
+    if frozenset(metadata_fields) != expected_fields:
+        raise AssertionError("backend evidence-pack metadata enforcement drift")
+    return metadata_fields
 
 
 def _py_rejected_string_values(
@@ -1221,14 +1262,18 @@ def _ts_state_reason_consistency_rules(source: str) -> frozenset[str]:
 def _ts_rejected_pack_string_field(source: str, field_name: str) -> str:
     variable_name = _ts_pack_string_variable(source, field_name)
     match = re.search(
-        rf"\b{re.escape(variable_name)}\s*!==\s*\"([^\"]+)\"",
+        rf"\b{re.escape(variable_name)}\s*!==\s*"
+        r'(?:"([^\"]+)"|(EVIDENCE_PACK_[A-Z0-9_]+))',
         source,
     )
     if match is None:
         raise AssertionError(
             f"operator UI pack field {field_name} rejection is not discoverable"
         )
-    return match.group(1)
+    literal_value, constant_name = match.groups()
+    if literal_value is not None:
+        return literal_value
+    return _ts_string_constant(source, constant_name)
 
 
 def _ts_no_workflow_authority_rejection(source: str) -> str:
@@ -1302,6 +1347,24 @@ def _ts_forbidden_defined_pack_fields(source: str, error_message: str) -> frozen
             f"operator UI forbidden pack fields for {error_message} are not discoverable"
         )
     return fields
+
+
+def _ts_forbidden_projection_sources_rejection(source: str) -> frozenset[str]:
+    projection_source_variable = _ts_pack_string_variable(source, "projection_source")
+    condition = _ts_condition_for_error(
+        source,
+        "rejects cache or browser sourced evidence-pack truth",
+    )
+    expected_check = (
+        "EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES.has("
+        f'{projection_source_variable} ?? ""'
+        ")"
+    )
+    if expected_check not in condition:
+        raise AssertionError(
+            "operator UI forbidden projection-source enforcement is not discoverable"
+        )
+    return _ts_set(source, "EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES")
 
 
 def _ts_condition_for_error(source: str, error_message: str) -> str:
