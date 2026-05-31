@@ -162,6 +162,83 @@ require_backticked_reference() {
   exit 1
 }
 
+reviewed_record_table_rows() {
+  awk '
+    function trim(value) {
+      gsub(/^[[:space:]]+/, "", value)
+      gsub(/[[:space:]]+$/, "", value)
+      return value
+    }
+
+    trim($0) == "## Reviewed Records" {
+      in_reviewed_records = 1
+      next
+    }
+
+    in_reviewed_records && trim($0) ~ /^##[[:space:]]/ {
+      exit
+    }
+
+    !in_reviewed_records {
+      next
+    }
+
+    {
+      row = trim($0)
+    }
+
+    row == "| limitation_id | title | severity | affected_surface | owner | mitigation | evidence_references | review_state | review_cadence | due_date | accepted_risk_posture | phase66_handoff_posture | authority_boundary |" {
+      in_table = 1
+      next
+    }
+
+    in_table && row == "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |" {
+      next
+    }
+
+    in_table && row == "" {
+      exit
+    }
+
+    in_table && row ~ /^\|[[:space:]]+`limitation-phase64-[a-z0-9-]+-[0-9]{3}`[[:space:]]+\|/ {
+      print row
+    }
+  ' "${phase64_records_path}"
+}
+
+require_reviewed_record_anchor() {
+  local limitation_id="$1"
+
+  if ! awk -v expected="### ${limitation_id}" '
+    function trim(value) {
+      gsub(/^[[:space:]]+/, "", value)
+      gsub(/[[:space:]]+$/, "", value)
+      return value
+    }
+
+    trim($0) == "## Record Anchors" {
+      in_record_anchors = 1
+      next
+    }
+
+    in_record_anchors && trim($0) ~ /^##[[:space:]]/ {
+      exit
+    }
+
+    in_record_anchors && trim($0) == expected {
+      found = 1
+      exit
+    }
+
+    END {
+      exit found ? 0 : 1
+    }
+  ' "${phase64_records_path}"; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: missing reviewed Phase 64 limitation record anchor" >&2
+    exit 1
+  fi
+}
+
 reject_no_open_blocker_assertion() {
   local value="$1"
   local limitation_id="$2"
@@ -315,7 +392,7 @@ validate_handoff_row() {
   reviewed_record_reference="docs/phase-64-1-reviewed-limitation-ownership-records.md#${limitation_id}"
   require_backticked_reference "${evidence_references}" "${reviewed_record_reference}" "reviewed Phase 64 limitation record reference" "${limitation_id}"
 
-  reviewed_record_matches="$(grep -F -- "| \`${limitation_id}\` |" "${phase64_records_path}" || true)"
+  reviewed_record_matches="$(reviewed_record_table_rows | grep -F -- "| \`${limitation_id}\` |" || true)"
   if [[ -z "${reviewed_record_matches}" ]]; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 limitation record is absent" >&2
     exit 1
@@ -328,6 +405,7 @@ validate_handoff_row() {
   fi
 
   reviewed_record_row="${reviewed_record_matches}"
+  require_reviewed_record_anchor "${limitation_id}"
 
   IFS='|' read -r empty_prefix record_limitation_id_cell record_title record_severity record_affected_surface record_owner record_mitigation record_evidence_references record_review_state record_review_cadence record_due_date record_accepted_risk_posture record_handoff_posture record_authority_boundary empty_suffix <<<"${reviewed_record_row}"
 
@@ -336,6 +414,7 @@ validate_handoff_row() {
   record_review_state="$(trim_cell "${record_review_state}")"
   record_accepted_risk_posture="$(trim_cell "${record_accepted_risk_posture}")"
   record_handoff_posture="$(trim_cell "${record_handoff_posture}")"
+  record_authority_boundary="$(trim_cell "${record_authority_boundary}")"
 
   if [[ "$(trim_cell "${owner}")" != "${record_owner}" ]]; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: owner does not match reviewed Phase 64 record" >&2
@@ -344,6 +423,11 @@ validate_handoff_row() {
 
   if [[ "${record_handoff_posture}" != "handoff_required" ]]; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 record is not marked for handoff" >&2
+    exit 1
+  fi
+
+  if [[ "${record_authority_boundary}" != "reviewed_evidence_input_only" ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 record authority boundary is not subordinate evidence only" >&2
     exit 1
   fi
 
@@ -440,7 +524,7 @@ while IFS= read -r row; do
     echo "Missing Phase 64.5 handoff row for reviewed Phase 64 limitation: ${limitation_id}" >&2
     exit 1
   fi
-done < "${phase64_records_path}"
+done < <(reviewed_record_table_rows)
 
 path_hygiene_text() {
   local file="$1"

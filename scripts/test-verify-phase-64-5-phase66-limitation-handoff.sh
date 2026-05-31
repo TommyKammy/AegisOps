@@ -62,6 +62,36 @@ remove_doc_text() {
     "${target}/docs/phase-64-5-phase66-limitation-handoff.md"
 }
 
+insert_after_reviewed_record_row() {
+  local target="$1"
+  local row="$2"
+
+  ROW="${row}" perl -0pi -e 's/(\| `limitation-phase64-rc-gate-consumption-001`[^\n]*\n)/$1$ENV{ROW}\n/' \
+    "${target}/docs/phase-64-1-reviewed-limitation-ownership-records.md"
+}
+
+insert_after_handoff_row() {
+  local target="$1"
+  local row="$2"
+
+  ROW="${row}" perl -0pi -e 's/(\| `limitation-phase64-rc-gate-consumption-001`[^\n]*\n)/$1$ENV{ROW}\n/' \
+    "${target}/docs/phase-64-5-phase66-limitation-handoff.md"
+}
+
+insert_after_reviewed_record_anchor() {
+  local target="$1"
+  local anchor="$2"
+
+  ANCHOR="${anchor}" perl -0pi -e 's/(### limitation-phase64-rc-gate-consumption-001\n\nThis anchor identifies the reviewed RC gate consumption limitation ownership record row above\.\n)/$1\n$ENV{ANCHOR}\n/' \
+    "${target}/docs/phase-64-1-reviewed-limitation-ownership-records.md"
+}
+
+extra_reviewed_record_row='| `limitation-phase64-extra-new-001` | Extra limitation remains separately tracked. | material | release_gate_evidence | extra-owner | Keep the extra limitation subordinate before Phase 66 RC proof. | `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` | mitigation_planned | weekly | none | extra_risk | handoff_required | reviewed_evidence_input_only |'
+extra_handoff_row='| `limitation-phase64-extra-new-001` | extra-owner | mitigation planned; extra limitation remains subordinate | `docs/phase-64-1-reviewed-limitation-ownership-records.md#limitation-phase64-extra-new-001`; `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` | Extra RC gate packet proof remains required before RC proof can treat the limitation as satisfied. | extra risk; accepted only as reviewed ownership evidence | 2026-06-15 | Phase 66 may cite this as subordinate limitation ownership evidence only; it does not satisfy any RC gate. |'
+extra_reviewed_record_anchor='### limitation-phase64-extra-new-001
+
+This anchor identifies the extra reviewed limitation ownership record row above.'
+
 valid_repo="${workdir}/valid"
 copy_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
@@ -161,11 +191,39 @@ assert_fails_with \
 
 duplicate_reviewed_record_repo="${workdir}/duplicate-reviewed-record"
 copy_valid_repo "${duplicate_reviewed_record_repo}"
-printf '%s\n' '| `limitation-phase64-support-bundle-001` | Duplicate support bundle evidence. | material | supportability_evidence | duplicate-owner | Contradict the reviewed support bundle slice. | `docs/phase-63-closeout-evaluation.md#support-bundle-gap-disposition` | mitigation_planned | weekly | none | duplicate_posture | handoff_required | reviewed_evidence_input_only |' \
-  >>"${duplicate_reviewed_record_repo}/docs/phase-64-1-reviewed-limitation-ownership-records.md"
+insert_after_reviewed_record_row \
+  "${duplicate_reviewed_record_repo}" \
+  '| `limitation-phase64-support-bundle-001` | Duplicate support bundle evidence. | material | supportability_evidence | duplicate-owner | Contradict the reviewed support bundle slice. | `docs/phase-63-closeout-evaluation.md#support-bundle-gap-disposition` | mitigation_planned | weekly | none | duplicate_posture | handoff_required | reviewed_evidence_input_only |'
 assert_fails_with \
   "${duplicate_reviewed_record_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: duplicate reviewed Phase 64 limitation records"
+
+missing_reviewed_record_anchor_repo="${workdir}/missing-reviewed-record-anchor"
+copy_valid_repo "${missing_reviewed_record_anchor_repo}"
+insert_after_reviewed_record_row "${missing_reviewed_record_anchor_repo}" "${extra_reviewed_record_row}"
+insert_after_handoff_row "${missing_reviewed_record_anchor_repo}" "${extra_handoff_row}"
+assert_fails_with \
+  "${missing_reviewed_record_anchor_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: missing reviewed Phase 64 limitation record anchor"
+
+commented_reviewed_record_repo="${workdir}/commented-reviewed-record"
+copy_valid_repo "${commented_reviewed_record_repo}"
+perl -0pi -e 's/(\| `limitation-phase64-support-bundle-001`[^\n]*\n)/<!-- $1 -->\n/' \
+  "${commented_reviewed_record_repo}/docs/phase-64-1-reviewed-limitation-ownership-records.md"
+assert_fails_with \
+  "${commented_reviewed_record_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: reviewed Phase 64 limitation record is absent"
+
+wrong_authority_boundary_repo="${workdir}/wrong-authority-boundary"
+copy_valid_repo "${wrong_authority_boundary_repo}"
+insert_after_reviewed_record_row \
+  "${wrong_authority_boundary_repo}" \
+  '| `limitation-phase64-extra-new-001` | Extra limitation remains separately tracked. | material | release_gate_evidence | extra-owner | Keep the extra limitation subordinate before Phase 66 RC proof. | `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` | mitigation_planned | weekly | none | extra_risk | handoff_required | wrong_authority |'
+insert_after_handoff_row "${wrong_authority_boundary_repo}" "${extra_handoff_row}"
+insert_after_reviewed_record_anchor "${wrong_authority_boundary_repo}" "${extra_reviewed_record_anchor}"
+assert_fails_with \
+  "${wrong_authority_boundary_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 record authority boundary is not subordinate evidence only"
 
 duplicate_handoff_row_repo="${workdir}/duplicate-handoff-row"
 copy_valid_repo "${duplicate_handoff_row_repo}"
