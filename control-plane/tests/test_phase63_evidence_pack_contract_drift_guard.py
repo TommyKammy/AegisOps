@@ -465,6 +465,65 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
             _operator_ui_contract_from_source(drifted_source).recognized_fields,
         )
 
+    def test_operator_ui_authority_visibility_and_recognized_rejections_are_enforced(
+        self,
+    ) -> None:
+        source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+
+        self.assertEqual(
+            contract_guard._ts_subordinate_authority_posture_rejection(source),
+            "subordinate_evidence_context_only",
+        )
+        self.assertTrue(
+            contract_guard._ts_rejected_optional_pack_boolean_field(
+                source,
+                "operator_visible",
+            )
+        )
+        self.assertIn("operator_visible", contract_guard._ts_recognized_fields_rejection(source))
+
+        provenance_authority_drift = source.replace(
+            "    if (\n"
+            "      asString(provenance.authority_posture) !==\n"
+            "      EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE\n"
+            "    ) {\n"
+            "      throw new OperatorDataProviderContractError(\n"
+            "        `Resource cases linked_evidence_packs item ${evidenceRequestId} must keep provenance subordinate.`,\n"
+            "      );\n"
+            "    }\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "authority_posture"):
+            contract_guard._ts_subordinate_authority_posture_rejection(
+                provenance_authority_drift,
+            )
+
+        operator_visible_drift = source.replace(
+            "pack.operator_visible !== true",
+            "pack.operator_visible !== false",
+        )
+        self.assertFalse(
+            contract_guard._ts_rejected_optional_pack_boolean_field(
+                operator_visible_drift,
+                "operator_visible",
+            )
+        )
+
+        recognized_rejection_drift = source.replace(
+            "    if (\n"
+            "      Object.keys(pack).some(\n"
+            "        (fieldName) => !EVIDENCE_PACK_RECOGNIZED_FIELDS.has(fieldName),\n"
+            "      )\n"
+            "    ) {\n"
+            "      throw new OperatorDataProviderContractError(\n"
+            "        `Resource cases linked_evidence_packs item ${evidenceRequestId} has unexpected evidence-pack fields.`,\n"
+            "      );\n"
+            "    }\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "recognized-field"):
+            contract_guard._ts_recognized_fields_rejection(recognized_rejection_drift)
+
     def test_backend_authority_parser_observes_representative_drift(self) -> None:
         source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
         self.assertEqual(_backend_no_workflow_authority_rejection(source), "none")
@@ -475,6 +534,122 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(AssertionError, "backend workflow authority"):
             _backend_no_workflow_authority_rejection(drifted_source)
+
+    def test_backend_authority_reason_and_boundary_rejections_are_enforced(self) -> None:
+        from aegisops.control_plane.inspection import evidence_pack_projection
+
+        source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
+
+        self.assertEqual(
+            contract_guard._backend_subordinate_authority_posture_rejection(source),
+            "subordinate_evidence_context_only",
+        )
+        self.assertTrue(
+            contract_guard._py_rejected_optional_boolean_value(
+                source,
+                ("get", "projection", "operator_visible"),
+            )
+        )
+        self.assertEqual(
+            contract_guard._py_backend_enforced_reason_sets(
+                source,
+                evidence_pack_projection,
+            )["degraded_reasons"],
+            evidence_pack_projection._EVIDENCE_PACK_ALLOWED_DEGRADED_REASONS,
+        )
+        self.assertIn(
+            "operator_visible",
+            contract_guard._py_backend_recognized_fields_rejection(
+                source,
+                evidence_pack_projection,
+            ),
+        )
+        self.assertEqual(
+            contract_guard._py_backend_forbidden_projection_sources_rejection(
+                source,
+                evidence_pack_projection,
+            ),
+            evidence_pack_projection._EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES,
+        )
+        self.assertEqual(
+            contract_guard._py_backend_forbidden_readiness_claim_rejection(
+                source,
+                evidence_pack_projection,
+            ),
+            evidence_pack_projection._EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS,
+        )
+
+        provenance_authority_drift = source.replace(
+            '    if (\n'
+            '        _optional_string_from_mapping(provenance, "authority_posture")\n'
+            "        != _EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE\n"
+            "    ):\n"
+            '        raise ValueError("linked evidence-pack projection must stay subordinate")\n',
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "authority posture"):
+            contract_guard._backend_subordinate_authority_posture_rejection(
+                provenance_authority_drift,
+            )
+
+        reason_drift = source.replace(
+            "    if any(\n"
+            "        reason not in _EVIDENCE_PACK_ALLOWED_DEGRADED_REASONS\n"
+            "        for reason in degraded_reasons\n"
+            "    ) or any(\n"
+            "        reason not in _EVIDENCE_PACK_ALLOWED_UNAVAILABLE_REASONS\n"
+            "        for reason in unavailable_reasons\n"
+            "    ):\n"
+            "        raise ValueError(\n"
+            "            \"linked evidence-pack projection has unsupported evidence-pack projection reason\"\n"
+            "        )\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "reason enforcement"):
+            contract_guard._py_backend_enforced_reason_sets(
+                reason_drift,
+                evidence_pack_projection,
+            )
+
+        forbidden_source_drift = source.replace(
+            "        or projection_source in _EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "projection-source"):
+            contract_guard._py_backend_forbidden_projection_sources_rejection(
+                forbidden_source_drift,
+                evidence_pack_projection,
+            )
+
+        readiness_drift = source.replace(
+            "    if any(\n"
+            "        claim_name in projection\n"
+            "        for claim_name in _EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS\n"
+            "    ):\n"
+            "        raise ValueError(\"linked evidence-pack projection cannot claim release readiness\")\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "readiness-claim"):
+            contract_guard._py_backend_forbidden_readiness_claim_rejection(
+                readiness_drift,
+                evidence_pack_projection,
+            )
+
+        recognized_drift = source.replace(
+            "    unexpected_fields = (\n"
+            "        frozenset(projection) - _EVIDENCE_PACK_PROJECTION_RECOGNIZED_FIELDS\n"
+            "    )\n"
+            "    if unexpected_fields:\n"
+            "        raise ValueError(\n"
+            "            \"linked evidence-pack projection has unexpected evidence-pack projection field\"\n"
+            "        )\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "recognized-field"):
+            contract_guard._py_backend_recognized_fields_rejection(
+                recognized_drift,
+                evidence_pack_projection,
+            )
 
     def test_backend_label_source_and_metadata_enforcement_are_parsed(self) -> None:
         from aegisops.control_plane.inspection import evidence_pack_projection
@@ -690,6 +865,56 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
             _ai_confidence_posture_rejection(
                 missing_reason_drift,
                 "external_hash_reputation_subordinate_context",
+            )
+
+    def test_ai_authority_posture_and_reason_vocabulary_are_enforced(self) -> None:
+        from aegisops.control_plane.assistant import ai_grounding_validation
+
+        source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
+        self.assertEqual(
+            contract_guard._ai_subordinate_authority_posture_rejection(source),
+            "subordinate_evidence_context_only",
+        )
+        self.assertEqual(
+            contract_guard._py_ai_enforced_reason_sets(
+                source,
+                ai_grounding_validation,
+            )["unavailable_reasons"],
+            ai_grounding_validation._ALLOWED_UNAVAILABLE_REASONS,
+        )
+
+        provenance_authority_drift = source.replace(
+            "        if provenance.get(\"authority_posture\") != _SUBORDINATE_AUTHORITY_POSTURE:\n"
+            "            reasons.append(\"grounding_authority_promotion_attempt\")\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "AI authority posture"):
+            contract_guard._ai_subordinate_authority_posture_rejection(
+                provenance_authority_drift,
+            )
+
+        missing_reason_call_drift = source.replace(
+            "    reasons.extend(_unsupported_projection_reason_reasons(projection))\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "reason vocabulary"):
+            contract_guard._py_ai_enforced_reason_sets(
+                missing_reason_call_drift,
+                ai_grounding_validation,
+            )
+
+        reason_constant_drift = source.replace(
+            "    if any(\n"
+            "        reason not in _ALLOWED_UNAVAILABLE_REASONS\n"
+            "        for reason in unavailable_reasons\n"
+            "    ):\n"
+            "        return (\"unsupported_grounding_reason\",)\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "reason vocabulary"):
+            contract_guard._py_ai_enforced_reason_sets(
+                reason_constant_drift,
+                ai_grounding_validation,
             )
 
     def test_ai_metadata_contract_uses_validator_allowed_fields(self) -> None:

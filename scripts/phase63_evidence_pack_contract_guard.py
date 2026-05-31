@@ -51,6 +51,14 @@ _BACKEND_NO_WORKFLOW_AUTHORITY_TARGETS = (
     ("subscript", "typed_values", "workflow_authority"),
     ("optional", "confidence", "source_native_score_authority"),
 )
+_BACKEND_SUBORDINATE_AUTHORITY_POSTURE_TARGETS = (
+    ("subscript", "typed_values", "authority_posture"),
+    ("optional", "provenance", "authority_posture"),
+)
+_AI_SUBORDINATE_AUTHORITY_POSTURE_TARGETS = (
+    ("get", "projection", "authority_posture"),
+    ("get", "provenance", "authority_posture"),
+)
 _STATE_REASON_CONSISTENCY_RULES = frozenset(
     {
         "available_status_has_no_reasons",
@@ -80,6 +88,7 @@ class Phase63EvidencePackContract:
     subordinate_authority_posture: str
     no_workflow_authority: str
     authoritative_workflow_truth: bool
+    operator_visible_truth: bool
     confidence_posture: str
     freshness_window_milliseconds: int
     state_reason_consistency_rules: frozenset[str]
@@ -155,6 +164,12 @@ def assert_phase63_evidence_pack_contract_aligned(
     )
     _assert_equal("contract fields", backend.contract_fields, ui.contract_fields)
     _assert_equal("recognized fields", backend.recognized_fields, ui.recognized_fields)
+    _assert_equal(
+        "operator-visible truth boundary",
+        backend.operator_visible_truth,
+        ui.operator_visible_truth,
+        True,
+    )
     _assert_equal(
         "source IDs",
         backend.supported_source_ids,
@@ -263,33 +278,34 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
         / "evidence_pack_projection.py"
     ).read_text(encoding="utf-8")
     labels = _py_backend_enforced_label_sets(validator_source, inspection_projection)
+    reason_sets = _py_backend_enforced_reason_sets(
+        validator_source,
+        inspection_projection,
+    )
     metadata_fields = _py_backend_enforced_metadata_fields(
         validator_source,
         inspection_projection,
     )
     return Phase63EvidencePackContract(
         labels=MappingProxyType(labels),
-        degraded_reasons=frozenset(
-            inspection_projection._EVIDENCE_PACK_ALLOWED_DEGRADED_REASONS
-        ),
-        unavailable_reasons=frozenset(
-            inspection_projection._EVIDENCE_PACK_ALLOWED_UNAVAILABLE_REASONS
-        ),
+        degraded_reasons=reason_sets["degraded_reasons"],
+        unavailable_reasons=reason_sets["unavailable_reasons"],
         required_custody_fields=metadata_fields["custody"],
         required_provenance_fields=metadata_fields["provenance"],
         required_confidence_fields=metadata_fields["confidence"],
         contract_fields=frozenset(
             inspection_projection._EVIDENCE_PACK_PROJECTION_CONTRACT_FIELDS
         ),
-        recognized_fields=frozenset(
-            inspection_projection._EVIDENCE_PACK_PROJECTION_RECOGNIZED_FIELDS
+        recognized_fields=_py_backend_recognized_fields_rejection(
+            validator_source,
+            inspection_projection,
         ),
         supported_source_ids=_py_rejected_string_values(
             validator_source,
             ("subscript", "values", "source_id"),
         ),
-        subordinate_authority_posture=(
-            inspection_projection._EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE
+        subordinate_authority_posture=_backend_subordinate_authority_posture_rejection(
+            validator_source
         ),
         no_workflow_authority=_backend_no_workflow_authority_rejection(
             validator_source
@@ -297,6 +313,10 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
         authoritative_workflow_truth=_py_rejected_boolean_value(
             validator_source,
             ("get", "projection", "authoritative_workflow_truth"),
+        ),
+        operator_visible_truth=_py_rejected_optional_boolean_value(
+            validator_source,
+            ("get", "projection", "operator_visible"),
         ),
         confidence_posture=_backend_confidence_posture_rejection(
             validator_source,
@@ -309,11 +329,13 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
         state_reason_consistency_rules=_py_backend_state_reason_consistency_rules(
             validator_source
         ),
-        forbidden_projection_sources=frozenset(
-            inspection_projection._EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES
+        forbidden_projection_sources=_py_backend_forbidden_projection_sources_rejection(
+            validator_source,
+            inspection_projection,
         ),
-        forbidden_readiness_claim_fields=frozenset(
-            inspection_projection._EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS
+        forbidden_readiness_claim_fields=_py_backend_forbidden_readiness_claim_rejection(
+            validator_source,
+            inspection_projection,
         ),
         authority_truth_denials=frozenset(),
     )
@@ -355,6 +377,10 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
         validator_source,
         ai_grounding_validation,
     )
+    reason_sets = _py_ai_enforced_reason_sets(
+        validator_source,
+        ai_grounding_validation,
+    )
     labels = {
         "consumer": singleton_labels["consumer"],
         "status": membership_labels["status"],
@@ -368,18 +394,16 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
     }
     return Phase63EvidencePackContract(
         labels=MappingProxyType(labels),
-        degraded_reasons=frozenset(ai_grounding_validation._ALLOWED_DEGRADED_REASONS),
-        unavailable_reasons=frozenset(
-            ai_grounding_validation._ALLOWED_UNAVAILABLE_REASONS
-        ),
+        degraded_reasons=reason_sets["degraded_reasons"],
+        unavailable_reasons=reason_sets["unavailable_reasons"],
         required_custody_fields=metadata_fields["custody"],
         required_provenance_fields=metadata_fields["provenance"],
         required_confidence_fields=metadata_fields["confidence"],
         contract_fields=frozenset(),
         recognized_fields=frozenset(),
         supported_source_ids=source_ids,
-        subordinate_authority_posture=(
-            ai_grounding_validation._SUBORDINATE_AUTHORITY_POSTURE
+        subordinate_authority_posture=_ai_subordinate_authority_posture_rejection(
+            validator_source
         ),
         no_workflow_authority=_ai_no_workflow_authority_rejection(
             validator_source
@@ -388,6 +412,7 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
             validator_source,
             ("get", "projection", "authoritative_workflow_truth"),
         ),
+        operator_visible_truth=True,
         confidence_posture=_ai_confidence_posture_rejection(
             validator_source,
             registry_entry.confidence_posture,
@@ -433,21 +458,21 @@ def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContrac
         required_provenance_fields=metadata_fields["provenance"],
         required_confidence_fields=metadata_fields["confidence"],
         contract_fields=_ts_set(source, "EVIDENCE_PACK_CONTRACT_FIELDS"),
-        recognized_fields=_ts_set_with_spreads(
+        recognized_fields=_ts_recognized_fields_rejection(
             source,
-            "EVIDENCE_PACK_RECOGNIZED_FIELDS",
         ),
         supported_source_ids=frozenset(
             {_ts_rejected_pack_string_field(source, "source_id")}
         ),
-        subordinate_authority_posture=_ts_rejected_pack_string_field(
-            source,
-            "authority_posture",
-        ),
+        subordinate_authority_posture=_ts_subordinate_authority_posture_rejection(source),
         no_workflow_authority=_ts_no_workflow_authority_rejection(source),
         authoritative_workflow_truth=_ts_rejected_pack_boolean_field(
             source,
             "authoritative_workflow_truth",
+        ),
+        operator_visible_truth=_ts_rejected_optional_pack_boolean_field(
+            source,
+            "operator_visible",
         ),
         confidence_posture=_ts_rejected_mapping_string_field(
             source,
@@ -602,6 +627,22 @@ def _backend_no_workflow_authority_rejection(source: str) -> str:
     return next(iter(values))
 
 
+def _backend_subordinate_authority_posture_rejection(source: str) -> str:
+    values: set[str] = set()
+    try:
+        for target in _BACKEND_SUBORDINATE_AUTHORITY_POSTURE_TARGETS:
+            values.update(_py_rejected_string_values(source, target))
+    except AssertionError as exc:
+        raise AssertionError(
+            "backend authority posture rejection is not consistently discoverable"
+        ) from exc
+    if len(values) != 1:
+        raise AssertionError(
+            "backend authority posture rejection is not consistently discoverable"
+        )
+    return next(iter(values))
+
+
 def _ai_no_workflow_authority_rejection(source: str) -> str:
     targets = (
         ("get", "projection", "workflow_authority"),
@@ -615,6 +656,22 @@ def _ai_no_workflow_authority_rejection(source: str) -> str:
     if len(values) != 1:
         raise AssertionError(
             "AI workflow authority rejection is not consistently discoverable"
+        )
+    return next(iter(values))
+
+
+def _ai_subordinate_authority_posture_rejection(source: str) -> str:
+    values: set[str] = set()
+    try:
+        for target in _AI_SUBORDINATE_AUTHORITY_POSTURE_TARGETS:
+            values.update(_py_rejected_string_values(source, target))
+    except AssertionError as exc:
+        raise AssertionError(
+            "AI authority posture rejection is not consistently discoverable"
+        ) from exc
+    if len(values) != 1:
+        raise AssertionError(
+            "AI authority posture rejection is not consistently discoverable"
         )
     return next(iter(values))
 
@@ -815,6 +872,31 @@ def _py_backend_enforced_label_sets(
     return {key: frozenset(labels[key]) for key in _LABEL_KEYS}
 
 
+def _py_backend_enforced_reason_sets(
+    source: str,
+    namespace: object,
+) -> dict[str, frozenset[str]]:
+    body = _py_function_source(source, "_validated_linked_evidence_pack_projection")
+    _require_substrings(
+        body,
+        (
+            "reason not in _EVIDENCE_PACK_ALLOWED_DEGRADED_REASONS",
+            "for reason in degraded_reasons",
+            "reason not in _EVIDENCE_PACK_ALLOWED_UNAVAILABLE_REASONS",
+            "for reason in unavailable_reasons",
+        ),
+        "backend evidence-pack reason enforcement",
+    )
+    return {
+        "degraded_reasons": frozenset(
+            getattr(namespace, "_EVIDENCE_PACK_ALLOWED_DEGRADED_REASONS")
+        ),
+        "unavailable_reasons": frozenset(
+            getattr(namespace, "_EVIDENCE_PACK_ALLOWED_UNAVAILABLE_REASONS")
+        ),
+    }
+
+
 def _py_backend_enforced_metadata_fields(
     source: str,
     namespace: object,
@@ -841,6 +923,87 @@ def _py_backend_enforced_metadata_fields(
     if frozenset(metadata_fields) != expected_fields:
         raise AssertionError("backend evidence-pack metadata enforcement drift")
     return metadata_fields
+
+
+def _py_backend_recognized_fields_rejection(
+    source: str,
+    namespace: object,
+) -> frozenset[str]:
+    body = _py_function_source(source, "_validated_linked_evidence_pack_projection")
+    _require_substrings(
+        body,
+        (
+            "missing_fields = _EVIDENCE_PACK_PROJECTION_CONTRACT_FIELDS - frozenset(projection)",
+            "if missing_fields:",
+            "unexpected_fields =",
+            "frozenset(projection) - _EVIDENCE_PACK_PROJECTION_RECOGNIZED_FIELDS",
+            "if unexpected_fields:",
+        ),
+        "backend recognized-field rejection",
+    )
+    return frozenset(getattr(namespace, "_EVIDENCE_PACK_PROJECTION_RECOGNIZED_FIELDS"))
+
+
+def _py_backend_forbidden_projection_sources_rejection(
+    source: str,
+    namespace: object,
+) -> frozenset[str]:
+    body = _py_function_source(source, "_validated_linked_evidence_pack_projection")
+    _require_substrings(
+        body,
+        (
+            "projection_source in _EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES",
+            'raise ValueError("linked evidence-pack projection cannot be cache sourced")',
+        ),
+        "backend forbidden projection-source enforcement",
+    )
+    return frozenset(getattr(namespace, "_EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES"))
+
+
+def _py_backend_forbidden_readiness_claim_rejection(
+    source: str,
+    namespace: object,
+) -> frozenset[str]:
+    body = _py_function_source(source, "_validated_linked_evidence_pack_projection")
+    _require_substrings(
+        body,
+        (
+            "claim_name in projection",
+            "for claim_name in _EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS",
+            'raise ValueError("linked evidence-pack projection cannot claim release readiness")',
+        ),
+        "backend readiness-claim rejection",
+    )
+    return frozenset(getattr(namespace, "_EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS"))
+
+
+def _py_ai_enforced_reason_sets(
+    source: str,
+    namespace: object,
+) -> dict[str, frozenset[str]]:
+    grounding_body = _py_function_source(source, "_grounding_source_reasons")
+    unsupported_body = _py_function_source(source, "_unsupported_projection_reason_reasons")
+    _require_substrings(
+        grounding_body,
+        ("reasons.extend(_unsupported_projection_reason_reasons(projection))",),
+        "AI reason vocabulary enforcement call",
+    )
+    _require_substrings(
+        unsupported_body,
+        (
+            "reason not in _ALLOWED_DEGRADED_REASONS",
+            "for reason in degraded_reasons",
+            "reason not in _ALLOWED_UNAVAILABLE_REASONS",
+            "for reason in unavailable_reasons",
+        ),
+        "AI reason vocabulary enforcement",
+    )
+    return {
+        "degraded_reasons": frozenset(getattr(namespace, "_ALLOWED_DEGRADED_REASONS")),
+        "unavailable_reasons": frozenset(
+            getattr(namespace, "_ALLOWED_UNAVAILABLE_REASONS")
+        ),
+    }
 
 
 def _py_rejected_string_values(
@@ -924,6 +1087,40 @@ def _py_rejected_boolean_value(
         _, mapping_name, field_name = target
         raise AssertionError(
             f"Python boolean rejection for {mapping_name}.{field_name} is not discoverable"
+        )
+    return next(iter(values))
+
+
+def _py_rejected_optional_boolean_value(
+    source: str,
+    target: tuple[str, str, str],
+) -> bool:
+    values: set[bool] = set()
+    has_none_guard = False
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Compare):
+            continue
+        if len(node.comparators) != 1 or _py_rejection_target(node.left) != target:
+            continue
+        comparator = node.comparators[0]
+        if (
+            len(node.ops) == 1
+            and isinstance(node.ops[0], (ast.IsNot, ast.NotEq))
+            and isinstance(comparator, ast.Constant)
+            and comparator.value is None
+        ):
+            has_none_guard = True
+            continue
+        if len(node.ops) != 1 or not isinstance(node.ops[0], (ast.IsNot, ast.NotEq)):
+            continue
+        compared_value = _py_boolean_constant(comparator)
+        if compared_value is not None:
+            values.add(compared_value)
+    if len(values) != 1 or not has_none_guard:
+        _, mapping_name, field_name = target
+        raise AssertionError(
+            "Python optional boolean rejection for "
+            f"{mapping_name}.{field_name} is not discoverable"
         )
     return next(iter(values))
 
@@ -1294,6 +1491,29 @@ def _ts_no_workflow_authority_rejection(source: str) -> str:
     return next(iter(values))
 
 
+def _ts_subordinate_authority_posture_rejection(source: str) -> str:
+    try:
+        values = frozenset(
+            {
+                _ts_rejected_pack_string_field(source, "authority_posture"),
+                _ts_rejected_mapping_string_field(
+                    source,
+                    "provenance",
+                    "authority_posture",
+                ),
+            }
+        )
+    except AssertionError as exc:
+        raise AssertionError(
+            "operator UI authority_posture rejection is not consistently discoverable"
+        ) from exc
+    if len(values) != 1:
+        raise AssertionError(
+            "operator UI authority_posture rejection is not consistently discoverable"
+        )
+    return next(iter(values))
+
+
 def _ts_rejected_mapping_string_field(
     source: str,
     mapping_name: str,
@@ -1337,6 +1557,18 @@ def _ts_rejected_pack_boolean_field(source: str, field_name: str) -> bool:
     return match.group(1) == "true"
 
 
+def _ts_rejected_optional_pack_boolean_field(source: str, field_name: str) -> bool:
+    variable = f"pack.{field_name}"
+    condition = _ts_condition_for_error(source, "must stay operator visible")
+    undefined_check = f"{variable} !== undefined"
+    match = re.search(rf"\b{re.escape(variable)}\s*!==\s*(true|false)", condition)
+    if undefined_check not in condition or match is None:
+        raise AssertionError(
+            f"operator UI pack field {field_name} optional boolean rejection is not discoverable"
+        )
+    return match.group(1) == "true"
+
+
 def _ts_forbidden_defined_pack_fields(source: str, error_message: str) -> frozenset[str]:
     condition = _ts_condition_for_error(source, error_message)
     fields = frozenset(
@@ -1347,6 +1579,22 @@ def _ts_forbidden_defined_pack_fields(source: str, error_message: str) -> frozen
             f"operator UI forbidden pack fields for {error_message} are not discoverable"
         )
     return fields
+
+
+def _ts_recognized_fields_rejection(source: str) -> frozenset[str]:
+    try:
+        condition = _ts_condition_for_error(source, "unexpected evidence-pack fields")
+        _require_substrings(
+            condition,
+            (
+                "Object.keys(pack).some(",
+                "(fieldName) => !EVIDENCE_PACK_RECOGNIZED_FIELDS.has(fieldName)",
+            ),
+            "operator UI recognized-field rejection",
+        )
+    except AssertionError as exc:
+        raise AssertionError("operator UI recognized-field rejection drift") from exc
+    return _ts_set_with_spreads(source, "EVIDENCE_PACK_RECOGNIZED_FIELDS")
 
 
 def _ts_forbidden_projection_sources_rejection(source: str) -> frozenset[str]:
