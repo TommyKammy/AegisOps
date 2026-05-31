@@ -64,6 +64,7 @@ Canonical cross-phase boundary reference:
 - [Phase 61.8 closeout evaluation](docs/phase-61-closeout-evaluation.md) records the Minimum SIEM Replacement Breadth outcomes, subordinate authority posture, verifier evidence, accepted limitations, and bounded Phase 62/66 handoff.
 - [Phase 62.8 closeout evaluation](docs/phase-62-closeout-evaluation.md) records the Minimum SOAR Replacement Breadth outcomes, subordinate authority posture, verifier evidence, accepted limitations, and bounded Phase 63/66 handoff.
 - [Phase 63.8 closeout evaluation](docs/phase-63-closeout-evaluation.md) records the Evidence Expansion v1 outcomes, subordinate authority posture, verifier evidence, issue-lint evidence, accepted limitations, and bounded Phase 66 handoff.
+- [Phase 64.5 Phase 66 limitation handoff](docs/phase-64-5-phase66-limitation-handoff.md) records Phase 64 limitation ownership evidence that Phase 66 may consume as subordinate RC proof input without satisfying RC gates by itself.
 - [Phase 58.5 upgrade and rollback plan contract](docs/phase-58-5-upgrade-rollback-plan-contract.md) defines reviewed upgrade-plan and rollback-plan evidence fields, failure states, and authority boundaries without implementing live upgrade or rollback execution.
 - [Phase 53.2 Wazuh certificate and credential contract](docs/deployment/wazuh-certificate-credential-contract.md) defines certificate generation-wrapper posture, credential custody, default-credential rejection, rotation guidance, and no-live-secret validation for the Wazuh profile.
 - [Phase 53.3 Wazuh intake binding contract](docs/deployment/wazuh-manager-intake-binding-contract.md) defines the manager-to-AegisOps intake URL, reviewed proxy route, shared-secret custody reference, provenance fields, and analytic-signal admission boundary for Wazuh-origin events.
@@ -170,6 +171,8 @@ The Phase 61.8 closeout evaluation is defined by the [Phase 61.8 closeout evalua
 The Phase 62.8 closeout evaluation is defined by the [Phase 62.8 closeout evaluation](docs/phase-62-closeout-evaluation.md).
 
 The Phase 63.8 closeout evaluation is defined by the [Phase 63.8 closeout evaluation](docs/phase-63-closeout-evaluation.md).
+
+The Phase 64.5 Phase 66 limitation handoff is defined by the [Phase 64.5 Phase 66 limitation handoff](docs/phase-64-5-phase66-limitation-handoff.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
