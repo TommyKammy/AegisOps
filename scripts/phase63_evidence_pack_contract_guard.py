@@ -30,6 +30,17 @@ _AUTHORITY_TRUTH_DENIALS = frozenset(
         "workflow_truth",
     }
 )
+_AI_GROUNDING_SINGLETON_LABEL_FIELDS = MappingProxyType(
+    {
+        "custody_state": "custody_state",
+        "provenance_state": "provenance_state",
+        "confidence_state": "confidence_state",
+    }
+)
+_BACKEND_NO_WORKFLOW_AUTHORITY_TARGETS = (
+    ("subscript", "typed_values", "workflow_authority"),
+    ("optional", "confidence", "source_native_score_authority"),
+)
 
 
 @dataclass(frozen=True)
@@ -203,6 +214,14 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
 
     source_id = inspection_projection._EVIDENCE_PACK_SUPPORTED_SOURCE_ID
     registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id]
+    validator_source = (
+        repo_root
+        / "control-plane"
+        / "aegisops"
+        / "control_plane"
+        / "inspection"
+        / "evidence_pack_projection.py"
+    ).read_text(encoding="utf-8")
     labels = {
         key: frozenset(
             inspection_projection._EVIDENCE_PACK_ALLOWED_PROJECTION_LABELS[key]
@@ -233,7 +252,9 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
         subordinate_authority_posture=(
             inspection_projection._EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE
         ),
-        no_workflow_authority=source_projection._NO_WORKFLOW_AUTHORITY,
+        no_workflow_authority=_backend_no_workflow_authority_rejection(
+            validator_source
+        ),
         confidence_posture=registry_entry.confidence_posture,
         freshness_window_seconds=source_projection._parse_duration_seconds(
             registry_entry.freshness_window
@@ -263,13 +284,25 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
         raise AssertionError("AI grounding source IDs must stay explicit")
     source_id = next(iter(source_ids))
     registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY[source_id]
+    validator_source = (
+        repo_root
+        / "control-plane"
+        / "aegisops"
+        / "control_plane"
+        / "assistant"
+        / "ai_grounding_validation.py"
+    ).read_text(encoding="utf-8")
+    singleton_labels = _py_projection_get_string_rejection_labels(
+        validator_source,
+        _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
+    )
     labels = {
         "consumer": frozenset({"ai_grounding"}),
         "status": frozenset(ai_grounding_validation._ALLOWED_STATUS),
         "freshness_state": frozenset(ai_grounding_validation._ALLOWED_FRESHNESS),
-        "custody_state": frozenset({"complete"}),
-        "confidence_state": frozenset({"present"}),
-        "provenance_state": frozenset({"bound"}),
+        "custody_state": singleton_labels["custody_state"],
+        "confidence_state": singleton_labels["confidence_state"],
+        "provenance_state": singleton_labels["provenance_state"],
         "conflict_state": frozenset(ai_grounding_validation._ALLOWED_CONFLICT),
         "source_state": frozenset(ai_grounding_validation._ALLOWED_SOURCE_STATE),
         "uncertainty_label": frozenset(ai_grounding_validation._ALLOWED_UNCERTAINTY),
@@ -301,7 +334,11 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
         ),
         forbidden_projection_sources=frozenset(),
         forbidden_readiness_claim_fields=frozenset(),
-        authority_truth_denials=frozenset(ai_grounding_validation._NEGATIVE_AUTHORITY),
+        authority_truth_denials=frozenset(
+            authority
+            for authority in _AUTHORITY_TRUTH_DENIALS
+            if ai_grounding_validation._scan_for_authority_claim(authority)
+        ),
     )
 
 
@@ -384,6 +421,100 @@ def _ts_allowed_labels(source: str) -> dict[str, frozenset[str]]:
             re.S,
         )
     }
+
+
+def _backend_no_workflow_authority_rejection(source: str) -> str:
+    values = frozenset(
+        value
+        for target in _BACKEND_NO_WORKFLOW_AUTHORITY_TARGETS
+        for value in _py_rejected_string_values(source, target)
+    )
+    if len(values) != 1:
+        raise AssertionError(
+            "backend workflow authority rejection is not consistently discoverable"
+        )
+    return next(iter(values))
+
+
+def _py_projection_get_string_rejection_labels(
+    source: str,
+    label_fields: Mapping[str, str],
+) -> dict[str, frozenset[str]]:
+    labels: dict[str, frozenset[str]] = {}
+    for label_key, field_name in label_fields.items():
+        values = _py_rejected_string_values(source, ("get", "projection", field_name))
+        if len(values) != 1:
+            raise AssertionError(
+                f"Python projection label {field_name} rejection is not singleton"
+            )
+        labels[label_key] = values
+    return labels
+
+
+def _py_rejected_string_values(
+    source: str,
+    target: tuple[str, str, str],
+) -> frozenset[str]:
+    values: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Compare):
+            continue
+        if len(node.ops) != 1 or not isinstance(node.ops[0], ast.NotEq):
+            continue
+        if len(node.comparators) != 1:
+            continue
+        compared_value = _py_string_constant(node.comparators[0])
+        if compared_value is None:
+            continue
+        if _py_rejection_target(node.left) == target:
+            values.add(compared_value)
+    if not values:
+        _, mapping_name, field_name = target
+        raise AssertionError(
+            f"Python string rejection for {mapping_name}.{field_name} is not discoverable"
+        )
+    return frozenset(values)
+
+
+def _py_rejection_target(node: ast.AST) -> tuple[str, str, str] | None:
+    if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
+        field_name = _py_subscript_key(node.slice)
+        if field_name is not None:
+            return ("subscript", node.value.id, field_name)
+    if isinstance(node, ast.Call):
+        if (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and isinstance(node.func.value, ast.Name)
+            and node.args
+        ):
+            field_name = _py_string_constant(node.args[0])
+            if field_name is not None:
+                return ("get", node.func.value.id, field_name)
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "_optional_string_from_mapping"
+            and len(node.args) >= 2
+            and isinstance(node.args[0], ast.Name)
+        ):
+            field_name = _py_string_constant(node.args[1])
+            if field_name is not None:
+                return ("optional", node.args[0].id, field_name)
+    return None
+
+
+def _py_subscript_key(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Index):
+        node = node.value
+    return _py_string_constant(node)
+
+
+def _py_string_constant(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Str):
+        return node.s
+    return None
 
 
 def _ts_set(source: str, name: str) -> frozenset[str]:

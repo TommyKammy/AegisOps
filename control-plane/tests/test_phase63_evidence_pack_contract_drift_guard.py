@@ -3,18 +3,24 @@ from __future__ import annotations
 import pathlib
 import sys
 import unittest
+from unittest import mock
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 CONTROL_PLANE_ROOT = TESTS_ROOT.parent
 REPO_ROOT = CONTROL_PLANE_ROOT.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+if str(CONTROL_PLANE_ROOT) not in sys.path:
+    sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 from scripts.phase63_evidence_pack_contract_guard import (  # noqa: E402
     assert_phase63_evidence_pack_contract_aligned,
     contract_with_drift,
     contract_with_label_drift,
     load_phase63_evidence_pack_contracts,
+    _backend_no_workflow_authority_rejection,
+    _py_projection_get_string_rejection_labels,
+    _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
     _ts_forbidden_defined_pack_fields,
     _ts_rejected_pack_string_field,
 )
@@ -27,6 +33,22 @@ OPERATOR_UI_VALIDATOR = (
     / "src"
     / "operatorDataProvider"
     / "linkedEvidencePackValidator.ts"
+)
+BACKEND_EVIDENCE_PACK_PROJECTION = (
+    REPO_ROOT
+    / "control-plane"
+    / "aegisops"
+    / "control_plane"
+    / "inspection"
+    / "evidence_pack_projection.py"
+)
+AI_GROUNDING_VALIDATOR = (
+    REPO_ROOT
+    / "control-plane"
+    / "aegisops"
+    / "control_plane"
+    / "assistant"
+    / "ai_grounding_validation.py"
 )
 
 
@@ -231,6 +253,62 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
             ),
             frozenset({"release_readiness_claim", "rc_readiness_claim"}),
         )
+
+    def test_backend_authority_parser_observes_representative_drift(self) -> None:
+        source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
+        self.assertEqual(_backend_no_workflow_authority_rejection(source), "none")
+
+        drifted_source = source.replace(
+            'typed_values["workflow_authority"] != "none"',
+            'typed_values["workflow_authority"] != "advisory_only"',
+        )
+        with self.assertRaisesRegex(AssertionError, "backend workflow authority"):
+            _backend_no_workflow_authority_rejection(drifted_source)
+
+    def test_ai_singleton_label_parser_observes_representative_drift(self) -> None:
+        source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
+        self.assertEqual(
+            _py_projection_get_string_rejection_labels(
+                source,
+                _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
+            ),
+            {
+                "custody_state": frozenset({"complete"}),
+                "provenance_state": frozenset({"bound"}),
+                "confidence_state": frozenset({"present"}),
+            },
+        )
+
+        drifted_source = source.replace(
+            'projection.get("custody_state") != "complete"',
+            'projection.get("custody_state") != "reviewed"',
+        )
+        self.assertEqual(
+            _py_projection_get_string_rejection_labels(
+                drifted_source,
+                _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
+            )["custody_state"],
+            frozenset({"reviewed"}),
+        )
+
+    def test_ai_authority_truth_denials_follow_scanner(self) -> None:
+        from aegisops.control_plane.assistant import ai_grounding_validation
+
+        original_scanner = ai_grounding_validation._scan_for_authority_claim
+
+        def scanner_with_gap(value: object) -> bool:
+            if value == "readiness_truth":
+                return False
+            return original_scanner(value)
+
+        with mock.patch.object(
+            ai_grounding_validation,
+            "_scan_for_authority_claim",
+            side_effect=scanner_with_gap,
+        ):
+            _, _, ai = load_phase63_evidence_pack_contracts(REPO_ROOT)
+
+        self.assertNotIn("readiness_truth", ai.authority_truth_denials)
 
 
 if __name__ == "__main__":
