@@ -16,6 +16,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from scripts import phase63_evidence_pack_contract_guard as contract_guard  # noqa: E402
 from scripts.phase63_evidence_pack_contract_guard import (  # noqa: E402
+    _AI_GROUNDING_ALLOWED_LABEL_FIELDS,
     _ai_confidence_posture_rejection,
     _ai_no_workflow_authority_rejection,
     assert_phase63_evidence_pack_contract_aligned,
@@ -24,16 +25,22 @@ from scripts.phase63_evidence_pack_contract_guard import (  # noqa: E402
     load_phase63_evidence_pack_contracts,
     _backend_no_workflow_authority_rejection,
     _backend_confidence_posture_rejection,
+    _py_ai_state_reason_consistency_rules,
+    _py_backend_state_reason_consistency_rules,
     _py_enforced_metadata_fields,
     _py_projection_get_string_rejection_labels,
+    _py_projection_get_membership_labels,
     _py_rejected_boolean_value,
     _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
+    _ts_enforced_freshness_window_milliseconds,
     _operator_ui_contract_from_source,
     _py_string_constant,
     _ts_forbidden_defined_pack_fields,
     _ts_no_workflow_authority_rejection,
+    _ts_rejected_mapping_string_field,
     _ts_rejected_pack_boolean_field,
     _ts_rejected_pack_string_field,
+    _ts_state_reason_consistency_rules,
 )
 
 
@@ -228,6 +235,18 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                 },
                 "authoritative workflow truth denial",
             ),
+            (
+                "state reason consistency",
+                {
+                    "operator_ui_contract": contract_with_drift(
+                        ui,
+                        "state_reason_consistency_rules",
+                        ui.state_reason_consistency_rules
+                        - frozenset({"uncertainty_label_matches_state"}),
+                    )
+                },
+                "state/reason consistency rules",
+            ),
         )
 
         for label, overrides, expected_message in mismatch_cases:
@@ -313,6 +332,47 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
             ).freshness_window_milliseconds,
             21600500,
         )
+
+    def test_operator_ui_freshness_window_requires_validator_call(self) -> None:
+        source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+        drifted_source = source.replace(
+            "    validateEvidencePackFreshnessWindow(\n"
+            "      custody,\n"
+            "      freshnessState,\n"
+            "      evidenceRequestId,\n"
+            "    );\n",
+            "",
+        )
+
+        with self.assertRaisesRegex(AssertionError, "FreshnessWindow"):
+            _ts_enforced_freshness_window_milliseconds(drifted_source)
+
+    def test_operator_ui_confidence_posture_uses_validator_check(self) -> None:
+        source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+        self.assertEqual(
+            _ts_rejected_mapping_string_field(source, "confidence", "posture"),
+            "external_hash_reputation_subordinate_context",
+        )
+
+        literal_drift = source.replace(
+            "asString(confidence.posture) !== EVIDENCE_PACK_CONFIDENCE_POSTURE",
+            'asString(confidence.posture) !== "workflow_truth_confidence"',
+        )
+        self.assertEqual(
+            _ts_rejected_mapping_string_field(literal_drift, "confidence", "posture"),
+            "workflow_truth_confidence",
+        )
+
+        missing_check = source.replace(
+            "    if (asString(confidence.posture) !== EVIDENCE_PACK_CONFIDENCE_POSTURE) {\n"
+            "      throw new OperatorDataProviderContractError(\n"
+            "        `Resource cases linked_evidence_packs item ${evidenceRequestId} has an unsupported confidence posture.`,\n"
+            "      );\n"
+            "    }\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "confidence.posture"):
+            _ts_rejected_mapping_string_field(missing_check, "confidence", "posture")
 
     def test_operator_ui_label_contract_requires_enforcement_calls(self) -> None:
         source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
@@ -416,6 +476,7 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                 _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
             ),
             {
+                "consumer": frozenset({"ai_grounding"}),
                 "custody_state": frozenset({"complete"}),
                 "provenance_state": frozenset({"bound"}),
                 "confidence_state": frozenset({"present"}),
@@ -433,6 +494,42 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
             )["custody_state"],
             frozenset({"reviewed"}),
         )
+
+    def test_ai_allowed_label_parser_observes_representative_drift(self) -> None:
+        from aegisops.control_plane.assistant import ai_grounding_validation
+
+        source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
+        self.assertEqual(
+            _py_projection_get_membership_labels(
+                source,
+                _AI_GROUNDING_ALLOWED_LABEL_FIELDS,
+                ai_grounding_validation,
+            )["status"],
+            ai_grounding_validation._ALLOWED_STATUS,
+        )
+
+        missing_check = source.replace(
+            '    if projection.get("status") not in _ALLOWED_STATUS:\n'
+            '        reasons.append("unsupported_grounding_status")\n',
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "status"):
+            _py_projection_get_membership_labels(
+                missing_check,
+                _AI_GROUNDING_ALLOWED_LABEL_FIELDS,
+                ai_grounding_validation,
+            )
+
+        wrong_constant = source.replace(
+            'projection.get("status") not in _ALLOWED_STATUS',
+            'projection.get("status") not in _ALLOWED_FRESHNESS',
+        )
+        with self.assertRaisesRegex(AssertionError, "unexpected constant"):
+            _py_projection_get_membership_labels(
+                wrong_constant,
+                _AI_GROUNDING_ALLOWED_LABEL_FIELDS,
+                ai_grounding_validation,
+            )
 
     def test_ai_no_workflow_authority_parser_observes_representative_drift(
         self,
@@ -497,19 +594,25 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
         )
 
         drifted_namespace = SimpleNamespace(
+            _REQUIRED_CUSTODY_FIELDS=ai_grounding_validation._REQUIRED_CUSTODY_FIELDS,
+            _REQUIRED_PROVENANCE_FIELDS=(
+                ai_grounding_validation._REQUIRED_PROVENANCE_FIELDS
+            ),
+            _REQUIRED_CONFIDENCE_FIELDS=(
+                tuple(
+                    field
+                    for field in ai_grounding_validation._REQUIRED_CONFIDENCE_FIELDS
+                    if field != "ambiguity_badge"
+                )
+            ),
             _ALLOWED_CUSTODY_FIELDS=ai_grounding_validation._ALLOWED_CUSTODY_FIELDS,
             _ALLOWED_PROVENANCE_FIELDS=(
                 ai_grounding_validation._ALLOWED_PROVENANCE_FIELDS
             ),
-            _ALLOWED_CONFIDENCE_FIELDS=(
-                ai_grounding_validation._ALLOWED_CONFIDENCE_FIELDS
-                - frozenset({"ambiguity_badge"})
-            ),
+            _ALLOWED_CONFIDENCE_FIELDS=ai_grounding_validation._ALLOWED_CONFIDENCE_FIELDS,
         )
-        self.assertNotEqual(
-            _py_enforced_metadata_fields(source, drifted_namespace)["confidence"],
-            ai_grounding_validation._REQUIRED_CONFIDENCE_FIELDS,
-        )
+        with self.assertRaisesRegex(AssertionError, "metadata enforcement"):
+            _py_enforced_metadata_fields(source, drifted_namespace)
 
     def test_workflow_truth_boolean_rejections_are_parsed(self) -> None:
         backend_source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
@@ -564,6 +667,51 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
             _, _, ai = load_phase63_evidence_pack_contracts(REPO_ROOT)
 
         self.assertNotIn("readiness_truth", ai.authority_truth_denials)
+
+    def test_state_reason_consistency_rules_are_loaded_from_validators(self) -> None:
+        backend_source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
+        ai_source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
+        ui_source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "uncertainty_label_matches_state",
+            _py_backend_state_reason_consistency_rules(backend_source),
+        )
+        self.assertIn(
+            "available_status_has_no_reasons",
+            _py_ai_state_reason_consistency_rules(ai_source),
+        )
+        self.assertIn(
+            "confidence_ambiguity_badge_matches_conflict",
+            _ts_state_reason_consistency_rules(ui_source),
+        )
+
+        backend_drift = backend_source.replace(
+            'values["status"] == "available"',
+            'values["status"] == "ready"',
+        )
+        with self.assertRaisesRegex(AssertionError, "state/reason"):
+            _py_backend_state_reason_consistency_rules(backend_drift)
+
+        ai_drift = ai_source.replace(
+            "    reasons.extend(_state_consistency_reasons(projection))\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "state/reason"):
+            _py_ai_state_reason_consistency_rules(ai_drift)
+
+        ui_drift = ui_source.replace(
+            "    validateEvidencePackReasonConsistency(pack, confidence, {\n"
+            "      status,\n"
+            "      freshnessState,\n"
+            "      conflictState,\n"
+            "      sourceState,\n"
+            "      uncertaintyLabel,\n"
+            "    });\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "ReasonConsistency"):
+            _ts_state_reason_consistency_rules(ui_drift)
 
     def test_python_string_constant_does_not_require_legacy_ast_str(self) -> None:
         legacy_ast_str = getattr(contract_guard.ast, "Str", None)

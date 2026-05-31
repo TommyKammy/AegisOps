@@ -32,14 +32,37 @@ _AUTHORITY_TRUTH_DENIALS = frozenset(
 )
 _AI_GROUNDING_SINGLETON_LABEL_FIELDS = MappingProxyType(
     {
+        "consumer": "consumer",
         "custody_state": "custody_state",
         "provenance_state": "provenance_state",
         "confidence_state": "confidence_state",
     }
 )
+_AI_GROUNDING_ALLOWED_LABEL_FIELDS = MappingProxyType(
+    {
+        "status": ("status", "_ALLOWED_STATUS"),
+        "freshness_state": ("freshness_state", "_ALLOWED_FRESHNESS"),
+        "conflict_state": ("conflict_state", "_ALLOWED_CONFLICT"),
+        "source_state": ("source_state", "_ALLOWED_SOURCE_STATE"),
+        "uncertainty_label": ("uncertainty_label", "_ALLOWED_UNCERTAINTY"),
+    }
+)
 _BACKEND_NO_WORKFLOW_AUTHORITY_TARGETS = (
     ("subscript", "typed_values", "workflow_authority"),
     ("optional", "confidence", "source_native_score_authority"),
+)
+_STATE_REASON_CONSISTENCY_RULES = frozenset(
+    {
+        "available_status_has_no_reasons",
+        "degraded_status_has_degraded_reasons_only",
+        "unavailable_status_has_unavailable_reasons",
+        "freshness_state_matches_stale_reputation",
+        "conflict_state_matches_conflicting_enrichment",
+        "source_state_matches_availability_reasons",
+        "uncertainty_label_matches_state",
+        "confidence_freshness_matches_freshness_state",
+        "confidence_ambiguity_badge_matches_conflict",
+    }
 )
 
 
@@ -59,6 +82,7 @@ class Phase63EvidencePackContract:
     authoritative_workflow_truth: bool
     confidence_posture: str
     freshness_window_milliseconds: int
+    state_reason_consistency_rules: frozenset[str]
     forbidden_projection_sources: frozenset[str]
     forbidden_readiness_claim_fields: frozenset[str]
     authority_truth_denials: frozenset[str]
@@ -142,6 +166,13 @@ def assert_phase63_evidence_pack_contract_aligned(
         backend.freshness_window_milliseconds,
         ui.freshness_window_milliseconds,
         ai.freshness_window_milliseconds,
+    )
+    _assert_equal(
+        "state/reason consistency rules",
+        backend.state_reason_consistency_rules,
+        ui.state_reason_consistency_rules,
+        ai.state_reason_consistency_rules,
+        _STATE_REASON_CONSISTENCY_RULES,
     )
     _assert_equal(
         "subordinate authority posture",
@@ -279,6 +310,9 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
             source_projection._parse_duration_seconds(registry_entry.freshness_window)
             * 1000
         ),
+        state_reason_consistency_rules=_py_backend_state_reason_consistency_rules(
+            validator_source
+        ),
         forbidden_projection_sources=frozenset(
             inspection_projection._EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES
         ),
@@ -316,20 +350,25 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
         validator_source,
         _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
     )
+    membership_labels = _py_projection_get_membership_labels(
+        validator_source,
+        _AI_GROUNDING_ALLOWED_LABEL_FIELDS,
+        ai_grounding_validation,
+    )
     metadata_fields = _py_enforced_metadata_fields(
         validator_source,
         ai_grounding_validation,
     )
     labels = {
-        "consumer": frozenset({"ai_grounding"}),
-        "status": frozenset(ai_grounding_validation._ALLOWED_STATUS),
-        "freshness_state": frozenset(ai_grounding_validation._ALLOWED_FRESHNESS),
+        "consumer": singleton_labels["consumer"],
+        "status": membership_labels["status"],
+        "freshness_state": membership_labels["freshness_state"],
         "custody_state": singleton_labels["custody_state"],
         "confidence_state": singleton_labels["confidence_state"],
         "provenance_state": singleton_labels["provenance_state"],
-        "conflict_state": frozenset(ai_grounding_validation._ALLOWED_CONFLICT),
-        "source_state": frozenset(ai_grounding_validation._ALLOWED_SOURCE_STATE),
-        "uncertainty_label": frozenset(ai_grounding_validation._ALLOWED_UNCERTAINTY),
+        "conflict_state": membership_labels["conflict_state"],
+        "source_state": membership_labels["source_state"],
+        "uncertainty_label": membership_labels["uncertainty_label"],
     }
     return Phase63EvidencePackContract(
         labels=MappingProxyType(labels),
@@ -361,6 +400,9 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
             source_projection._parse_duration_seconds(registry_entry.freshness_window)
             * 1000
         ),
+        state_reason_consistency_rules=_py_ai_state_reason_consistency_rules(
+            validator_source
+        ),
         forbidden_projection_sources=frozenset(),
         forbidden_readiness_claim_fields=frozenset(),
         authority_truth_denials=frozenset(
@@ -385,10 +427,6 @@ def _operator_ui_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContrac
 
 def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContract:
     labels = _ts_allowed_labels(source)
-    freshness_window_ms = _ts_number_expression(
-        source,
-        "EVIDENCE_PACK_FRESHNESS_WINDOW_MS",
-    )
     metadata_fields = _ts_enforced_metadata_fields(source)
     reason_sets = _ts_enforced_reason_sets(source)
     return Phase63EvidencePackContract(
@@ -415,11 +453,15 @@ def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContrac
             source,
             "authoritative_workflow_truth",
         ),
-        confidence_posture=_ts_string_constant(
+        confidence_posture=_ts_rejected_mapping_string_field(
             source,
-            "EVIDENCE_PACK_CONFIDENCE_POSTURE",
+            "confidence",
+            "posture",
         ),
-        freshness_window_milliseconds=freshness_window_ms,
+        freshness_window_milliseconds=_ts_enforced_freshness_window_milliseconds(
+            source
+        ),
+        state_reason_consistency_rules=_ts_state_reason_consistency_rules(source),
         forbidden_projection_sources=_ts_set(
             source,
             "EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES",
@@ -696,31 +738,68 @@ def _py_projection_get_string_rejection_labels(
     return labels
 
 
+def _py_projection_get_membership_labels(
+    source: str,
+    label_fields: Mapping[str, tuple[str, str]],
+    namespace: object,
+) -> dict[str, frozenset[str]]:
+    labels: dict[str, frozenset[str]] = {}
+    for label_key, (field_name, constant_name) in label_fields.items():
+        values = _py_rejected_membership_values(
+            source,
+            ("get", "projection", field_name),
+            constant_name,
+            namespace,
+        )
+        if not values:
+            raise AssertionError(
+                f"Python projection label {field_name} membership check is not discoverable"
+            )
+        labels[label_key] = values
+    return labels
+
+
 def _py_enforced_metadata_fields(
     source: str,
     namespace: object,
 ) -> dict[str, frozenset[str]]:
-    fields: dict[str, frozenset[str]] = {}
+    required_fields: dict[str, frozenset[str]] = {}
+    allowed_fields: dict[str, frozenset[str]] = {}
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, ast.Call):
             continue
         if not isinstance(node.func, ast.Name):
             continue
-        if node.func.id != "_metadata_contract_reasons" or len(node.args) < 2:
-            continue
-        value_argument = node.args[0]
-        allowed_argument = node.args[1]
-        if not isinstance(value_argument, ast.Name):
-            continue
-        if not isinstance(allowed_argument, ast.Name):
-            continue
-        if value_argument.id not in {"custody", "provenance", "confidence"}:
-            continue
-        fields[value_argument.id] = frozenset(getattr(namespace, allowed_argument.id))
+        if node.func.id == "_mapping_has_non_empty_fields" and len(node.args) >= 2:
+            value_argument = node.args[0]
+            required_argument = node.args[1]
+            if (
+                isinstance(value_argument, ast.Name)
+                and value_argument.id in {"custody", "provenance", "confidence"}
+                and isinstance(required_argument, ast.Name)
+            ):
+                required_fields[value_argument.id] = frozenset(
+                    getattr(namespace, required_argument.id)
+                )
+        if node.func.id == "_metadata_contract_reasons" and len(node.args) >= 2:
+            value_argument = node.args[0]
+            allowed_argument = node.args[1]
+            if (
+                isinstance(value_argument, ast.Name)
+                and value_argument.id in {"custody", "provenance", "confidence"}
+                and isinstance(allowed_argument, ast.Name)
+            ):
+                allowed_fields[value_argument.id] = frozenset(
+                    getattr(namespace, allowed_argument.id)
+                )
     expected_fields = frozenset({"custody", "provenance", "confidence"})
-    if frozenset(fields) != expected_fields:
+    if (
+        frozenset(required_fields) != expected_fields
+        or frozenset(allowed_fields) != expected_fields
+        or required_fields != allowed_fields
+    ):
         raise AssertionError("AI grounding metadata enforcement drift")
-    return fields
+    return required_fields
 
 
 def _py_rejected_string_values(
@@ -745,6 +824,40 @@ def _py_rejected_string_values(
         _, mapping_name, field_name = target
         raise AssertionError(
             f"Python string rejection for {mapping_name}.{field_name} is not discoverable"
+        )
+    return frozenset(values)
+
+
+def _py_rejected_membership_values(
+    source: str,
+    target: tuple[str, str, str],
+    expected_constant_name: str,
+    namespace: object,
+) -> frozenset[str]:
+    values: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Compare):
+            continue
+        if len(node.ops) != 1 or not isinstance(node.ops[0], ast.NotIn):
+            continue
+        if len(node.comparators) != 1:
+            continue
+        if _py_rejection_target(node.left) != target:
+            continue
+        comparator = node.comparators[0]
+        if not isinstance(comparator, ast.Name):
+            continue
+        if comparator.id != expected_constant_name:
+            raise AssertionError(
+                f"Python membership rejection for {target[1]}.{target[2]} "
+                "uses an unexpected constant"
+            )
+        values.update(getattr(namespace, comparator.id))
+    if not values:
+        _, mapping_name, field_name = target
+        raise AssertionError(
+            f"Python membership rejection for {mapping_name}.{field_name} "
+            "is not discoverable"
         )
     return frozenset(values)
 
@@ -847,6 +960,131 @@ def _py_source_string_constants(source: str) -> Mapping[str, str]:
     return constants
 
 
+def _py_backend_state_reason_consistency_rules(source: str) -> frozenset[str]:
+    body = _py_function_source(source, "_validate_linked_evidence_pack_reason_consistency")
+    call_source = _py_function_source(source, "_validated_linked_evidence_pack_projection")
+    _require_substrings(
+        call_source,
+        ("_validate_linked_evidence_pack_reason_consistency(",),
+        "backend state/reason consistency call",
+    )
+    return _state_reason_consistency_rules_from_requirements(
+        {
+            "available_status_has_no_reasons": (
+                'values["status"] == "available"',
+                "degraded_reasons or unavailable_reasons",
+            ),
+            "degraded_status_has_degraded_reasons_only": (
+                'values["status"] == "degraded"',
+                "not degraded_reasons or unavailable_reasons",
+            ),
+            "unavailable_status_has_unavailable_reasons": (
+                'values["status"] == "unavailable"',
+                "not unavailable_reasons",
+            ),
+            "freshness_state_matches_stale_reputation": (
+                '"stale_reputation" in degraded_reasons',
+                'values["freshness_state"] == "stale"',
+            ),
+            "conflict_state_matches_conflicting_enrichment": (
+                "expected_conflict_state =",
+                '"conflicting" if "conflicting_enrichment" in degraded_reasons else "none"',
+            ),
+            "source_state_matches_availability_reasons": (
+                "expected_source_state =",
+                '"source_stale" in degraded_reasons',
+            ),
+            "uncertainty_label_matches_state": (
+                '_linked_evidence_pack_expected_uncertainty_label(',
+                '"uncertainty_label"',
+            ),
+            "confidence_freshness_matches_freshness_state": (
+                '"freshness",',
+                'values["freshness_state"]',
+            ),
+            "confidence_ambiguity_badge_matches_conflict": (
+                '"ambiguity_badge",',
+                '"unresolved"',
+                '"related-entity"',
+            ),
+        },
+        body,
+        "backend state/reason consistency",
+    )
+
+
+def _py_ai_state_reason_consistency_rules(source: str) -> frozenset[str]:
+    projection_body = _py_function_source(source, "_projection_reasons")
+    state_body = _py_function_source(source, "_state_consistency_reasons")
+    uncertainty_body = _py_function_source(source, "_expected_uncertainty_label")
+    _require_substrings(
+        projection_body,
+        (
+            "reasons.extend(_uncertainty_state_reasons(projection))",
+            "reasons.extend(_state_consistency_reasons(projection))",
+        ),
+        "AI state/reason consistency calls",
+    )
+    combined = state_body + "\n" + uncertainty_body
+    return _state_reason_consistency_rules_from_requirements(
+        {
+            "available_status_has_no_reasons": (
+                'status == "available"',
+                "bool(degraded_reasons)",
+                "bool(unavailable_reasons)",
+            ),
+            "degraded_status_has_degraded_reasons_only": (
+                'status == "degraded"',
+                "not degraded_reasons",
+                "bool(unavailable_reasons)",
+            ),
+            "unavailable_status_has_unavailable_reasons": (
+                'status == "unavailable"',
+                "not unavailable_reasons",
+            ),
+            "freshness_state_matches_stale_reputation": (
+                'freshness_state == "stale"',
+                '"stale_reputation" not in degraded_reasons',
+            ),
+            "conflict_state_matches_conflicting_enrichment": (
+                'conflict_state == "conflicting"',
+                '"conflicting_enrichment" not in degraded_reasons',
+            ),
+            "source_state_matches_availability_reasons": (
+                'source_state == "unavailable"',
+                'source_state == "degraded"',
+                '"source_stale" not in degraded_reasons',
+            ),
+            "uncertainty_label_matches_state": (
+                'return "source_unavailable"',
+                'return "unresolved_conflict"',
+                'return "stale_review_required"',
+                'return "related_entity_not_authoritative"',
+            ),
+            "confidence_freshness_matches_freshness_state": (
+                'confidence.get("freshness") != freshness_state',
+            ),
+            "confidence_ambiguity_badge_matches_conflict": (
+                "expected_badge =",
+                '"unresolved"',
+                '"related-entity"',
+            ),
+        },
+        combined,
+        "AI state/reason consistency",
+    )
+
+
+def _py_function_source(source: str, function_name: str) -> str:
+    pattern = rf"^def {re.escape(function_name)}\("
+    match = re.search(pattern, source, re.M)
+    if match is None:
+        raise AssertionError(f"Python function {function_name} is not discoverable")
+    next_match = re.search(r"^def \w+\(", source[match.end() :], re.M)
+    end = len(source) if next_match is None else match.end() + next_match.start()
+    return source[match.start() : end]
+
+
 def _ts_set(source: str, name: str) -> frozenset[str]:
     match = re.search(
         rf"const {re.escape(name)} = new Set\(\[(?P<body>.*?)\]\);",
@@ -899,6 +1137,87 @@ def _ts_number_expression(source: str, name: str) -> int:
     return _safe_integer_expression(expression)
 
 
+def _ts_enforced_freshness_window_milliseconds(source: str) -> int:
+    function_body = _ts_function_body(source, "validateEvidencePackFreshnessWindow")
+    _require_substrings(
+        function_body,
+        (
+            "EVIDENCE_PACK_FRESHNESS_WINDOW_MS",
+            'freshnessState === "fresh"',
+            'freshnessState === "stale"',
+        ),
+        "operator UI freshness-window enforcement",
+    )
+    _ts_require_call(
+        source,
+        "validateEvidencePackFreshnessWindow",
+        ("custody", "freshnessState", "evidenceRequestId"),
+    )
+    return _ts_number_expression(source, "EVIDENCE_PACK_FRESHNESS_WINDOW_MS")
+
+
+def _ts_state_reason_consistency_rules(source: str) -> frozenset[str]:
+    function_body = _ts_function_body(source, "validateEvidencePackReasonConsistency")
+    _ts_require_call(
+        source,
+        "validateEvidencePackReasonConsistency",
+        (
+            "pack",
+            "confidence",
+            "{\n      status,\n      freshnessState,\n      conflictState,\n      sourceState,\n      uncertaintyLabel,\n    }",
+        ),
+    )
+    return _state_reason_consistency_rules_from_requirements(
+        {
+            "available_status_has_no_reasons": (
+                'labels.status === "available"',
+                "degradedReasons.length > 0",
+                "unavailableReasons.length > 0",
+            ),
+            "degraded_status_has_degraded_reasons_only": (
+                'labels.status === "degraded"',
+                "degradedReasons.length === 0",
+                "unavailableReasons.length > 0",
+            ),
+            "unavailable_status_has_unavailable_reasons": (
+                'labels.status === "unavailable"',
+                "unavailableReasons.length === 0",
+            ),
+            "freshness_state_matches_stale_reputation": (
+                'degradedReasons.includes("stale_reputation")',
+                'labels.freshnessState === "stale"',
+            ),
+            "conflict_state_matches_conflicting_enrichment": (
+                "expectedConflictState =",
+                'degradedReasons.includes("conflicting_enrichment")',
+                '"conflicting"',
+                '"none"',
+            ),
+            "source_state_matches_availability_reasons": (
+                "expectedSourceState =",
+                'degradedReasons.includes("source_stale")',
+                '"unavailable"',
+                '"degraded"',
+                '"available"',
+            ),
+            "uncertainty_label_matches_state": (
+                "expectedEvidencePackUncertaintyLabel(",
+                "labels.uncertaintyLabel",
+            ),
+            "confidence_freshness_matches_freshness_state": (
+                "asString(confidence.freshness) !== labels.freshnessState",
+            ),
+            "confidence_ambiguity_badge_matches_conflict": (
+                "asString(confidence.ambiguity_badge)",
+                '"unresolved"',
+                '"related-entity"',
+            ),
+        },
+        function_body,
+        "operator UI state/reason consistency",
+    )
+
+
 def _ts_rejected_pack_string_field(source: str, field_name: str) -> str:
     variable_name = _ts_pack_string_variable(source, field_name)
     match = re.search(
@@ -937,7 +1256,7 @@ def _ts_rejected_mapping_string_field(
 ) -> str:
     match = re.search(
         rf"\basString\({re.escape(mapping_name)}\.{re.escape(field_name)}\)"
-        r"\s*!==\s*\"([^\"]+)\"",
+        r'\s*!==\s*(?:"([^\"]+)"|(EVIDENCE_PACK_[A-Z0-9_]+))',
         source,
     )
     if match is None:
@@ -945,7 +1264,10 @@ def _ts_rejected_mapping_string_field(
             "operator UI mapping field "
             f"{mapping_name}.{field_name} rejection is not discoverable"
         )
-    return match.group(1)
+    literal_value, constant_name = match.groups()
+    if literal_value is not None:
+        return literal_value
+    return _ts_string_constant(source, constant_name)
 
 
 def _ts_pack_string_variable(source: str, field_name: str) -> str:
@@ -1005,6 +1327,40 @@ def _ts_condition_for_error(source: str, error_message: str) -> str:
     return _extract_parenthesized(source, if_index + len("if "))
 
 
+def _ts_function_body(source: str, function_name: str) -> str:
+    match = re.search(rf"\bfunction\s+{re.escape(function_name)}\s*\(", source)
+    if match is None:
+        raise AssertionError(f"operator UI function {function_name} is not discoverable")
+    arguments_source = _extract_parenthesized(source, source.find("(", match.start()))
+    body_start = source.find("{", match.end() + len(arguments_source))
+    if body_start == -1:
+        raise AssertionError(f"operator UI function {function_name} body is not discoverable")
+    return _extract_braced(source, body_start)
+
+
+def _ts_require_call(
+    source: str,
+    function_name: str,
+    expected_arguments: tuple[str, ...],
+) -> None:
+    expected_normalized = tuple(_normalize_ts_argument(arg) for arg in expected_arguments)
+    for match in re.finditer(rf"\b{re.escape(function_name)}\s*\(", source):
+        arguments = tuple(
+            _normalize_ts_argument(argument)
+            for argument in _split_ts_arguments(
+                _extract_parenthesized(source, match.end() - 1)
+            )
+            if argument.strip()
+        )
+        if arguments == expected_normalized:
+            return
+    raise AssertionError(f"operator UI {function_name} call is not discoverable")
+
+
+def _normalize_ts_argument(argument: str) -> str:
+    return re.sub(r"\s+", " ", argument.strip())
+
+
 def _extract_parenthesized(source: str, open_index: int) -> str:
     if open_index >= len(source) or source[open_index] != "(":
         raise AssertionError("operator UI condition is not parenthesized")
@@ -1032,6 +1388,55 @@ def _extract_parenthesized(source: str, open_index: int) -> str:
             if depth == 0:
                 return source[condition_start:index]
     raise AssertionError("operator UI condition is not closed")
+
+
+def _extract_braced(source: str, open_index: int) -> str:
+    if open_index >= len(source) or source[open_index] != "{":
+        raise AssertionError("operator UI block is not braced")
+    depth = 0
+    string_quote: str | None = None
+    escaped = False
+    body_start = open_index + 1
+    for index in range(open_index, len(source)):
+        character = source[index]
+        if string_quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == string_quote:
+                string_quote = None
+            continue
+        if character in {'"', "'", "`"}:
+            string_quote = character
+            continue
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return source[body_start:index]
+    raise AssertionError("operator UI block is not closed")
+
+
+def _state_reason_consistency_rules_from_requirements(
+    requirements: Mapping[str, tuple[str, ...]],
+    source: str,
+    label: str,
+) -> frozenset[str]:
+    rules = {
+        rule_name
+        for rule_name, substrings in requirements.items()
+        if all(substring in source for substring in substrings)
+    }
+    if frozenset(rules) != _STATE_REASON_CONSISTENCY_RULES:
+        raise AssertionError(f"{label} drift")
+    return frozenset(rules)
+
+
+def _require_substrings(source: str, substrings: tuple[str, ...], label: str) -> None:
+    if not all(substring in source for substring in substrings):
+        raise AssertionError(f"{label} drift")
 
 
 def _safe_integer_expression(expression: str) -> int:
