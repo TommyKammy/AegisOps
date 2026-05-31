@@ -101,7 +101,6 @@ class Phase64LimitationOwnershipControlPlaneTests(unittest.TestCase):
             review_cadence=None,
             due_date=expired_due_date,
         )
-        _validate_record(record)
 
         projection = project_limitation_ownership_context(
             record,

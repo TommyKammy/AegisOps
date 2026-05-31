@@ -57,9 +57,20 @@ def is_phase64_record_family(record: ControlPlaneRecord) -> bool:
 
 def validate_phase64_record(record: ControlPlaneRecord) -> bool:
     if isinstance(record, KnownLimitationOwnershipRecord):
-        _validate_known_limitation_ownership_record(record)
+        validate_known_limitation_ownership_record_contract(record)
         return True
     return False
+
+
+def validate_known_limitation_ownership_record_contract(
+    record: KnownLimitationOwnershipRecord,
+) -> None:
+    if record.lifecycle_state != record.review_state:
+        raise ValueError(
+            "known_limitation_ownership record "
+            f"{record.record_id!r} requires lifecycle_state to match review_state"
+        )
+    _validate_known_limitation_ownership_record(record)
 
 
 def validate_known_limitation_current_review(
@@ -67,7 +78,7 @@ def validate_known_limitation_current_review(
     *,
     as_of: date | None = None,
 ) -> None:
-    _validate_known_limitation_ownership_record(record)
+    validate_known_limitation_ownership_record_contract(record)
     if known_limitation_review_due_date_status(record, as_of=as_of) == "expired":
         raise ValueError(
             "known_limitation_ownership record "
@@ -199,5 +210,6 @@ __all__ = [
     "known_limitation_review_due_date_status",
     "is_phase64_record_family",
     "validate_known_limitation_current_review",
+    "validate_known_limitation_ownership_record_contract",
     "validate_phase64_record",
 ]

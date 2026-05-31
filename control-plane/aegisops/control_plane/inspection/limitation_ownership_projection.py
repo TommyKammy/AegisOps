@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Mapping
 
 from ..models import KnownLimitationOwnershipRecord
-from ..record_validation import _validate_record
 from ..validation.phase64_record_validators import (
     known_limitation_review_due_date_status,
+    validate_known_limitation_ownership_record_contract,
 )
 
 
@@ -54,7 +54,7 @@ def project_limitation_ownership_context(
             "known limitation ownership projection cannot provide workflow authority"
         )
 
-    _validate_record(record)
+    validate_known_limitation_ownership_record_contract(record)
     review_due_date_status = known_limitation_review_due_date_status(record)
 
     return {
