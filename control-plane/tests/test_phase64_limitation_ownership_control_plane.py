@@ -12,11 +12,14 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 from aegisops.control_plane.inspection.limitation_ownership_projection import (  # noqa: E402
     project_limitation_ownership_context,
 )
+from aegisops.control_plane.config import RuntimeConfig  # noqa: E402
 from aegisops.control_plane.models import KnownLimitationOwnershipRecord  # noqa: E402
 from aegisops.control_plane.record_validation import _validate_record  # noqa: E402
+from aegisops.control_plane.service import AegisOpsControlPlaneService  # noqa: E402
 from aegisops.control_plane.validation.phase64_record_validators import (  # noqa: E402
     validate_known_limitation_current_review,
 )
+from postgres_test_support import make_store  # noqa: E402
 
 
 def _known_limitation_ownership_record(
@@ -128,6 +131,46 @@ class Phase64LimitationOwnershipControlPlaneTests(unittest.TestCase):
                 consumer="inspection",
                 requested_authority="release_truth",
             )
+
+    def test_service_inspects_limitation_ownership_through_backend_projection(
+        self,
+    ) -> None:
+        store, _backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        record = _known_limitation_ownership_record()
+
+        service.persist_record(record)
+
+        projection = service.inspect_limitation_ownership_detail(record.limitation_id)
+        self.assertEqual(projection["limitation_id"], record.limitation_id)
+        self.assertEqual(projection["consumer"], "inspection")
+        self.assertEqual(projection["review_cadence"], "weekly")
+        self.assertFalse(projection["readiness_truth"])
+        self.assertFalse(projection["release_truth"])
+        self.assertFalse(projection["gate_truth"])
+        self.assertFalse(projection["workflow_truth"])
+        self.assertNotIn("stale_cache", projection)
+
+    def test_service_requires_explicit_limitation_when_multiple_records_exist(
+        self,
+    ) -> None:
+        store, _backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        service.persist_record(
+            _known_limitation_ownership_record(limitation_id="limitation-001")
+        )
+        service.persist_record(
+            _known_limitation_ownership_record(limitation_id="limitation-002")
+        )
+
+        with self.assertRaisesRegex(LookupError, "explicit limitation_id"):
+            service.inspect_limitation_ownership_detail()
 
 
 if __name__ == "__main__":

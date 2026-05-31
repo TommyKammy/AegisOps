@@ -26,7 +26,6 @@ const normalLimitationOwnership = {
   review_due_date_status: "current",
   review_state: "accepted_risk",
   severity: "material",
-  stale_cache: false,
   title: "Support bundle evidence remains separately tracked.",
   affected_surface: "supportability_evidence",
   workflow_authority: "none",
@@ -105,6 +104,36 @@ export function registerOperatorRoutesLimitationOwnershipTests() {
           "The backend limitation ownership projection was stale, malformed, or claimed authority the browser cannot hold.",
         ),
       ).toBeInTheDocument();
+    });
+
+    it("fails closed when limitation ownership omits review timing", async () => {
+      const payloadWithoutReviewTiming: Record<string, unknown> = {
+        ...normalLimitationOwnership,
+      };
+      delete payloadWithoutReviewTiming.due_date;
+      delete payloadWithoutReviewTiming.review_cadence;
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-limitation-ownership": {
+            ...payloadWithoutReviewTiming,
+            review_due_date_status: "not_specified",
+          },
+        }),
+      });
+
+      renderOperatorRoute("/operator/limitations", dependencies);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("heading", {
+            name: "Limitation ownership unavailable",
+          }),
+        ).toBeInTheDocument();
+      });
+
+      expect(
+        screen.queryByText("Support bundle evidence remains separately tracked."),
+      ).toBeNull();
     });
   });
 }

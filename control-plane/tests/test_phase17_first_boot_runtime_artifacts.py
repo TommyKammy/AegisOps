@@ -122,6 +122,7 @@ class Phase17FirstBootRuntimeArtifactTests(unittest.TestCase):
             "location = /inspect-alert-detail {",
             "location = /inspect-case-detail {",
             "location = /inspect-action-review {",
+            "location = /inspect-limitation-ownership {",
             "location = /inspect-advisory-output {",
             "location = /operator/queue {",
         )
@@ -140,6 +141,9 @@ class Phase17FirstBootRuntimeArtifactTests(unittest.TestCase):
             ),
             "/inspect-action-review": (
                 "proxy_pass http://aegisops_control_plane/inspect-action-review$is_args$args;"
+            ),
+            "/inspect-limitation-ownership": (
+                "proxy_pass http://aegisops_control_plane/inspect-limitation-ownership$is_args$args;"
             ),
             "/inspect-advisory-output": (
                 "proxy_pass http://aegisops_control_plane/inspect-advisory-output$is_args$args;"
@@ -199,6 +203,7 @@ class Phase17FirstBootRuntimeArtifactTests(unittest.TestCase):
             "/inspect-alert-detail",
             "/inspect-case-detail",
             "/inspect-action-review",
+            "/inspect-limitation-ownership",
             "/inspect-advisory-output",
             "/operator/queue",
         ):

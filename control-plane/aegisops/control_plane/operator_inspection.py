@@ -5,6 +5,9 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Protocol, Type, TypeVar
 
 from .inspection.evidence_pack_projection import build_linked_evidence_pack_projections
+from .inspection.limitation_ownership_projection import (
+    project_limitation_ownership_context,
+)
 from .models import (
     ActionExecutionRecord,
     ActionRequestRecord,
@@ -15,6 +18,7 @@ from .models import (
     CaseRecord,
     ControlPlaneRecord,
     EvidenceRecord,
+    KnownLimitationOwnershipRecord,
     LifecycleTransitionRecord,
     ObservationRecord,
     LeadRecord,
@@ -1680,6 +1684,34 @@ class OperatorInspectionReadSurface:
                 self._record_to_dict(alert_record) if alert_record is not None else None
             ),
         )
+
+    def inspect_limitation_ownership_detail(
+        self,
+        limitation_id: str | None = None,
+    ) -> object:
+        if limitation_id is not None:
+            limitation_id = self._service._require_non_empty_string(
+                limitation_id,
+                "limitation_id",
+            )
+            record = self._service._store.get(
+                KnownLimitationOwnershipRecord,
+                limitation_id,
+            )
+            if record is None:
+                raise LookupError(
+                    f"Missing limitation ownership record {limitation_id!r}"
+                )
+            return project_limitation_ownership_context(record, consumer="inspection")
+
+        records = self._service._store.list(KnownLimitationOwnershipRecord)
+        if not records:
+            raise LookupError("Missing limitation ownership record for inspection")
+        if len(records) > 1:
+            raise LookupError(
+                "Limitation ownership inspection requires an explicit limitation_id"
+            )
+        return project_limitation_ownership_context(records[0], consumer="inspection")
 
     def _build_alert_external_ticket_reference_surface(
         self,

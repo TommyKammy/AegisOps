@@ -220,6 +220,7 @@ class RuntimeSkeletonTests(unittest.TestCase):
         from aegisops.control_plane.api import http_surface
 
         self.assertIn("/inspect-records", http_surface.HTTP_GET_ROUTES)
+        self.assertIn("/inspect-limitation-ownership", http_surface.HTTP_GET_ROUTES)
         self.assertIn(
             "/operator/promote-alert-to-case",
             http_surface.HTTP_POST_ROUTES,

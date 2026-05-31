@@ -390,6 +390,42 @@ def _handle_inspect_action_review(
     _write_json(handler, HTTPStatus.OK, payload)
 
 
+def _handle_inspect_limitation_ownership(
+    handler: BaseHTTPRequestHandler,
+    context: HttpSurfaceContext,
+    principal: object,
+) -> None:
+    raw_limitation_id = _query_value(handler, "limitation_id")
+    limitation_id = (
+        normalize_record_id(raw_limitation_id) if raw_limitation_id else None
+    )
+    try:
+        payload = context.service.inspect_limitation_ownership_detail(
+            limitation_id
+        )
+    except ValueError as exc:
+        _write_json(
+            handler,
+            HTTPStatus.BAD_REQUEST,
+            {
+                "error": "invalid_request",
+                "message": str(exc),
+            },
+        )
+        return
+    except LookupError as exc:
+        _write_json(
+            handler,
+            HTTPStatus.NOT_FOUND,
+            {
+                "error": "not_found",
+                "message": str(exc),
+            },
+        )
+        return
+    _write_json(handler, HTTPStatus.OK, dict(payload))
+
+
 def _handle_assistant_context_family(
     handler: BaseHTTPRequestHandler,
     context: HttpSurfaceContext,
@@ -466,6 +502,7 @@ HTTP_GET_ROUTES: dict[str, GetRouteHandler] = {
     "/inspect-alert-detail": _handle_inspect_alert_detail,
     "/inspect-case-detail": _handle_inspect_case_detail,
     "/inspect-action-review": _handle_inspect_action_review,
+    "/inspect-limitation-ownership": _handle_inspect_limitation_ownership,
     "/inspect-assistant-context": _handle_assistant_context_family,
     "/inspect-advisory-output": _handle_assistant_context_family,
     "/render-recommendation-draft": _handle_assistant_context_family,

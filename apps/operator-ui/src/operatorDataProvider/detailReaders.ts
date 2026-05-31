@@ -651,6 +651,8 @@ export async function getOneForLimitationOwnership(
   const authorityPosture = asString(payload.authority_posture);
   const workflowAuthority = asString(payload.workflow_authority);
   const projectionSource = asString(payload.projection_source);
+  const reviewCadence = asString(payload.review_cadence);
+  const dueDate = asString(payload.due_date);
   const evidenceReferences = Array.isArray(payload.evidence_references)
     ? payload.evidence_references
     : null;
@@ -693,6 +695,11 @@ export async function getOneForLimitationOwnership(
       "Resource limitationOwnership has unsupported review_due_date_status.",
     );
   }
+  if (reviewCadence === null && dueDate === null) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership requires review_cadence or due_date.",
+    );
+  }
   if (evidenceReferences.length === 0) {
     throw new OperatorDataProviderContractError(
       "Resource limitationOwnership requires explicit evidence references.",
@@ -706,7 +713,8 @@ export async function getOneForLimitationOwnership(
     }
   });
   if (
-    payload.stale_cache !== false ||
+    (payload.stale_cache !== undefined && payload.stale_cache !== false) ||
+    payload.cache_sourced === true ||
     ["browser_cache", "ui_cache", "cache"].includes(projectionSource ?? "")
   ) {
     throw new OperatorDataProviderContractError(
