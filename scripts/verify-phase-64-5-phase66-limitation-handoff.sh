@@ -142,6 +142,41 @@ require_normalized_contains() {
   fi
 }
 
+require_backticked_reference() {
+  local references="$1"
+  local expected="$2"
+  local description="$3"
+  local limitation_id="$4"
+  local reference
+
+  while IFS= read -r reference; do
+    reference="${reference#\`}"
+    reference="${reference%\`}"
+
+    if [[ "${reference}" == "${expected}" ]]; then
+      return 0
+    fi
+  done < <(grep -oE '`[^`]+`' <<<"${references}" || true)
+
+  echo "Invalid Phase 64.5 handoff row for ${limitation_id}: missing ${description}" >&2
+  exit 1
+}
+
+reject_no_open_blocker_assertion() {
+  local value="$1"
+  local limitation_id="$2"
+  local normalized
+
+  normalized="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^[:alnum:]]+/ /g; s/[[:space:]]+/ /g; s/^ //; s/ $//')"
+
+  if [[ "${normalized}" =~ (^|[[:space:]])no[[:space:]]+open[[:space:]]+blockers?([[:space:]]+remain)?($|[[:space:]]) || \
+        "${normalized}" =~ (^|[[:space:]])no[[:space:]]+remaining[[:space:]]+blockers?($|[[:space:]]) || \
+        "${normalized}" =~ (^|[[:space:]])all[[:space:]]+blockers?[[:space:]]+(resolved|closed|cleared)($|[[:space:]]) ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: open blockers must list remaining blockers" >&2
+    exit 1
+  fi
+}
+
 require_real_iso_date() {
   local value="$1"
   local description="$2"
@@ -230,6 +265,8 @@ validate_handoff_row() {
   local record_accepted_risk_posture
   local record_handoff_posture
   local record_authority_boundary
+  local record_evidence_reference
+  local record_evidence_reference_target
 
   if [[ ! "${row}" =~ ^\|.*\|[[:space:]]*$ ]]; then
     echo "Invalid Phase 64.5 handoff table row: ${row}" >&2
@@ -260,6 +297,7 @@ validate_handoff_row() {
   reject_blank_or_placeholder "${accepted_risks}" "accepted risks" "${limitation_id}"
   reject_blank_or_placeholder "${next_review_date}" "next review date" "${limitation_id}"
   reject_blank_or_placeholder "${rc_gate_notes}" "RC-gate consumption notes" "${limitation_id}"
+  reject_no_open_blocker_assertion "${open_blockers}" "${limitation_id}"
 
   next_review_date="$(trim_cell "${next_review_date}")"
   require_real_iso_date "${next_review_date}" "next review date" "${limitation_id}"
@@ -275,10 +313,7 @@ validate_handoff_row() {
   fi
 
   reviewed_record_reference="docs/phase-64-1-reviewed-limitation-ownership-records.md#${limitation_id}"
-  if ! grep -Fq -- "${reviewed_record_reference}" <<<"${evidence_references}"; then
-    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: missing reviewed Phase 64 limitation record reference" >&2
-    exit 1
-  fi
+  require_backticked_reference "${evidence_references}" "${reviewed_record_reference}" "reviewed Phase 64 limitation record reference" "${limitation_id}"
 
   reviewed_record_matches="$(grep -F -- "| \`${limitation_id}\` |" "${phase64_records_path}" || true)"
   if [[ -z "${reviewed_record_matches}" ]]; then
@@ -313,14 +348,14 @@ validate_handoff_row() {
   fi
 
   while IFS= read -r record_evidence_reference; do
+    record_evidence_reference_target="${record_evidence_reference#\`}"
+    record_evidence_reference_target="${record_evidence_reference_target%\`}"
+
     if [[ -z "${record_evidence_reference}" ]]; then
       continue
     fi
 
-    if ! grep -Fq -- "${record_evidence_reference}" <<<"${evidence_references}"; then
-      echo "Invalid Phase 64.5 handoff row for ${limitation_id}: missing reviewed Phase 64 evidence reference ${record_evidence_reference}" >&2
-      exit 1
-    fi
+    require_backticked_reference "${evidence_references}" "${record_evidence_reference_target}" "reviewed Phase 64 evidence reference ${record_evidence_reference}" "${limitation_id}"
   done < <(grep -oE '`[^`]+`' <<<"${record_evidence_references}" || true)
 
   require_normalized_contains "${mitigation_status}" "${record_review_state}" "mitigation status" "${limitation_id}"
@@ -453,8 +488,8 @@ allowed_non_claim_line="No product behavior, source breadth, SOAR breadth, SIEM 
 allowed_non_claim_line_lower="$(printf '%s' "${allowed_non_claim_line}" | tr '[:upper:]' '[:lower:]')"
 required_rejection_line="Missing limitation owner, missing mitigation, missing evidence references, missing open blocker list, missing next review date, inferred RC pass, gate truth shortcut, release truth shortcut, verifier-as-readiness-truth, issue-lint-as-readiness-truth, Beta readiness claim, RC readiness claim, GA readiness claim, or commercial readiness claim must fail."
 required_rejection_line_lower="$(printf '%s' "${required_rejection_line}" | tr '[:upper:]' '[:lower:]')"
-forbidden_claim_pattern='(aegisops is beta ready|aegisops is rc ready|aegisops is ga ready|aegisops is release ready|aegisops is production ready|phase 66 rc proof is complete|phase 66 proves rc readiness|phase 64\.5 proves rc readiness|phase 64\.5 satisfies rc gates|phase 64\.5 satisfies release gates|handoff evidence is gate truth|handoff evidence is release truth|handoff evidence is readiness truth|verifier output is readiness truth|issue lint output is readiness truth|release truth shortcut|gate truth shortcut|commercial readiness is complete|production rollout readiness is complete|rc gate is accepted by this handoff|release gate is accepted by this handoff|gate is accepted by this handoff)'
-forbidden_compact_claim_pattern='(aegisopsisbetaready|aegisopsisrcready|aegisopsisgaready|aegisopsisreleaseready|aegisopsisproductionready|phase66rcproofiscomplete|phase66provesrcreadiness|phase645provesrcreadiness|phase645satisfiesrcgates|phase645satisfiesreleasegates|handoffevidenceisgatetruth|handoffevidenceisreleasetruth|handoffevidenceisreadinesstruth|verifieroutputisreadinesstruth|issuelintoutputisreadinesstruth|releasetruthshortcut|gatetruthshortcut|commercialreadinessiscomplete|productionrolloutreadinessiscomplete|rcgateisacceptedbythishandoff|releasegateisacceptedbythishandoff|gateisacceptedbythishandoff)'
+forbidden_claim_pattern='(aegisops is beta ready|aegisops is rc ready|aegisops is ga ready|aegisops is release ready|aegisops is production ready|phase 66 rc proof is complete|phase 66 proves rc readiness|phase 64\.5 proves rc readiness|phase 64\.5 satisfies rc gates|phase 64\.5 satisfies release gates|handoff infers rc pass|inferred rc pass|rc readiness is complete|beta readiness is complete|ga readiness is complete|commercial readiness is complete|production rollout readiness is complete|handoff evidence is gate truth|handoff evidence is release truth|handoff evidence is readiness truth|verifier output is readiness truth|verifier as readiness truth|issue lint output is readiness truth|issue lint as readiness truth|release truth shortcut|gate truth shortcut|rc gate is accepted by this handoff|release gate is accepted by this handoff|gate is accepted by this handoff)'
+forbidden_compact_claim_pattern='(aegisopsisbetaready|aegisopsisrcready|aegisopsisgaready|aegisopsisreleaseready|aegisopsisproductionready|phase66rcproofiscomplete|phase66provesrcreadiness|phase645provesrcreadiness|phase645satisfiesrcgates|phase645satisfiesreleasegates|handoffinfersrcpass|inferredrcpass|rcreadinessiscomplete|betareadinessiscomplete|gareadinessiscomplete|commercialreadinessiscomplete|productionrolloutreadinessiscomplete|handoffevidenceisgatetruth|handoffevidenceisreleasetruth|handoffevidenceisreadinesstruth|verifieroutputisreadinesstruth|verifierasreadinesstruth|issuelintoutputisreadinesstruth|issuelintasreadinesstruth|releasetruthshortcut|gatetruthshortcut|rcgateisacceptedbythishandoff|releasegateisacceptedbythishandoff|gateisacceptedbythishandoff)'
 
 scan_forbidden_claims() {
   local file="$1"

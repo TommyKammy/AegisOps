@@ -136,6 +136,14 @@ assert_fails_with \
   "${missing_reviewed_record_reference_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-rc-gate-consumption-001: missing reviewed Phase 64 limitation record reference"
 
+broken_reviewed_record_reference_repo="${workdir}/broken-reviewed-record-reference"
+copy_valid_repo "${broken_reviewed_record_reference_repo}"
+perl -0pi -e 's{docs/phase-64-1-reviewed-limitation-ownership-records\.md#limitation-phase64-support-bundle-001}{docs/phase-64-1-reviewed-limitation-ownership-records.md#limitation-phase64-support-bundle-001-missing}' \
+  "${broken_reviewed_record_reference_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${broken_reviewed_record_reference_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: missing reviewed Phase 64 limitation record reference"
+
 missing_reviewed_evidence_reference_repo="${workdir}/missing-reviewed-evidence-reference"
 copy_valid_repo "${missing_reviewed_evidence_reference_repo}"
 remove_doc_text "${missing_reviewed_evidence_reference_repo}" '`docs/phase-63-closeout-evaluation.md#support-bundle-gap-disposition`; '
@@ -181,6 +189,14 @@ perl -0pi -e 's/Phase 51\.3 support bundle command, redaction review, included r
 assert_fails_with \
   "${punctuated_placeholder_blocker_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: missing open blockers"
+
+no_open_blockers_repo="${workdir}/no-open-blockers"
+copy_valid_repo "${no_open_blockers_repo}"
+perl -0pi -e 's/Phase 51\.3 support bundle command, redaction review, included record identifiers, omitted private data classes, owner, retention expectation, and verifier evidence remain required before RC proof can treat support evidence as satisfied\./No open blockers remain./' \
+  "${no_open_blockers_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${no_open_blockers_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: open blockers must list remaining blockers"
 
 malformed_extra_row_repo="${workdir}/malformed-extra-row"
 copy_valid_repo "${malformed_extra_row_repo}"
@@ -243,6 +259,27 @@ printf '%s\n' "AegisOps is RC ready because Phase 64.5 has owners." >>"${rc_over
 assert_fails_with \
   "${rc_overclaim_repo}" \
   "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: AegisOps is RC ready because Phase 64.5 has owners."
+
+inferred_rc_pass_repo="${workdir}/inferred-rc-pass"
+copy_valid_repo "${inferred_rc_pass_repo}"
+printf '%s\n' "The handoff infers RC pass." >>"${inferred_rc_pass_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${inferred_rc_pass_repo}" \
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: The handoff infers RC pass."
+
+rc_readiness_complete_repo="${workdir}/rc-readiness-complete"
+copy_valid_repo "${rc_readiness_complete_repo}"
+printf '%s\n' "RC readiness is complete." >>"${rc_readiness_complete_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${rc_readiness_complete_repo}" \
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: RC readiness is complete."
+
+verifier_as_readiness_truth_repo="${workdir}/verifier-as-readiness-truth"
+copy_valid_repo "${verifier_as_readiness_truth_repo}"
+printf '%s\n' "verifier-as-readiness-truth" >>"${verifier_as_readiness_truth_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${verifier_as_readiness_truth_repo}" \
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: verifier-as-readiness-truth"
 
 rc_ready_variant_repo="${workdir}/rc-ready-variant"
 copy_valid_repo "${rc_ready_variant_repo}"
