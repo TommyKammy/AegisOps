@@ -255,6 +255,11 @@ def _ensure_control_plane_path(repo_root: pathlib.Path) -> None:
         sys.path.insert(0, str(control_plane_root))
 
 
+def _main() -> None:
+    assert_phase63_evidence_pack_contract_aligned()
+    print("Phase 63 evidence-pack contract guard passed")
+
+
 def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
     _ensure_control_plane_path(repo_root)
     from aegisops.control_plane.evidence import (  # noqa: WPS433
@@ -322,9 +327,10 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
             validator_source,
             registry_entry.confidence_posture,
         ),
-        freshness_window_milliseconds=(
-            source_projection._parse_duration_seconds(registry_entry.freshness_window)
-            * 1000
+        freshness_window_milliseconds=_py_backend_enforced_freshness_window_milliseconds(
+            validator_source,
+            registry_entry.freshness_window,
+            source_projection,
         ),
         state_reason_consistency_rules=_py_backend_state_reason_consistency_rules(
             validator_source
@@ -417,9 +423,10 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
             validator_source,
             registry_entry.confidence_posture,
         ),
-        freshness_window_milliseconds=(
-            source_projection._parse_duration_seconds(registry_entry.freshness_window)
-            * 1000
+        freshness_window_milliseconds=_py_ai_enforced_freshness_window_milliseconds(
+            validator_source,
+            registry_entry.freshness_window,
+            source_projection,
         ),
         state_reason_consistency_rules=_py_ai_state_reason_consistency_rules(
             validator_source
@@ -975,6 +982,72 @@ def _py_backend_forbidden_readiness_claim_rejection(
         "backend readiness-claim rejection",
     )
     return frozenset(getattr(namespace, "_EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS"))
+
+
+def _py_backend_enforced_freshness_window_milliseconds(
+    source: str,
+    registry_freshness_window: str,
+    source_projection: object,
+) -> int:
+    call_body = _py_function_source(source, "_validated_linked_evidence_pack_projection")
+    _require_substrings(
+        call_body,
+        (
+            "_validate_linked_evidence_pack_freshness_window(",
+            "values=typed_values",
+            "custody=custody",
+        ),
+        "backend freshness-window enforcement call",
+    )
+    freshness_body = _py_function_source(
+        source,
+        "_validate_linked_evidence_pack_freshness_window",
+    )
+    _require_substrings(
+        freshness_body,
+        (
+            'PHASE63_EVIDENCE_SOURCE_REGISTRY.get(values["source_id"])',
+            "_parse_duration_seconds(registry_entry.freshness_window)",
+            'values["freshness_state"] == "fresh"',
+            'values["freshness_state"] == "stale"',
+            '"linked evidence-pack projection freshness window mismatch"',
+        ),
+        "backend freshness-window enforcement",
+    )
+    return source_projection._parse_duration_seconds(registry_freshness_window) * 1000
+
+
+def _py_ai_enforced_freshness_window_milliseconds(
+    source: str,
+    registry_freshness_window: str,
+    source_projection: object,
+) -> int:
+    projection_body = _py_function_source(source, "_projection_reasons")
+    _require_substrings(
+        projection_body,
+        (
+            "reasons.extend(",
+            "_freshness_recomputation_reasons(",
+            "projection",
+            "grounded_at",
+            "expected_collection_timestamp",
+        ),
+        "AI freshness recomputation enforcement call",
+    )
+    freshness_body = _py_function_source(source, "_freshness_recomputation_reasons")
+    _require_substrings(
+        freshness_body,
+        (
+            'source_id = _string(projection.get("source_id"))',
+            "PHASE63_EVIDENCE_SOURCE_REGISTRY.get(source_id)",
+            "_parse_duration_seconds(registry_entry.freshness_window)",
+            '"stale" if age_seconds > freshness_window_seconds else "fresh"',
+            'projection.get("freshness_state") != expected_freshness',
+            'confidence.get("freshness") != expected_freshness',
+        ),
+        "AI freshness recomputation enforcement",
+    )
+    return source_projection._parse_duration_seconds(registry_freshness_window) * 1000
 
 
 def _py_ai_enforced_reason_sets(
@@ -1808,3 +1881,7 @@ def contract_with_label_drift(
     labels = dict(contract.labels)
     labels[label_name] = values
     return replace(contract, labels=MappingProxyType(labels))
+
+
+if __name__ == "__main__":
+    _main()

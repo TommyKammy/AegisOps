@@ -25,7 +25,9 @@ from scripts.phase63_evidence_pack_contract_guard import (  # noqa: E402
     load_phase63_evidence_pack_contracts,
     _backend_no_workflow_authority_rejection,
     _backend_confidence_posture_rejection,
+    _py_ai_enforced_freshness_window_milliseconds,
     _py_backend_enforced_label_sets,
+    _py_backend_enforced_freshness_window_milliseconds,
     _py_backend_enforced_metadata_fields,
     _py_ai_state_reason_consistency_rules,
     _py_backend_state_reason_consistency_rules,
@@ -76,6 +78,19 @@ AI_GROUNDING_VALIDATOR = (
 class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
     def test_phase63_evidence_pack_contracts_stay_aligned(self) -> None:
         assert_phase63_evidence_pack_contract_aligned(REPO_ROOT)
+
+    def test_direct_script_entrypoint_runs_guard(self) -> None:
+        with mock.patch.object(
+            contract_guard,
+            "assert_phase63_evidence_pack_contract_aligned",
+        ) as guard:
+            with mock.patch("builtins.print") as mocked_print:
+                contract_guard._main()
+
+        guard.assert_called_once_with()
+        mocked_print.assert_called_once_with(
+            "Phase 63 evidence-pack contract guard passed"
+        )
 
     def test_drift_guard_fails_on_representative_contract_mismatches(self) -> None:
         backend, ui, ai = load_phase63_evidence_pack_contracts(REPO_ROOT)
@@ -714,6 +729,46 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                 evidence_pack_projection,
             )
 
+    def test_backend_freshness_window_enforcement_is_parsed(self) -> None:
+        from aegisops.control_plane.evidence import (
+            evidence_freshness_provenance_projection,
+        )
+
+        source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
+        self.assertEqual(
+            _py_backend_enforced_freshness_window_milliseconds(
+                source,
+                "PT6H",
+                evidence_freshness_provenance_projection,
+            ),
+            21600000,
+        )
+
+        missing_call_drift = source.replace(
+            "    _validate_linked_evidence_pack_freshness_window(\n"
+            "        values=typed_values,\n"
+            "        custody=custody,\n"
+            "    )\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "freshness-window enforcement call"):
+            _py_backend_enforced_freshness_window_milliseconds(
+                missing_call_drift,
+                "PT6H",
+                evidence_freshness_provenance_projection,
+            )
+
+        missing_registry_window_drift = source.replace(
+            "_parse_duration_seconds(registry_entry.freshness_window)",
+            '_parse_duration_seconds("PT6H")',
+        )
+        with self.assertRaisesRegex(AssertionError, "freshness-window enforcement"):
+            _py_backend_enforced_freshness_window_milliseconds(
+                missing_registry_window_drift,
+                "PT6H",
+                evidence_freshness_provenance_projection,
+            )
+
     def test_backend_confidence_posture_parser_observes_representative_drift(
         self,
     ) -> None:
@@ -947,6 +1002,49 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(AssertionError, "metadata enforcement"):
             _py_enforced_metadata_fields(source, drifted_namespace)
+
+    def test_ai_freshness_recomputation_enforcement_is_parsed(self) -> None:
+        from aegisops.control_plane.evidence import (
+            evidence_freshness_provenance_projection,
+        )
+
+        source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
+        self.assertEqual(
+            _py_ai_enforced_freshness_window_milliseconds(
+                source,
+                "PT6H",
+                evidence_freshness_provenance_projection,
+            ),
+            21600000,
+        )
+
+        missing_call_drift = source.replace(
+            "    reasons.extend(\n"
+            "        _freshness_recomputation_reasons(\n"
+            "            projection,\n"
+            "            grounded_at,\n"
+            "            expected_collection_timestamp,\n"
+            "        )\n"
+            "    )\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "freshness recomputation"):
+            _py_ai_enforced_freshness_window_milliseconds(
+                missing_call_drift,
+                "PT6H",
+                evidence_freshness_provenance_projection,
+            )
+
+        missing_registry_window_drift = source.replace(
+            "_parse_duration_seconds(registry_entry.freshness_window)",
+            '_parse_duration_seconds("PT6H")',
+        )
+        with self.assertRaisesRegex(AssertionError, "freshness recomputation"):
+            _py_ai_enforced_freshness_window_milliseconds(
+                missing_registry_window_drift,
+                "PT6H",
+                evidence_freshness_provenance_projection,
+            )
 
     def test_workflow_truth_boolean_rejections_are_parsed(self) -> None:
         backend_source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
