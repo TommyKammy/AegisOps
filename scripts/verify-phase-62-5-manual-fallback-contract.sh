@@ -8,6 +8,9 @@ required_paths=(
   "${repo_root}/docs/phase-62-5-manual-fallback-contract.md"
   "${repo_root}/docs/phase-62-5-manual-fallback-validation.md"
   "${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_registry.py"
+  "${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_catalog.py"
+  "${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_manual_fallback.py"
+  "${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_types.py"
   "${repo_root}/control-plane/tests/test_phase62_action_policy_registry.py"
 )
 
@@ -37,11 +40,17 @@ for phrase in \
   require_phrase "${contract_path}" "${phrase}"
 done
 
-registry_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_registry.py"
+types_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_types.py"
 for phrase in \
   'ManualFallbackRequirement' \
+  '"execution_receipt_required"' \
+  '"aegisops_reconciliation_required"'; do
+  require_phrase "${types_path}" "${phrase}"
+done
+
+catalog_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_catalog.py"
+for phrase in \
   'PHASE62_MANUAL_FALLBACK_REQUIREMENTS' \
-  'validate_phase62_manual_fallback_record' \
   '"shuffle_unavailable"' \
   '"execution_rejected"' \
   '"missing_receipt"' \
@@ -53,10 +62,14 @@ for phrase in \
   '"fallback_state"' \
   '"blocked_reason"' \
   '"expected_evidence"' \
-  '"follow_up_state"' \
-  '"execution_receipt_required"' \
-  '"aegisops_reconciliation_required"'; do
-  require_phrase "${registry_path}" "${phrase}"
+  '"follow_up_state"'; do
+  require_phrase "${catalog_path}" "${phrase}"
+done
+
+manual_fallback_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_manual_fallback.py"
+for phrase in \
+  'validate_phase62_manual_fallback_record'; do
+  require_phrase "${manual_fallback_path}" "${phrase}"
 done
 
 (cd "${repo_root}" && PYTHONPATH="${repo_root}/control-plane:${repo_root}/control-plane/tests" python3 -m unittest \

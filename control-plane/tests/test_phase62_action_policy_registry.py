@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pathlib
 import sys
 import unittest
+from importlib import import_module
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 CONTROL_PLANE_ROOT = TESTS_ROOT.parent
@@ -85,6 +86,29 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     "manual_review",
                 ),
             )
+
+    def test_registry_exposes_focused_internal_seams(self) -> None:
+        expected_exports = {
+            "aegisops.control_plane.actions.action_policy_catalog": (
+                "PHASE62_ACTION_POLICIES",
+                "PHASE62_SHUFFLE_WORKFLOW_MAPPINGS",
+            ),
+            "aegisops.control_plane.actions.action_policy_manual_fallback": (
+                "validate_phase62_manual_fallback_record",
+            ),
+            "aegisops.control_plane.actions.action_policy_simulator_validation": (
+                "validate_phase62_simulator_output",
+            ),
+            "aegisops.control_plane.actions.action_policy_authority_scanning": (
+                "promotes_non_authoritative_evidence",
+            ),
+        }
+
+        for module_name, exports in expected_exports.items():
+            with self.subTest(module_name=module_name):
+                module = import_module(module_name)
+                for export in exports:
+                    self.assertTrue(hasattr(module, export))
 
     def test_simulator_contract_covers_reviewed_actions_in_demo_test_mode_only(
         self,

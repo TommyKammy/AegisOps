@@ -8,6 +8,9 @@ required_paths=(
   "${repo_root}/docs/phase-62-6-automation-simulator-contract.md"
   "${repo_root}/docs/phase-62-6-automation-simulator-validation.md"
   "${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_registry.py"
+  "${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_catalog.py"
+  "${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_simulator_validation.py"
+  "${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_types.py"
   "${repo_root}/control-plane/tests/test_phase62_action_policy_registry.py"
 )
 
@@ -38,22 +41,32 @@ for phrase in \
   require_phrase "${contract_path}" "${phrase}"
 done
 
-registry_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_registry.py"
+types_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_types.py"
 for phrase in \
   'SimulatorContract' \
+  '"non_authoritative_demo_test_evidence"'; do
+  require_phrase "${types_path}" "${phrase}"
+done
+
+catalog_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_catalog.py"
+for phrase in \
   'PHASE62_SIMULATOR_CONTRACTS' \
-  'validate_phase62_simulator_output' \
   '"demo"' \
   '"test"' \
   '"demo_test_label"' \
   '"production_exclusion"' \
   '"authority_posture"' \
-  '"non_authoritative_demo_test_evidence"' \
   '"live_secret_ref"' \
   '"customer_data_classification"' \
   '"synthetic_only"' \
   '"sanitized_demo_only"'; do
-  require_phrase "${registry_path}" "${phrase}"
+  require_phrase "${catalog_path}" "${phrase}"
+done
+
+simulator_validation_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_simulator_validation.py"
+for phrase in \
+  'validate_phase62_simulator_output'; do
+  require_phrase "${simulator_validation_path}" "${phrase}"
 done
 
 (cd "${repo_root}" && PYTHONPATH="${repo_root}/control-plane:${repo_root}/control-plane/tests" python3 -m unittest \
