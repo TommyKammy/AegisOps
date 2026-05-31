@@ -97,6 +97,11 @@ class Phase63EvidencePackContract:
     authority_truth_denials: frozenset[str]
 
 
+def _main() -> None:
+    assert_phase63_evidence_pack_contract_aligned()
+    print("Phase 63 evidence-pack contract guard passed")
+
+
 def assert_phase63_evidence_pack_contract_aligned(
     repo_root: pathlib.Path | str | None = None,
     *,
@@ -253,11 +258,6 @@ def _ensure_control_plane_path(repo_root: pathlib.Path) -> None:
     control_plane_root = repo_root / "control-plane"
     if str(control_plane_root) not in sys.path:
         sys.path.insert(0, str(control_plane_root))
-
-
-def _main() -> None:
-    assert_phase63_evidence_pack_contract_aligned()
-    print("Phase 63 evidence-pack contract guard passed")
 
 
 def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
