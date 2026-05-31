@@ -5,12 +5,14 @@ set -euo pipefail
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 registry_path="${repo_root}/control-plane/aegisops/control_plane/evidence/evidence_source_registry.py"
+registry_data_path="${repo_root}/control-plane/aegisops/control_plane/evidence/evidence_source_registry_data.py"
+validation_catalog_path="${repo_root}/control-plane/aegisops/control_plane/evidence/evidence_source_validation_catalog.py"
 test_path="${repo_root}/control-plane/tests/test_phase63_evidence_source_registry.py"
 doc_path="${repo_root}/docs/phase-63-1-evidence-source-registry-v1.md"
 validation_path="${repo_root}/docs/phase-63-1-evidence-source-registry-v1-validation.md"
 policy_path="${repo_root}/docs/phase-51-6-authority-boundary-negative-test-policy.md"
 
-for path in "${registry_path}" "${test_path}" "${doc_path}" "${validation_path}" "${policy_path}"; do
+for path in "${registry_path}" "${registry_data_path}" "${validation_catalog_path}" "${test_path}" "${doc_path}" "${validation_path}" "${policy_path}"; do
   if [[ ! -f "${path}" ]]; then
     echo "Missing Phase 63.1 evidence source registry artifact: ${path}" >&2
     exit 1
@@ -28,9 +30,6 @@ require_phrase() {
 
 required_registry_phrases=(
   'PHASE63_EVIDENCE_SOURCE_REGISTRY'
-  '"osquery_host_state"'
-  '"malwarebazaar_hash_reputation"'
-  '"subordinate_evidence_context_only"'
   '"unsupported_source_type"'
   '"missing_owner"'
   '"missing_freshness_window"'
@@ -41,14 +40,32 @@ required_registry_phrases=(
   '"registry_key_source_type_mismatch"'
   '"registry_key_confidence_posture_mismatch"'
   '"unknown_registry_entry_field"'
-  '"unsupported_broad_source_reference"'
   '"source_identity_custody_requirements_mismatch"'
   '"source_identity_confidence_posture_mismatch"'
-  '"owner_promotes_workflow_authority"'
 )
 
 for phrase in "${required_registry_phrases[@]}"; do
   require_phrase "${registry_path}" "${phrase}"
+done
+
+required_registry_data_phrases=(
+  'PHASE63_EVIDENCE_SOURCE_REGISTRY'
+  '"osquery_host_state"'
+  '"malwarebazaar_hash_reputation"'
+  '"subordinate_evidence_context_only"'
+)
+
+for phrase in "${required_registry_data_phrases[@]}"; do
+  require_phrase "${registry_data_path}" "${phrase}"
+done
+
+required_validation_catalog_phrases=(
+  '"unsupported_broad_source_reference"'
+  '"owner_promotes_workflow_authority"'
+)
+
+for phrase in "${required_validation_catalog_phrases[@]}"; do
+  require_phrase "${validation_catalog_path}" "${phrase}"
 done
 
 required_doc_phrases=(

@@ -15,6 +15,13 @@ from aegisops.control_plane.evidence.evidence_source_registry import (  # noqa: 
     validate_phase63_evidence_source_registry,
     validate_phase63_evidence_source_use,
 )
+from aegisops.control_plane.evidence.evidence_source_registry_data import (  # noqa: E402
+    EvidenceSourceEntry,
+    PHASE63_EVIDENCE_SOURCE_REGISTRY as REGISTRY_DATA_SOURCE,
+)
+from aegisops.control_plane.evidence.evidence_source_validation_catalog import (  # noqa: E402
+    _broad_or_default_source_errors,
+)
 
 
 class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
@@ -35,6 +42,25 @@ class Phase63EvidenceSourceRegistryTests(unittest.TestCase):
             "disabled_states": ("disabled_by_policy", "missing_custody"),
             "authority_posture": "subordinate_evidence_context_only",
         }
+
+    def test_registry_facade_uses_split_data_and_validation_catalog_modules(
+        self,
+    ) -> None:
+        self.assertIs(PHASE63_EVIDENCE_SOURCE_REGISTRY, REGISTRY_DATA_SOURCE)
+        self.assertEqual(
+            _broad_or_default_source_errors(
+                EvidenceSourceEntry(
+                    **{
+                        **self._valid_osquery_entry(),
+                        "custody_requirements": (
+                            self._valid_osquery_entry()["custody_requirements"]
+                            + ", Velociraptor flow id"
+                        ),
+                    }
+                )
+            ),
+            ["unsupported_broad_source_reference"],
+        )
 
     def test_registry_contains_osquery_and_one_bounded_enrichment_source(self) -> None:
         self.assertEqual(
