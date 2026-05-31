@@ -8,6 +8,7 @@ import {
   createAuthorizedFetch,
   jsonResponse,
 } from "./OperatorRoutes.testSupport";
+import { EvidencePackReviewSection } from "./operatorConsolePages/caseDetailEvidencePackSection";
 
 const freshCollectionTimestamp = new Date().toISOString();
 const staleCollectionTimestamp = new Date(
@@ -146,6 +147,23 @@ const fullRouteTestTimeout = 15_000;
 describe("case detail evidence pack UI", () => {
   beforeEach(() => {
     resetOperatorQueryCacheForTests();
+  });
+
+  it("keeps evidence-pack rendering isolated behind the case-detail evidence-pack section", () => {
+    render(<EvidencePackReviewSection evidencePacks={[createEvidencePack()]} />);
+
+    const evidencePackTable = screen.getByRole("table", {
+      name: "Linked evidence packs",
+    });
+    const rows = within(evidencePackTable).getAllByRole("row").slice(1);
+
+    expect(rows).toHaveLength(1);
+    expect(
+      within(rows[0] as HTMLElement).getByText("evidence-request-001"),
+    ).toBeInTheDocument();
+    expect(
+      within(rows[0] as HTMLElement).getByText("Subordinate evidence context only"),
+    ).toBeInTheDocument();
   });
 
   it("renders linked evidence pack custody, provenance, stale/conflict, freshness, confidence, uncertainty, and source state as subordinate context", async () => {
