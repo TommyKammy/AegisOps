@@ -115,6 +115,31 @@ reject_blank_or_placeholder() {
   fi
 }
 
+normalize_comparison_text() {
+  local value="$1"
+
+  printf '%s' "${value}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[-_]+/ /g; s/[[:space:]]+/ /g; s/^ //; s/ $//'
+}
+
+require_normalized_contains() {
+  local value="$1"
+  local expected="$2"
+  local description="$3"
+  local limitation_id="$4"
+  local normalized_value
+  local normalized_expected
+
+  normalized_value="$(normalize_comparison_text "${value}")"
+  normalized_expected="$(normalize_comparison_text "${expected}")"
+
+  if [[ -z "${normalized_expected}" || "${normalized_value}" != *"${normalized_expected}"* ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: ${description} does not match reviewed Phase 64 record" >&2
+    exit 1
+  fi
+}
+
+handoff_ids=""
+
 validate_handoff_row() {
   local row="$1"
   local pipe_count
@@ -130,6 +155,20 @@ validate_handoff_row() {
   local empty_suffix
   local limitation_id
   local reviewed_record_reference
+  local reviewed_record_row
+  local record_limitation_id_cell
+  local record_title
+  local record_severity
+  local record_affected_surface
+  local record_owner
+  local record_mitigation
+  local record_evidence_references
+  local record_review_state
+  local record_review_cadence
+  local record_due_date
+  local record_accepted_risk_posture
+  local record_handoff_posture
+  local record_authority_boundary
 
   if [[ ! "${row}" =~ ^\|.*\|[[:space:]]*$ ]]; then
     echo "Invalid Phase 64.5 handoff table row: ${row}" >&2
@@ -172,15 +211,38 @@ validate_handoff_row() {
     exit 1
   fi
 
-  if ! grep -Fq -- "| \`${limitation_id}\` |" "${phase64_records_path}"; then
+  reviewed_record_row="$(grep -F -- "| \`${limitation_id}\` |" "${phase64_records_path}" || true)"
+  if [[ -z "${reviewed_record_row}" ]]; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 limitation record is absent" >&2
     exit 1
   fi
+
+  IFS='|' read -r empty_prefix record_limitation_id_cell record_title record_severity record_affected_surface record_owner record_mitigation record_evidence_references record_review_state record_review_cadence record_due_date record_accepted_risk_posture record_handoff_posture record_authority_boundary empty_suffix <<<"${reviewed_record_row}"
+
+  record_owner="$(trim_cell "${record_owner}")"
+  record_review_state="$(trim_cell "${record_review_state}")"
+  record_accepted_risk_posture="$(trim_cell "${record_accepted_risk_posture}")"
+  record_handoff_posture="$(trim_cell "${record_handoff_posture}")"
+
+  if [[ "$(trim_cell "${owner}")" != "${record_owner}" ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: owner does not match reviewed Phase 64 record" >&2
+    exit 1
+  fi
+
+  if [[ "${record_handoff_posture}" != "handoff_required" ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 record is not marked for handoff" >&2
+    exit 1
+  fi
+
+  require_normalized_contains "${mitigation_status}" "${record_review_state}" "mitigation status" "${limitation_id}"
+  require_normalized_contains "${accepted_risks}" "${record_accepted_risk_posture}" "accepted risks" "${limitation_id}"
 
   if ! grep -Eiq '(subordinate|no rc gate|does not satisfy|independent)' <<<"${rc_gate_notes}"; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: RC-gate consumption notes must preserve subordinate handoff boundary" >&2
     exit 1
   fi
+
+  handoff_ids="${handoff_ids}${limitation_id}"$'\n'
 }
 
 handoff_row_count=0
@@ -234,6 +296,28 @@ if (( handoff_row_count == 0 )); then
   exit 1
 fi
 
+while IFS= read -r row; do
+  trimmed_row="$(trim_cell "${row}")"
+
+  if [[ ! "${trimmed_row}" =~ ^\|[[:space:]]+\`limitation-phase64-[a-z0-9-]+-[0-9]{3}\`[[:space:]]+\| ]]; then
+    continue
+  fi
+
+  if [[ ! "${trimmed_row}" == *"| handoff_required |"* ]]; then
+    continue
+  fi
+
+  IFS='|' read -r empty_prefix limitation_id_cell _ <<<"${trimmed_row}"
+  limitation_id_cell="$(trim_cell "${limitation_id_cell}")"
+  limitation_id="${limitation_id_cell#\`}"
+  limitation_id="${limitation_id%\`}"
+
+  if ! grep -Fxq -- "${limitation_id}" <<<"${handoff_ids}"; then
+    echo "Missing Phase 64.5 handoff row for reviewed Phase 64 limitation: ${limitation_id}" >&2
+    exit 1
+  fi
+done < "${phase64_records_path}"
+
 path_hygiene_text() {
   local file="$1"
 
@@ -280,30 +364,49 @@ allowed_non_claim_line="No product behavior, source breadth, SOAR breadth, SIEM 
 allowed_non_claim_line_lower="$(printf '%s' "${allowed_non_claim_line}" | tr '[:upper:]' '[:lower:]')"
 required_rejection_line="Missing limitation owner, missing mitigation, missing evidence references, missing open blocker list, missing next review date, inferred RC pass, gate truth shortcut, release truth shortcut, verifier-as-readiness-truth, issue-lint-as-readiness-truth, Beta readiness claim, RC readiness claim, GA readiness claim, or commercial readiness claim must fail."
 required_rejection_line_lower="$(printf '%s' "${required_rejection_line}" | tr '[:upper:]' '[:lower:]')"
+forbidden_claim_pattern='(aegisops is beta ready|aegisops is rc ready|aegisops is ga ready|aegisops is release ready|aegisops is production ready|phase 66 rc proof is complete|phase 66 proves rc readiness|phase 64\.5 proves rc readiness|phase 64\.5 satisfies rc gates|phase 64\.5 satisfies release gates|handoff evidence is gate truth|handoff evidence is release truth|handoff evidence is readiness truth|verifier output is readiness truth|issue lint output is readiness truth|release truth shortcut|gate truth shortcut|commercial readiness is complete|production rollout readiness is complete|rc gate is accepted by this handoff|release gate is accepted by this handoff|gate is accepted by this handoff)'
+forbidden_compact_claim_pattern='(aegisopsisbetaready|aegisopsisrcready|aegisopsisgaready|aegisopsisreleaseready|aegisopsisproductionready|phase66rcproofiscomplete|phase66provesrcreadiness|phase645provesrcreadiness|phase645satisfiesrcgates|phase645satisfiesreleasegates|handoffevidenceisgatetruth|handoffevidenceisreleasetruth|handoffevidenceisreadinesstruth|verifieroutputisreadinesstruth|issuelintoutputisreadinesstruth|releasetruthshortcut|gatetruthshortcut|commercialreadinessiscomplete|productionrolloutreadinessiscomplete|rcgateisacceptedbythishandoff|releasegateisacceptedbythishandoff|gateisacceptedbythishandoff)'
 
 scan_forbidden_claims() {
   local file="$1"
   local file_label="$2"
-  local line
-  local line_lower
-  local normalized_line
-  local compact_line
+  local offender
+  local perl_status
 
-  while IFS= read -r line; do
-    line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
-    if [[ "${line_lower}" == "${allowed_non_claim_line_lower}" || "${line_lower}" == "${required_rejection_line_lower}" ]]; then
-      continue
-    fi
+  set +e
+  offender="$(ALLOWED_NON_CLAIM_LINE="${allowed_non_claim_line_lower}" \
+    REQUIRED_REJECTION_LINE="${required_rejection_line_lower}" \
+    FORBIDDEN_CLAIM_PATTERN="${forbidden_claim_pattern}" \
+    FORBIDDEN_COMPACT_CLAIM_PATTERN="${forbidden_compact_claim_pattern}" \
+    perl -ne '
+      chomp(my $line = $_);
+      my $line_lower = lc $line;
+      next if $line_lower eq $ENV{"ALLOWED_NON_CLAIM_LINE"} || $line_lower eq $ENV{"REQUIRED_REJECTION_LINE"};
 
-    normalized_line="$(printf '%s' "${line_lower}" | sed -E 's/[-_]+/ /g; s/[[:space:]]+/ /g')"
-    compact_line="$(printf '%s' "${line_lower}" | tr -cd '[:alnum:]')"
+      my $normalized_line = $line_lower;
+      $normalized_line =~ s/[-_]+/ /g;
+      $normalized_line =~ s/[[:space:]]+/ /g;
 
-    if grep -Eiq '(aegisops is beta ready|aegisops is rc ready|aegisops is ga ready|aegisops is release ready|phase 66 rc proof is complete|phase 66 proves rc readiness|phase 64\.5 proves rc readiness|phase 64\.5 satisfies rc gates|phase 64\.5 satisfies release gates|handoff evidence is gate truth|handoff evidence is release truth|handoff evidence is readiness truth|verifier output is readiness truth|issue lint output is readiness truth|release truth shortcut|gate truth shortcut|commercial readiness is complete|production rollout readiness is complete)' <<<"${normalized_line}" || \
-       grep -Eiq '(aegisopsisbetaready|aegisopsisrcready|aegisopsisgaready|aegisopsisreleaseready|phase66rcproofiscomplete|phase66provesrcreadiness|phase645provesrcreadiness|phase645satisfiesrcgates|phase645satisfiesreleasegates|handoffevidenceisgatetruth|handoffevidenceisreleasetruth|handoffevidenceisreadinesstruth|verifieroutputisreadinesstruth|issuelintoutputisreadinesstruth|releasetruthshortcut|gatetruthshortcut|commercialreadinessiscomplete|productionrolloutreadinessiscomplete)' <<<"${compact_line}"; then
-      echo "Forbidden Phase 64.5 handoff claim in ${file_label}: ${line}" >&2
-      exit 1
-    fi
-  done < "${file}"
+      my $compact_line = $line_lower;
+      $compact_line =~ s/[^[:alnum:]]//g;
+
+      if ($normalized_line =~ /$ENV{"FORBIDDEN_CLAIM_PATTERN"}/ || $compact_line =~ /$ENV{"FORBIDDEN_COMPACT_CLAIM_PATTERN"}/) {
+        print $line;
+        exit 2;
+      }
+    ' "${file}")"
+  perl_status=$?
+  set -e
+
+  if [[ "${perl_status}" == "2" ]]; then
+    echo "Forbidden Phase 64.5 handoff claim in ${file_label}: ${offender}" >&2
+    exit 1
+  fi
+
+  if [[ "${perl_status}" != "0" ]]; then
+    echo "Failed to scan Phase 64.5 handoff claims in ${file_label}" >&2
+    exit 1
+  fi
 }
 
 scan_forbidden_claims "${absolute_doc_path}" "${doc_path}"

@@ -143,6 +143,38 @@ assert_fails_with \
   "${malformed_extra_row_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-extra-002: missing owner"
 
+missing_required_handoff_row_repo="${workdir}/missing-required-handoff-row"
+copy_valid_repo "${missing_required_handoff_row_repo}"
+perl -0pi -e 's/\| `limitation-phase64-rc-gate-consumption-001`[^\n]*\n//' \
+  "${missing_required_handoff_row_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${missing_required_handoff_row_repo}" \
+  "Missing Phase 64.5 handoff row for reviewed Phase 64 limitation: limitation-phase64-rc-gate-consumption-001"
+
+wrong_owner_repo="${workdir}/wrong-owner"
+copy_valid_repo "${wrong_owner_repo}"
+perl -0pi -e 's/supportability-owner/wrong-owner/' \
+  "${wrong_owner_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${wrong_owner_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: owner does not match reviewed Phase 64 record"
+
+wrong_mitigation_status_repo="${workdir}/wrong-mitigation-status"
+copy_valid_repo "${wrong_mitigation_status_repo}"
+perl -0pi -e 's/accepted risk; support bundle evidence remains separately tracked/mitigation planned; support bundle evidence remains separately tracked/' \
+  "${wrong_mitigation_status_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${wrong_mitigation_status_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: mitigation status does not match reviewed Phase 64 record"
+
+wrong_accepted_risk_repo="${workdir}/wrong-accepted-risk"
+copy_valid_repo "${wrong_accepted_risk_repo}"
+perl -0pi -e 's/bounded pre-RC limitation accepted only as reviewed ownership evidence/wrong accepted risk posture/' \
+  "${wrong_accepted_risk_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${wrong_accepted_risk_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: accepted risks does not match reviewed Phase 64 record"
+
 missing_remaining_obligations_repo="${workdir}/missing-remaining-obligations"
 copy_valid_repo "${missing_remaining_obligations_repo}"
 remove_doc_text "${missing_remaining_obligations_repo}" "Remaining Phase 66 proof obligations: independent RC gate packet, support bundle evidence, restore evidence, upgrade and rollback evidence, first-user RC behavior, daily-operator RC behavior, supportability evidence, security review, packaging evidence, issue-lint evidence, verifier evidence, and explicit gate acceptance outside this handoff."
@@ -184,6 +216,20 @@ printf '%s\n' "Handoff evidence is release truth." >>"${release_truth_repo}/docs
 assert_fails_with \
   "${release_truth_repo}" \
   "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: Handoff evidence is release truth."
+
+production_ready_repo="${workdir}/production-ready"
+copy_valid_repo "${production_ready_repo}"
+printf '%s\n' "AegisOps is production ready because the handoff exists." >>"${production_ready_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${production_ready_repo}" \
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: AegisOps is production ready because the handoff exists."
+
+rc_gate_accepted_repo="${workdir}/rc-gate-accepted"
+copy_valid_repo "${rc_gate_accepted_repo}"
+printf '%s\n' "The RC gate is accepted by this handoff." >>"${rc_gate_accepted_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${rc_gate_accepted_repo}" \
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: The RC gate is accepted by this handoff."
 
 verifier_truth_repo="${workdir}/verifier-truth"
 copy_valid_repo "${verifier_truth_repo}"
