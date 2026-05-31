@@ -52,6 +52,7 @@ class Phase63EvidencePackContract:
     required_provenance_fields: frozenset[str]
     required_confidence_fields: frozenset[str]
     contract_fields: frozenset[str]
+    recognized_fields: frozenset[str]
     supported_source_ids: frozenset[str]
     subordinate_authority_posture: str
     no_workflow_authority: str
@@ -128,6 +129,7 @@ def assert_phase63_evidence_pack_contract_aligned(
         ai.required_confidence_fields,
     )
     _assert_equal("contract fields", backend.contract_fields, ui.contract_fields)
+    _assert_equal("recognized fields", backend.recognized_fields, ui.recognized_fields)
     _assert_equal(
         "source IDs",
         backend.supported_source_ids,
@@ -248,6 +250,9 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
         contract_fields=frozenset(
             inspection_projection._EVIDENCE_PACK_PROJECTION_CONTRACT_FIELDS
         ),
+        recognized_fields=frozenset(
+            inspection_projection._EVIDENCE_PACK_PROJECTION_RECOGNIZED_FIELDS
+        ),
         supported_source_ids=frozenset({source_id}),
         subordinate_authority_posture=(
             inspection_projection._EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE
@@ -255,7 +260,10 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
         no_workflow_authority=_backend_no_workflow_authority_rejection(
             validator_source
         ),
-        confidence_posture=registry_entry.confidence_posture,
+        confidence_posture=_backend_confidence_posture_rejection(
+            validator_source,
+            registry_entry.confidence_posture,
+        ),
         freshness_window_milliseconds=(
             source_projection._parse_duration_seconds(registry_entry.freshness_window)
             * 1000
@@ -324,6 +332,7 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
             ai_grounding_validation._REQUIRED_CONFIDENCE_FIELDS
         ),
         contract_fields=frozenset(),
+        recognized_fields=frozenset(),
         supported_source_ids=source_ids,
         subordinate_authority_posture=(
             ai_grounding_validation._SUBORDINATE_AUTHORITY_POSTURE
@@ -362,26 +371,20 @@ def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContrac
         source,
         "EVIDENCE_PACK_FRESHNESS_WINDOW_MS",
     )
+    metadata_fields = _ts_enforced_metadata_fields(source)
+    reason_sets = _ts_enforced_reason_sets(source)
     return Phase63EvidencePackContract(
         labels=MappingProxyType(labels),
-        degraded_reasons=_ts_set(source, "EVIDENCE_PACK_ALLOWED_DEGRADED_REASONS"),
-        unavailable_reasons=_ts_set(
-            source,
-            "EVIDENCE_PACK_ALLOWED_UNAVAILABLE_REASONS",
-        ),
-        required_custody_fields=_ts_set(
-            source,
-            "EVIDENCE_PACK_REQUIRED_CUSTODY_FIELDS",
-        ),
-        required_provenance_fields=_ts_set(
-            source,
-            "EVIDENCE_PACK_REQUIRED_PROVENANCE_FIELDS",
-        ),
-        required_confidence_fields=_ts_set(
-            source,
-            "EVIDENCE_PACK_REQUIRED_CONFIDENCE_FIELDS",
-        ),
+        degraded_reasons=reason_sets["degraded_reasons"],
+        unavailable_reasons=reason_sets["unavailable_reasons"],
+        required_custody_fields=metadata_fields["custody"],
+        required_provenance_fields=metadata_fields["provenance"],
+        required_confidence_fields=metadata_fields["confidence"],
         contract_fields=_ts_set(source, "EVIDENCE_PACK_CONTRACT_FIELDS"),
+        recognized_fields=_ts_set_with_spreads(
+            source,
+            "EVIDENCE_PACK_RECOGNIZED_FIELDS",
+        ),
         supported_source_ids=frozenset(
             {_ts_string_constant(source, "EVIDENCE_PACK_SUPPORTED_SOURCE_ID")}
         ),
@@ -389,10 +392,7 @@ def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContrac
             source,
             "EVIDENCE_PACK_SUBORDINATE_AUTHORITY_POSTURE",
         ),
-        no_workflow_authority=_ts_rejected_pack_string_field(
-            source,
-            "workflow_authority",
-        ),
+        no_workflow_authority=_ts_no_workflow_authority_rejection(source),
         confidence_posture=_ts_string_constant(
             source,
             "EVIDENCE_PACK_CONFIDENCE_POSTURE",
@@ -444,6 +444,94 @@ def _ts_enforced_label_keys(source: str) -> frozenset[str]:
     return labels
 
 
+def _ts_enforced_reason_sets(source: str) -> dict[str, frozenset[str]]:
+    reason_sets = {
+        field_name: _ts_set(source, constant_name)
+        for field_name, constant_name in _ts_validator_call_constants(
+            source,
+            "validateEvidencePackReasons",
+            "pack",
+        ).items()
+    }
+    expected_fields = frozenset({"degraded_reasons", "unavailable_reasons"})
+    if frozenset(reason_sets) != expected_fields:
+        raise AssertionError("operator UI evidence-pack reason enforcement drift")
+    return reason_sets
+
+
+def _ts_enforced_metadata_fields(source: str) -> dict[str, frozenset[str]]:
+    metadata_fields = {
+        field_name: _ts_set(source, constant_name)
+        for field_name, constant_name in _ts_validator_call_constants(
+            source,
+            "validateEvidencePackMetadataMap",
+            None,
+        ).items()
+    }
+    expected_fields = frozenset({"custody", "provenance", "confidence"})
+    if frozenset(metadata_fields) != expected_fields:
+        raise AssertionError("operator UI evidence-pack metadata enforcement drift")
+    return metadata_fields
+
+
+def _ts_validator_call_constants(
+    source: str,
+    function_name: str,
+    object_name: str | None,
+) -> dict[str, str]:
+    constants: dict[str, str] = {}
+    for match in re.finditer(rf"\b{re.escape(function_name)}\s*\(", source):
+        arguments = _split_ts_arguments(
+            _extract_parenthesized(source, match.end() - 1)
+        )
+        if len(arguments) < 2:
+            continue
+        value_argument = arguments[0].strip()
+        constant_argument = arguments[1].strip()
+        if not re.fullmatch(r"EVIDENCE_PACK_[A-Z0-9_]+", constant_argument):
+            continue
+        if object_name is None:
+            if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value_argument):
+                constants[value_argument] = constant_argument
+            continue
+        field_match = re.fullmatch(
+            rf"{re.escape(object_name)}\.([A-Za-z0-9_]+)",
+            value_argument,
+        )
+        if field_match is not None:
+            constants[field_match.group(1)] = constant_argument
+    return constants
+
+
+def _split_ts_arguments(arguments_source: str) -> tuple[str, ...]:
+    arguments: list[str] = []
+    depth = 0
+    string_quote: str | None = None
+    escaped = False
+    argument_start = 0
+    for index, character in enumerate(arguments_source):
+        if string_quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == string_quote:
+                string_quote = None
+            continue
+        if character in {'"', "'", "`"}:
+            string_quote = character
+            continue
+        if character in "([{":
+            depth += 1
+        elif character in ")]}":
+            depth -= 1
+        elif character == "," and depth == 0:
+            arguments.append(arguments_source[argument_start:index])
+            argument_start = index + 1
+    arguments.append(arguments_source[argument_start:])
+    return tuple(arguments)
+
+
 def _backend_no_workflow_authority_rejection(source: str) -> str:
     values = frozenset(
         value
@@ -455,6 +543,43 @@ def _backend_no_workflow_authority_rejection(source: str) -> str:
             "backend workflow authority rejection is not consistently discoverable"
         )
     return next(iter(values))
+
+
+def _backend_confidence_posture_rejection(
+    source: str,
+    registry_confidence_posture: str,
+) -> str:
+    values: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Compare):
+            continue
+        if len(node.ops) != 1 or not isinstance(node.ops[0], ast.NotEq):
+            continue
+        if len(node.comparators) != 1:
+            continue
+        if _py_rejection_target(node.left) != ("optional", "confidence", "posture"):
+            continue
+        compared_value = _py_string_constant(node.comparators[0])
+        if compared_value is None and _py_registry_confidence_posture_reference(
+            node.comparators[0]
+        ):
+            compared_value = registry_confidence_posture
+        if compared_value is not None:
+            values.add(compared_value)
+    if len(values) != 1:
+        raise AssertionError(
+            "backend confidence posture rejection is not consistently discoverable"
+        )
+    return next(iter(values))
+
+
+def _py_registry_confidence_posture_reference(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == "confidence_posture"
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "registry_entry"
+    )
 
 
 def _py_projection_get_string_rejection_labels(
@@ -548,6 +673,30 @@ def _ts_set(source: str, name: str) -> frozenset[str]:
     return frozenset(_string_literals(match.group("body")))
 
 
+def _ts_set_with_spreads(
+    source: str,
+    name: str,
+    *,
+    seen: frozenset[str] = frozenset(),
+) -> frozenset[str]:
+    if name in seen:
+        raise AssertionError(f"operator UI constant {name} has recursive spread")
+    match = re.search(
+        rf"const {re.escape(name)} = new Set\(\[(?P<body>.*?)\]\);",
+        source,
+        re.S,
+    )
+    if match is None:
+        raise AssertionError(f"operator UI constant {name} is not discoverable")
+    body = match.group("body")
+    values = set(_string_literals(body))
+    for spread_name in re.findall(r"\.\.\.(EVIDENCE_PACK_[A-Z0-9_]+)", body):
+        values.update(
+            _ts_set_with_spreads(source, spread_name, seen=seen | frozenset({name}))
+        )
+    return frozenset(values)
+
+
 def _ts_string_constant(source: str, name: str) -> str:
     match = re.search(rf'const {re.escape(name)} =\s*"([^"]+)";', source)
     if match is None:
@@ -574,6 +723,42 @@ def _ts_rejected_pack_string_field(source: str, field_name: str) -> str:
     if match is None:
         raise AssertionError(
             f"operator UI pack field {field_name} rejection is not discoverable"
+        )
+    return match.group(1)
+
+
+def _ts_no_workflow_authority_rejection(source: str) -> str:
+    values = frozenset(
+        {
+            _ts_rejected_pack_string_field(source, "workflow_authority"),
+            _ts_rejected_mapping_string_field(
+                source,
+                "confidence",
+                "source_native_score_authority",
+            ),
+        }
+    )
+    if len(values) != 1:
+        raise AssertionError(
+            "operator UI workflow authority rejection is not consistently discoverable"
+        )
+    return next(iter(values))
+
+
+def _ts_rejected_mapping_string_field(
+    source: str,
+    mapping_name: str,
+    field_name: str,
+) -> str:
+    match = re.search(
+        rf"\basString\({re.escape(mapping_name)}\.{re.escape(field_name)}\)"
+        r"\s*!==\s*\"([^\"]+)\"",
+        source,
+    )
+    if match is None:
+        raise AssertionError(
+            "operator UI mapping field "
+            f"{mapping_name}.{field_name} rejection is not discoverable"
         )
     return match.group(1)
 

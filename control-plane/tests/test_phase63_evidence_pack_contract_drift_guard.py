@@ -20,11 +20,13 @@ from scripts.phase63_evidence_pack_contract_guard import (  # noqa: E402
     contract_with_label_drift,
     load_phase63_evidence_pack_contracts,
     _backend_no_workflow_authority_rejection,
+    _backend_confidence_posture_rejection,
     _py_projection_get_string_rejection_labels,
     _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
     _operator_ui_contract_from_source,
     _py_string_constant,
     _ts_forbidden_defined_pack_fields,
+    _ts_no_workflow_authority_rejection,
     _ts_rejected_pack_string_field,
 )
 
@@ -131,6 +133,17 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                 "source IDs",
             ),
             (
+                "recognized field",
+                {
+                    "operator_ui_contract": contract_with_drift(
+                        ui,
+                        "recognized_fields",
+                        ui.recognized_fields - frozenset({"operator_visible"}),
+                    )
+                },
+                "recognized fields",
+            ),
+            (
                 "freshness window",
                 {
                     "operator_ui_contract": contract_with_drift(
@@ -219,6 +232,7 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
             _ts_rejected_pack_string_field(source, "workflow_authority"),
             "none",
         )
+        self.assertEqual(_ts_no_workflow_authority_rejection(source), "none")
         self.assertEqual(
             _ts_forbidden_defined_pack_fields(
                 source,
@@ -244,6 +258,13 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
             _ts_rejected_pack_string_field(workflow_drift, "workflow_authority"),
             "advisory_only",
         )
+
+        confidence_authority_drift = source.replace(
+            'asString(confidence.source_native_score_authority) !== "none"',
+            'asString(confidence.source_native_score_authority) !== "advisory_only"',
+        )
+        with self.assertRaisesRegex(AssertionError, "workflow authority"):
+            _ts_no_workflow_authority_rejection(confidence_authority_drift)
 
         readiness_drift = source.replace(
             "      pack.gate_readiness_claim !== undefined\n",
@@ -286,6 +307,41 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "label enforcement"):
             _operator_ui_contract_from_source(drifted_source)
 
+    def test_operator_ui_metadata_contract_requires_enforcement_calls(self) -> None:
+        source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+
+        reason_drift = source.replace(
+            "    validateEvidencePackReasons(\n"
+            "      pack.degraded_reasons,\n"
+            "      EVIDENCE_PACK_ALLOWED_DEGRADED_REASONS,\n"
+            "    );\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "reason enforcement"):
+            _operator_ui_contract_from_source(reason_drift)
+
+        metadata_drift = source.replace(
+            "    validateEvidencePackMetadataMap(\n"
+            "      confidence,\n"
+            "      EVIDENCE_PACK_REQUIRED_CONFIDENCE_FIELDS,\n"
+            "      evidenceRequestId,\n"
+            "    );\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "metadata enforcement"):
+            _operator_ui_contract_from_source(metadata_drift)
+
+    def test_operator_ui_recognized_fields_follow_spread_set(self) -> None:
+        source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+        contract = _operator_ui_contract_from_source(source)
+        self.assertIn("operator_visible", contract.recognized_fields)
+
+        drifted_source = source.replace('  "operator_visible",\n', "")
+        self.assertNotIn(
+            "operator_visible",
+            _operator_ui_contract_from_source(drifted_source).recognized_fields,
+        )
+
     def test_backend_authority_parser_observes_representative_drift(self) -> None:
         source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
         self.assertEqual(_backend_no_workflow_authority_rejection(source), "none")
@@ -296,6 +352,44 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(AssertionError, "backend workflow authority"):
             _backend_no_workflow_authority_rejection(drifted_source)
+
+    def test_backend_confidence_posture_parser_observes_representative_drift(
+        self,
+    ) -> None:
+        source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
+        self.assertEqual(
+            _backend_confidence_posture_rejection(
+                source,
+                "external_hash_reputation_subordinate_context",
+            ),
+            "external_hash_reputation_subordinate_context",
+        )
+
+        literal_drift = source.replace(
+            "registry_entry.confidence_posture",
+            '"workflow_truth_confidence"',
+        )
+        self.assertEqual(
+            _backend_confidence_posture_rejection(
+                literal_drift,
+                "external_hash_reputation_subordinate_context",
+            ),
+            "workflow_truth_confidence",
+        )
+
+        missing_check_drift = source.replace(
+            '    if (\n'
+            '        _optional_string_from_mapping(confidence, "posture")\n'
+            "        != registry_entry.confidence_posture\n"
+            "    ):\n"
+            '        raise ValueError("linked evidence-pack projection confidence posture mismatch")\n',
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "confidence posture"):
+            _backend_confidence_posture_rejection(
+                missing_check_drift,
+                "external_hash_reputation_subordinate_context",
+            )
 
     def test_ai_singleton_label_parser_observes_representative_drift(self) -> None:
         source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
