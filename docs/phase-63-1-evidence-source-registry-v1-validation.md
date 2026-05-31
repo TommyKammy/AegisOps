@@ -9,6 +9,8 @@
 ## Required Artifacts
 
 - `control-plane/aegisops/control_plane/evidence/evidence_source_registry.py`
+- `control-plane/aegisops/control_plane/evidence/evidence_source_registry_data.py`
+- `control-plane/aegisops/control_plane/evidence/evidence_source_validation_catalog.py`
 - `control-plane/tests/test_phase63_evidence_source_registry.py`
 - `docs/phase-63-1-evidence-source-registry-v1.md`
 - `docs/phase-63-1-evidence-source-registry-v1-validation.md`
@@ -16,6 +18,8 @@
 ## Outcome
 
 The registry now covers exactly two entries: `osquery_host_state` and `malwarebazaar_hash_reputation`.
+
+Registry data now lives in `control-plane/aegisops/control_plane/evidence/evidence_source_registry_data.py`; broad-source, workflow-authority, and custody-negation validation catalogs now live in `control-plane/aegisops/control_plane/evidence/evidence_source_validation_catalog.py`; and `control-plane/aegisops/control_plane/evidence/evidence_source_registry.py` remains the stable validator facade.
 
 The focused test suite rejects unsupported broad sources in source type and known registry text fields, missing owner, missing freshness window, malformed freshness windows, missing custody requirements, missing allowed target class, disabled source use, degraded source use, target-class mismatch, swapped source identity/type/target/freshness/custody/confidence/state pairings, unknown mapping fields in entry and source-use validation, source types outside the reviewed pair, and registry entries that claim workflow authority or workflow-truth ownership in any registry field.
 
