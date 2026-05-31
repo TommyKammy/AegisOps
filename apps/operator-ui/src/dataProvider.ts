@@ -3,6 +3,7 @@ import {
   getOneForActionReview,
   getOneForAdvisoryOutput,
   getOneForBusinessHoursHandoff,
+  getOneForLimitationOwnership,
   getOneForStandardResource,
   getOneForTodayView,
 } from "./operatorDataProvider/detailReaders";
@@ -33,7 +34,11 @@ export function createOperatorDataProvider({
     delete: (_resource) => rejectUnsupported("delete", _resource),
     deleteMany: (_resource) => rejectUnsupported("deleteMany", _resource),
     getList(resource, params) {
-      if (resource === "advisoryOutput" || resource === "actionReview") {
+      if (
+        resource === "advisoryOutput" ||
+        resource === "actionReview" ||
+        resource === "limitationOwnership"
+      ) {
         return rejectUnsupported("getList", resource);
       }
 
@@ -66,6 +71,10 @@ export function createOperatorDataProvider({
 
       if (resource === "businessHoursHandoff") {
         return getOneForBusinessHoursHandoff(fetchFn);
+      }
+
+      if (resource === "limitationOwnership") {
+        return getOneForLimitationOwnership(fetchFn);
       }
 
       if (!isStandardResource(resource)) {

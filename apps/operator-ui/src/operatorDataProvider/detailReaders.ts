@@ -62,6 +62,37 @@ const BUSINESS_HOURS_HANDOFF_AI_POSTURES = new Set([
   "rejected_for_reference",
 ]);
 
+const LIMITATION_OWNERSHIP_REVIEW_STATES = new Set([
+  "identified",
+  "under_review",
+  "accepted_risk",
+  "mitigation_planned",
+  "mitigation_in_progress",
+  "closed",
+]);
+
+const LIMITATION_OWNERSHIP_SEVERITIES = new Set([
+  "low",
+  "medium",
+  "material",
+  "high",
+  "blocking",
+]);
+
+const LIMITATION_OWNERSHIP_HANDOFF_POSTURES = new Set([
+  "not_ready_for_handoff",
+  "handoff_required",
+  "handoff_ready_as_subordinate_evidence",
+  "blocked_until_mitigated",
+]);
+
+const LIMITATION_OWNERSHIP_DUE_DATE_STATUSES = new Set([
+  "not_specified",
+  "expired",
+  "due_today",
+  "current",
+]);
+
 export async function getOneForStandardResource(
   fetchFn: typeof fetch,
   resource: StandardOperatorResourceName,
@@ -597,6 +628,109 @@ export async function getOneForBusinessHoursHandoff(
       ...payload,
       id: "current",
       items: items.map(validateBusinessHoursHandoffItem),
+    },
+  };
+}
+
+export async function getOneForLimitationOwnership(
+  fetchFn: typeof fetch,
+): Promise<GetOneResult> {
+  const payload = asObject(
+    await fetchJson(fetchFn, "/inspect-limitation-ownership"),
+    "Resource limitationOwnership returned a malformed detail payload.",
+  );
+  const limitationId = asString(payload.limitation_id);
+  const title = asString(payload.title);
+  const severity = asString(payload.severity);
+  const affectedSurface = asString(payload.affected_surface);
+  const owner = asString(payload.owner);
+  const mitigation = asString(payload.mitigation);
+  const reviewState = asString(payload.review_state);
+  const phase66HandoffPosture = asString(payload.phase66_handoff_posture);
+  const reviewDueDateStatus = asString(payload.review_due_date_status);
+  const authorityPosture = asString(payload.authority_posture);
+  const workflowAuthority = asString(payload.workflow_authority);
+  const projectionSource = asString(payload.projection_source);
+  const evidenceReferences = Array.isArray(payload.evidence_references)
+    ? payload.evidence_references
+    : null;
+
+  if (
+    limitationId === null ||
+    title === null ||
+    severity === null ||
+    affectedSurface === null ||
+    owner === null ||
+    mitigation === null ||
+    reviewState === null ||
+    phase66HandoffPosture === null ||
+    reviewDueDateStatus === null ||
+    authorityPosture === null ||
+    workflowAuthority === null ||
+    evidenceReferences === null
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership detail payload is missing reviewed ownership fields.",
+    );
+  }
+  if (!LIMITATION_OWNERSHIP_SEVERITIES.has(severity)) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership has unsupported severity.",
+    );
+  }
+  if (!LIMITATION_OWNERSHIP_REVIEW_STATES.has(reviewState)) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership has unsupported review_state.",
+    );
+  }
+  if (!LIMITATION_OWNERSHIP_HANDOFF_POSTURES.has(phase66HandoffPosture)) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership has unsupported phase66_handoff_posture.",
+    );
+  }
+  if (!LIMITATION_OWNERSHIP_DUE_DATE_STATUSES.has(reviewDueDateStatus)) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership has unsupported review_due_date_status.",
+    );
+  }
+  if (evidenceReferences.length === 0) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership requires explicit evidence references.",
+    );
+  }
+  evidenceReferences.forEach((reference) => {
+    if (asString(reference) === null) {
+      throw new OperatorDataProviderContractError(
+        "Resource limitationOwnership has a malformed evidence reference.",
+      );
+    }
+  });
+  if (
+    payload.stale_cache !== false ||
+    ["browser_cache", "ui_cache", "cache"].includes(projectionSource ?? "")
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership rejects browser or cache sourced limitation truth.",
+    );
+  }
+  if (
+    authorityPosture !== "subordinate_limitation_context_only" ||
+    payload.readiness_truth !== false ||
+    payload.release_truth !== false ||
+    payload.gate_truth !== false ||
+    payload.workflow_truth !== false ||
+    workflowAuthority !== "none"
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource limitationOwnership must remain subordinate and cannot claim readiness, release, gate, or workflow truth.",
+    );
+  }
+
+  return {
+    data: {
+      ...payload,
+      id: limitationId,
+      evidence_references: evidenceReferences,
     },
   };
 }
