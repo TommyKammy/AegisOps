@@ -26,6 +26,7 @@ from scripts.phase63_evidence_pack_contract_guard import (  # noqa: E402
     _backend_no_workflow_authority_rejection,
     _backend_confidence_posture_rejection,
     _py_ai_enforced_freshness_window_milliseconds,
+    _py_ai_forbidden_readiness_claim_rejection,
     _py_backend_enforced_label_sets,
     _py_backend_enforced_freshness_window_milliseconds,
     _py_backend_enforced_metadata_fields,
@@ -188,6 +189,27 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                 "source IDs",
             ),
             (
+                "coordinated source ID",
+                {
+                    "backend_contract": contract_with_drift(
+                        backend,
+                        "supported_source_ids",
+                        frozenset({"sample_hash_reputation"}),
+                    ),
+                    "operator_ui_contract": contract_with_drift(
+                        ui,
+                        "supported_source_ids",
+                        frozenset({"sample_hash_reputation"}),
+                    ),
+                    "ai_grounding_contract": contract_with_drift(
+                        ai,
+                        "supported_source_ids",
+                        frozenset({"sample_hash_reputation"}),
+                    ),
+                },
+                "source IDs",
+            ),
+            (
                 "recognized field",
                 {
                     "operator_ui_contract": contract_with_drift(
@@ -257,6 +279,17 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                 "readiness claim fields",
             ),
             (
+                "AI readiness claim",
+                {
+                    "ai_grounding_contract": contract_with_drift(
+                        ai,
+                        "forbidden_readiness_claim_fields",
+                        frozenset(),
+                    )
+                },
+                "readiness claim fields",
+            ),
+            (
                 "authority truth denial",
                 {
                     "ai_grounding_contract": contract_with_drift(
@@ -286,6 +319,27 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                         "authoritative_workflow_truth",
                         True,
                     )
+                },
+                "authoritative workflow truth denial",
+            ),
+            (
+                "coordinated workflow truth widening",
+                {
+                    "backend_contract": contract_with_drift(
+                        backend,
+                        "authoritative_workflow_truth",
+                        True,
+                    ),
+                    "operator_ui_contract": contract_with_drift(
+                        ui,
+                        "authoritative_workflow_truth",
+                        True,
+                    ),
+                    "ai_grounding_contract": contract_with_drift(
+                        ai,
+                        "authoritative_workflow_truth",
+                        True,
+                    ),
                 },
                 "authoritative workflow truth denial",
             ),
@@ -401,6 +455,24 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "FreshnessWindow"):
             _ts_enforced_freshness_window_milliseconds(drifted_source)
 
+    def test_operator_ui_source_state_reason_check_models_registry_status(
+        self,
+    ) -> None:
+        source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+        self.assertIn(
+            "source_state_matches_availability_reasons",
+            _ts_state_reason_consistency_rules(
+                source,
+                source_registry_status="enabled",
+            ),
+        )
+
+        with self.assertRaisesRegex(AssertionError, "valid source-state reasons"):
+            _ts_state_reason_consistency_rules(
+                source,
+                source_registry_status="degraded",
+            )
+
     def test_operator_ui_confidence_posture_uses_validator_check(self) -> None:
         source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
         self.assertEqual(
@@ -482,6 +554,35 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(AssertionError, "metadata-map validator semantics"):
             _operator_ui_contract_from_source(metadata_helper_drift)
+
+    def test_ai_readiness_claim_denial_is_parsed(self) -> None:
+        from aegisops.control_plane.assistant import ai_grounding_validation
+
+        source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
+        self.assertEqual(
+            _py_ai_forbidden_readiness_claim_rejection(
+                source,
+                ai_grounding_validation,
+            ),
+            frozenset(
+                {
+                    "release_readiness_claim",
+                    "rc_readiness_claim",
+                    "gate_readiness_claim",
+                }
+            ),
+        )
+
+        readiness_drift = source.replace(
+            "    if any(claim_name in projection for claim_name in _FORBIDDEN_READINESS_CLAIMS):\n"
+            "        reasons.append(\"grounding_authority_promotion_attempt\")\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "readiness-claim"):
+            _py_ai_forbidden_readiness_claim_rejection(
+                readiness_drift,
+                ai_grounding_validation,
+            )
 
     def test_operator_ui_source_authority_and_projection_source_checks_are_parsed(
         self,

@@ -94,6 +94,14 @@ _METADATA_FORMAT_RULES = frozenset(
     }
 )
 _CACHE_BOOLEAN_FALSE_FIELDS = frozenset({"cache_sourced", "stale_cache"})
+_BOUNDED_EVIDENCE_PACK_SOURCE_IDS = frozenset({"malwarebazaar_hash_reputation"})
+_FORBIDDEN_READINESS_CLAIM_FIELDS = frozenset(
+    {
+        "release_readiness_claim",
+        "rc_readiness_claim",
+        "gate_readiness_claim",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -219,6 +227,7 @@ def assert_phase63_evidence_pack_contract_aligned(
         backend.supported_source_ids,
         ui.supported_source_ids,
         ai.supported_source_ids,
+        _BOUNDED_EVIDENCE_PACK_SOURCE_IDS,
     )
     _assert_equal(
         "freshness window",
@@ -250,6 +259,7 @@ def assert_phase63_evidence_pack_contract_aligned(
         backend.authoritative_workflow_truth,
         ui.authoritative_workflow_truth,
         ai.authoritative_workflow_truth,
+        False,
     )
     _assert_equal(
         "confidence posture",
@@ -272,6 +282,8 @@ def assert_phase63_evidence_pack_contract_aligned(
         "readiness claim fields",
         backend.forbidden_readiness_claim_fields,
         ui.forbidden_readiness_claim_fields,
+        ai.forbidden_readiness_claim_fields,
+        _FORBIDDEN_READINESS_CLAIM_FIELDS,
     )
     _assert_equal(
         "AI authority truth denial posture",
@@ -490,7 +502,10 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
         ),
         forbidden_projection_sources=frozenset(),
         cache_boolean_false_fields=frozenset(),
-        forbidden_readiness_claim_fields=frozenset(),
+        forbidden_readiness_claim_fields=_py_ai_forbidden_readiness_claim_rejection(
+            validator_source,
+            ai_grounding_validation,
+        ),
         authority_truth_denials=_py_ai_authority_truth_denials(
             validator_source,
             ai_grounding_validation,
@@ -499,6 +514,11 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
 
 
 def _operator_ui_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
+    _ensure_control_plane_path(repo_root)
+    from aegisops.control_plane.evidence.evidence_source_registry import (  # noqa: WPS433
+        PHASE63_EVIDENCE_SOURCE_REGISTRY,
+    )
+
     source = (
         repo_root
         / "apps"
@@ -507,10 +527,21 @@ def _operator_ui_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContrac
         / "operatorDataProvider"
         / "linkedEvidencePackValidator.ts"
     ).read_text(encoding="utf-8")
-    return _operator_ui_contract_from_source(source)
+    supported_source_id = _ts_rejected_pack_string_field(source, "source_id")
+    registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(supported_source_id)
+    if registry_entry is None:
+        raise AssertionError("operator UI supported evidence-pack source is unregistered")
+    return _operator_ui_contract_from_source(
+        source,
+        source_registry_status=registry_entry.status,
+    )
 
 
-def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContract:
+def _operator_ui_contract_from_source(
+    source: str,
+    *,
+    source_registry_status: str = "enabled",
+) -> Phase63EvidencePackContract:
     labels = _ts_allowed_labels(source)
     metadata_fields = _ts_enforced_metadata_fields(source)
     reason_sets = _ts_enforced_reason_sets(source)
@@ -548,7 +579,10 @@ def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContrac
         freshness_window_milliseconds=_ts_enforced_freshness_window_milliseconds(
             source
         ),
-        state_reason_consistency_rules=_ts_state_reason_consistency_rules(source),
+        state_reason_consistency_rules=_ts_state_reason_consistency_rules(
+            source,
+            source_registry_status=source_registry_status,
+        ),
         forbidden_projection_sources=_ts_forbidden_projection_sources_rejection(source),
         cache_boolean_false_fields=_ts_cache_boolean_rejections(source),
         forbidden_readiness_claim_fields=_ts_forbidden_defined_pack_fields(
@@ -1148,6 +1182,23 @@ def _py_backend_forbidden_readiness_claim_rejection(
         "backend readiness-claim rejection",
     )
     return frozenset(getattr(namespace, "_EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS"))
+
+
+def _py_ai_forbidden_readiness_claim_rejection(
+    source: str,
+    namespace: object,
+) -> frozenset[str]:
+    body = _py_function_source(source, "_projection_reasons")
+    _require_substrings(
+        body,
+        (
+            "claim_name in projection",
+            "for claim_name in _FORBIDDEN_READINESS_CLAIMS",
+            'reasons.append("grounding_authority_promotion_attempt")',
+        ),
+        "AI readiness-claim rejection",
+    )
+    return frozenset(getattr(namespace, "_FORBIDDEN_READINESS_CLAIMS"))
 
 
 def _py_backend_provenance_binding_rules(source: str) -> frozenset[str]:
@@ -1843,7 +1894,11 @@ def _ts_enforced_freshness_window_milliseconds(source: str) -> int:
     return _ts_number_expression(source, "EVIDENCE_PACK_FRESHNESS_WINDOW_MS")
 
 
-def _ts_state_reason_consistency_rules(source: str) -> frozenset[str]:
+def _ts_state_reason_consistency_rules(
+    source: str,
+    *,
+    source_registry_status: str = "enabled",
+) -> frozenset[str]:
     function_body = _ts_function_body(source, "validateEvidencePackReasonConsistency")
     _ts_require_call(
         source,
@@ -1854,6 +1909,7 @@ def _ts_state_reason_consistency_rules(source: str) -> frozenset[str]:
             "{\n      status,\n      freshnessState,\n      conflictState,\n      sourceState,\n      uncertaintyLabel,\n    }",
         ),
     )
+    _ts_source_reason_registry_status_check(function_body, source_registry_status)
     return _state_reason_consistency_rules_from_requirements(
         {
             "available_status_has_no_reasons": (
@@ -1903,6 +1959,34 @@ def _ts_state_reason_consistency_rules(source: str) -> frozenset[str]:
         function_body,
         "operator UI state/reason consistency",
     )
+
+
+def _ts_source_reason_registry_status_check(
+    function_body: str,
+    source_registry_status: str,
+) -> None:
+    rejects_registry_transition_reasons = all(
+        substring in function_body
+        for substring in (
+            'degradedReasons.includes("source_stale")',
+            'unavailableReasons.includes("source_denied")',
+            "throw new OperatorDataProviderContractError(inconsistentMessage)",
+        )
+    )
+    if source_registry_status == "enabled":
+        if not rejects_registry_transition_reasons:
+            raise AssertionError(
+                "operator UI enabled-source reason rejection is not discoverable"
+            )
+        return
+    if source_registry_status in {"degraded", "disabled"}:
+        if rejects_registry_transition_reasons:
+            raise AssertionError(
+                "operator UI source-state registry-status enforcement rejects "
+                "valid source-state reasons"
+            )
+        return
+    raise AssertionError("operator UI source registry status is unsupported")
 
 
 def _ts_rejected_pack_string_field(source: str, field_name: str) -> str:

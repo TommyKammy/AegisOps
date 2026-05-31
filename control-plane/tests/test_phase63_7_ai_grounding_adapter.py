@@ -1299,6 +1299,21 @@ class Phase637AIGroundingAdapterTests(unittest.TestCase):
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertEqual(payload["grounding_items"], ())
 
+    def test_readiness_claims_in_grounding_projection_fail_closed(self) -> None:
+        projection = {
+            **_projection(),
+            "release_readiness_claim": "ready",
+        }
+
+        payload = build_ai_grounding_adapter(
+            grounding_context_payload=_grounding_payload(projections=(projection,))
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertIn("grounding_authority_promotion_attempt", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["grounding_items"], ())
+
     def test_advertised_agent_and_tool_are_registered(self) -> None:
         with (REPO_ROOT / "docs/automation/ai-agent-registry.json").open() as stream:
             agent_registry = json.load(stream)

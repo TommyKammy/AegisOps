@@ -50,6 +50,11 @@ _NEGATIVE_AUTHORITY = (
     "readiness_truth",
     "workflow_truth",
 )
+_FORBIDDEN_READINESS_CLAIMS = (
+    "release_readiness_claim",
+    "rc_readiness_claim",
+    "gate_readiness_claim",
+)
 _REQUIRED_CUSTODY_FIELDS = (
     "reviewed_file_hash",
     "enrichment_request_id",
@@ -220,6 +225,8 @@ def _projection_reasons(
     else:
         reasons.extend(_grounding_source_reasons(source_id, projection))
     if projection.get("authoritative_workflow_truth") is not False:
+        reasons.append("grounding_authority_promotion_attempt")
+    if any(claim_name in projection for claim_name in _FORBIDDEN_READINESS_CLAIMS):
         reasons.append("grounding_authority_promotion_attempt")
     if projection.get("workflow_authority") != _NO_WORKFLOW_AUTHORITY:
         reasons.append("grounding_authority_promotion_attempt")
