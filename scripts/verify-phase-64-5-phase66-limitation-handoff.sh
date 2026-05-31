@@ -239,6 +239,27 @@ require_reviewed_record_anchor() {
   fi
 }
 
+require_required_reviewed_record_live_row() {
+  local required_row="$1"
+
+  if ! reviewed_record_table_rows | grep -Fxq -- "${required_row}"; then
+    echo "Missing required Phase 64.1 reviewed limitation live table row: ${required_row}" >&2
+    exit 1
+  fi
+}
+
+required_reviewed_record_rows=()
+while IFS= read -r row; do
+  required_reviewed_record_rows+=("${row}")
+done <<'EOF_REQUIRED_REVIEWED_RECORD_ROW'
+| `limitation-phase64-support-bundle-001` | Support bundle evidence remains separately tracked. | material | supportability_evidence | supportability-owner | Track the support bundle slice before Phase 66 RC proof. | `docs/phase-63-closeout-evaluation.md#support-bundle-gap-disposition` | accepted_risk | weekly | none | bounded_pre_rc_limitation | handoff_required | reviewed_evidence_input_only |
+| `limitation-phase64-rc-gate-consumption-001` | RC gate packet still needs independent proof. | material | release_gate_evidence | release-gate-owner | Keep limitation ownership as subordinate RC packet planning evidence only. | `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`; `docs/phase-64-1-known-limitation-ownership-record-contract.md` | mitigation_planned | weekly | none | gate_consumption_risk_requires_independent_proof | handoff_required | reviewed_evidence_input_only |
+EOF_REQUIRED_REVIEWED_RECORD_ROW
+
+for row in "${required_reviewed_record_rows[@]}"; do
+  require_required_reviewed_record_live_row "${row}"
+done
+
 reject_no_open_blocker_assertion() {
   local value="$1"
   local limitation_id="$2"
@@ -297,6 +318,86 @@ require_real_iso_date() {
 
   if (( day_number < 1 || day_number > max_day )); then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: ${description} must use a real YYYY-MM-DD calendar date" >&2
+    exit 1
+  fi
+}
+
+validate_reviewed_record_contract_fields() {
+  local limitation_id="$1"
+  local record_title="$2"
+  local record_severity="$3"
+  local record_affected_surface="$4"
+  local record_owner="$5"
+  local record_mitigation="$6"
+  local record_evidence_references="$7"
+  local record_review_state="$8"
+  local record_review_cadence="$9"
+  local record_due_date="${10}"
+  local record_accepted_risk_posture="${11}"
+  local record_handoff_posture="${12}"
+  local record_authority_boundary="${13}"
+
+  reject_blank_or_placeholder "${record_title}" "reviewed Phase 64 record title" "${limitation_id}"
+  reject_blank_or_placeholder "${record_severity}" "reviewed Phase 64 record severity" "${limitation_id}"
+  reject_blank_or_placeholder "${record_affected_surface}" "reviewed Phase 64 record affected surface" "${limitation_id}"
+  reject_blank_or_placeholder "${record_owner}" "reviewed Phase 64 record owner" "${limitation_id}"
+  reject_blank_or_placeholder "${record_mitigation}" "reviewed Phase 64 record mitigation" "${limitation_id}"
+  reject_blank_or_placeholder "${record_evidence_references}" "reviewed Phase 64 record evidence references" "${limitation_id}"
+  reject_blank_or_placeholder "${record_review_state}" "reviewed Phase 64 record review state" "${limitation_id}"
+  reject_blank_or_placeholder "${record_accepted_risk_posture}" "reviewed Phase 64 record accepted risk posture" "${limitation_id}"
+  reject_blank_or_placeholder "${record_handoff_posture}" "reviewed Phase 64 record handoff posture" "${limitation_id}"
+  reject_blank_or_placeholder "${record_authority_boundary}" "reviewed Phase 64 record authority boundary" "${limitation_id}"
+
+  record_severity="$(trim_cell "${record_severity}")"
+  record_review_state="$(trim_cell "${record_review_state}")"
+  record_review_cadence="$(trim_cell "${record_review_cadence}")"
+  record_due_date="$(trim_cell "${record_due_date}")"
+  record_handoff_posture="$(trim_cell "${record_handoff_posture}")"
+
+  if [[ ! "${record_severity}" =~ ^(low|medium|material|high|blocking)$ ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 record severity is unsupported" >&2
+    exit 1
+  fi
+
+  if [[ ! "${record_review_state}" =~ ^(identified|under_review|accepted_risk|mitigation_planned|mitigation_in_progress|closed)$ ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 record review state is unsupported" >&2
+    exit 1
+  fi
+
+  if [[ "${record_review_cadence}" =~ ^(none|n/a|na)$ && "${record_due_date}" =~ ^(none|n/a|na)$ ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 record requires review cadence or due date" >&2
+    exit 1
+  fi
+
+  if [[ ! "${record_due_date}" =~ ^(none|n/a|na)$ ]]; then
+    require_real_iso_date "${record_due_date}" "reviewed Phase 64 record due date" "${limitation_id}"
+  fi
+
+  if [[ ! "${record_handoff_posture}" =~ ^(not_ready_for_handoff|handoff_required|handoff_ready_as_subordinate_evidence|blocked_until_mitigated)$ ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 record handoff posture is unsupported" >&2
+    exit 1
+  fi
+}
+
+require_rc_gate_notes_boundary() {
+  local value="$1"
+  local limitation_id="$2"
+  local normalized
+
+  normalized="$(normalize_comparison_text "${value}")"
+
+  if [[ "${normalized}" =~ (^|[[:space:]])not[[:space:]]+(a[[:space:]]+|as[[:space:]]+)?subordinate($|[[:space:]]) || \
+        "${normalized}" =~ (^|[[:space:]])non[[:space:]]+subordinate($|[[:space:]]) || \
+        "${normalized}" =~ (^|[[:space:]])not[[:space:]]+independent($|[[:space:]]) || \
+        "${normalized}" =~ (^|[[:space:]])does[[:space:]]+not[[:space:]]+(preserve|remain|stay)[[:space:]].*subordinate($|[[:space:]]) ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: RC-gate consumption notes must preserve subordinate handoff boundary" >&2
+    exit 1
+  fi
+
+  if [[ ! "${normalized}" =~ (^|[[:space:]])subordinate($|[[:space:]]) && \
+        ! "${normalized}" =~ (^|[[:space:]])does[[:space:]]+not[[:space:]]+satisfy($|[[:space:]]) && \
+        ! "${normalized}" =~ (^|[[:space:]])independent($|[[:space:]]) ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: RC-gate consumption notes must preserve subordinate handoff boundary" >&2
     exit 1
   fi
 }
@@ -409,6 +510,21 @@ validate_handoff_row() {
 
   IFS='|' read -r empty_prefix record_limitation_id_cell record_title record_severity record_affected_surface record_owner record_mitigation record_evidence_references record_review_state record_review_cadence record_due_date record_accepted_risk_posture record_handoff_posture record_authority_boundary empty_suffix <<<"${reviewed_record_row}"
 
+  validate_reviewed_record_contract_fields \
+    "${limitation_id}" \
+    "${record_title}" \
+    "${record_severity}" \
+    "${record_affected_surface}" \
+    "${record_owner}" \
+    "${record_mitigation}" \
+    "${record_evidence_references}" \
+    "${record_review_state}" \
+    "${record_review_cadence}" \
+    "${record_due_date}" \
+    "${record_accepted_risk_posture}" \
+    "${record_handoff_posture}" \
+    "${record_authority_boundary}"
+
   record_owner="$(trim_cell "${record_owner}")"
   record_evidence_references="$(trim_cell "${record_evidence_references}")"
   record_review_state="$(trim_cell "${record_review_state}")"
@@ -445,10 +561,7 @@ validate_handoff_row() {
   require_normalized_contains "${mitigation_status}" "${record_review_state}" "mitigation status" "${limitation_id}"
   require_normalized_contains "${accepted_risks}" "${record_accepted_risk_posture}" "accepted risks" "${limitation_id}"
 
-  if ! grep -Eiq '(subordinate|no rc gate|does not satisfy|independent)' <<<"${rc_gate_notes}"; then
-    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: RC-gate consumption notes must preserve subordinate handoff boundary" >&2
-    exit 1
-  fi
+  require_rc_gate_notes_boundary "${rc_gate_notes}" "${limitation_id}"
 
   handoff_ids="${handoff_ids}${limitation_id}"$'\n'
 }
