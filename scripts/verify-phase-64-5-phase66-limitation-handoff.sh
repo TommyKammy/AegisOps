@@ -213,6 +213,28 @@ require_evidence_reference_target() {
   fi
 }
 
+validate_handoff_evidence_references() {
+  local references="$1"
+  local limitation_id="$2"
+  local backticked_reference_pattern='^`[^`]+`$'
+  local reference
+  local reference_target
+  local reference_parts
+
+  IFS=';' read -r -a reference_parts <<<"${references}"
+  for reference in "${reference_parts[@]}"; do
+    reference="$(trim_cell "${reference}")"
+    if [[ ! "${reference}" =~ ${backticked_reference_pattern} ]]; then
+      echo "Invalid Phase 64.5 handoff row for ${limitation_id}: handoff evidence reference must be a single backticked repo-relative target: ${reference}" >&2
+      exit 1
+    fi
+
+    reference_target="${reference#\`}"
+    reference_target="${reference_target%\`}"
+    require_evidence_reference_target "${reference_target}" "handoff evidence reference ${reference}" "${limitation_id}"
+  done
+}
+
 reviewed_record_table_rows() {
   awk '
     function trim(value) {
@@ -514,8 +536,6 @@ validate_handoff_row() {
   local record_evidence_reference
   local record_evidence_reference_target
   local reviewed_record_pipe_count
-  local handoff_evidence_reference
-  local handoff_evidence_reference_target
 
   if [[ ! "${row}" =~ ^\|.*\|[[:space:]]*$ ]]; then
     echo "Invalid Phase 64.5 handoff table row: ${row}" >&2
@@ -642,16 +662,7 @@ validate_handoff_row() {
     require_evidence_reference_target "${record_evidence_reference_target}" "reviewed Phase 64 evidence reference ${record_evidence_reference}" "${limitation_id}"
   done < <(grep -oE '`[^`]+`' <<<"${record_evidence_references}" || true)
 
-  while IFS= read -r handoff_evidence_reference; do
-    handoff_evidence_reference_target="${handoff_evidence_reference#\`}"
-    handoff_evidence_reference_target="${handoff_evidence_reference_target%\`}"
-
-    if [[ -z "${handoff_evidence_reference}" ]]; then
-      continue
-    fi
-
-    require_evidence_reference_target "${handoff_evidence_reference_target}" "handoff evidence reference ${handoff_evidence_reference}" "${limitation_id}"
-  done < <(grep -oE '`[^`]+`' <<<"${evidence_references}" || true)
+  validate_handoff_evidence_references "${evidence_references}" "${limitation_id}"
 
   require_normalized_contains "${mitigation_status}" "${record_review_state}" "mitigation status" "${limitation_id}"
   require_normalized_contains "${accepted_risks}" "${record_accepted_risk_posture}" "accepted risks" "${limitation_id}"
