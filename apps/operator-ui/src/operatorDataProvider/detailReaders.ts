@@ -739,7 +739,7 @@ export async function getOneForLimitationOwnership(
   });
   if (
     (payload.stale_cache !== undefined && payload.stale_cache !== false) ||
-    payload.cache_sourced === true ||
+    (payload.cache_sourced !== undefined && payload.cache_sourced !== false) ||
     ["browser_cache", "ui_cache", "cache"].includes(projectionSource ?? "")
   ) {
     throw new OperatorDataProviderContractError(
