@@ -179,6 +179,34 @@ class Phase64KnownLimitationOwnershipContractTests(unittest.TestCase):
             record,
         )
 
+    def test_known_limitation_ownership_restore_dry_run_rejects_invalid_contract_shape(
+        self,
+    ) -> None:
+        store, _backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        record = _known_limitation_ownership_record()
+        service.persist_record(record)
+        backup = service.export_authoritative_record_chain_backup()
+        backup["record_families"]["known_limitation_ownership"][0][
+            "severity"
+        ] = "catastrophic"
+
+        restored_store, _backend = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+        diagnostics_service = (
+            restored_service._runtime_restore_readiness_diagnostics_service
+        )
+
+        with self.assertRaisesRegex(ValueError, "unsupported severity"):
+            diagnostics_service.dry_run_authoritative_record_chain_restore(backup)
+        self.assertEqual(restored_store.list(KnownLimitationOwnershipRecord), ())
+
     def test_known_limitation_ownership_default_lifecycle_state_follows_review_state(
         self,
     ) -> None:
@@ -238,6 +266,19 @@ class Phase64KnownLimitationOwnershipContractTests(unittest.TestCase):
                     phase66_handoff_posture="rc_proof_complete"
                 )
             )
+
+    def test_known_limitation_ownership_allows_ordinary_workflow_limitation_text(
+        self,
+    ) -> None:
+        record = _known_limitation_ownership_record(
+            title="Approval expiry mitigation remains manual.",
+            mitigation="Track the execution gap as a known limitation.",
+            accepted_risk_posture=(
+                "Reconciliation coverage remains partial until the evidence owner review."
+            ),
+        )
+
+        _validate_record(record)
 
     def test_known_limitation_ownership_rejects_readiness_and_release_overclaims(
         self,

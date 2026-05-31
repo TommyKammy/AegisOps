@@ -384,6 +384,7 @@ class RestoreValidationBoundary:
             *families.recommendations,
             *families.detector_lifecycles,
             *families.false_positive_reviews,
+            *families.known_limitation_ownership_records,
         ):
             _validate_record(record)
 
