@@ -114,6 +114,14 @@ assert_fails_with \
   "${stale_next_review_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: next review date must be after the handoff document date"
 
+invalid_next_review_repo="${workdir}/invalid-next-review"
+copy_valid_repo "${invalid_next_review_repo}"
+perl -0pi -e 's/2026-06-15/2026-13-40/g' \
+  "${invalid_next_review_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${invalid_next_review_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: next review date must use a real YYYY-MM-DD calendar date"
+
 missing_subordinate_repo="${workdir}/missing-subordinate"
 copy_valid_repo "${missing_subordinate_repo}"
 remove_doc_text "${missing_subordinate_repo}" 'The handoff references reviewed Phase 64 known limitation ownership records in `docs/phase-64-1-reviewed-limitation-ownership-records.md` as subordinate evidence only.'
@@ -127,6 +135,13 @@ remove_doc_text "${missing_reviewed_record_reference_repo}" '`docs/phase-64-1-re
 assert_fails_with \
   "${missing_reviewed_record_reference_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-rc-gate-consumption-001: missing reviewed Phase 64 limitation record reference"
+
+missing_reviewed_evidence_reference_repo="${workdir}/missing-reviewed-evidence-reference"
+copy_valid_repo "${missing_reviewed_evidence_reference_repo}"
+remove_doc_text "${missing_reviewed_evidence_reference_repo}" '`docs/phase-63-closeout-evaluation.md#support-bundle-gap-disposition`; '
+assert_fails_with \
+  "${missing_reviewed_evidence_reference_repo}" \
+  'Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: missing reviewed Phase 64 evidence reference `docs/phase-63-closeout-evaluation.md#support-bundle-gap-disposition`'
 
 missing_reviewed_record_repo="${workdir}/missing-reviewed-record"
 copy_valid_repo "${missing_reviewed_record_repo}"
@@ -144,12 +159,28 @@ assert_fails_with \
   "${duplicate_reviewed_record_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: duplicate reviewed Phase 64 limitation records"
 
+duplicate_handoff_row_repo="${workdir}/duplicate-handoff-row"
+copy_valid_repo "${duplicate_handoff_row_repo}"
+perl -0pi -e 's/(\| `limitation-phase64-support-bundle-001`[^\n]*\n)/$1$1/' \
+  "${duplicate_handoff_row_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${duplicate_handoff_row_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: duplicate Phase 64.5 handoff rows"
+
 missing_row_blocker_repo="${workdir}/missing-row-blocker"
 copy_valid_repo "${missing_row_blocker_repo}"
 remove_doc_text "${missing_row_blocker_repo}" "RC gate packet must still prove install, Wazuh signal, Shuffle execution, AI trace, report export, restore dry-run, upgrade plan, support bundle, and limitations ownership evidence against the approved RC gate."
 assert_fails_with \
   "${missing_row_blocker_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-rc-gate-consumption-001: missing open blockers"
+
+punctuated_placeholder_blocker_repo="${workdir}/punctuated-placeholder-blocker"
+copy_valid_repo "${punctuated_placeholder_blocker_repo}"
+perl -0pi -e 's/Phase 51\.3 support bundle command, redaction review, included record identifiers, omitted private data classes, owner, retention expectation, and verifier evidence remain required before RC proof can treat support evidence as satisfied\./TBD./' \
+  "${punctuated_placeholder_blocker_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${punctuated_placeholder_blocker_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: missing open blockers"
 
 malformed_extra_row_repo="${workdir}/malformed-extra-row"
 copy_valid_repo "${malformed_extra_row_repo}"

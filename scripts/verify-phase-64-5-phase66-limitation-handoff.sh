@@ -105,11 +105,13 @@ reject_blank_or_placeholder() {
   local description="$2"
   local limitation_id="$3"
   local normalized
+  local placeholder_key
 
   value="$(trim_cell "${value}")"
   normalized="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]')"
+  placeholder_key="$(printf '%s' "${normalized}" | sed -E 's/^`+//; s/`+$//; s/^[[:space:][:punct:]]+//; s/[[:space:][:punct:]]+$//; s/[[:space:][:punct:]]+//g')"
 
-  if [[ -z "${value}" || "${normalized}" =~ ^(\`?)(none|n/a|na|tbd|todo|placeholder|-)(\`?)$ ]]; then
+  if [[ -z "${value}" || -z "${placeholder_key}" || "${placeholder_key}" =~ ^(none|na|tbd|todo|placeholder)$ ]]; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: missing ${description}" >&2
     exit 1
   fi
@@ -140,11 +142,60 @@ require_normalized_contains() {
   fi
 }
 
+require_real_iso_date() {
+  local value="$1"
+  local description="$2"
+  local limitation_id="$3"
+  local year
+  local month
+  local day
+  local year_number
+  local month_number
+  local day_number
+  local max_day
+
+  if [[ ! "${value}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: ${description} must use YYYY-MM-DD" >&2
+    exit 1
+  fi
+
+  year="${value:0:4}"
+  month="${value:5:2}"
+  day="${value:8:2}"
+  year_number=$((10#${year}))
+  month_number=$((10#${month}))
+  day_number=$((10#${day}))
+
+  if (( month_number < 1 || month_number > 12 )); then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: ${description} must use a real YYYY-MM-DD calendar date" >&2
+    exit 1
+  fi
+
+  case "${month_number}" in
+    1|3|5|7|8|10|12) max_day=31 ;;
+    4|6|9|11) max_day=30 ;;
+    2)
+      if (( (year_number % 400 == 0) || (year_number % 4 == 0 && year_number % 100 != 0) )); then
+        max_day=29
+      else
+        max_day=28
+      fi
+      ;;
+  esac
+
+  if (( day_number < 1 || day_number > max_day )); then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: ${description} must use a real YYYY-MM-DD calendar date" >&2
+    exit 1
+  fi
+}
+
 handoff_document_date="$(sed -nE 's/^- \*\*Date\*\*: ([0-9]{4}-[0-9]{2}-[0-9]{2})$/\1/p' "${absolute_doc_path}" | head -n 1)"
 if [[ -z "${handoff_document_date}" ]]; then
   echo "Missing Phase 64.5 handoff document date" >&2
   exit 1
 fi
+
+require_real_iso_date "${handoff_document_date}" "handoff document date" "document"
 
 handoff_ids=""
 
@@ -210,14 +261,16 @@ validate_handoff_row() {
   reject_blank_or_placeholder "${next_review_date}" "next review date" "${limitation_id}"
   reject_blank_or_placeholder "${rc_gate_notes}" "RC-gate consumption notes" "${limitation_id}"
 
-  if [[ ! "$(trim_cell "${next_review_date}")" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: next review date must use YYYY-MM-DD" >&2
+  next_review_date="$(trim_cell "${next_review_date}")"
+  require_real_iso_date "${next_review_date}" "next review date" "${limitation_id}"
+
+  if [[ "${next_review_date}" < "${handoff_document_date}" || "${next_review_date}" == "${handoff_document_date}" ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: next review date must be after the handoff document date" >&2
     exit 1
   fi
 
-  next_review_date="$(trim_cell "${next_review_date}")"
-  if [[ "${next_review_date}" < "${handoff_document_date}" || "${next_review_date}" == "${handoff_document_date}" ]]; then
-    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: next review date must be after the handoff document date" >&2
+  if [[ -n "${handoff_ids}" ]] && grep -Fxq -- "${limitation_id}" <<<"${handoff_ids}"; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: duplicate Phase 64.5 handoff rows" >&2
     exit 1
   fi
 
@@ -244,6 +297,7 @@ validate_handoff_row() {
   IFS='|' read -r empty_prefix record_limitation_id_cell record_title record_severity record_affected_surface record_owner record_mitigation record_evidence_references record_review_state record_review_cadence record_due_date record_accepted_risk_posture record_handoff_posture record_authority_boundary empty_suffix <<<"${reviewed_record_row}"
 
   record_owner="$(trim_cell "${record_owner}")"
+  record_evidence_references="$(trim_cell "${record_evidence_references}")"
   record_review_state="$(trim_cell "${record_review_state}")"
   record_accepted_risk_posture="$(trim_cell "${record_accepted_risk_posture}")"
   record_handoff_posture="$(trim_cell "${record_handoff_posture}")"
@@ -257,6 +311,17 @@ validate_handoff_row() {
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 record is not marked for handoff" >&2
     exit 1
   fi
+
+  while IFS= read -r record_evidence_reference; do
+    if [[ -z "${record_evidence_reference}" ]]; then
+      continue
+    fi
+
+    if ! grep -Fq -- "${record_evidence_reference}" <<<"${evidence_references}"; then
+      echo "Invalid Phase 64.5 handoff row for ${limitation_id}: missing reviewed Phase 64 evidence reference ${record_evidence_reference}" >&2
+      exit 1
+    fi
+  done < <(grep -oE '`[^`]+`' <<<"${record_evidence_references}" || true)
 
   require_normalized_contains "${mitigation_status}" "${record_review_state}" "mitigation status" "${limitation_id}"
   require_normalized_contains "${accepted_risks}" "${record_accepted_risk_posture}" "accepted risks" "${limitation_id}"
