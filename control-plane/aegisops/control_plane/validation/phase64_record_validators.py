@@ -124,6 +124,7 @@ def _validate_known_limitation_ownership_record(
         )
     for field_name in (
         "title",
+        "affected_surface",
         "mitigation",
         "accepted_risk_posture",
         "phase66_handoff_posture",

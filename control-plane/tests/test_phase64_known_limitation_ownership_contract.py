@@ -305,6 +305,16 @@ class Phase64KnownLimitationOwnershipContractTests(unittest.TestCase):
                         )
                     )
 
+    def test_known_limitation_ownership_rejects_affected_surface_overclaims(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "affected_surface"):
+            _validate_record(
+                _known_limitation_ownership_record(
+                    affected_surface="SIEM/SOAR replacement readiness"
+                )
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
