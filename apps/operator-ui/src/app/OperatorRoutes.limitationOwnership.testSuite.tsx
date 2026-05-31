@@ -117,7 +117,7 @@ export function registerOperatorRoutesLimitationOwnershipTests() {
         fetchFn,
       });
 
-      renderOperatorRoute("/operator/limitations", dependencies);
+      renderOperatorRoute("/operator/limitations?view=selection", dependencies);
 
       await waitFor(() => {
         expect(
@@ -137,6 +137,10 @@ export function registerOperatorRoutesLimitationOwnershipTests() {
       ).toHaveAttribute(
         "href",
         "/operator/limitations?limitation_id=limitation-phase64-support-bundle-001",
+      );
+      expect(screen.getByRole("menuitem", { name: "Limitations" })).toHaveAttribute(
+        "href",
+        expect.stringContaining("/operator/limitations?view=selection"),
       );
       expect(
         fetchFn.mock.calls.some(([url]) =>

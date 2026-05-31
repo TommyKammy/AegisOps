@@ -265,7 +265,7 @@ function OperatorMenu({
       <Menu.Item
         leftIcon={<ReportProblemOutlinedIcon />}
         primaryText="Limitations"
-        to={buildOperatorShellPath(basePath, "limitations")}
+        to={buildOperatorShellPath(basePath, "limitations?view=selection")}
       />
       <Menu.Item
         leftIcon={<WarningAmberOutlinedIcon />}

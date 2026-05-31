@@ -682,7 +682,8 @@ export async function getOneForLimitationOwnership(
     reviewDueDateStatus === null ||
     authorityPosture === null ||
     workflowAuthority === null ||
-    evidenceReferences === null
+    evidenceReferences === null ||
+    (reviewCadence === null && dueDate === null)
   ) {
     throw new OperatorDataProviderContractError(
       "Resource limitationOwnership detail payload is missing reviewed ownership fields.",
@@ -706,11 +707,6 @@ export async function getOneForLimitationOwnership(
   if (!LIMITATION_OWNERSHIP_DUE_DATE_STATUSES.has(reviewDueDateStatus)) {
     throw new OperatorDataProviderContractError(
       "Resource limitationOwnership has unsupported review_due_date_status.",
-    );
-  }
-  if (reviewCadence === null && dueDate === null) {
-    throw new OperatorDataProviderContractError(
-      "Resource limitationOwnership requires review_cadence or due_date.",
     );
   }
   if (evidenceReferences.length === 0) {
