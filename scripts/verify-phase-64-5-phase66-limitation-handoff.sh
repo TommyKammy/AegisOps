@@ -235,6 +235,28 @@ validate_handoff_evidence_references() {
   done
 }
 
+validate_reviewed_record_evidence_references() {
+  local references="$1"
+  local limitation_id="$2"
+  local backticked_reference_pattern='^`[^`]+`$'
+  local reference
+  local reference_target
+  local reference_parts
+
+  IFS=';' read -r -a reference_parts <<<"${references}"
+  for reference in "${reference_parts[@]}"; do
+    reference="$(trim_cell "${reference}")"
+    if [[ ! "${reference}" =~ ${backticked_reference_pattern} ]]; then
+      echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 evidence reference must be a single backticked repo-relative target: ${reference}" >&2
+      exit 1
+    fi
+
+    reference_target="${reference#\`}"
+    reference_target="${reference_target%\`}"
+    require_evidence_reference_target "${reference_target}" "reviewed Phase 64 evidence reference ${reference}" "${limitation_id}"
+  done
+}
+
 reviewed_record_table_rows() {
   awk '
     function trim(value) {
@@ -350,7 +372,7 @@ reject_no_open_blocker_assertion() {
     exit 1
   fi
 
-  if [[ "${normalized}" =~ (^|[[:space:]])all[[:space:]]+blockers?[[:space:]]+(resolved|closed|cleared|removed)($|[[:space:]]) ]]; then
+  if [[ "${normalized}" =~ (^|[[:space:]])all[[:space:]]+blockers?([[:space:]]+(have|has|are|were|been))*[[:space:]]+(resolved|closed|cleared|removed)($|[[:space:]]) ]]; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: open blockers must list remaining blockers" >&2
     exit 1
   fi
@@ -417,6 +439,8 @@ validate_reviewed_record_contract_fields() {
   local record_accepted_risk_posture="${11}"
   local record_handoff_posture="${12}"
   local record_authority_boundary="${13}"
+  local record_review_cadence_key
+  local record_due_date_key
 
   reject_blank_or_placeholder "${record_title}" "reviewed Phase 64 record title" "${limitation_id}"
   reject_blank_or_placeholder "${record_severity}" "reviewed Phase 64 record severity" "${limitation_id}"
@@ -434,6 +458,8 @@ validate_reviewed_record_contract_fields() {
   record_review_cadence="$(trim_cell "${record_review_cadence}")"
   record_due_date="$(trim_cell "${record_due_date}")"
   record_handoff_posture="$(trim_cell "${record_handoff_posture}")"
+  record_review_cadence_key="$(printf '%s' "${record_review_cadence}" | tr '[:upper:]' '[:lower:]')"
+  record_due_date_key="$(printf '%s' "${record_due_date}" | tr '[:upper:]' '[:lower:]')"
 
   if [[ ! "${record_severity}" =~ ^(low|medium|material|high|blocking)$ ]]; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 record severity is unsupported" >&2
@@ -445,13 +471,13 @@ validate_reviewed_record_contract_fields() {
     exit 1
   fi
 
-  if [[ ( -z "${record_review_cadence}" || "${record_review_cadence}" =~ ^(none|n/a|na)$ ) && \
-        ( -z "${record_due_date}" || "${record_due_date}" =~ ^(none|n/a|na)$ ) ]]; then
+  if [[ ( -z "${record_review_cadence_key}" || "${record_review_cadence_key}" =~ ^(none|n/a|na|tbd|todo|placeholder)$ ) && \
+        ( -z "${record_due_date_key}" || "${record_due_date_key}" =~ ^(none|n/a|na|tbd|todo|placeholder)$ ) ]]; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 record requires review cadence or due date" >&2
     exit 1
   fi
 
-  if [[ -n "${record_due_date}" && ! "${record_due_date}" =~ ^(none|n/a|na)$ ]]; then
+  if [[ -n "${record_due_date_key}" && ! "${record_due_date_key}" =~ ^(none|n/a|na|tbd|todo|placeholder)$ ]]; then
     require_real_iso_date "${record_due_date}" "reviewed Phase 64 record due date" "${limitation_id}"
   fi
 
@@ -477,6 +503,7 @@ require_rc_gate_notes_boundary() {
   fi
 
   if [[ "${normalized}" =~ (^|[[:space:]])independent[[:space:]]+evidence[[:space:]]+(satisfies|satisfy|accepts|accept)[[:space:]]+((the|any)[[:space:]]+)?(rc[[:space:]]+|release[[:space:]]+)?gates?($|[[:space:].,;:]) || \
+        "${normalized}" =~ (^|[[:space:]])((rc|release)[[:space:]]+)?gates?[[:space:]]+(is[[:space:]]+|are[[:space:]]+|has[[:space:]]+been[[:space:]]+|have[[:space:]]+been[[:space:]]+)?(satisfied|accepted|approved)($|[[:space:].,;:]) || \
         "${normalized}" =~ (^|[[:space:]])((rc|release)[[:space:]]+)?gates?[[:space:]]+(is[[:space:]]+)?(satisfied|accepted)[[:space:]]+(by|in)[[:space:]]+this[[:space:]]+handoff($|[[:space:].,;:]) ]]; then
     echo "Invalid Phase 64.5 handoff row for ${limitation_id}: RC-gate consumption notes must not satisfy RC gates" >&2
     exit 1
@@ -650,6 +677,8 @@ validate_handoff_row() {
     exit 1
   fi
 
+  validate_reviewed_record_evidence_references "${record_evidence_references}" "${limitation_id}"
+
   while IFS= read -r record_evidence_reference; do
     record_evidence_reference_target="${record_evidence_reference#\`}"
     record_evidence_reference_target="${record_evidence_reference_target%\`}"
@@ -789,9 +818,11 @@ fi
 
 allowed_non_claim_line="No product behavior, source breadth, SOAR breadth, SIEM breadth, evidence collection, AI behavior, operator UI behavior, runtime workflow, release gate execution, RC proof, GA proof, limitation resolution workflow, or production rollout readiness claim is implemented here."
 allowed_non_claim_line_lower="$(printf '%s' "${allowed_non_claim_line}" | tr '[:upper:]' '[:lower:]')"
+allowed_record_non_claim_line="They do not resolve limitations, satisfy RC gates, prove release readiness, approve GA readiness, replace support evidence, create release truth, create gate truth, or create readiness truth."
+allowed_record_non_claim_line_lower="$(printf '%s' "${allowed_record_non_claim_line}" | tr '[:upper:]' '[:lower:]')"
 required_rejection_line="Missing limitation owner, missing mitigation, missing evidence references, missing open blocker list, missing next review date, inferred RC pass, gate truth shortcut, release truth shortcut, verifier-as-readiness-truth, issue-lint-as-readiness-truth, Beta readiness claim, RC readiness claim, GA readiness claim, or commercial readiness claim must fail."
 required_rejection_line_lower="$(printf '%s' "${required_rejection_line}" | tr '[:upper:]' '[:lower:]')"
-forbidden_claim_pattern='(aegisops is beta ready|aegisops is rc ready|aegisops is ga ready|aegisops is release ready|aegisops is production ready|phase 66 rc proof is complete|phase 66 proves rc readiness|phase 64\.5 proves rc readiness|phase 64\.5 satisfies rc gates|phase 64\.5 satisfies release gates|handoff infers rc pass|inferred rc pass|rc readiness is complete|beta readiness is complete|ga readiness is complete|commercial readiness is complete|self service commercial readiness is complete|production rollout readiness is complete|handoff evidence is gate truth|handoff evidence is release truth|handoff evidence is readiness truth|verifier output is readiness truth|verifier as readiness truth|issue lint output is readiness truth|issue lint as readiness truth|release truth shortcut|gate truth shortcut|rc gate is accepted by this handoff|release gate is accepted by this handoff|gate is accepted by this handoff|(^|[[:space:]])[^.]*[[:space:]](is|are|becomes|become|marks|mark|proves|prove|approves|approve)[[:space:]]+(beta|rc|ga|commercial|self[[:space:]]+service[[:space:]]+commercial)[[:space:]]+ready($|[[:space:].,;:])|(^|[[:space:]])(beta|rc|ga|commercial|self[[:space:]]+service[[:space:]]+commercial)[[:space:]]+readiness[[:space:]]+(is[[:space:]]+)?(ready|complete|accepted|approved|proven|satisfied)($|[[:space:].,;:]))'
+forbidden_claim_pattern='(aegisops is beta ready|aegisops is rc ready|aegisops is ga ready|aegisops is release ready|aegisops is production ready|phase 66 rc proof is complete|phase 66 proves rc readiness|phase 64\.5 proves rc readiness|phase 64\.5 satisfies rc gates|phase 64\.5 satisfies release gates|handoff infers rc pass|inferred rc pass|rc readiness is complete|beta readiness is complete|ga readiness is complete|commercial readiness is complete|self service commercial readiness is complete|production rollout readiness is complete|handoff evidence is gate truth|handoff evidence is release truth|handoff evidence is readiness truth|verifier output is readiness truth|verifier as readiness truth|issue lint output is readiness truth|issue lint as readiness truth|release truth shortcut|gate truth shortcut|rc gate is accepted by this handoff|release gate is accepted by this handoff|gate is accepted by this handoff|(^|[[:space:]])[^.]*[[:space:]](is|are|becomes|become|marks|mark|proves|prove|approves|approve)[[:space:]]+(beta|rc|ga|commercial|self[[:space:]]+service[[:space:]]+commercial)[[:space:]]+ready($|[[:space:].,;:])|(^|[[:space:]])[^.]*[[:space:]](marks|mark|proves|prove|approves|approve|satisfies|satisfy)[[:space:]]+(beta|rc|ga|commercial|self[[:space:]]+service[[:space:]]+commercial)[[:space:]]+readiness($|[[:space:].,;:])|(^|[[:space:]])(beta|rc|ga|commercial|self[[:space:]]+service[[:space:]]+commercial)[[:space:]]+readiness[[:space:]]+(is[[:space:]]+)?(ready|complete|accepted|approved|proven|satisfied)($|[[:space:].,;:]))'
 forbidden_compact_claim_pattern='(aegisopsisbetaready|aegisopsisrcready|aegisopsisgaready|aegisopsisreleaseready|aegisopsisproductionready|phase66rcproofiscomplete|phase66provesrcreadiness|phase645provesrcreadiness|phase645satisfiesrcgates|phase645satisfiesreleasegates|handoffinfersrcpass|inferredrcpass|rcreadinessiscomplete|betareadinessiscomplete|gareadinessiscomplete|commercialreadinessiscomplete|selfservicecommercialreadinessiscomplete|productionrolloutreadinessiscomplete|handoffevidenceisgatetruth|handoffevidenceisreleasetruth|handoffevidenceisreadinesstruth|verifieroutputisreadinesstruth|verifierasreadinesstruth|issuelintoutputisreadinesstruth|issuelintasreadinesstruth|releasetruthshortcut|gatetruthshortcut|rcgateisacceptedbythishandoff|releasegateisacceptedbythishandoff|gateisacceptedbythishandoff|ishandoffrcready|thishandoffisrcready|thishandoffisbetaready|thishandoffisgaready|thishandoffiscommercialready|thishandoffisselfservicecommercialready|commercialready|selfservicecommercialready)'
 
 scan_forbidden_claims() {
@@ -802,13 +833,14 @@ scan_forbidden_claims() {
 
   set +e
   offender="$(ALLOWED_NON_CLAIM_LINE="${allowed_non_claim_line_lower}" \
+    ALLOWED_RECORD_NON_CLAIM_LINE="${allowed_record_non_claim_line_lower}" \
     REQUIRED_REJECTION_LINE="${required_rejection_line_lower}" \
     FORBIDDEN_CLAIM_PATTERN="${forbidden_claim_pattern}" \
     FORBIDDEN_COMPACT_CLAIM_PATTERN="${forbidden_compact_claim_pattern}" \
     perl -ne '
       chomp(my $line = $_);
       my $line_lower = lc $line;
-      next if $line_lower eq $ENV{"ALLOWED_NON_CLAIM_LINE"} || $line_lower eq $ENV{"REQUIRED_REJECTION_LINE"};
+      next if $line_lower eq $ENV{"ALLOWED_NON_CLAIM_LINE"} || $line_lower eq $ENV{"ALLOWED_RECORD_NON_CLAIM_LINE"} || $line_lower eq $ENV{"REQUIRED_REJECTION_LINE"};
 
       my $normalized_line = $line_lower;
       $normalized_line =~ s/[-_]+/ /g;

@@ -259,6 +259,17 @@ assert_fails_with \
   "${missing_review_schedule_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 record requires review cadence or due date"
 
+placeholder_review_schedule_repo="${workdir}/placeholder-review-schedule"
+copy_valid_repo "${placeholder_review_schedule_repo}"
+insert_after_reviewed_record_row \
+  "${placeholder_review_schedule_repo}" \
+  '| `limitation-phase64-extra-new-001` | Extra limitation remains separately tracked. | material | release_gate_evidence | extra-owner | Keep the extra limitation subordinate before Phase 66 RC proof. | `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` | mitigation_planned | TBD | none | extra_risk | handoff_required | reviewed_evidence_input_only |'
+insert_after_handoff_row "${placeholder_review_schedule_repo}" "${extra_handoff_row}"
+insert_after_reviewed_record_anchor "${placeholder_review_schedule_repo}" "${extra_reviewed_record_anchor}"
+assert_fails_with \
+  "${placeholder_review_schedule_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 record requires review cadence or due date"
+
 extra_reviewed_record_cell_repo="${workdir}/extra-reviewed-record-cell"
 copy_valid_repo "${extra_reviewed_record_cell_repo}"
 insert_after_reviewed_record_row \
@@ -293,6 +304,17 @@ insert_after_reviewed_record_anchor "${missing_reviewed_evidence_target_repo}" "
 assert_fails_with \
   "${missing_reviewed_evidence_target_repo}" \
   'Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 evidence reference `docs/nonexistent-evidence.md#missing` target file is absent: docs/nonexistent-evidence.md#missing'
+
+unbackticked_reviewed_evidence_target_repo="${workdir}/unbackticked-reviewed-evidence-target"
+copy_valid_repo "${unbackticked_reviewed_evidence_target_repo}"
+insert_after_reviewed_record_row \
+  "${unbackticked_reviewed_evidence_target_repo}" \
+  '| `limitation-phase64-extra-new-001` | Extra limitation remains separately tracked. | material | release_gate_evidence | extra-owner | Keep the extra limitation subordinate before Phase 66 RC proof. | docs/nonexistent-evidence.md#missing | mitigation_planned | weekly | none | extra_risk | handoff_required | reviewed_evidence_input_only |'
+insert_after_handoff_row "${unbackticked_reviewed_evidence_target_repo}" "${extra_handoff_row}"
+insert_after_reviewed_record_anchor "${unbackticked_reviewed_evidence_target_repo}" "${extra_reviewed_record_anchor}"
+assert_fails_with \
+  "${unbackticked_reviewed_evidence_target_repo}" \
+  'Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 evidence reference must be a single backticked repo-relative target: docs/nonexistent-evidence.md#missing'
 
 missing_handoff_evidence_target_repo="${workdir}/missing-handoff-evidence-target"
 copy_valid_repo "${missing_handoff_evidence_target_repo}"
@@ -353,6 +375,14 @@ perl -0pi -e 's/Phase 51\.3 support bundle command, redaction review, included r
   "${none_remaining_blockers_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
 assert_fails_with \
   "${none_remaining_blockers_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: open blockers must list remaining blockers"
+
+resolved_auxiliary_blockers_repo="${workdir}/resolved-auxiliary-blockers"
+copy_valid_repo "${resolved_auxiliary_blockers_repo}"
+perl -0pi -e 's/Phase 51\.3 support bundle command, redaction review, included record identifiers, omitted private data classes, owner, retention expectation, and verifier evidence remain required before RC proof can treat support evidence as satisfied\./All blockers have been resolved./' \
+  "${resolved_auxiliary_blockers_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${resolved_auxiliary_blockers_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-support-bundle-001: open blockers must list remaining blockers"
 
 malformed_extra_row_repo="${workdir}/malformed-extra-row"
@@ -419,6 +449,14 @@ assert_fails_with \
   "${independent_rc_gate_satisfaction_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-rc-gate-consumption-001: RC-gate consumption notes must not satisfy RC gates"
 
+bare_rc_gate_acceptance_repo="${workdir}/bare-rc-gate-acceptance"
+copy_valid_repo "${bare_rc_gate_acceptance_repo}"
+perl -0pi -e 's/Phase 66 may use the owner, mitigation, risk, and review-date fields as subordinate RC proof planning; it does not accept any RC gate\./Subordinate evidence only; RC gate is accepted./' \
+  "${bare_rc_gate_acceptance_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${bare_rc_gate_acceptance_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-rc-gate-consumption-001: RC-gate consumption notes must not satisfy RC gates"
+
 missing_remaining_obligations_repo="${workdir}/missing-remaining-obligations"
 copy_valid_repo "${missing_remaining_obligations_repo}"
 remove_doc_text "${missing_remaining_obligations_repo}" "Remaining Phase 66 proof obligations: independent RC gate packet, support bundle evidence, restore evidence, upgrade and rollback evidence, first-user RC behavior, daily-operator RC behavior, supportability evidence, security review, packaging evidence, issue-lint evidence, verifier evidence, and explicit gate acceptance outside this handoff."
@@ -446,6 +484,13 @@ printf '%s\n' "RC readiness is complete." >>"${rc_readiness_complete_repo}/docs/
 assert_fails_with \
   "${rc_readiness_complete_repo}" \
   "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: RC readiness is complete."
+
+rc_readiness_proof_repo="${workdir}/rc-readiness-proof"
+copy_valid_repo "${rc_readiness_proof_repo}"
+printf '%s\n' "This handoff proves RC readiness." >>"${rc_readiness_proof_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${rc_readiness_proof_repo}" \
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: This handoff proves RC readiness."
 
 verifier_as_readiness_truth_repo="${workdir}/verifier-as-readiness-truth"
 copy_valid_repo "${verifier_as_readiness_truth_repo}"
