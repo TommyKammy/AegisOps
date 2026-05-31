@@ -26,6 +26,7 @@ PROTECTED_READ_ROLES_BY_PATH: dict[str, tuple[str, ...]] = {
     "/inspect-alert-detail": READ_ONLY_PROTECTED_ROLES,
     "/inspect-case-detail": READ_ONLY_PROTECTED_ROLES,
     "/inspect-action-review": READ_ONLY_PROTECTED_ROLES,
+    "/inspect-limitation-ownership": READ_ONLY_PROTECTED_ROLES,
     "/inspect-assistant-context": READ_ONLY_PROTECTED_ROLES,
     "/inspect-advisory-output": READ_ONLY_PROTECTED_ROLES,
     "/render-recommendation-draft": READ_ONLY_PROTECTED_ROLES,

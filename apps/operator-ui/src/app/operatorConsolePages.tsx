@@ -1,6 +1,7 @@
 export { QueuePage } from "./operatorConsolePages/queuePages";
 export { TodayPage } from "./operatorConsolePages/todayPages";
 export { BusinessHoursHandoffPage } from "./operatorConsolePages/handoffPages";
+export { LimitationOwnershipPage } from "./operatorConsolePages/limitationOwnershipPages";
 export {
   AlertDetailPage,
   CaseDetailPage,

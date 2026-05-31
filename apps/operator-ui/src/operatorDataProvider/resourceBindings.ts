@@ -57,6 +57,12 @@ export const RESOURCE_BINDINGS: Record<
     listPath: "/inspect-first-login-checklist",
     listSemantics: "client",
   },
+  limitationOwnership: {
+    idField: "limitation_id",
+    listPath: "/inspect-records",
+    listSemantics: "client",
+    recordFamily: "known_limitation_ownership",
+  },
   queue: {
     idField: "alert_id",
     listPath: "/inspect-analyst-queue",

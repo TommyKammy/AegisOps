@@ -18,6 +18,7 @@ import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import HandshakeOutlinedIcon from "@mui/icons-material/HandshakeOutlined";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import PlaylistAddCheckOutlinedIcon from "@mui/icons-material/PlaylistAddCheckOutlined";
+import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import RuleFolderOutlinedIcon from "@mui/icons-material/RuleFolderOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import SecurityOutlinedIcon from "@mui/icons-material/SecurityOutlined";
@@ -112,6 +113,8 @@ const TodayPage =
   lazyOperatorConsolePage("TodayPage") as unknown as typeof import("./operatorConsolePages").TodayPage;
 const BusinessHoursHandoffPage =
   lazyOperatorConsolePage("BusinessHoursHandoffPage") as unknown as typeof import("./operatorConsolePages").BusinessHoursHandoffPage;
+const LimitationOwnershipPage =
+  lazyOperatorConsolePage("LimitationOwnershipPage") as unknown as typeof import("./operatorConsolePages").LimitationOwnershipPage;
 const UserRoleAdminPage =
   lazyOperatorConsolePage("UserRoleAdminPage") as unknown as typeof import("./operatorConsolePages").UserRoleAdminPage;
 
@@ -258,6 +261,11 @@ function OperatorMenu({
         leftIcon={<HandshakeOutlinedIcon />}
         primaryText="Handoff"
         to={buildOperatorShellPath(basePath, "handoff")}
+      />
+      <Menu.Item
+        leftIcon={<ReportProblemOutlinedIcon />}
+        primaryText="Limitations"
+        to={buildOperatorShellPath(basePath, "limitations?view=selection")}
       />
       <Menu.Item
         leftIcon={<WarningAmberOutlinedIcon />}
@@ -555,6 +563,7 @@ function OperatorShellContent({
           <Route element={<OverviewPage operatorRoles={operatorRoles} />} index />
           <Route element={<TodayPage />} path="today" />
           <Route element={<BusinessHoursHandoffPage />} path="handoff" />
+          <Route element={<LimitationOwnershipPage />} path="limitations" />
           <Route element={<QueuePage />} path="queue" />
           <Route element={<AlertIndexPage />} path="alerts" />
           <Route

@@ -2,6 +2,7 @@ import type { GetListParams, GetListResult } from "react-admin";
 import { OperatorDataProviderContractError, UnsupportedOperatorDataProviderOperationError } from "./errors";
 import {
   validateDetectorActivationReviewRecord,
+  validateLimitationOwnershipListRecord,
   validateRecordSearchResult,
   validateSourceHealthDashboardRecord,
 } from "./phase61ListValidators";
@@ -314,6 +315,9 @@ export async function getListForStandardResource({
     }
     if (resource === "recordSearch") {
       records.forEach(validateRecordSearchResult);
+    }
+    if (resource === "limitationOwnership") {
+      records.forEach(validateLimitationOwnershipListRecord);
     }
     totalRecords =
       typeof response.total_records === "number"
