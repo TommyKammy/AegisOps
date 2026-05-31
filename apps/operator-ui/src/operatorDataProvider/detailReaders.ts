@@ -634,9 +634,22 @@ export async function getOneForBusinessHoursHandoff(
 
 export async function getOneForLimitationOwnership(
   fetchFn: typeof fetch,
+  params: GetOneParams,
 ): Promise<GetOneResult> {
+  const requestedId =
+    typeof params.id === "string" || typeof params.id === "number"
+      ? String(params.id).trim()
+      : "";
+  const url = new URL(
+    "/inspect-limitation-ownership",
+    "http://operator-ui.local",
+  );
+  if (requestedId && requestedId !== "current") {
+    url.searchParams.set("limitation_id", requestedId);
+  }
+
   const payload = asObject(
-    await fetchJson(fetchFn, "/inspect-limitation-ownership"),
+    await fetchJson(fetchFn, `${url.pathname}${url.search}`),
     "Resource limitationOwnership returned a malformed detail payload.",
   );
   const limitationId = asString(payload.limitation_id);

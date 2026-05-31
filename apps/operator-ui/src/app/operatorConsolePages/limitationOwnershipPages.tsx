@@ -1,6 +1,7 @@
 import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import { Alert, Chip, Grid, Stack, Typography } from "@mui/material";
 import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   asString,
   asStringArray,
@@ -32,9 +33,12 @@ function LimitationOwnershipUnavailable() {
 
 export function LimitationOwnershipPage() {
   const meta = useMemo(() => ({}), []);
+  const [searchParams] = useSearchParams();
+  const requestedLimitationId =
+    searchParams.get("limitation_id")?.trim() || "current";
   const { data, error, loading } = useOperatorRecord(
     "limitationOwnership",
-    "current",
+    requestedLimitationId,
     meta,
   );
   const title = asString(data?.title) ?? "Reviewed limitation";

@@ -459,6 +459,52 @@ describe("createOperatorDataProvider", () => {
     );
   });
 
+  it("passes requested limitation ownership ids to the backend projection endpoint", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        authority_posture: "subordinate_limitation_context_only",
+        due_date: "2026-06-15",
+        evidence_references: ["docs/phase-63-closeout-evaluation.md"],
+        gate_truth: false,
+        limitation_id: "limitation-phase64-support-bundle-001",
+        mitigation: "Track the support bundle slice before Phase 66 RC proof.",
+        owner: "supportability-owner",
+        phase66_handoff_posture: "handoff_required",
+        readiness_truth: false,
+        release_truth: false,
+        review_due_date_status: "current",
+        review_state: "accepted_risk",
+        severity: "material",
+        title: "Support bundle evidence remains separately tracked.",
+        affected_surface: "supportability_evidence",
+        workflow_authority: "none",
+        workflow_truth: false,
+      }),
+    );
+    const dataProvider = createOperatorDataProvider({ fetchFn });
+
+    await expect(
+      dataProvider.getOne("limitationOwnership", {
+        id: "limitation-phase64-support-bundle-001",
+      }),
+    ).resolves.toEqual({
+      data: expect.objectContaining({
+        id: "limitation-phase64-support-bundle-001",
+        limitation_id: "limitation-phase64-support-bundle-001",
+      }),
+    });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      "/inspect-limitation-ownership?limitation_id=limitation-phase64-support-bundle-001",
+      {
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+  });
+
   it("rejects action-review detail payloads whose selected review is missing or mismatched", async () => {
     const missingSelectedReviewId = createOperatorDataProvider({
       fetchFn: vi.fn<typeof fetch>().mockResolvedValue(

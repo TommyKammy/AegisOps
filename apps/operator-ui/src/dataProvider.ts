@@ -74,7 +74,7 @@ export function createOperatorDataProvider({
       }
 
       if (resource === "limitationOwnership") {
-        return getOneForLimitationOwnership(fetchFn);
+        return getOneForLimitationOwnership(fetchFn, params);
       }
 
       if (!isStandardResource(resource)) {

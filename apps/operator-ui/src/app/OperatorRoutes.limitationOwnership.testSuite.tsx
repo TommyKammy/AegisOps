@@ -35,13 +35,18 @@ const normalLimitationOwnership = {
 export function registerOperatorRoutesLimitationOwnershipTests() {
   describe("limitation ownership route", () => {
     it("renders reviewed limitation ownership as subordinate backend context", async () => {
+      const fetchFn = createAuthorizedFetch({
+        "/inspect-limitation-ownership?limitation_id=limitation-phase64-support-bundle-001":
+          normalLimitationOwnership,
+      });
       const dependencies = createDefaultDependencies({
-        fetchFn: createAuthorizedFetch({
-          "/inspect-limitation-ownership": normalLimitationOwnership,
-        }),
+        fetchFn,
       });
 
-      renderOperatorRoute("/operator/limitations", dependencies);
+      renderOperatorRoute(
+        "/operator/limitations?limitation_id=limitation-phase64-support-bundle-001",
+        dependencies,
+      );
 
       await waitFor(() => {
         expect(
@@ -74,6 +79,15 @@ export function registerOperatorRoutesLimitationOwnershipTests() {
       expect(screen.queryByRole("button", { name: /resolve/i })).toBeNull();
       expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
       expect(screen.queryByText(/ready for rc/i)).toBeNull();
+      expect(fetchFn).toHaveBeenCalledWith(
+        "/inspect-limitation-ownership?limitation_id=limitation-phase64-support-bundle-001",
+        {
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+          },
+        },
+      );
     });
 
     it("fails closed on browser or cache sourced limitation ownership truth", async () => {
