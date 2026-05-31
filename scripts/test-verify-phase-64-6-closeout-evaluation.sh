@@ -73,6 +73,14 @@ remove_doc_text() {
     "${target}/docs/phase-64-closeout-evaluation.md"
 }
 
+comment_doc_text() {
+  local target="$1"
+  local text="$2"
+
+  TEXT="${text}" perl -0pi -e 's/\Q$ENV{TEXT}\E/<!-- $ENV{TEXT} -->/g' \
+    "${target}/docs/phase-64-closeout-evaluation.md"
+}
+
 valid_repo="${workdir}/valid"
 copy_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
@@ -100,6 +108,14 @@ assert_fails_with \
   "${missing_child_repo}" \
   "Missing Phase 64 child issue outcome row in Child Issue Outcomes table"
 
+commented_child_repo="${workdir}/commented-child"
+copy_valid_repo "${commented_child_repo}"
+comment_doc_text "${commented_child_repo}" \
+  "| #1368 | Phase 64.3 operator limitation ownership surface | Closed. \`apps/operator-ui/src/app/operatorConsolePages/limitationOwnershipPages.tsx\`, route wiring, data-provider readers, list validators, and focused UI/data-provider tests prove operator visibility from backend-bound limitation records without browser, cache, UI, or workflow truth. |"
+assert_fails_with \
+  "${commented_child_repo}" \
+  "Missing Phase 64 child issue outcome row in Child Issue Outcomes table"
+
 missing_verifier_repo="${workdir}/missing-verifier"
 copy_valid_repo "${missing_verifier_repo}"
 remove_doc_text "${missing_verifier_repo}" \
@@ -108,12 +124,28 @@ assert_fails_with \
   "${missing_verifier_repo}" \
   "Missing Phase 64 verifier evidence line in Verifier Evidence section"
 
+commented_verifier_repo="${workdir}/commented-verifier"
+copy_valid_repo "${commented_verifier_repo}"
+comment_doc_text "${commented_verifier_repo}" \
+  "- \`python3 -m unittest control-plane.tests.test_phase64_limitation_ownership_control_plane\`"
+assert_fails_with \
+  "${commented_verifier_repo}" \
+  "Missing Phase 64 verifier evidence line in Verifier Evidence section"
+
 missing_issue_lint_repo="${workdir}/missing-issue-lint"
 copy_valid_repo "${missing_issue_lint_repo}"
 perl -0pi -e 's/- `node <codex-supervisor-root>\/dist\/index\.js issue-lint 1371 --config <supervisor-config-path>`.*\n//m' \
   "${missing_issue_lint_repo}/docs/phase-64-closeout-evaluation.md"
 assert_fails_with \
   "${missing_issue_lint_repo}" \
+  "Missing Phase 64 issue-lint evidence line in Issue-lint evidence section"
+
+commented_issue_lint_repo="${workdir}/commented-issue-lint"
+copy_valid_repo "${commented_issue_lint_repo}"
+comment_doc_text "${commented_issue_lint_repo}" \
+  "- \`node <codex-supervisor-root>/dist/index.js issue-lint 1371 --config <supervisor-config-path>\`"
+assert_fails_with \
+  "${commented_issue_lint_repo}" \
   "Missing Phase 64 issue-lint evidence line in Issue-lint evidence section"
 
 missing_handoff_repo="${workdir}/missing-handoff"

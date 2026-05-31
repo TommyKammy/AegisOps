@@ -1,7 +1,7 @@
 # Phase 64 Closeout Evaluation
 
 - **Status**: Accepted as Limitation Ownership evidence before Phase 66 RC proof, Beta, RC, GA, and commercial replacement-readiness claims.
-- **Date**: 2026-06-01
+- **Date**: 2026-06-01 Asia/Tokyo closeout date
 - **Owner**: AegisOps maintainers
 - **Related Issues**: #1365, #1366, #1367, #1368, #1369, #1370, #1371
 
@@ -50,7 +50,7 @@ Phase 64 materially added or tightened these repo-owned surfaces:
 - `control-plane/aegisops/control_plane/api/http_protected_surface.py`
 - `control-plane/aegisops/control_plane/assistant/cited_recommendation_draft.py`
 - `control-plane/aegisops/control_plane/runtime/restore_readiness_projection.py`
-- `postgres/control-plane/migrations/20260531_phase_64_known_limitation_ownership_records.sql`
+- `postgres/control-plane/migrations/0015_phase_64_known_limitation_ownership_records.sql`
 - `postgres/control-plane/schema.sql`
 - `control-plane/tests/test_phase64_known_limitation_ownership_contract.py`
 - `control-plane/tests/test_phase64_limitation_ownership_control_plane.py`

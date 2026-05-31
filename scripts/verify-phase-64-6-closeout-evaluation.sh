@@ -46,8 +46,11 @@ require_section_phrase() {
   local section="$1"
   local phrase="$2"
   local description="$3"
+  local visible_section
 
-  if ! grep -Fq -- "${phrase}" <<<"${section}"; then
+  visible_section="$(perl -0pe 's/<!--.*?-->//gs' <<<"${section}")"
+
+  if ! grep -Fq -- "${phrase}" <<<"${visible_section}"; then
     echo "Missing ${description}: ${phrase}" >&2
     exit 1
   fi
