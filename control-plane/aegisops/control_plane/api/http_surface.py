@@ -400,9 +400,8 @@ def _handle_inspect_limitation_ownership(
         normalize_record_id(raw_limitation_id) if raw_limitation_id else None
     )
     try:
-        payload = context.service.inspect_limitation_ownership_detail(
-            limitation_id
-        )
+        read_surface = context.service._operator_inspection_read_surface
+        payload = read_surface.inspect_limitation_ownership_detail(limitation_id)
     except ValueError as exc:
         _write_json(
             handler,

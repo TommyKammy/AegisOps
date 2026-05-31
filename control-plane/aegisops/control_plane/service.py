@@ -906,14 +906,6 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
             action_request_id
         )
 
-    def inspect_limitation_ownership_detail(
-        self,
-        limitation_id: str | None = None,
-    ) -> object:
-        return self._operator_inspection_read_surface.inspect_limitation_ownership_detail(
-            limitation_id
-        )
-
     def record_action_review_manual_fallback(
         self,
         *,

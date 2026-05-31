@@ -132,7 +132,7 @@ class Phase64LimitationOwnershipControlPlaneTests(unittest.TestCase):
                 requested_authority="release_truth",
             )
 
-    def test_service_inspects_limitation_ownership_through_backend_projection(
+    def test_read_surface_inspects_limitation_ownership_through_backend_projection(
         self,
     ) -> None:
         store, _backend = make_store()
@@ -144,7 +144,10 @@ class Phase64LimitationOwnershipControlPlaneTests(unittest.TestCase):
 
         service.persist_record(record)
 
-        projection = service.inspect_limitation_ownership_detail(record.limitation_id)
+        read_surface = service._operator_inspection_read_surface
+        projection = read_surface.inspect_limitation_ownership_detail(
+            record.limitation_id
+        )
         self.assertEqual(projection["limitation_id"], record.limitation_id)
         self.assertEqual(projection["consumer"], "inspection")
         self.assertEqual(projection["review_cadence"], "weekly")
@@ -154,7 +157,7 @@ class Phase64LimitationOwnershipControlPlaneTests(unittest.TestCase):
         self.assertFalse(projection["workflow_truth"])
         self.assertNotIn("stale_cache", projection)
 
-    def test_service_requires_explicit_limitation_when_multiple_records_exist(
+    def test_read_surface_requires_explicit_limitation_when_multiple_records_exist(
         self,
     ) -> None:
         store, _backend = make_store()
@@ -169,8 +172,9 @@ class Phase64LimitationOwnershipControlPlaneTests(unittest.TestCase):
             _known_limitation_ownership_record(limitation_id="limitation-002")
         )
 
+        read_surface = service._operator_inspection_read_surface
         with self.assertRaisesRegex(LookupError, "explicit limitation_id"):
-            service.inspect_limitation_ownership_detail()
+            read_surface.inspect_limitation_ownership_detail()
 
 
 if __name__ == "__main__":
