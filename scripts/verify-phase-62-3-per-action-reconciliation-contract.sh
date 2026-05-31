@@ -8,6 +8,7 @@ required_paths=(
   "${repo_root}/docs/phase-62-3-per-action-reconciliation-contract.md"
   "${repo_root}/docs/phase-62-3-per-action-reconciliation-validation.md"
   "${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_registry.py"
+  "${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_catalog.py"
   "${repo_root}/control-plane/aegisops/control_plane/actions/execution_coordinator_reconciliation.py"
   "${repo_root}/control-plane/tests/test_phase62_action_policy_registry.py"
   "${repo_root}/control-plane/tests/test_service_persistence_action_reconciliation_reviewed_requests.py"
@@ -29,7 +30,7 @@ require_phrase() {
   fi
 }
 
-registry_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_registry.py"
+catalog_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_catalog.py"
 for phrase in \
   'expected_receipt_fields' \
   'correlation_fields' \
@@ -44,7 +45,7 @@ for phrase in \
   '"manual_review"' \
   '"expected_execution_receipt_id"' \
   '"coordination_reference_id"'; do
-  require_phrase "${registry_path}" "${phrase}"
+  require_phrase "${catalog_path}" "${phrase}"
 done
 
 contract_path="${repo_root}/docs/phase-62-3-per-action-reconciliation-contract.md"

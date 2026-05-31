@@ -6,6 +6,7 @@ repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 required_paths=(
   "${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_registry.py"
+  "${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_catalog.py"
   "${repo_root}/control-plane/tests/test_phase62_action_policy_registry.py"
   "${repo_root}/control-plane/tests/test_service_persistence_action_reconciliation_reviewed_requests.py"
 )
@@ -26,7 +27,7 @@ require_phrase() {
   fi
 }
 
-registry_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_registry.py"
+catalog_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_catalog.py"
 for phrase in \
   '"enrichment_only_lookup"' \
   '"operator_notification"' \
@@ -36,7 +37,12 @@ for phrase in \
   'allowed_reviewer_roles' \
   'allowed_target_scope' \
   'idempotency_required' \
-  'protected_target_posture' \
+  'protected_target_posture'; do
+  require_phrase "${catalog_path}" "${phrase}"
+done
+
+registry_path="${repo_root}/control-plane/aegisops/control_plane/actions/action_policy_registry.py"
+for phrase in \
   'missing_reviewed_policy' \
   'requester_role_not_allowed' \
   'policy_expired' \
