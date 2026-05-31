@@ -761,6 +761,14 @@ class PostgresControlPlaneStore:
             ),
         )
 
+    def inspect_limitation_ownership_records(
+        self,
+    ) -> tuple[KnownLimitationOwnershipRecord, ...]:
+        if self._active_connection.get() is None:
+            with self.transaction(isolation_level="REPEATABLE READ"):
+                return self.inspect_limitation_ownership_records()
+        return self.list(KnownLimitationOwnershipRecord)
+
     def inspect_readiness_review_path_records(
         self,
         *,

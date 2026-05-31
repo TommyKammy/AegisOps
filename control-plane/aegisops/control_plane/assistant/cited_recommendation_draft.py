@@ -24,6 +24,7 @@ _SUPPORTED_RECORD_FAMILIES = (
     "runbook",
     "source_health",
     "ai_trace",
+    "known_limitation_ownership",
 )
 _SUPPORTED_FEEDBACK_POSTURES = (
     "accepted",
@@ -38,6 +39,9 @@ _NEGATIVE_AUTHORITY = (
     "case_closure",
     "detector_activation",
     "source_truth_creation",
+    "readiness_truth",
+    "release_truth",
+    "gate_truth",
     "recommendation_truth",
     "workflow_completion",
     "workflow_truth",
@@ -60,6 +64,17 @@ _AUTHORITY_PRESSURE_TERMS = (
     "hard write",
     "dispatch action",
     "dispatch the action",
+    "prove readiness",
+    "prove release readiness",
+    "prove rc readiness",
+    "claim readiness",
+    "claim release readiness",
+    "claim rc readiness",
+    "release truth",
+    "readiness truth",
+    "gate truth",
+    "satisfy gate",
+    "satisfy the gate",
 )
 _FEEDBACK_COERCION_TERMS = (
     "accept every recommendation",
@@ -200,7 +215,11 @@ def _base_payload(
         "execution_authority": False,
         "reconciliation_authority": False,
         "case_closure_authority": False,
+        "readiness_authority": False,
+        "release_authority": False,
+        "gate_authority": False,
         "negative_authority": _NEGATIVE_AUTHORITY,
+        "limitation_context": _limitation_context(records),
         "citations": citations,
     }
 
@@ -285,6 +304,8 @@ def _validated_recommendation_payload(
             reasons.append("ai_created_recommendation_context")
         if not _citation_matches(raw_record.get("citation"), raw_record):
             reasons.append("missing_reviewed_record_citation")
+        if record_family == "known_limitation_ownership":
+            reasons.extend(_limitation_context_rejection_reasons(raw_record))
         records.append(raw_record)
 
     reviewed_citations = _reviewed_record_citation_set(
@@ -391,6 +412,55 @@ def _record_uncertainty_flags(
     if any(len(values) > 1 for values in conflict_values.values()):
         flags.append("conflicting_evidence")
     return _dedupe_strings(tuple(flags))
+
+
+def _limitation_context(
+    records: tuple[Mapping[str, object], ...],
+) -> tuple[dict[str, object], ...]:
+    limitation_context: list[dict[str, object]] = []
+    for record in records:
+        if _string(record.get("record_family")) != "known_limitation_ownership":
+            continue
+        limitation_id = _string(record.get("record_id"))
+        if limitation_id is None:
+            continue
+        limitation_context.append(
+            {
+                "limitation_id": limitation_id,
+                "review_state": _string(record.get("review_state")),
+                "mitigation": _string(record.get("mitigation")),
+                "review_cadence": _string(record.get("review_cadence")),
+                "authority_posture": _string(record.get("authority_posture")),
+                "readiness_truth": False,
+                "release_truth": False,
+                "gate_truth": False,
+            }
+        )
+    return tuple(limitation_context)
+
+
+def _limitation_context_rejection_reasons(
+    record: Mapping[str, object],
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    if _string(record.get("review_state")) is None:
+        reasons.append("missing_limitation_review_state")
+    if _string(record.get("mitigation")) is None:
+        reasons.append("missing_limitation_mitigation")
+    if not (
+        _string(record.get("review_cadence")) is not None
+        or _string(record.get("due_date")) is not None
+    ):
+        reasons.append("missing_limitation_review_cadence")
+    if (
+        _string(record.get("authority_posture"))
+        != "subordinate_limitation_context_only"
+    ):
+        reasons.append("limitation_context_not_subordinate")
+    for field_name in ("readiness_truth", "release_truth", "gate_truth"):
+        if record.get(field_name) is not False:
+            reasons.append(f"limitation_context_{field_name}_attempt")
+    return tuple(reasons)
 
 
 def _has_required_draft_citations(citation_ids: tuple[str, ...]) -> bool:

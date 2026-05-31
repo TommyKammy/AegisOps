@@ -31,9 +31,73 @@ from _restore_readiness_test_support import (
     timedelta,
     timezone,
 )
+from aegisops.control_plane.models import KnownLimitationOwnershipRecord
 
 
 class ReadinessProjectionTests(ServicePersistenceTestBase):
+    def test_readiness_projects_limitation_context_without_readiness_truth(
+        self,
+    ) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
+        )
+        service.persist_record(
+            KnownLimitationOwnershipRecord(
+                limitation_id="limitation-phase64-readiness-context-001",
+                title="Support bundle limitation remains tracked.",
+                severity="material",
+                affected_surface="supportability_evidence",
+                owner="supportability-owner",
+                mitigation="Track support handoff evidence ownership.",
+                evidence_references=(
+                    "docs/phase-63-closeout-evaluation.md#support-bundle-gap-disposition",
+                ),
+                review_state="accepted_risk",
+                review_cadence="weekly",
+                due_date=None,
+                accepted_risk_posture="bounded_pre_rc_limitation",
+                phase66_handoff_posture="handoff_required",
+                authority_boundary="reviewed_evidence_input_only",
+            )
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        limitation_context = readiness.metrics["limitation_ownership_context"]
+
+        self.assertEqual(readiness.status, "ready")
+        self.assertEqual(limitation_context["tracked_count"], 1)
+        self.assertEqual(limitation_context["open_count"], 1)
+        self.assertFalse(limitation_context["readiness_truth"])
+        self.assertFalse(limitation_context["release_truth"])
+        self.assertFalse(limitation_context["gate_truth"])
+        self.assertEqual(
+            limitation_context["authority_posture"],
+            "subordinate_limitation_context_only",
+        )
+        self.assertEqual(
+            limitation_context["records"][0]["limitation_id"],
+            "limitation-phase64-readiness-context-001",
+        )
+        self.assertFalse(limitation_context["records"][0]["readiness_truth"])
+        self.assertFalse(
+            readiness.metrics["operator_health"]["subordinate_context"][
+                "limitation_ownership"
+            ]["readiness_truth"]
+        )
+
     def test_service_phase21_readiness_surfaces_unresolved_review_path_health(
         self,
     ) -> None:

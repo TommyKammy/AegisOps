@@ -9,7 +9,11 @@ from ..models import (
     ActionRequestRecord,
     AlertRecord,
     CaseRecord,
+    KnownLimitationOwnershipRecord,
     ReconciliationRecord,
+)
+from ..inspection.limitation_ownership_projection import (
+    project_limitation_ownership_context,
 )
 from .readiness_contracts import ReadinessDiagnosticsAggregates
 from .runtime_boundary import ControlPlaneStore, RuntimeBoundaryService, _is_missing_runtime_binding
@@ -209,6 +213,7 @@ class _ReadinessHealthProjection:
             control_plane_change_authority_freeze = (
                 self._control_plane_change_authority_freeze_status()
             )
+            limitation_ownership_context = self._build_limitation_ownership_context()
 
         shutdown = self._build_shutdown_status_snapshot(
             open_case_ids=readiness_aggregates.open_case_ids,
@@ -235,6 +240,7 @@ class _ReadinessHealthProjection:
             automation_substrate_health=automation_substrate_health,
             optional_extensions=optional_extensions,
             control_plane_change_authority_freeze=control_plane_change_authority_freeze,
+            limitation_ownership_context=limitation_ownership_context,
         )
 
         metrics = {
@@ -312,6 +318,7 @@ class _ReadinessHealthProjection:
             "control_plane_change_authority_freeze": (
                 control_plane_change_authority_freeze
             ),
+            "limitation_ownership_context": limitation_ownership_context,
             "operator_health": operator_health,
         }
 
@@ -343,6 +350,7 @@ class _ReadinessHealthProjection:
         automation_substrate_health: dict[str, object],
         optional_extensions: dict[str, object],
         control_plane_change_authority_freeze: dict[str, object],
+        limitation_ownership_context: dict[str, object],
     ) -> dict[str, object]:
         subordinate_context = {
             "source_health": self._operator_subordinate_context_entry(
@@ -367,6 +375,21 @@ class _ReadinessHealthProjection:
                     )
                     if extension.get("readiness") == "degraded"
                 ),
+            },
+            "limitation_ownership": {
+                **self._operator_subordinate_context_entry(
+                    state="healthy",
+                    tracked_count=int(
+                        limitation_ownership_context.get("tracked_count", 0)
+                    ),
+                ),
+                "open_count": int(limitation_ownership_context.get("open_count", 0)),
+                "authority_posture": limitation_ownership_context.get(
+                    "authority_posture"
+                ),
+                "readiness_truth": False,
+                "release_truth": False,
+                "gate_truth": False,
             },
         }
         subordinate_state = self._operator_worst_state(
@@ -402,6 +425,41 @@ class _ReadinessHealthProjection:
             },
             "subordinate_context": subordinate_context,
             "commercial_claims": (),
+        }
+
+    def _build_limitation_ownership_context(self) -> dict[str, object]:
+        record_reader = getattr(
+            self._store,
+            "inspect_limitation_ownership_records",
+            None,
+        )
+        records = (
+            record_reader()
+            if callable(record_reader)
+            else self._store.list(KnownLimitationOwnershipRecord)
+        )
+        projections = tuple(
+            project_limitation_ownership_context(
+                record,
+                consumer="service_snapshot",
+                requested_authority="none",
+            )
+            for record in records
+        )
+        open_records = tuple(
+            record
+            for record in projections
+            if record.get("review_state") != "closed"
+        )
+        return {
+            "tracked_count": len(projections),
+            "open_count": len(open_records),
+            "authority_posture": "subordinate_limitation_context_only",
+            "readiness_truth": False,
+            "release_truth": False,
+            "gate_truth": False,
+            "workflow_truth": False,
+            "records": open_records,
         }
 
     @staticmethod
