@@ -56,7 +56,7 @@ class Phase63EvidencePackContract:
     subordinate_authority_posture: str
     no_workflow_authority: str
     confidence_posture: str
-    freshness_window_seconds: int
+    freshness_window_milliseconds: int
     forbidden_projection_sources: frozenset[str]
     forbidden_readiness_claim_fields: frozenset[str]
     authority_truth_denials: frozenset[str]
@@ -136,9 +136,9 @@ def assert_phase63_evidence_pack_contract_aligned(
     )
     _assert_equal(
         "freshness window",
-        backend.freshness_window_seconds,
-        ui.freshness_window_seconds,
-        ai.freshness_window_seconds,
+        backend.freshness_window_milliseconds,
+        ui.freshness_window_milliseconds,
+        ai.freshness_window_milliseconds,
     )
     _assert_equal(
         "subordinate authority posture",
@@ -256,8 +256,9 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
             validator_source
         ),
         confidence_posture=registry_entry.confidence_posture,
-        freshness_window_seconds=source_projection._parse_duration_seconds(
-            registry_entry.freshness_window
+        freshness_window_milliseconds=(
+            source_projection._parse_duration_seconds(registry_entry.freshness_window)
+            * 1000
         ),
         forbidden_projection_sources=frozenset(
             inspection_projection._EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES
@@ -329,8 +330,9 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
         ),
         no_workflow_authority=ai_grounding_validation._NO_WORKFLOW_AUTHORITY,
         confidence_posture=registry_entry.confidence_posture,
-        freshness_window_seconds=source_projection._parse_duration_seconds(
-            registry_entry.freshness_window
+        freshness_window_milliseconds=(
+            source_projection._parse_duration_seconds(registry_entry.freshness_window)
+            * 1000
         ),
         forbidden_projection_sources=frozenset(),
         forbidden_readiness_claim_fields=frozenset(),
@@ -351,6 +353,10 @@ def _operator_ui_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContrac
         / "operatorDataProvider"
         / "linkedEvidencePackValidator.ts"
     ).read_text(encoding="utf-8")
+    return _operator_ui_contract_from_source(source)
+
+
+def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContract:
     labels = _ts_allowed_labels(source)
     freshness_window_ms = _ts_number_expression(
         source,
@@ -391,7 +397,7 @@ def _operator_ui_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContrac
             source,
             "EVIDENCE_PACK_CONFIDENCE_POSTURE",
         ),
-        freshness_window_seconds=freshness_window_ms // 1000,
+        freshness_window_milliseconds=freshness_window_ms,
         forbidden_projection_sources=_ts_set(
             source,
             "EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES",
@@ -413,7 +419,7 @@ def _ts_allowed_labels(source: str) -> dict[str, frozenset[str]]:
     if match is None:
         raise AssertionError("operator UI evidence-pack labels are not discoverable")
     body = match.group("body")
-    return {
+    labels = {
         key: frozenset(_string_literals(value_source))
         for key, value_source in re.findall(
             r"(\w+):\s*new Set\(\[(.*?)\]\),",
@@ -421,6 +427,21 @@ def _ts_allowed_labels(source: str) -> dict[str, frozenset[str]]:
             re.S,
         )
     }
+    enforced_labels = _ts_enforced_label_keys(source)
+    if frozenset(labels) != enforced_labels:
+        raise AssertionError("operator UI evidence-pack label enforcement drift")
+    return labels
+
+
+def _ts_enforced_label_keys(source: str) -> frozenset[str]:
+    labels = frozenset(
+        re.findall(r'\bvalidateEvidencePackLabel\(\s*"([^"]+)"\s*,', source)
+    )
+    if not labels:
+        raise AssertionError(
+            "operator UI evidence-pack label enforcement is not discoverable"
+        )
+    return labels
 
 
 def _backend_no_workflow_authority_rejection(source: str) -> str:
@@ -504,7 +525,8 @@ def _py_rejection_target(node: ast.AST) -> tuple[str, str, str] | None:
 
 
 def _py_subscript_key(node: ast.AST) -> str | None:
-    if isinstance(node, ast.Index):
+    index_type = getattr(ast, "Index", None)
+    if index_type is not None and isinstance(node, index_type):
         node = node.value
     return _py_string_constant(node)
 
@@ -512,8 +534,6 @@ def _py_subscript_key(node: ast.AST) -> str | None:
 def _py_string_constant(node: ast.AST) -> str | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
-    if isinstance(node, ast.Str):
-        return node.s
     return None
 
 

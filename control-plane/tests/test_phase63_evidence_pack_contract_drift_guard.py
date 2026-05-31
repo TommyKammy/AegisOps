@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
+from scripts import phase63_evidence_pack_contract_guard as contract_guard  # noqa: E402
 from scripts.phase63_evidence_pack_contract_guard import (  # noqa: E402
     assert_phase63_evidence_pack_contract_aligned,
     contract_with_drift,
@@ -21,6 +22,8 @@ from scripts.phase63_evidence_pack_contract_guard import (  # noqa: E402
     _backend_no_workflow_authority_rejection,
     _py_projection_get_string_rejection_labels,
     _AI_GROUNDING_SINGLETON_LABEL_FIELDS,
+    _operator_ui_contract_from_source,
+    _py_string_constant,
     _ts_forbidden_defined_pack_fields,
     _ts_rejected_pack_string_field,
 )
@@ -132,8 +135,8 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                 {
                     "operator_ui_contract": contract_with_drift(
                         ui,
-                        "freshness_window_seconds",
-                        ui.freshness_window_seconds + 1,
+                        "freshness_window_milliseconds",
+                        ui.freshness_window_milliseconds + 1,
                     )
                 },
                 "freshness window",
@@ -254,6 +257,35 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
             frozenset({"release_readiness_claim", "rc_readiness_claim"}),
         )
 
+    def test_operator_ui_freshness_window_preserves_millisecond_precision(self) -> None:
+        source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+        self.assertEqual(
+            _operator_ui_contract_from_source(source).freshness_window_milliseconds,
+            21600000,
+        )
+
+        drifted_source = source.replace(
+            "6 * 60 * 60 * 1000",
+            "6 * 60 * 60 * 1000 + 500",
+        )
+
+        self.assertEqual(
+            _operator_ui_contract_from_source(
+                drifted_source,
+            ).freshness_window_milliseconds,
+            21600500,
+        )
+
+    def test_operator_ui_label_contract_requires_enforcement_calls(self) -> None:
+        source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+        drifted_source = source.replace(
+            '    validateEvidencePackLabel("source_state", sourceState, evidenceRequestId);\n',
+            "",
+        )
+
+        with self.assertRaisesRegex(AssertionError, "label enforcement"):
+            _operator_ui_contract_from_source(drifted_source)
+
     def test_backend_authority_parser_observes_representative_drift(self) -> None:
         source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
         self.assertEqual(_backend_no_workflow_authority_rejection(source), "none")
@@ -309,6 +341,20 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
             _, _, ai = load_phase63_evidence_pack_contracts(REPO_ROOT)
 
         self.assertNotIn("readiness_truth", ai.authority_truth_denials)
+
+    def test_python_string_constant_does_not_require_legacy_ast_str(self) -> None:
+        legacy_ast_str = getattr(contract_guard.ast, "Str", None)
+        if legacy_ast_str is not None:
+            delattr(contract_guard.ast, "Str")
+        try:
+            self.assertIsNone(_py_string_constant(contract_guard.ast.Constant(value=1)))
+            self.assertEqual(
+                _py_string_constant(contract_guard.ast.Constant(value="none")),
+                "none",
+            )
+        finally:
+            if legacy_ast_str is not None:
+                setattr(contract_guard.ast, "Str", legacy_ast_str)
 
 
 if __name__ == "__main__":
