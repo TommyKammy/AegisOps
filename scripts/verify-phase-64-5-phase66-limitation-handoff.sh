@@ -514,6 +514,8 @@ validate_handoff_row() {
   local record_evidence_reference
   local record_evidence_reference_target
   local reviewed_record_pipe_count
+  local handoff_evidence_reference
+  local handoff_evidence_reference_target
 
   if [[ ! "${row}" =~ ^\|.*\|[[:space:]]*$ ]]; then
     echo "Invalid Phase 64.5 handoff table row: ${row}" >&2
@@ -584,6 +586,12 @@ validate_handoff_row() {
   fi
 
   IFS='|' read -r empty_prefix record_limitation_id_cell record_title record_severity record_affected_surface record_owner record_mitigation record_evidence_references record_review_state record_review_cadence record_due_date record_accepted_risk_posture record_handoff_posture record_authority_boundary empty_suffix <<<"${reviewed_record_row}"
+  empty_prefix="$(trim_cell "${empty_prefix}")"
+  empty_suffix="$(trim_cell "${empty_suffix}")"
+  if [[ -n "${empty_prefix}" || -n "${empty_suffix}" ]]; then
+    echo "Invalid Phase 64.5 handoff row for ${limitation_id}: reviewed Phase 64 record row must end after 13 columns" >&2
+    exit 1
+  fi
 
   validate_reviewed_record_contract_fields \
     "${limitation_id}" \
@@ -633,6 +641,17 @@ validate_handoff_row() {
     require_backticked_reference "${evidence_references}" "${record_evidence_reference_target}" "reviewed Phase 64 evidence reference ${record_evidence_reference}" "${limitation_id}"
     require_evidence_reference_target "${record_evidence_reference_target}" "reviewed Phase 64 evidence reference ${record_evidence_reference}" "${limitation_id}"
   done < <(grep -oE '`[^`]+`' <<<"${record_evidence_references}" || true)
+
+  while IFS= read -r handoff_evidence_reference; do
+    handoff_evidence_reference_target="${handoff_evidence_reference#\`}"
+    handoff_evidence_reference_target="${handoff_evidence_reference_target%\`}"
+
+    if [[ -z "${handoff_evidence_reference}" ]]; then
+      continue
+    fi
+
+    require_evidence_reference_target "${handoff_evidence_reference_target}" "handoff evidence reference ${handoff_evidence_reference}" "${limitation_id}"
+  done < <(grep -oE '`[^`]+`' <<<"${evidence_references}" || true)
 
   require_normalized_contains "${mitigation_status}" "${record_review_state}" "mitigation status" "${limitation_id}"
   require_normalized_contains "${accepted_risks}" "${record_accepted_risk_posture}" "accepted risks" "${limitation_id}"
