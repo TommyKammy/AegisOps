@@ -259,6 +259,30 @@ assert_fails_with \
   "${missing_review_schedule_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 record requires review cadence or due date"
 
+extra_reviewed_record_cell_repo="${workdir}/extra-reviewed-record-cell"
+copy_valid_repo "${extra_reviewed_record_cell_repo}"
+insert_after_reviewed_record_row \
+  "${extra_reviewed_record_cell_repo}" \
+  '| `limitation-phase64-extra-new-001` | Extra limitation remains separately tracked. | material | release_gate_evidence | extra-owner | Keep the extra limitation subordinate before Phase 66 RC proof. | `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` | mitigation_planned | weekly | none | extra_risk | handoff_required | reviewed_evidence_input_only | unexpected |'
+insert_after_handoff_row "${extra_reviewed_record_cell_repo}" "${extra_handoff_row}"
+insert_after_reviewed_record_anchor "${extra_reviewed_record_cell_repo}" "${extra_reviewed_record_anchor}"
+assert_fails_with \
+  "${extra_reviewed_record_cell_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 record row must have 13 columns"
+
+missing_reviewed_evidence_target_repo="${workdir}/missing-reviewed-evidence-target"
+copy_valid_repo "${missing_reviewed_evidence_target_repo}"
+insert_after_reviewed_record_row \
+  "${missing_reviewed_evidence_target_repo}" \
+  '| `limitation-phase64-extra-new-001` | Extra limitation remains separately tracked. | material | release_gate_evidence | extra-owner | Keep the extra limitation subordinate before Phase 66 RC proof. | `docs/nonexistent-evidence.md#missing` | mitigation_planned | weekly | none | extra_risk | handoff_required | reviewed_evidence_input_only |'
+insert_after_handoff_row \
+  "${missing_reviewed_evidence_target_repo}" \
+  '| `limitation-phase64-extra-new-001` | extra-owner | mitigation planned; extra limitation remains subordinate | `docs/phase-64-1-reviewed-limitation-ownership-records.md#limitation-phase64-extra-new-001`; `docs/nonexistent-evidence.md#missing` | Extra RC gate packet proof remains required before RC proof can treat the limitation as satisfied. | extra risk; accepted only as reviewed ownership evidence | 2026-06-15 | Phase 66 may cite this as subordinate limitation ownership evidence only; it does not satisfy any RC gate. |'
+insert_after_reviewed_record_anchor "${missing_reviewed_evidence_target_repo}" "${extra_reviewed_record_anchor}"
+assert_fails_with \
+  "${missing_reviewed_evidence_target_repo}" \
+  'Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 evidence reference `docs/nonexistent-evidence.md#missing` target file is absent: docs/nonexistent-evidence.md#missing'
+
 duplicate_handoff_row_repo="${workdir}/duplicate-handoff-row"
 copy_valid_repo "${duplicate_handoff_row_repo}"
 perl -0pi -e 's/(\| `limitation-phase64-support-bundle-001`[^\n]*\n)/$1$1/' \
@@ -438,6 +462,20 @@ printf '%s\n' "AegisOps is production ready because the handoff exists." >>"${pr
 assert_fails_with \
   "${production_ready_repo}" \
   "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: AegisOps is production ready because the handoff exists."
+
+commercial_ready_repo="${workdir}/commercial-ready"
+copy_valid_repo "${commercial_ready_repo}"
+printf '%s\n' "This handoff is commercial ready." >>"${commercial_ready_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${commercial_ready_repo}" \
+  "Forbidden Phase 64.5 handoff claim in docs/phase-64-5-phase66-limitation-handoff.md: This handoff is commercial ready."
+
+self_service_commercial_ready_repo="${workdir}/self-service-commercial-ready"
+copy_valid_repo "${self_service_commercial_ready_repo}"
+printf '%s\n' "This handoff is self-service-commercial ready." >>"${self_service_commercial_ready_repo}/README.md"
+assert_fails_with \
+  "${self_service_commercial_ready_repo}" \
+  "Forbidden Phase 64.5 handoff claim in README.md: This handoff is self-service-commercial ready."
 
 rc_gate_accepted_repo="${workdir}/rc-gate-accepted"
 copy_valid_repo "${rc_gate_accepted_repo}"
