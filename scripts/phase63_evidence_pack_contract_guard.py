@@ -72,6 +72,28 @@ _STATE_REASON_CONSISTENCY_RULES = frozenset(
         "confidence_ambiguity_badge_matches_conflict",
     }
 )
+_PROVENANCE_BINDING_RULES = frozenset(
+    {
+        "case_binding",
+        "request_binding",
+        "source_id",
+        "reviewed_file_hash",
+        "enrichment_request_id",
+        "collection_timestamp",
+        "response_digest",
+        "custody_reference",
+        "evidence_record_id",
+    }
+)
+_METADATA_FORMAT_RULES = frozenset(
+    {
+        "reviewed_file_hash",
+        "response_digest",
+        "custody_collection_timestamp",
+        "provenance_collection_timestamp",
+    }
+)
+_CACHE_BOOLEAN_FALSE_FIELDS = frozenset({"cache_sourced", "stale_cache"})
 
 
 @dataclass(frozen=True)
@@ -82,6 +104,8 @@ class Phase63EvidencePackContract:
     required_custody_fields: frozenset[str]
     required_provenance_fields: frozenset[str]
     required_confidence_fields: frozenset[str]
+    provenance_binding_rules: frozenset[str]
+    metadata_format_rules: frozenset[str]
     contract_fields: frozenset[str]
     recognized_fields: frozenset[str]
     supported_source_ids: frozenset[str]
@@ -93,6 +117,7 @@ class Phase63EvidencePackContract:
     freshness_window_milliseconds: int
     state_reason_consistency_rules: frozenset[str]
     forbidden_projection_sources: frozenset[str]
+    cache_boolean_false_fields: frozenset[str]
     forbidden_readiness_claim_fields: frozenset[str]
     authority_truth_denials: frozenset[str]
 
@@ -167,6 +192,20 @@ def assert_phase63_evidence_pack_contract_aligned(
         ui.required_confidence_fields,
         ai.required_confidence_fields,
     )
+    _assert_equal(
+        "provenance binding rules",
+        backend.provenance_binding_rules,
+        ui.provenance_binding_rules,
+        ai.provenance_binding_rules,
+        _PROVENANCE_BINDING_RULES,
+    )
+    _assert_equal(
+        "metadata format rules",
+        backend.metadata_format_rules,
+        ui.metadata_format_rules,
+        ai.metadata_format_rules,
+        _METADATA_FORMAT_RULES,
+    )
     _assert_equal("contract fields", backend.contract_fields, ui.contract_fields)
     _assert_equal("recognized fields", backend.recognized_fields, ui.recognized_fields)
     _assert_equal(
@@ -222,6 +261,12 @@ def assert_phase63_evidence_pack_contract_aligned(
         "forbidden projection sources",
         backend.forbidden_projection_sources,
         ui.forbidden_projection_sources,
+    )
+    _assert_equal(
+        "cache-sourced boolean denials",
+        backend.cache_boolean_false_fields,
+        ui.cache_boolean_false_fields,
+        _CACHE_BOOLEAN_FALSE_FIELDS,
     )
     _assert_equal(
         "readiness claim fields",
@@ -298,6 +343,10 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
         required_custody_fields=metadata_fields["custody"],
         required_provenance_fields=metadata_fields["provenance"],
         required_confidence_fields=metadata_fields["confidence"],
+        provenance_binding_rules=_py_backend_provenance_binding_rules(
+            validator_source
+        ),
+        metadata_format_rules=_py_backend_metadata_format_rules(validator_source),
         contract_fields=frozenset(
             inspection_projection._EVIDENCE_PACK_PROJECTION_CONTRACT_FIELDS
         ),
@@ -338,6 +387,9 @@ def _backend_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContract:
         forbidden_projection_sources=_py_backend_forbidden_projection_sources_rejection(
             validator_source,
             inspection_projection,
+        ),
+        cache_boolean_false_fields=_py_backend_cache_boolean_rejections(
+            validator_source
         ),
         forbidden_readiness_claim_fields=_py_backend_forbidden_readiness_claim_rejection(
             validator_source,
@@ -405,9 +457,14 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
         required_custody_fields=metadata_fields["custody"],
         required_provenance_fields=metadata_fields["provenance"],
         required_confidence_fields=metadata_fields["confidence"],
+        provenance_binding_rules=_py_ai_provenance_binding_rules(validator_source),
+        metadata_format_rules=_py_ai_metadata_format_rules(validator_source),
         contract_fields=frozenset(),
         recognized_fields=frozenset(),
-        supported_source_ids=source_ids,
+        supported_source_ids=_py_ai_supported_source_ids_rejection(
+            validator_source,
+            ai_grounding_validation,
+        ),
         subordinate_authority_posture=_ai_subordinate_authority_posture_rejection(
             validator_source
         ),
@@ -432,11 +489,11 @@ def _ai_grounding_contract(repo_root: pathlib.Path) -> Phase63EvidencePackContra
             validator_source
         ),
         forbidden_projection_sources=frozenset(),
+        cache_boolean_false_fields=frozenset(),
         forbidden_readiness_claim_fields=frozenset(),
-        authority_truth_denials=frozenset(
-            authority
-            for authority in _AUTHORITY_TRUTH_DENIALS
-            if ai_grounding_validation._scan_for_authority_claim(authority)
+        authority_truth_denials=_py_ai_authority_truth_denials(
+            validator_source,
+            ai_grounding_validation,
         ),
     )
 
@@ -464,6 +521,8 @@ def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContrac
         required_custody_fields=metadata_fields["custody"],
         required_provenance_fields=metadata_fields["provenance"],
         required_confidence_fields=metadata_fields["confidence"],
+        provenance_binding_rules=_ts_provenance_binding_rules(source),
+        metadata_format_rules=_ts_metadata_format_rules(source),
         contract_fields=_ts_set(source, "EVIDENCE_PACK_CONTRACT_FIELDS"),
         recognized_fields=_ts_recognized_fields_rejection(
             source,
@@ -491,6 +550,7 @@ def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContrac
         ),
         state_reason_consistency_rules=_ts_state_reason_consistency_rules(source),
         forbidden_projection_sources=_ts_forbidden_projection_sources_rejection(source),
+        cache_boolean_false_fields=_ts_cache_boolean_rejections(source),
         forbidden_readiness_claim_fields=_ts_forbidden_defined_pack_fields(
             source,
             "cannot claim release readiness",
@@ -500,6 +560,7 @@ def _operator_ui_contract_from_source(source: str) -> Phase63EvidencePackContrac
 
 
 def _ts_allowed_labels(source: str) -> dict[str, frozenset[str]]:
+    _ts_label_validator_semantics(source)
     match = re.search(
         r"const EVIDENCE_PACK_ALLOWED_LABELS = \{(?P<body>.*?)\n\};",
         source,
@@ -534,6 +595,7 @@ def _ts_enforced_label_keys(source: str) -> frozenset[str]:
 
 
 def _ts_enforced_reason_sets(source: str) -> dict[str, frozenset[str]]:
+    _ts_reason_validator_semantics(source)
     reason_sets = {
         field_name: _ts_set(source, constant_name)
         for field_name, constant_name in _ts_validator_call_constants(
@@ -549,6 +611,7 @@ def _ts_enforced_reason_sets(source: str) -> dict[str, frozenset[str]]:
 
 
 def _ts_enforced_metadata_fields(source: str) -> dict[str, frozenset[str]]:
+    _ts_metadata_map_validator_semantics(source)
     metadata_fields = {
         field_name: _ts_set(source, constant_name)
         for field_name, constant_name in _ts_validator_call_constants(
@@ -561,6 +624,109 @@ def _ts_enforced_metadata_fields(source: str) -> dict[str, frozenset[str]]:
     if frozenset(metadata_fields) != expected_fields:
         raise AssertionError("operator UI evidence-pack metadata enforcement drift")
     return metadata_fields
+
+
+def _ts_label_validator_semantics(source: str) -> None:
+    body = _ts_function_body(source, "validateEvidencePackLabel")
+    _require_substrings(
+        body,
+        (
+            "EVIDENCE_PACK_ALLOWED_LABELS[fieldName].has(value)",
+            "unsupported evidence-pack label",
+        ),
+        "operator UI label validator semantics",
+    )
+
+
+def _ts_reason_validator_semantics(source: str) -> None:
+    body = _ts_function_body(source, "validateEvidencePackReasons")
+    _require_substrings(
+        body,
+        (
+            "Array.isArray(value)",
+            "allowedReasons.has(asString(reason) ?? \"\")",
+            "unsupported evidence-pack reasons",
+        ),
+        "operator UI reason validator semantics",
+    )
+
+
+def _ts_metadata_map_validator_semantics(source: str) -> None:
+    body = _ts_function_body(source, "validateEvidencePackMetadataMap")
+    _require_substrings(
+        body,
+        (
+            "fieldNames.length !== requiredFields.size",
+            "fieldNames.some((fieldName) => !requiredFields.has(fieldName))",
+            "Array.from(requiredFields).some((fieldName) => asString(value[fieldName]) === null)",
+            "missing required evidence-pack metadata",
+        ),
+        "operator UI metadata-map validator semantics",
+    )
+
+
+def _ts_provenance_binding_rules(source: str) -> frozenset[str]:
+    condition = _ts_condition_for_error(
+        source,
+        "must keep provenance bound to the evidence request and case",
+    )
+    _require_substrings(
+        condition,
+        (
+            "evidenceRecordId === null",
+            "asString(provenance.request_binding) !== evidenceRequestId",
+            "asString(provenance.case_binding) !== requestedCaseId",
+            "asString(provenance.source_id) !== sourceId",
+            "asString(provenance.target_binding) !== asString(custody.reviewed_file_hash)",
+            "asString(provenance.enrichment_request_id) !==",
+            "asString(custody.enrichment_request_id)",
+            "asString(provenance.collection_timestamp) !==",
+            "asString(custody.collection_timestamp)",
+            "asString(provenance.response_digest) !== asString(custody.response_digest)",
+            "asString(provenance.custody_reference) !==",
+            "linkedEvidenceRecordCustodyReference(",
+        ),
+        "operator UI provenance binding enforcement",
+    )
+    return _PROVENANCE_BINDING_RULES
+
+
+def _ts_metadata_format_rules(source: str) -> frozenset[str]:
+    body = _ts_function_body(source, "validateEvidencePackMetadataFormats")
+    _require_substrings(
+        body,
+        (
+            "isSupportedReviewedHash(asString(custody.reviewed_file_hash))",
+            "isSha256Digest(asString(custody.response_digest))",
+            "isAwareTimestamp(asString(custody.collection_timestamp))",
+            "isAwareTimestamp(asString(provenance.collection_timestamp))",
+            "invalid evidence-pack metadata",
+        ),
+        "operator UI metadata format enforcement",
+    )
+    _ts_require_call(
+        source,
+        "validateEvidencePackMetadataFormats",
+        ("custody", "provenance", "evidenceRequestId"),
+    )
+    return _METADATA_FORMAT_RULES
+
+
+def _ts_cache_boolean_rejections(source: str) -> frozenset[str]:
+    condition = _ts_condition_for_error(
+        source,
+        "rejects cache or browser sourced evidence-pack truth",
+    )
+    fields = frozenset(
+        re.findall(
+            r"\bpack\.([A-Za-z0-9_]+)\s*!==\s*undefined\s*&&\s*"
+            r"pack\.\1\s*!==\s*false",
+            condition,
+        )
+    )
+    if fields != _CACHE_BOOLEAN_FALSE_FIELDS:
+        raise AssertionError("operator UI cache-sourced boolean rejection drift")
+    return fields
 
 
 def _ts_validator_call_constants(
@@ -982,6 +1148,216 @@ def _py_backend_forbidden_readiness_claim_rejection(
         "backend readiness-claim rejection",
     )
     return frozenset(getattr(namespace, "_EVIDENCE_PACK_FORBIDDEN_READINESS_CLAIMS"))
+
+
+def _py_backend_provenance_binding_rules(source: str) -> frozenset[str]:
+    validator_body = _py_function_source(
+        source,
+        "_validated_linked_evidence_pack_projection",
+    )
+    binding_body = _py_function_source(
+        source,
+        "_validate_linked_evidence_pack_provenance_bindings",
+    )
+    _require_substrings(
+        validator_body,
+        (
+            "_validate_linked_evidence_pack_provenance_bindings(",
+            "_optional_string_from_mapping(provenance,",
+            '"request_binding"',
+            'typed_values["evidence_request_id"]',
+            '"case_binding"',
+            "case_id",
+            '"source_id"',
+            'typed_values["source_id"]',
+            '"aegisops_evidence_record_id"',
+            "evidence_record_id",
+        ),
+        "backend provenance binding enforcement",
+    )
+    _require_substrings(
+        binding_body,
+        (
+            '"target_binding"',
+            '"reviewed_file_hash"',
+            '"enrichment_request_id"',
+            '"collection_timestamp"',
+            '"response_digest"',
+            '"custody_reference"',
+            "record_custody_reference",
+        ),
+        "backend provenance binding enforcement",
+    )
+    return _PROVENANCE_BINDING_RULES
+
+
+def _py_ai_provenance_binding_rules(source: str) -> frozenset[str]:
+    projection_body = _py_function_source(source, "_projection_reasons")
+    binding_body = _py_function_source(source, "_provenance_binding_reasons")
+    _require_substrings(
+        projection_body,
+        (
+            "_provenance_binding_reasons(",
+            "_reviewed_hash_reasons(custody, expected_reviewed_file_hash)",
+            "_response_digest_reasons(custody, expected_response_digest)",
+            "_evidence_record_binding_reasons(",
+            "expected_custody_reference=expected_custody_reference",
+            "expected_collection_timestamp=expected_collection_timestamp",
+        ),
+        "AI provenance binding enforcement",
+    )
+    _require_substrings(
+        binding_body,
+        (
+            '"request_binding"',
+            'projection.get("evidence_request_id")',
+            '"case_binding"',
+            "anchor_id",
+            '"source_id"',
+            'projection.get("source_id")',
+            '"target_binding"',
+            'custody.get("reviewed_file_hash")',
+            '"enrichment_request_id"',
+            'custody.get("enrichment_request_id")',
+            '"collection_timestamp"',
+            "expected_collection_timestamp",
+            '"response_digest"',
+            'custody.get("response_digest")',
+            '"custody_reference"',
+            "expected_custody_reference",
+        ),
+        "AI provenance binding enforcement",
+    )
+    return _PROVENANCE_BINDING_RULES
+
+
+def _py_backend_metadata_format_rules(source: str) -> frozenset[str]:
+    validator_body = _py_function_source(
+        source,
+        "_validated_linked_evidence_pack_projection",
+    )
+    format_body = _py_function_source(
+        source,
+        "_validate_linked_evidence_pack_metadata_formats",
+    )
+    _require_substrings(
+        validator_body,
+        ("_validate_linked_evidence_pack_metadata_formats(",),
+        "backend metadata format enforcement call",
+    )
+    _require_substrings(
+        format_body,
+        (
+            "_is_supported_reviewed_hash(",
+            '"reviewed_file_hash"',
+            "_is_sha256_digest(",
+            '"response_digest"',
+            '_datetime_from_evidence_pack_content(custody, "collection_timestamp")',
+            '_datetime_from_evidence_pack_content(provenance, "collection_timestamp")',
+        ),
+        "backend metadata format enforcement",
+    )
+    return _METADATA_FORMAT_RULES
+
+
+def _py_ai_metadata_format_rules(source: str) -> frozenset[str]:
+    projection_body = _py_function_source(source, "_projection_reasons")
+    reviewed_hash_body = _py_function_source(source, "_reviewed_hash_reasons")
+    response_digest_body = _py_function_source(source, "_response_digest_reasons")
+    provenance_body = _py_function_source(source, "_provenance_binding_reasons")
+    _require_substrings(
+        projection_body,
+        (
+            "_reviewed_hash_reasons(custody, expected_reviewed_file_hash)",
+            "_response_digest_reasons(custody, expected_response_digest)",
+            "_provenance_binding_reasons(",
+        ),
+        "AI metadata format enforcement call",
+    )
+    _require_substrings(
+        reviewed_hash_body,
+        ("_normalized_supported_hash(", '"unsupported_grounding_reviewed_hash"'),
+        "AI reviewed-hash format enforcement",
+    )
+    _require_substrings(
+        response_digest_body,
+        ("_SHA256_DIGEST_PATTERN.fullmatch(response_digest)",),
+        "AI response-digest format enforcement",
+    )
+    _require_substrings(
+        provenance_body,
+        (
+            '_aware_datetime(\n            custody.get("collection_timestamp")',
+            '_aware_datetime(\n            provenance.get("collection_timestamp")',
+        ),
+        "AI metadata timestamp format enforcement",
+    )
+    return _METADATA_FORMAT_RULES
+
+
+def _py_backend_cache_boolean_rejections(source: str) -> frozenset[str]:
+    body = _py_function_source(source, "_validated_linked_evidence_pack_projection")
+    _require_substrings(
+        body,
+        (
+            "cache_sourced = projection.get(\"cache_sourced\")",
+            "stale_cache = projection.get(\"stale_cache\")",
+            "(cache_sourced is not None and cache_sourced is not False)",
+            "(stale_cache is not None and stale_cache is not False)",
+            'raise ValueError("linked evidence-pack projection cannot be cache sourced")',
+        ),
+        "backend cache-sourced boolean rejection",
+    )
+    return _CACHE_BOOLEAN_FALSE_FIELDS
+
+
+def _py_ai_supported_source_ids_rejection(
+    source: str,
+    namespace: object,
+) -> frozenset[str]:
+    body = _py_function_source(source, "_grounding_source_reasons")
+    _require_substrings(
+        body,
+        (
+            "registry_entry = PHASE63_EVIDENCE_SOURCE_REGISTRY.get(source_id)",
+            "source_id not in _SUPPORTED_GROUNDING_SOURCE_IDS",
+            'return ("unsupported_grounding_source",)',
+        ),
+        "AI source-id enforcement",
+    )
+    return frozenset(getattr(namespace, "_SUPPORTED_GROUNDING_SOURCE_IDS"))
+
+
+def _py_ai_authority_truth_denials(source: str, namespace: object) -> frozenset[str]:
+    projection_body = _py_function_source(source, "_projection_reasons")
+    metadata_body = _py_function_source(source, "_metadata_contract_reasons")
+    _require_substrings(
+        projection_body,
+        (
+            "_metadata_contract_reasons(",
+            "_ALLOWED_CUSTODY_FIELDS",
+            "_ALLOWED_PROVENANCE_FIELDS",
+            "_ALLOWED_CONFIDENCE_FIELDS",
+        ),
+        "AI metadata authority-scan call",
+    )
+    _require_substrings(
+        metadata_body,
+        (
+            "for field_name, item in value.items():",
+            "field_name not in authority_scanned_fields",
+            "_metadata_authority_values(field_name, item)",
+            "_scan_for_authority_claim(",
+            "_scan_for_endpoint_command_language(",
+            '"grounding_metadata_authority_claim"',
+        ),
+        "AI metadata authority-scan enforcement",
+    )
+    return frozenset(
+        authority
+        for authority in _AUTHORITY_TRUTH_DENIALS
+        if namespace._scan_for_authority_claim(authority)
+    )
 
 
 def _py_backend_enforced_freshness_window_milliseconds(

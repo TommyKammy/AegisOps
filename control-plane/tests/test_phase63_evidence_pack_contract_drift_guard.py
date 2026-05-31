@@ -153,6 +153,30 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                 "confidence fields",
             ),
             (
+                "provenance binding rule",
+                {
+                    "backend_contract": contract_with_drift(
+                        backend,
+                        "provenance_binding_rules",
+                        backend.provenance_binding_rules
+                        - frozenset({"custody_reference"}),
+                    )
+                },
+                "provenance binding rules",
+            ),
+            (
+                "metadata format rule",
+                {
+                    "ai_grounding_contract": contract_with_drift(
+                        ai,
+                        "metadata_format_rules",
+                        ai.metadata_format_rules
+                        - frozenset({"response_digest"}),
+                    )
+                },
+                "metadata format rules",
+            ),
+            (
                 "source ID",
                 {
                     "ai_grounding_contract": contract_with_drift(
@@ -207,6 +231,18 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                     )
                 },
                 "forbidden projection sources",
+            ),
+            (
+                "cache-sourced boolean",
+                {
+                    "operator_ui_contract": contract_with_drift(
+                        ui,
+                        "cache_boolean_false_fields",
+                        ui.cache_boolean_false_fields
+                        - frozenset({"stale_cache"}),
+                    )
+                },
+                "cache-sourced boolean denials",
             ),
             (
                 "readiness claim",
@@ -402,6 +438,13 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "label enforcement"):
             _operator_ui_contract_from_source(drifted_source)
 
+        helper_drift = source.replace(
+            "  if (!EVIDENCE_PACK_ALLOWED_LABELS[fieldName].has(value)) {\n",
+            "  if (false) {\n",
+        )
+        with self.assertRaisesRegex(AssertionError, "label validator semantics"):
+            _operator_ui_contract_from_source(helper_drift)
+
     def test_operator_ui_metadata_contract_requires_enforcement_calls(self) -> None:
         source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
 
@@ -425,6 +468,20 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(AssertionError, "metadata enforcement"):
             _operator_ui_contract_from_source(metadata_drift)
+
+        reason_helper_drift = source.replace(
+            "    if (!asString(reason) || !allowedReasons.has(asString(reason) ?? \"\")) {\n",
+            "    if (!asString(reason)) {\n",
+        )
+        with self.assertRaisesRegex(AssertionError, "reason validator semantics"):
+            _operator_ui_contract_from_source(reason_helper_drift)
+
+        metadata_helper_drift = source.replace(
+            "    fieldNames.length !== requiredFields.size ||\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "metadata-map validator semantics"):
+            _operator_ui_contract_from_source(metadata_helper_drift)
 
     def test_operator_ui_source_authority_and_projection_source_checks_are_parsed(
         self,
@@ -468,6 +525,43 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(AssertionError, "projection-source"):
             _operator_ui_contract_from_source(projection_source_drift)
+
+        cache_boolean_drift = source.replace(
+            "      (pack.stale_cache !== undefined && pack.stale_cache !== false) ||\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "cache-sourced boolean"):
+            _operator_ui_contract_from_source(cache_boolean_drift)
+
+    def test_operator_ui_provenance_and_metadata_formats_are_enforced(self) -> None:
+        source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
+        self.assertIn(
+            "custody_reference",
+            contract_guard._ts_provenance_binding_rules(source),
+        )
+        self.assertIn(
+            "response_digest",
+            contract_guard._ts_metadata_format_rules(source),
+        )
+
+        provenance_drift = source.replace(
+            "      asString(provenance.custody_reference) !==\n"
+            "        linkedEvidenceRecordCustodyReference(\n"
+            "          response,\n"
+            "          evidenceRecordId,\n"
+            "          evidenceRequestId,\n"
+            "        )\n",
+            "      false\n",
+        )
+        with self.assertRaisesRegex(AssertionError, "provenance binding"):
+            contract_guard._ts_provenance_binding_rules(provenance_drift)
+
+        metadata_format_drift = source.replace(
+            "    !isSha256Digest(asString(custody.response_digest)) ||\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "metadata format"):
+            contract_guard._ts_metadata_format_rules(metadata_format_drift)
 
     def test_operator_ui_recognized_fields_follow_spread_set(self) -> None:
         source = OPERATOR_UI_VALIDATOR.read_text(encoding="utf-8")
@@ -586,6 +680,18 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
             ),
             evidence_pack_projection._EVIDENCE_PACK_FORBIDDEN_PROJECTION_SOURCES,
         )
+        self.assertIn(
+            "custody_reference",
+            contract_guard._py_backend_provenance_binding_rules(source),
+        )
+        self.assertIn(
+            "response_digest",
+            contract_guard._py_backend_metadata_format_rules(source),
+        )
+        self.assertEqual(
+            contract_guard._py_backend_cache_boolean_rejections(source),
+            frozenset({"cache_sourced", "stale_cache"}),
+        )
         self.assertEqual(
             contract_guard._py_backend_forbidden_readiness_claim_rejection(
                 source,
@@ -635,6 +741,31 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                 forbidden_source_drift,
                 evidence_pack_projection,
             )
+
+        cache_boolean_drift = source.replace(
+            "        or (stale_cache is not None and stale_cache is not False)\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "cache-sourced boolean"):
+            contract_guard._py_backend_cache_boolean_rejections(cache_boolean_drift)
+
+        provenance_binding_drift = source.replace(
+            '        "custody_reference": record_custody_reference,\n',
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "provenance binding"):
+            contract_guard._py_backend_provenance_binding_rules(
+                provenance_binding_drift,
+            )
+
+        metadata_format_drift = source.replace(
+            "    ) or not _is_sha256_digest(\n"
+            "        _optional_string_from_mapping(custody, \"response_digest\")\n"
+            "    ):\n",
+            "    ):\n",
+        )
+        with self.assertRaisesRegex(AssertionError, "metadata format"):
+            contract_guard._py_backend_metadata_format_rules(metadata_format_drift)
 
         readiness_drift = source.replace(
             "    if any(\n"
@@ -870,6 +1001,50 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
                 ai_grounding_validation,
             )
 
+    def test_ai_source_provenance_and_metadata_enforcement_are_parsed(self) -> None:
+        from aegisops.control_plane.assistant import ai_grounding_validation
+
+        source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
+        self.assertEqual(
+            contract_guard._py_ai_supported_source_ids_rejection(
+                source,
+                ai_grounding_validation,
+            ),
+            frozenset({"malwarebazaar_hash_reputation"}),
+        )
+        self.assertIn(
+            "custody_reference",
+            contract_guard._py_ai_provenance_binding_rules(source),
+        )
+        self.assertIn(
+            "response_digest",
+            contract_guard._py_ai_metadata_format_rules(source),
+        )
+
+        source_id_drift = source.replace(
+            "    if registry_entry is None or source_id not in _SUPPORTED_GROUNDING_SOURCE_IDS:\n",
+            "    if registry_entry is None:\n",
+        )
+        with self.assertRaisesRegex(AssertionError, "source-id"):
+            contract_guard._py_ai_supported_source_ids_rejection(
+                source_id_drift,
+                ai_grounding_validation,
+            )
+
+        provenance_drift = source.replace(
+            '        "custody_reference": expected_custody_reference,\n',
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "provenance binding"):
+            contract_guard._py_ai_provenance_binding_rules(provenance_drift)
+
+        metadata_format_drift = source.replace(
+            "        or _SHA256_DIGEST_PATTERN.fullmatch(response_digest) is None\n",
+            "",
+        )
+        with self.assertRaisesRegex(AssertionError, "response-digest format"):
+            contract_guard._py_ai_metadata_format_rules(metadata_format_drift)
+
     def test_ai_no_workflow_authority_parser_observes_representative_drift(
         self,
     ) -> None:
@@ -1084,6 +1259,7 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
     def test_ai_authority_truth_denials_follow_scanner(self) -> None:
         from aegisops.control_plane.assistant import ai_grounding_validation
 
+        source = AI_GROUNDING_VALIDATOR.read_text(encoding="utf-8")
         original_scanner = ai_grounding_validation._scan_for_authority_claim
 
         def scanner_with_gap(value: object) -> bool:
@@ -1099,6 +1275,18 @@ class Phase63EvidencePackContractDriftGuardTests(unittest.TestCase):
             _, _, ai = load_phase63_evidence_pack_contracts(REPO_ROOT)
 
         self.assertNotIn("readiness_truth", ai.authority_truth_denials)
+
+        scanner_call_drift = source.replace(
+            "            if _scan_for_authority_claim(\n"
+            "                scan_value\n"
+            "            ) or _scan_for_endpoint_command_language(scan_value):\n",
+            "            if _scan_for_endpoint_command_language(scan_value):\n",
+        )
+        with self.assertRaisesRegex(AssertionError, "authority-scan enforcement"):
+            contract_guard._py_ai_authority_truth_denials(
+                scanner_call_drift,
+                ai_grounding_validation,
+            )
 
     def test_state_reason_consistency_rules_are_loaded_from_validators(self) -> None:
         backend_source = BACKEND_EVIDENCE_PACK_PROJECTION.read_text(encoding="utf-8")
