@@ -135,6 +135,14 @@ assert_fails_with \
   "${missing_row_blocker_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-rc-gate-consumption-001: missing open blockers"
 
+malformed_extra_row_repo="${workdir}/malformed-extra-row"
+copy_valid_repo "${malformed_extra_row_repo}"
+perl -0pi -e 's/\| `limitation-phase64-support-bundle-001`/\|`limitation-phase64-extra-002`\| \| \| \| \| \| \| \|\n| `limitation-phase64-support-bundle-001`/' \
+  "${malformed_extra_row_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_fails_with \
+  "${malformed_extra_row_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-extra-002: missing owner"
+
 missing_remaining_obligations_repo="${workdir}/missing-remaining-obligations"
 copy_valid_repo "${missing_remaining_obligations_repo}"
 remove_doc_text "${missing_remaining_obligations_repo}" "Remaining Phase 66 proof obligations: independent RC gate packet, support bundle evidence, restore evidence, upgrade and rollback evidence, first-user RC behavior, daily-operator RC behavior, supportability evidence, security review, packaging evidence, issue-lint evidence, verifier evidence, and explicit gate acceptance outside this handoff."

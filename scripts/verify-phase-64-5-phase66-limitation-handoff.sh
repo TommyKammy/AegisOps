@@ -117,6 +117,7 @@ reject_blank_or_placeholder() {
 
 validate_handoff_row() {
   local row="$1"
+  local pipe_count
   local empty_prefix
   local limitation_id_cell
   local owner
@@ -130,16 +131,27 @@ validate_handoff_row() {
   local limitation_id
   local reviewed_record_reference
 
+  if [[ ! "${row}" =~ ^\|.*\|[[:space:]]*$ ]]; then
+    echo "Invalid Phase 64.5 handoff table row: ${row}" >&2
+    exit 1
+  fi
+
+  pipe_count="$(grep -o '|' <<<"${row}" | wc -l | tr -d '[:space:]')"
+  if [[ "${pipe_count}" != "9" ]]; then
+    echo "Invalid Phase 64.5 handoff table row: expected 8 columns: ${row}" >&2
+    exit 1
+  fi
+
   IFS='|' read -r empty_prefix limitation_id_cell owner mitigation_status evidence_references open_blockers accepted_risks next_review_date rc_gate_notes empty_suffix <<<"${row}"
 
   limitation_id_cell="$(trim_cell "${limitation_id_cell}")"
-  limitation_id="${limitation_id_cell#\`}"
-  limitation_id="${limitation_id%\`}"
-
-  if [[ ! "${limitation_id}" =~ ^limitation-phase64-[a-z0-9-]+-[0-9]{3}$ ]]; then
+  if [[ ! "${limitation_id_cell}" =~ ^\`limitation-phase64-[a-z0-9-]+-[0-9]{3}\`$ ]]; then
     echo "Invalid Phase 64.5 handoff row limitation id: ${limitation_id_cell}" >&2
     exit 1
   fi
+
+  limitation_id="${limitation_id_cell#\`}"
+  limitation_id="${limitation_id%\`}"
 
   reject_blank_or_placeholder "${owner}" "owner" "${limitation_id}"
   reject_blank_or_placeholder "${mitigation_status}" "mitigation status" "${limitation_id}"
@@ -172,9 +184,47 @@ validate_handoff_row() {
 }
 
 handoff_row_count=0
+in_handoff_entries=0
+in_handoff_table=0
 while IFS= read -r row; do
-  if [[ "${row}" =~ ^\|\ \`limitation-phase64- ]]; then
-    validate_handoff_row "${row}"
+  trimmed_row="$(trim_cell "${row}")"
+
+  if [[ "${trimmed_row}" == "## Handoff Entries" ]]; then
+    in_handoff_entries=1
+    continue
+  fi
+
+  if (( in_handoff_entries == 0 )); then
+    continue
+  fi
+
+  if [[ "${trimmed_row}" =~ ^##[[:space:]] ]]; then
+    break
+  fi
+
+  if [[ -z "${trimmed_row}" ]]; then
+    if (( in_handoff_table == 1 )); then
+      break
+    fi
+    continue
+  fi
+
+  if [[ "${trimmed_row}" == "| Limitation id | Owner | Mitigation status | Evidence references | Open blockers | Accepted risks | Next review date | RC-gate consumption notes |" ]]; then
+    in_handoff_table=1
+    continue
+  fi
+
+  if (( in_handoff_table == 1 )); then
+    if [[ "${trimmed_row}" == "| --- | --- | --- | --- | --- | --- | --- | --- |" ]]; then
+      continue
+    fi
+
+    if [[ ! "${trimmed_row}" =~ ^\| ]]; then
+      echo "Invalid Phase 64.5 handoff table row: ${row}" >&2
+      exit 1
+    fi
+
+    validate_handoff_row "${trimmed_row}"
     handoff_row_count=$((handoff_row_count + 1))
   fi
 done < "${absolute_doc_path}"
