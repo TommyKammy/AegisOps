@@ -187,7 +187,7 @@ perl -0pi -e 's/\| `limitation-phase64-rc-gate-consumption-001`[^\n]*\n//' \
   "${missing_reviewed_record_repo}/docs/phase-64-1-reviewed-limitation-ownership-records.md"
 assert_fails_with \
   "${missing_reviewed_record_repo}" \
-  "Missing required Phase 64.1 reviewed limitation record term"
+  "Missing required Phase 64.1 reviewed limitation live table row"
 
 duplicate_reviewed_record_repo="${workdir}/duplicate-reviewed-record"
 copy_valid_repo "${duplicate_reviewed_record_repo}"
