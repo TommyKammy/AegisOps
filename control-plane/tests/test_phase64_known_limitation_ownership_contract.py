@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
 import pathlib
 import sys
 import unittest
@@ -207,6 +208,42 @@ class Phase64KnownLimitationOwnershipContractTests(unittest.TestCase):
             diagnostics_service.dry_run_authoritative_record_chain_restore(backup)
         self.assertEqual(restored_store.list(KnownLimitationOwnershipRecord), ())
 
+    def test_known_limitation_ownership_restore_preserves_expired_due_date_record(
+        self,
+    ) -> None:
+        store, _backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        record = _known_limitation_ownership_record()
+        service.persist_record(record)
+        backup = service.export_authoritative_record_chain_backup()
+        expired_due_date = (date.today() - timedelta(days=1)).isoformat()
+        backup["record_families"]["known_limitation_ownership"][0][
+            "due_date"
+        ] = expired_due_date
+
+        restored_store, _backend = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+        restore_summary = restored_service.restore_authoritative_record_chain_backup(
+            backup
+        )
+
+        self.assertEqual(
+            restore_summary.restored_record_counts["known_limitation_ownership"],
+            1,
+        )
+        restored_record = restored_store.get(
+            KnownLimitationOwnershipRecord,
+            record.limitation_id,
+        )
+        self.assertIsNotNone(restored_record)
+        self.assertEqual(restored_record.due_date, expired_due_date)
+
     def test_known_limitation_ownership_default_lifecycle_state_follows_review_state(
         self,
     ) -> None:
@@ -290,9 +327,13 @@ class Phase64KnownLimitationOwnershipContractTests(unittest.TestCase):
             "Support-bundle completion is achieved for this limitation.",
             "This limitation is gate truth for Phase 66.",
             "This limitation is UI truth for Phase 66.",
+            "This limitation is UI-truth for Phase 66.",
             "This limitation is AI truth for Phase 66.",
+            "This limitation is AI-truth for Phase 66.",
             "This limitation is verifier truth for Phase 66.",
+            "This limitation is verifier-truth for Phase 66.",
             "This limitation is issue-lint truth for Phase 66.",
+            "This limitation is issue-lint-truth for Phase 66.",
             "This limitation proves case closure.",
             "This limitation proves approval, execution, and reconciliation.",
             "AegisOps has SIEM/SOAR replacement readiness.",

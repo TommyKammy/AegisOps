@@ -4,6 +4,9 @@ from typing import Mapping
 
 from ..models import KnownLimitationOwnershipRecord
 from ..record_validation import _validate_record
+from ..validation.phase64_record_validators import (
+    known_limitation_review_due_date_status,
+)
 
 
 _ALLOWED_CONSUMERS = frozenset({"inspection", "service_snapshot"})
@@ -52,6 +55,7 @@ def project_limitation_ownership_context(
         )
 
     _validate_record(record)
+    review_due_date_status = known_limitation_review_due_date_status(record)
 
     return {
         **_readonly_strings(record),
@@ -59,6 +63,8 @@ def project_limitation_ownership_context(
         "evidence_references": record.evidence_references,
         "review_cadence": record.review_cadence,
         "due_date": record.due_date,
+        "review_due_date_status": review_due_date_status,
+        "review_due_date_expired": review_due_date_status == "expired",
         "authority_posture": _SUBORDINATE_AUTHORITY_POSTURE,
         "readiness_truth": False,
         "release_truth": False,

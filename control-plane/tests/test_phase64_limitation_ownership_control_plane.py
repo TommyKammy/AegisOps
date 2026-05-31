@@ -14,6 +14,9 @@ from aegisops.control_plane.inspection.limitation_ownership_projection import ( 
 )
 from aegisops.control_plane.models import KnownLimitationOwnershipRecord  # noqa: E402
 from aegisops.control_plane.record_validation import _validate_record  # noqa: E402
+from aegisops.control_plane.validation.phase64_record_validators import (  # noqa: E402
+    validate_known_limitation_current_review,
+)
 
 
 def _known_limitation_ownership_record(
@@ -54,11 +57,11 @@ def _known_limitation_ownership_record(
 
 
 class Phase64LimitationOwnershipControlPlaneTests(unittest.TestCase):
-    def test_validation_rejects_expired_review_due_date(self) -> None:
+    def test_current_review_validation_rejects_expired_review_due_date(self) -> None:
         expired_due_date = (date.today() - timedelta(days=1)).isoformat()
 
         with self.assertRaisesRegex(ValueError, "expired review"):
-            _validate_record(
+            validate_known_limitation_current_review(
                 _known_limitation_ownership_record(
                     review_cadence=None,
                     due_date=expired_due_date,
@@ -78,6 +81,8 @@ class Phase64LimitationOwnershipControlPlaneTests(unittest.TestCase):
         self.assertEqual(projection["limitation_id"], record.limitation_id)
         self.assertEqual(projection["consumer"], "service_snapshot")
         self.assertEqual(projection["review_state"], record.review_state)
+        self.assertEqual(projection["review_due_date_status"], "not_specified")
+        self.assertFalse(projection["review_due_date_expired"])
         self.assertEqual(
             projection["authority_posture"],
             "subordinate_limitation_context_only",
@@ -89,6 +94,30 @@ class Phase64LimitationOwnershipControlPlaneTests(unittest.TestCase):
         self.assertEqual(projection["workflow_authority"], "none")
         self.assertNotIn("lifecycle_state", projection)
         self.assertNotIn("readiness_claim", projection)
+
+    def test_projection_preserves_expired_limitation_context(self) -> None:
+        expired_due_date = (date.today() - timedelta(days=1)).isoformat()
+        record = _known_limitation_ownership_record(
+            review_cadence=None,
+            due_date=expired_due_date,
+        )
+        _validate_record(record)
+
+        projection = project_limitation_ownership_context(
+            record,
+            consumer="inspection",
+            requested_authority="none",
+        )
+
+        self.assertEqual(projection["limitation_id"], record.limitation_id)
+        self.assertEqual(projection["due_date"], expired_due_date)
+        self.assertEqual(projection["review_due_date_status"], "expired")
+        self.assertTrue(projection["review_due_date_expired"])
+        self.assertEqual(
+            projection["authority_posture"],
+            "subordinate_limitation_context_only",
+        )
+        self.assertFalse(projection["workflow_truth"])
 
     def test_projection_rejects_authority_promotion_request(self) -> None:
         record = _known_limitation_ownership_record()
