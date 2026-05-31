@@ -96,6 +96,17 @@ valid_repo="${workdir}/valid"
 copy_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
 
+not_independent_boundary_note_repo="${workdir}/not-independent-boundary-note"
+copy_valid_repo "${not_independent_boundary_note_repo}"
+perl -0pi -e 's/Phase 66 may use the owner, mitigation, risk, and review-date fields as subordinate RC proof planning; it does not accept any RC gate\./Phase 66 may use the owner, mitigation, risk, and review-date fields as subordinate RC proof planning; this handoff is not independent RC proof and does not satisfy any RC gate./' \
+  "${not_independent_boundary_note_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_passes "${not_independent_boundary_note_repo}"
+
+negated_commercial_readiness_disclaimer_repo="${workdir}/negated-commercial-readiness-disclaimer"
+copy_valid_repo "${negated_commercial_readiness_disclaimer_repo}"
+printf '%s\n' "This handoff is not commercial ready." >>"${negated_commercial_readiness_disclaimer_repo}/docs/phase-64-5-phase66-limitation-handoff.md"
+assert_passes "${negated_commercial_readiness_disclaimer_repo}"
+
 missing_doc_repo="${workdir}/missing-doc"
 mkdir -p "${missing_doc_repo}/docs"
 cp "${repo_root}/README.md" "${missing_doc_repo}/README.md"
@@ -270,6 +281,17 @@ assert_fails_with \
   "${placeholder_review_schedule_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 record requires review cadence or due date"
 
+punctuated_placeholder_review_schedule_repo="${workdir}/punctuated-placeholder-review-schedule"
+copy_valid_repo "${punctuated_placeholder_review_schedule_repo}"
+insert_after_reviewed_record_row \
+  "${punctuated_placeholder_review_schedule_repo}" \
+  '| `limitation-phase64-extra-new-001` | Extra limitation remains separately tracked. | material | release_gate_evidence | extra-owner | Keep the extra limitation subordinate before Phase 66 RC proof. | `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` | mitigation_planned | TBD. | none | extra_risk | handoff_required | reviewed_evidence_input_only |'
+insert_after_handoff_row "${punctuated_placeholder_review_schedule_repo}" "${extra_handoff_row}"
+insert_after_reviewed_record_anchor "${punctuated_placeholder_review_schedule_repo}" "${extra_reviewed_record_anchor}"
+assert_fails_with \
+  "${punctuated_placeholder_review_schedule_repo}" \
+  "Invalid Phase 64.5 handoff row for limitation-phase64-extra-new-001: reviewed Phase 64 record requires review cadence or due date"
+
 extra_reviewed_record_cell_repo="${workdir}/extra-reviewed-record-cell"
 copy_valid_repo "${extra_reviewed_record_cell_repo}"
 insert_after_reviewed_record_row \
@@ -392,6 +414,15 @@ perl -0pi -e 's/\| `limitation-phase64-support-bundle-001`/\|`limitation-phase64
 assert_fails_with \
   "${malformed_extra_row_repo}" \
   "Invalid Phase 64.5 handoff row for limitation-phase64-extra-002: missing owner"
+
+loose_reviewed_record_row_repo="${workdir}/loose-reviewed-record-row"
+copy_valid_repo "${loose_reviewed_record_row_repo}"
+insert_after_reviewed_record_row \
+  "${loose_reviewed_record_row_repo}" \
+  '| `limitation-phase64-extra-new-001`| Extra limitation remains separately tracked. | material | release_gate_evidence | extra-owner | Keep the extra limitation subordinate before Phase 66 RC proof. | `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` | mitigation_planned | weekly | none | extra_risk | handoff_required | reviewed_evidence_input_only |'
+assert_fails_with \
+  "${loose_reviewed_record_row_repo}" \
+  "Missing Phase 64.5 handoff row for reviewed Phase 64 limitation: limitation-phase64-extra-new-001"
 
 missing_required_handoff_row_repo="${workdir}/missing-required-handoff-row"
 copy_valid_repo "${missing_required_handoff_row_repo}"
