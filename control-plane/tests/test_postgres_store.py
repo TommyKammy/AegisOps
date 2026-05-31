@@ -30,6 +30,7 @@ from aegisops.control_plane.models import (
     EvidenceRecord,
     HuntRecord,
     HuntRunRecord,
+    KnownLimitationOwnershipRecord,
     LeadRecord,
     LifecycleTransitionRecord,
     ObservationRecord,
@@ -554,6 +555,13 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             / "migrations"
             / "0014_phase_61_source_health_records.sql"
         ).read_text(encoding="utf-8").lower()
+        migration_sql += "\n" + (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0015_phase_64_known_limitation_ownership_records.sql"
+        ).read_text(encoding="utf-8").lower()
         schema_sql = (
             CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
         ).read_text(encoding="utf-8").lower()
@@ -840,8 +848,8 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                     "citations": ("ai-trace-001", "evidence-001", "recommendation-001"),
                 },
             ),
-            ReconciliationRecord(
-                reconciliation_id="reconciliation-001",
+                ReconciliationRecord(
+                    reconciliation_id="reconciliation-001",
                 subject_linkage={"action_request_ids": ["action-request-001"]},
                 alert_id=None,
                 finding_id="finding-001",
@@ -854,9 +862,27 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 ingest_disposition="matched",
                 mismatch_summary="matched execution",
                 compared_at=timestamp,
-                lifecycle_state="matched",
-            ),
-        ]
+                    lifecycle_state="matched",
+                ),
+                KnownLimitationOwnershipRecord(
+                    limitation_id="limitation-001",
+                    title="Support bundle evidence remains separately tracked.",
+                    severity="material",
+                    affected_surface="supportability_evidence",
+                    owner="supportability-owner",
+                    mitigation="Track the support bundle slice before Phase 66 RC proof.",
+                    evidence_references=(
+                        "docs/phase-63-closeout-evaluation.md#support-bundle-gap-disposition",
+                    ),
+                    review_state="accepted_risk",
+                    review_cadence="weekly",
+                    due_date=None,
+                    accepted_risk_posture="bounded_pre_rc_limitation",
+                    phase66_handoff_posture="handoff_required",
+                    authority_boundary="reviewed_evidence_input_only",
+                    readiness_claim=None,
+                ),
+            ]
 
         for record in records:
             store.save(record)
@@ -876,6 +902,7 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             (HuntRunRecord, "hunt-run-001", records[11]),
             (AITraceRecord, "ai-trace-001", records[12]),
             (ReconciliationRecord, "reconciliation-001", records[13]),
+            (KnownLimitationOwnershipRecord, "limitation-001", records[14]),
         ]
 
         for record_type, record_id, expected_record in expected_records:

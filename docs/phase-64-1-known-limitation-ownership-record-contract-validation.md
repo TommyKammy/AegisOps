@@ -6,6 +6,8 @@ Validation status: PASS
 
 The focused test suite accepts a valid known limitation ownership record and verifies that it is registered as `known_limitation_ownership` in the control-plane record family map.
 
+It also verifies that the record persists through the PostgreSQL-backed store, remains inspectable through `inspect_records("known_limitation_ownership")`, and creates lifecycle transition history for `known_limitation_ownership` subjects.
+
 The validator rejects missing owner, missing mitigation, missing evidence reference, missing affected surface, missing review state, missing Phase 66 handoff posture, unsupported review state, unsupported Phase 66 handoff posture, and forbidden readiness or release overclaims.
 
 ## Boundary Coverage

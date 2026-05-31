@@ -29,7 +29,10 @@ from .validation.phase61_record_validators import (
     _DETECTOR_LIFECYCLE_STATES,
     validate_phase61_record,
 )
-from .validation.phase64_record_validators import validate_phase64_record
+from .validation.phase64_record_validators import (
+    _KNOWN_LIMITATION_REVIEW_STATES,
+    validate_phase64_record,
+)
 
 
 _TICKET_REFERENCE_URL_PATTERN = re.compile(
@@ -203,6 +206,7 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
         {"proposed", "under_review", "rejected", "withdrawn", "expired", "superseded"}
     ),
     "source_health": frozenset({"reviewed", "superseded", "withdrawn"}),
+    "known_limitation_ownership": frozenset(_KNOWN_LIMITATION_REVIEW_STATES),
 }
 
 _RECONCILIATION_INGEST_DISPOSITIONS = frozenset(

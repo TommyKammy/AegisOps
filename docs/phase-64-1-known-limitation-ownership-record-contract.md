@@ -6,6 +6,8 @@ Phase 64.1 defines the reviewed AegisOps known limitation ownership record contr
 
 Known limitation ownership records are AegisOps-owned records and reviewed evidence inputs only. They do not resolve limitations, accept release gates, approve readiness, close cases, replace support evidence, or become verifier, issue-lint, RC, GA, or commercial replacement truth by themselves.
 
+The record family has explicit PostgreSQL storage backing and lifecycle-transition subject states so operator inspection and persistence paths can list, save, and transition the contract without treating it as RC or release proof.
+
 ## 2. Required Record Fields
 
 Every `known_limitation_ownership` record requires:
@@ -75,6 +77,7 @@ Verifier output and issue-lint output remain validation and metadata evidence on
 ## 6. Non-Goals
 
 - No limitation is resolved by this contract.
-- No runtime behavior, operator UI behavior, AI behavior, RC proof, GA proof, or gate acceptance is added.
+- No operator UI behavior, AI behavior, RC proof, GA proof, or gate acceptance is added.
+- Runtime backing is limited to the reviewed record family storage and lifecycle history needed to preserve the contract.
 - No Beta, RC, GA, self-service commercial, or commercial replacement readiness claim is made.
 - No verifier output or issue-lint output becomes release, readiness, gate, limitation, or closeout truth.

@@ -22,6 +22,7 @@ from ..models import (
     FalsePositiveReviewRecord,
     HuntRecord,
     HuntRunRecord,
+    KnownLimitationOwnershipRecord,
     LeadRecord,
     LifecycleTransitionRecord,
     ObservationRecord,
@@ -147,6 +148,11 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
     SourceHealthRecord: TableConfig(
         SourceHealthRecord,
         "source_health_records",
+        array_fields=frozenset({"evidence_references"}),
+    ),
+    KnownLimitationOwnershipRecord: TableConfig(
+        KnownLimitationOwnershipRecord,
+        "known_limitation_ownership_records",
         array_fields=frozenset({"evidence_references"}),
     ),
     EvidenceRecord: TableConfig(

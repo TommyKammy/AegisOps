@@ -508,7 +508,11 @@ class KnownLimitationOwnershipRecord(ControlPlaneRecord):
     phase66_handoff_posture: str
     authority_boundary: str
     readiness_claim: str | None = None
-    lifecycle_state: str = "identified"
+    lifecycle_state: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.lifecycle_state is None:
+            object.__setattr__(self, "lifecycle_state", self.review_state)
 
 
 AnyControlPlaneRecord = Union[

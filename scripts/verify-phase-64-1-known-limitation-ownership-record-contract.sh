@@ -9,8 +9,11 @@ policy_path="${repo_root}/docs/phase-51-6-authority-boundary-negative-test-polic
 gate_path="${repo_root}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
 closeout_path="${repo_root}/docs/phase-63-closeout-evaluation.md"
 model_path="${repo_root}/control-plane/aegisops/control_plane/models.py"
+postgres_path="${repo_root}/control-plane/aegisops/control_plane/adapters/postgres.py"
 validator_path="${repo_root}/control-plane/aegisops/control_plane/validation/phase64_record_validators.py"
 test_path="${repo_root}/control-plane/tests/test_phase64_known_limitation_ownership_contract.py"
+schema_path="${repo_root}/postgres/control-plane/schema.sql"
+migration_path="${repo_root}/postgres/control-plane/migrations/0015_phase_64_known_limitation_ownership_records.sql"
 
 for path in \
   "${doc_path}" \
@@ -19,8 +22,11 @@ for path in \
   "${gate_path}" \
   "${closeout_path}" \
   "${model_path}" \
+  "${postgres_path}" \
   "${validator_path}" \
-  "${test_path}"; do
+  "${test_path}" \
+  "${schema_path}" \
+  "${migration_path}"; do
   if [[ ! -f "${path}" ]]; then
     echo "Missing Phase 64.1 known limitation ownership artifact: ${path}" >&2
     exit 1
@@ -48,6 +54,16 @@ for phrase in "${required_model_phrases[@]}"; do
   require_phrase "${model_path}" "${phrase}"
 done
 
+required_postgres_phrases=(
+  'KnownLimitationOwnershipRecord: TableConfig'
+  '"known_limitation_ownership_records"'
+  'array_fields=frozenset({"evidence_references"})'
+)
+
+for phrase in "${required_postgres_phrases[@]}"; do
+  require_phrase "${postgres_path}" "${phrase}"
+done
+
 required_validator_phrases=(
   '_KNOWN_LIMITATION_REVIEW_STATES'
   '_KNOWN_LIMITATION_HANDOFF_POSTURES'
@@ -62,9 +78,14 @@ done
 
 required_test_phrases=(
   'test_known_limitation_ownership_record_is_registered_reviewed_contract_family'
+  'test_known_limitation_ownership_persists_and_inspects_with_lifecycle_history'
+  'test_known_limitation_ownership_default_lifecycle_state_follows_review_state'
   'test_known_limitation_ownership_requires_explicit_owner_mitigation_evidence_surface_review_and_handoff'
   'test_known_limitation_ownership_rejects_unsupported_review_and_handoff_states'
   'test_known_limitation_ownership_rejects_readiness_and_release_overclaims'
+  'Support-bundle completion is achieved'
+  'gate truth'
+  'SIEM/SOAR replacement readiness'
   'Verifier output is readiness truth'
   'Issue-lint output is readiness truth'
 )
@@ -101,6 +122,14 @@ required_validation_phrases=(
 
 for phrase in "${required_validation_phrases[@]}"; do
   require_phrase "${validation_path}" "${phrase}"
+done
+
+for phrase in \
+  'create table if not exists aegisops_control.known_limitation_ownership_records' \
+  "subject_record_family = 'known_limitation_ownership'" \
+  "'mitigation_in_progress'"; do
+  require_phrase "${schema_path}" "${phrase}"
+  require_phrase "${migration_path}" "${phrase}"
 done
 
 (cd "${repo_root}" && PYTHONPATH="${repo_root}/control-plane" python3 -m unittest control-plane.tests.test_phase64_known_limitation_ownership_contract)

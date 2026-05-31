@@ -8,10 +8,18 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
-from aegisops.control_plane.models import KnownLimitationOwnershipRecord
+from aegisops.control_plane.config import RuntimeConfig
+from aegisops.control_plane.models import (
+    KnownLimitationOwnershipRecord,
+    LifecycleTransitionRecord,
+)
 from aegisops.control_plane.record_validation import _validate_record
-from aegisops.control_plane.service import RECORD_TYPES_BY_FAMILY
+from aegisops.control_plane.service import (
+    AegisOpsControlPlaneService,
+    RECORD_TYPES_BY_FAMILY,
+)
 from aegisops.control_plane.validation import phase64_record_validators
+from postgres_test_support import make_store
 
 
 def _known_limitation_ownership_record(
@@ -68,6 +76,81 @@ class Phase64KnownLimitationOwnershipContractTests(unittest.TestCase):
         )
         _validate_record(record)
 
+    def test_known_limitation_ownership_persists_and_inspects_with_lifecycle_history(
+        self,
+    ) -> None:
+        store, _backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        record = _known_limitation_ownership_record(review_state="under_review")
+
+        service.persist_record(record)
+
+        self.assertEqual(
+            store.get(KnownLimitationOwnershipRecord, record.record_id),
+            record,
+        )
+        inspection = service.inspect_records("known_limitation_ownership")
+        self.assertEqual(
+            inspection.records,
+            (
+                {
+                    "limitation_id": record.limitation_id,
+                    "title": record.title,
+                    "severity": record.severity,
+                    "affected_surface": record.affected_surface,
+                    "owner": record.owner,
+                    "mitigation": record.mitigation,
+                    "evidence_references": record.evidence_references,
+                    "review_state": record.review_state,
+                    "review_cadence": record.review_cadence,
+                    "due_date": record.due_date,
+                    "accepted_risk_posture": record.accepted_risk_posture,
+                    "phase66_handoff_posture": record.phase66_handoff_posture,
+                    "authority_boundary": record.authority_boundary,
+                    "readiness_claim": record.readiness_claim,
+                    "lifecycle_state": record.review_state,
+                },
+            ),
+        )
+        transitions = service.list_lifecycle_transitions(
+            "known_limitation_ownership",
+            record.limitation_id,
+        )
+        self.assertEqual(len(transitions), 1)
+        self.assertIsInstance(transitions[0], LifecycleTransitionRecord)
+        self.assertEqual(
+            transitions[0].subject_record_family,
+            "known_limitation_ownership",
+        )
+        self.assertEqual(transitions[0].lifecycle_state, "under_review")
+
+    def test_known_limitation_ownership_default_lifecycle_state_follows_review_state(
+        self,
+    ) -> None:
+        record = KnownLimitationOwnershipRecord(
+            limitation_id="limitation-phase64-default-lifecycle-001",
+            title="Default lifecycle state follows the reviewed state.",
+            severity="medium",
+            affected_surface="record_contract",
+            owner="contract-owner",
+            mitigation="Keep lifecycle history aligned to review state.",
+            evidence_references=(
+                "docs/phase-64-1-known-limitation-ownership-record-contract.md",
+            ),
+            review_state="mitigation_planned",
+            review_cadence="weekly",
+            due_date=None,
+            accepted_risk_posture="bounded_pre_rc_limitation",
+            phase66_handoff_posture="handoff_required",
+            authority_boundary="reviewed_evidence_input_only",
+        )
+
+        self.assertEqual(record.lifecycle_state, "mitigation_planned")
+        _validate_record(record)
+
     def test_known_limitation_ownership_requires_explicit_owner_mitigation_evidence_surface_review_and_handoff(
         self,
     ) -> None:
@@ -111,6 +194,11 @@ class Phase64KnownLimitationOwnershipContractTests(unittest.TestCase):
             "AegisOps is RC ready because this limitation has an owner.",
             "AegisOps is GA ready because this limitation has an owner.",
             "AegisOps is a self-service commercial replacement.",
+            "Support-bundle completion is achieved for this limitation.",
+            "This limitation is gate truth for Phase 66.",
+            "This limitation proves case closure.",
+            "This limitation proves approval, execution, and reconciliation.",
+            "AegisOps has SIEM/SOAR replacement readiness.",
             "Verifier output is readiness truth for this limitation.",
             "Issue-lint output is readiness truth for this limitation.",
         )
