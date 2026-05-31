@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date, datetime, timezone
 
 from ..models import ControlPlaneRecord, KnownLimitationOwnershipRecord
 from .phase61_record_validators import (
@@ -40,6 +41,7 @@ _FORBIDDEN_READINESS_CLAIM_PATTERN = re.compile(
     r"self-service\s+commercial|readiness\s+truth|release\s+truth|"
     r"support-bundle\s+completion|support\s+bundle\s+completion|"
     r"gate\s+truth|case\s+closure|"
+    r"ui\s+truth|ai\s+truth|verifier\s+truth|issue-lint\s+truth|"
     r"proves\s+(?:approval|execution|reconciliation)|"
     r"siem/soar\s+replacement\s+readiness|siem\s+soar\s+replacement\s+readiness|"
     r"verifier\s+output\s+is\s+readiness\s+truth|"
@@ -104,6 +106,8 @@ def _validate_known_limitation_ownership_record(
             "known_limitation_ownership record "
             f"{record.record_id!r} requires review_cadence or due_date"
         )
+    if _has_linkage_value(record.due_date):
+        _validate_review_due_date(record)
     if record.phase66_handoff_posture not in _KNOWN_LIMITATION_HANDOFF_POSTURES:
         raise ValueError(
             "known_limitation_ownership record "
@@ -140,6 +144,26 @@ def _validate_known_limitation_ownership_record(
 
 def _contains_forbidden_readiness_claim(value: object) -> bool:
     return isinstance(value, str) and bool(_FORBIDDEN_READINESS_CLAIM_PATTERN.search(value))
+
+
+def _validate_review_due_date(record: KnownLimitationOwnershipRecord) -> None:
+    if not isinstance(record.due_date, str):
+        raise ValueError(
+            "known_limitation_ownership record "
+            f"{record.record_id!r} requires due_date to be an ISO date"
+        )
+    try:
+        due_date = date.fromisoformat(record.due_date)
+    except ValueError as exc:
+        raise ValueError(
+            "known_limitation_ownership record "
+            f"{record.record_id!r} requires due_date to be an ISO date"
+        ) from exc
+    if due_date < datetime.now(timezone.utc).date():
+        raise ValueError(
+            "known_limitation_ownership record "
+            f"{record.record_id!r} has expired review due_date"
+        )
 
 
 __all__ = [
