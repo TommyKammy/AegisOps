@@ -5,6 +5,10 @@ import re
 
 from .assistant_context import _advisory_text_claims_authority_or_scope_expansion
 from .live_assistant_workflow import phase24_live_assistant_prompt_injection_flags
+from ..inspection.limitation_ownership_projection import (
+    project_limitation_ownership_context,
+)
+from ..models import KnownLimitationOwnershipRecord
 
 _AGENT_NAME = "cited_recommendation_draft_agent"
 _TOOL_NAME = "recommendation_draft"
@@ -292,21 +296,27 @@ def _validated_recommendation_payload(
         if not isinstance(raw_record, Mapping):
             reasons.append("malformed_reviewed_record")
             continue
+        normalized_record: Mapping[str, object] = raw_record
         record_family = _string(raw_record.get("record_family"))
-        record_id = _string(raw_record.get("record_id"))
+        record_id = _reviewed_record_id(raw_record, record_family)
+        if record_id is not None and raw_record.get("record_id") != record_id:
+            normalized_record = {**raw_record, "record_id": record_id}
         if record_family not in _SUPPORTED_RECORD_FAMILIES:
             reasons.append("unsupported_reviewed_record_family")
         if record_id is None:
             reasons.append("missing_reviewed_record_id")
-        if not _record_bound_to_review_anchor(raw_record, anchor_family, anchor_id):
+        if not _record_bound_to_review_anchor(normalized_record, anchor_family, anchor_id):
             reasons.append("record_not_bound_to_review_anchor")
-        if _normalized_string(raw_record.get("created_by")) == "ai":
+        if _normalized_string(normalized_record.get("created_by")) == "ai":
             reasons.append("ai_created_recommendation_context")
-        if not _citation_matches(raw_record.get("citation"), raw_record):
+        if not _citation_matches(normalized_record.get("citation"), normalized_record):
             reasons.append("missing_reviewed_record_citation")
         if record_family == "known_limitation_ownership":
-            reasons.extend(_limitation_context_rejection_reasons(raw_record))
-        records.append(raw_record)
+            normalized_record, limitation_reasons = _project_reviewed_limitation_context(
+                normalized_record
+            )
+            reasons.extend(limitation_reasons)
+        records.append(normalized_record)
 
     reviewed_citations = _reviewed_record_citation_set(
         tuple(records),
@@ -439,6 +449,93 @@ def _limitation_context(
     return tuple(limitation_context)
 
 
+def _project_reviewed_limitation_context(
+    record: Mapping[str, object],
+) -> tuple[Mapping[str, object], tuple[str, ...]]:
+    reasons = list(_raw_limitation_context_rejection_reasons(record))
+    try:
+        limitation_record = _known_limitation_record_from_mapping(record)
+        projection = dict(
+            project_limitation_ownership_context(
+                limitation_record,
+                consumer="service_snapshot",
+                requested_authority="none",
+            )
+        )
+    except (TypeError, ValueError):
+        return record, _dedupe_strings(
+            (*reasons, "invalid_limitation_ownership_contract")
+        )
+
+    projected_record = {
+        **record,
+        **projection,
+        "record_family": "known_limitation_ownership",
+        "record_id": limitation_record.limitation_id,
+    }
+    reasons.extend(_limitation_context_rejection_reasons(projected_record))
+    return projected_record, _dedupe_strings(tuple(reasons))
+
+
+def _known_limitation_record_from_mapping(
+    record: Mapping[str, object],
+) -> KnownLimitationOwnershipRecord:
+    review_state = _required_limitation_string(record, "review_state")
+    return KnownLimitationOwnershipRecord(
+        limitation_id=_required_limitation_id(record),
+        title=_required_limitation_string(record, "title"),
+        severity=_required_limitation_string(record, "severity"),
+        affected_surface=_required_limitation_string(record, "affected_surface"),
+        owner=_required_limitation_string(record, "owner"),
+        mitigation=_required_limitation_string(record, "mitigation"),
+        evidence_references=_string_tuple(record.get("evidence_references")),
+        review_state=review_state,
+        review_cadence=_string(record.get("review_cadence")),
+        due_date=_string(record.get("due_date")),
+        accepted_risk_posture=_required_limitation_string(
+            record,
+            "accepted_risk_posture",
+        ),
+        phase66_handoff_posture=_required_limitation_string(
+            record,
+            "phase66_handoff_posture",
+        ),
+        authority_boundary=_required_limitation_string(record, "authority_boundary"),
+        readiness_claim=_string(record.get("readiness_claim")),
+        lifecycle_state=_string(record.get("lifecycle_state")) or review_state,
+    )
+
+
+def _required_limitation_id(record: Mapping[str, object]) -> str:
+    limitation_id = _reviewed_record_id(record, "known_limitation_ownership")
+    if limitation_id is None:
+        raise ValueError("known_limitation_ownership requires limitation_id")
+    return limitation_id
+
+
+def _required_limitation_string(record: Mapping[str, object], field_name: str) -> str:
+    value = _string(record.get(field_name))
+    if value is None:
+        raise ValueError(f"known_limitation_ownership requires {field_name}")
+    return value
+
+
+def _raw_limitation_context_rejection_reasons(
+    record: Mapping[str, object],
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    authority_posture = _string(record.get("authority_posture"))
+    if (
+        authority_posture is not None
+        and authority_posture != "subordinate_limitation_context_only"
+    ):
+        reasons.append("limitation_context_not_subordinate")
+    for field_name in ("readiness_truth", "release_truth", "gate_truth"):
+        if field_name in record and record.get(field_name) is not False:
+            reasons.append(f"limitation_context_{field_name}_attempt")
+    return tuple(reasons)
+
+
 def _limitation_context_rejection_reasons(
     record: Mapping[str, object],
 ) -> tuple[str, ...]:
@@ -461,6 +558,18 @@ def _limitation_context_rejection_reasons(
         if record.get(field_name) is not False:
             reasons.append(f"limitation_context_{field_name}_attempt")
     return tuple(reasons)
+
+
+def _reviewed_record_id(
+    record: Mapping[str, object],
+    record_family: str | None,
+) -> str | None:
+    record_id = _string(record.get("record_id"))
+    if record_id is not None:
+        return record_id
+    if record_family == "known_limitation_ownership":
+        return _string(record.get("limitation_id"))
+    return None
 
 
 def _has_required_draft_citations(citation_ids: tuple[str, ...]) -> bool:

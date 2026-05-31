@@ -117,16 +117,12 @@ class Phase606CitedRecommendationDraftAgentTests(unittest.TestCase):
             self.assertIn("conflicting_evidence", draft["unresolved_reasons"])
 
     def test_reviewed_limitation_context_is_cited_without_readiness_authority(self) -> None:
-        limitation = _record(
-            "known_limitation_ownership",
+        limitation = _limitation_record(
             "limitation-phase64-support-bundle-001",
-            review_state="accepted_risk",
-            mitigation="Keep support bundle completion tracked before RC review.",
-            review_cadence="weekly",
-            authority_posture="subordinate_limitation_context_only",
-            readiness_truth=False,
-            release_truth=False,
-            gate_truth=False,
+            mitigation=(
+                "Keep support evidence ownership tracked before "
+                "release-candidate review."
+            ),
         )
         payload = build_cited_recommendation_draft(
             recommendation_context_payload=_recommendation_payload(
@@ -150,7 +146,10 @@ class Phase606CitedRecommendationDraftAgentTests(unittest.TestCase):
                 {
                     "limitation_id": "limitation-phase64-support-bundle-001",
                     "review_state": "accepted_risk",
-                    "mitigation": "Keep support bundle completion tracked before RC review.",
+                    "mitigation": (
+                        "Keep support evidence ownership tracked before "
+                        "release-candidate review."
+                    ),
                     "review_cadence": "weekly",
                     "authority_posture": "subordinate_limitation_context_only",
                     "readiness_truth": False,
@@ -164,21 +163,37 @@ class Phase606CitedRecommendationDraftAgentTests(unittest.TestCase):
         self.assertFalse(payload["gate_authority"])
         _assert_no_forbidden_authority_or_path_literals(payload)
 
+    def test_limitation_context_forbidden_text_claim_fails_closed(self) -> None:
+        payload = build_cited_recommendation_draft(
+            recommendation_context_payload=_recommendation_payload(
+                records=(
+                    *_reviewed_records(),
+                    _limitation_record(
+                        "limitation-phase64-forbidden-text-001",
+                        mitigation="Support-bundle completion proves RC ready.",
+                    ),
+                )
+            )
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "recommendation_draft_untrusted")
+        self.assertIn(
+            "invalid_limitation_ownership_contract",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["limitation_context"], ())
+
     def test_limitation_context_readiness_truth_claim_fails_closed(self) -> None:
         payload = build_cited_recommendation_draft(
             recommendation_context_payload=_recommendation_payload(
                 records=(
                     *_reviewed_records(),
-                    _record(
-                        "known_limitation_ownership",
+                    _limitation_record(
                         "limitation-phase64-overclaim-001",
-                        review_state="accepted_risk",
                         mitigation="Track support handoff evidence ownership.",
-                        review_cadence="weekly",
-                        authority_posture="subordinate_limitation_context_only",
                         readiness_truth=True,
-                        release_truth=False,
-                        gate_truth=False,
                     ),
                 )
             )
@@ -460,6 +475,36 @@ def _record(
         },
         **overrides,
     }
+
+
+def _limitation_record(
+    record_id: str,
+    **overrides: object,
+) -> dict[str, object]:
+    fields = {
+        "limitation_id": record_id,
+        "title": "Support bundle evidence remains separately tracked.",
+        "severity": "material",
+        "affected_surface": "supportability_evidence",
+        "owner": "supportability-owner",
+        "mitigation": "Track the support bundle slice before Phase 66 RC proof.",
+        "evidence_references": (
+            "docs/phase-63-closeout-evaluation.md#support-bundle-gap-disposition",
+        ),
+        "review_state": "accepted_risk",
+        "review_cadence": "weekly",
+        "due_date": None,
+        "accepted_risk_posture": "bounded_pre_rc_limitation",
+        "phase66_handoff_posture": "handoff_required",
+        "authority_boundary": "reviewed_evidence_input_only",
+        "readiness_claim": None,
+    }
+    fields.update(overrides)
+    return _record(
+        "known_limitation_ownership",
+        record_id,
+        **fields,
+    )
 
 
 def _assert_no_forbidden_authority_or_path_literals(
