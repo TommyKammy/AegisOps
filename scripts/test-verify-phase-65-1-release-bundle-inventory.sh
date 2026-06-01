@@ -1,0 +1,1075 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+verifier="${repo_root}/scripts/verify-phase-65-1-release-bundle-inventory.sh"
+
+workdir="$(mktemp -d)"
+trap 'rm -rf "${workdir}"' EXIT
+valid_template="${workdir}/valid-template"
+
+pass_stdout="${workdir}/pass.out"
+pass_stderr="${workdir}/pass.err"
+fail_stdout="${workdir}/fail.out"
+fail_stderr="${workdir}/fail.err"
+
+assert_passes() {
+  local target="$1"
+
+  if ! bash "${verifier}" "${target}" >"${pass_stdout}" 2>"${pass_stderr}"; then
+    echo "Expected verifier to pass for ${target}" >&2
+    cat "${pass_stdout}" >&2
+    cat "${pass_stderr}" >&2
+    exit 1
+  fi
+}
+
+assert_fails_with() {
+  local target="$1"
+  local expected="$2"
+
+  if bash "${verifier}" "${target}" >"${fail_stdout}" 2>"${fail_stderr}"; then
+    echo "Expected verifier to fail for ${target}" >&2
+    cat "${fail_stdout}" >&2
+    exit 1
+  fi
+
+  if ! grep -Fiq -- "${expected}" "${fail_stderr}"; then
+    echo "Expected failure output to contain: ${expected}" >&2
+    cat "${fail_stdout}" >&2
+    cat "${fail_stderr}" >&2
+    exit 1
+  fi
+}
+
+create_valid_repo_template() {
+  if [[ -d "${valid_template}" ]]; then
+    return
+  fi
+
+  copy_repo_path() {
+    local relative_path="$1"
+
+    mkdir -p "${valid_template}/$(dirname "${relative_path}")"
+    cp -pR "${repo_root}/${relative_path}" "${valid_template}/${relative_path}"
+  }
+
+  mkdir -p "${valid_template}"
+  copy_repo_path "README.md"
+  copy_repo_path "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+  copy_repo_path "docs/phase-51-5-competitive-gap-matrix.md"
+  copy_repo_path "docs/phase-51-6-authority-boundary-negative-test-policy.md"
+  copy_repo_path "docs/phase-63-closeout-evaluation.md"
+  copy_repo_path "docs/phase-64-1-known-limitation-ownership-record-contract.md"
+  copy_repo_path "docs/phase-64-1-reviewed-limitation-ownership-records.md"
+  copy_repo_path "docs/phase-64-5-phase66-limitation-handoff.md"
+  copy_repo_path "docs/phase-64-closeout-evaluation.md"
+  copy_repo_path "docs/phase-65-1-release-bundle-inventory.md"
+  copy_repo_path "docs/deployment/customer-like-rehearsal-environment.md"
+  copy_repo_path "docs/deployment/operational-evidence-handoff-pack.md"
+  copy_repo_path "docs/deployment/restore-rollback-upgrade-evidence-rehearsal.md"
+  copy_repo_path "docs/deployment/runtime-smoke-bundle.md"
+  copy_repo_path "docs/deployment/single-customer-profile.md"
+  copy_repo_path "docs/deployment/single-customer-release-bundle-inventory.md"
+  copy_repo_path "docs/runbook.md"
+  copy_repo_path "scripts/run-phase-37-runtime-smoke-gate.sh"
+  copy_repo_path "scripts/test-verify-single-customer-release-bundle-inventory.sh"
+  copy_repo_path "scripts/verify-customer-like-rehearsal-environment.sh"
+  copy_repo_path "scripts/verify-phase-37-restore-rollback-upgrade-evidence.sh"
+  copy_repo_path "scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh"
+  copy_repo_path "scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh"
+  copy_repo_path "scripts/verify-phase-51-5-competitive-gap-matrix.sh"
+  copy_repo_path "scripts/verify-phase-64-6-closeout-evaluation.sh"
+  copy_repo_path "scripts/verify-phase-65-1-release-bundle-inventory.sh"
+  copy_repo_path "scripts/verify-publishable-path-hygiene.sh"
+  copy_repo_path "scripts/verify-single-customer-release-bundle-inventory.sh"
+  mkdir -p "${valid_template}/control-plane/aegisops/control_plane"
+  : >"${valid_template}/control-plane/aegisops/__init__.py"
+  : >"${valid_template}/control-plane/aegisops/control_plane/__init__.py"
+  copy_repo_path "control-plane/aegisops/control_plane/publishable_paths.py"
+  copy_repo_path "control-plane/deployment/first-boot/Dockerfile"
+  copy_repo_path "control-plane/deployment/first-boot/bootstrap.env.sample"
+  copy_repo_path "control-plane/deployment/first-boot/control-plane-entrypoint.sh"
+  copy_repo_path "control-plane/deployment/first-boot/docker-compose.yml"
+  copy_repo_path "control-plane/tests/fixtures/phase37/reviewed-record-chain-rehearsal.json"
+  copy_repo_path "postgres/control-plane/migrations"
+  copy_repo_path "proxy/nginx/conf.d-first-boot/control-plane.conf"
+  copy_repo_path "proxy/nginx/nginx.conf"
+  git -C "${valid_template}" init -q
+  git -C "${valid_template}" config user.email "aegisops@example.invalid"
+  git -C "${valid_template}" config user.name "AegisOps Test"
+  git -C "${valid_template}" add README.md docs scripts control-plane proxy postgres
+  git -C "${valid_template}" commit -q -m "fixture"
+}
+
+copy_valid_repo() {
+  local target="$1"
+
+  create_valid_repo_template
+  cp -pR "${valid_template}" "${target}"
+}
+
+remove_doc_text() {
+  local target="$1"
+  local text="$2"
+
+  TEXT="${text}" perl -0pi -e 's/\Q$ENV{TEXT}\E//g' \
+    "${target}/docs/phase-65-1-release-bundle-inventory.md"
+}
+
+replace_doc_text() {
+  local target="$1"
+  local from_text="$2"
+  local to_text="$3"
+
+  FROM_TEXT="${from_text}" TO_TEXT="${to_text}" perl -0pi -e 's/\Q$ENV{FROM_TEXT}\E/$ENV{TO_TEXT}/g' \
+    "${target}/docs/phase-65-1-release-bundle-inventory.md"
+}
+
+assert_missing_doc_text_fails() {
+  local fixture_name="$1"
+  local text="$2"
+  local expected="$3"
+
+  local target="${workdir}/${fixture_name}"
+  copy_valid_repo "${target}"
+  remove_doc_text "${target}" "${text}"
+  assert_fails_with "${target}" "${expected}"
+}
+
+assert_appended_claim_fails() {
+  local fixture_name="$1"
+  local claim="$2"
+  local expected="$3"
+
+  local target="${workdir}/${fixture_name}"
+  copy_valid_repo "${target}"
+  printf '%s\n' "${claim}" >>"${target}/docs/phase-65-1-release-bundle-inventory.md"
+  assert_fails_with "${target}" "${expected}"
+}
+
+valid_repo="${workdir}/valid"
+copy_valid_repo "${valid_repo}"
+assert_passes "${valid_repo}"
+
+missing_doc_repo="${workdir}/missing-doc"
+copy_valid_repo "${missing_doc_repo}"
+rm "${missing_doc_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${missing_doc_repo}" \
+  "Missing Phase 65.1 release bundle inventory: docs/phase-65-1-release-bundle-inventory.md"
+
+missing_readme_repo="${workdir}/missing-readme"
+copy_valid_repo "${missing_readme_repo}"
+perl -0pi -e 's/- \[Phase 65\.1 release bundle inventory\]\(docs\/phase-65-1-release-bundle-inventory\.md\)[^\n]*\n//m' \
+  "${missing_readme_repo}/README.md"
+assert_fails_with \
+  "${missing_readme_repo}" \
+  "Missing README canonical cross-phase boundary bullet"
+
+readme_overclaim_repo="${workdir}/readme-overclaim"
+copy_valid_repo "${readme_overclaim_repo}"
+perl -0pi -e 's/(- \[Phase 65\.1 release bundle inventory\]\(docs\/phase-65-1-release-bundle-inventory\.md\)[^\n]*)/$1 and proves GA readiness./m' \
+  "${readme_overclaim_repo}/README.md"
+assert_fails_with \
+  "${readme_overclaim_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+readme_inventory_subject_claim_repo="${workdir}/readme-inventory-subject-claim"
+copy_valid_repo "${readme_inventory_subject_claim_repo}"
+printf '%s\n' "Release bundle inventory is GA ready." >>"${readme_inventory_subject_claim_repo}/README.md"
+assert_fails_with \
+  "${readme_inventory_subject_claim_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+readme_later_phase_claim_repo="${workdir}/readme-later-phase-claim"
+copy_valid_repo "${readme_later_phase_claim_repo}"
+printf '%s\n' "Phase 66 closeout evidence proves Phase 66 RC readiness." >>"${readme_later_phase_claim_repo}/README.md"
+assert_passes "${readme_later_phase_claim_repo}"
+
+invalid_phase51_gate_repo="${workdir}/invalid-phase51-gate"
+copy_valid_repo "${invalid_phase51_gate_repo}"
+printf '%s\n' "x" >"${invalid_phase51_gate_repo}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+assert_fails_with \
+  "${invalid_phase51_gate_repo}" \
+  "Phase 65.1 inherited Phase 51.3 gate verifier failed"
+
+invalid_phase51_gap_repo="${workdir}/invalid-phase51-gap"
+copy_valid_repo "${invalid_phase51_gap_repo}"
+printf '%s\n' "x" >"${invalid_phase51_gap_repo}/docs/phase-51-5-competitive-gap-matrix.md"
+assert_fails_with \
+  "${invalid_phase51_gap_repo}" \
+  "Phase 65.1 inherited Phase 51.5 competitive gap matrix verifier failed"
+
+invalid_phase64_closeout_repo="${workdir}/invalid-phase64-closeout"
+copy_valid_repo "${invalid_phase64_closeout_repo}"
+printf '%s\n' "x" >"${invalid_phase64_closeout_repo}/docs/phase-64-closeout-evaluation.md"
+assert_fails_with \
+  "${invalid_phase64_closeout_repo}" \
+  "Phase 65.1 inherited Phase 64 closeout verifier failed"
+
+invalid_deployment_inventory_repo="${workdir}/invalid-deployment-inventory"
+copy_valid_repo "${invalid_deployment_inventory_repo}"
+printf '%s\n' "x" >"${invalid_deployment_inventory_repo}/docs/deployment/single-customer-release-bundle-inventory.md"
+assert_fails_with \
+  "${invalid_deployment_inventory_repo}" \
+  "Phase 65.1 inherited single-customer release bundle inventory verifier failed"
+
+missing_deployment_inventory_repo="${workdir}/missing-deployment-inventory"
+copy_valid_repo "${missing_deployment_inventory_repo}"
+rm "${missing_deployment_inventory_repo}/docs/deployment/single-customer-release-bundle-inventory.md"
+assert_fails_with \
+  "${missing_deployment_inventory_repo}" \
+  "Missing single-customer release bundle inventory baseline"
+
+required_baseline_paths=(
+  "missing-phase51-gate-baseline-path|docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+  "missing-phase51-gap-baseline-path|docs/phase-51-5-competitive-gap-matrix.md"
+  "missing-phase64-closeout-baseline-path|docs/phase-64-closeout-evaluation.md"
+  "missing-deployment-baseline-path|docs/deployment/single-customer-release-bundle-inventory.md"
+)
+
+for baseline_case in "${required_baseline_paths[@]}"; do
+  IFS="|" read -r fixture_name required_path <<<"${baseline_case}"
+  baseline_path_repo="${workdir}/${fixture_name}"
+  copy_valid_repo "${baseline_path_repo}"
+  remove_doc_text "${baseline_path_repo}" "${required_path}"
+  assert_fails_with \
+    "${baseline_path_repo}" \
+    "Missing required Phase 65.1 inventory term"
+done
+
+missing_subordinate_boundary_repo="${workdir}/missing-subordinate-boundary"
+copy_valid_repo "${missing_subordinate_boundary_repo}"
+remove_doc_text "${missing_subordinate_boundary_repo}" "Wazuh, Shuffle, AI, tickets, reports, support notes, dashboards, exports, browser state, UI cache, downstream receipts, release notes, bundle files, verifier output, issue-lint output, and operator-facing summaries cannot satisfy RC gates, GA gates, workflow truth, limitation truth, release truth, or readiness truth by themselves."
+assert_fails_with \
+  "${missing_subordinate_boundary_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+misplaced_subordinate_boundary_repo="${workdir}/misplaced-subordinate-boundary"
+copy_valid_repo "${misplaced_subordinate_boundary_repo}"
+replace_doc_text \
+  "${misplaced_subordinate_boundary_repo}" \
+  "Wazuh, Shuffle, AI, tickets, reports, support notes, dashboards, exports, browser state, UI cache, downstream receipts, release notes, bundle files, verifier output, issue-lint output, and operator-facing summaries cannot satisfy RC gates, GA gates, workflow truth, limitation truth, release truth, or readiness truth by themselves." \
+  ""
+printf '%s\n' "Detached evidence note: Wazuh, Shuffle, AI, tickets, reports, support notes, dashboards, exports, browser state, UI cache, downstream receipts, release notes, bundle files, verifier output, issue-lint output, and operator-facing summaries cannot satisfy RC gates, GA gates, workflow truth, limitation truth, release truth, or readiness truth by themselves." >>"${misplaced_subordinate_boundary_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${misplaced_subordinate_boundary_repo}" \
+  "Missing Phase 65.1 evidence and authority boundary term in Evidence section"
+
+missing_version_repo="${workdir}/missing-version"
+copy_valid_repo "${missing_version_repo}"
+remove_doc_text "${missing_version_repo}" "The inventory identifier is \`phase-65-release-bundle-inventory-v1\`."
+assert_fails_with \
+  "${missing_version_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+missing_record_inventory_identifier_repo="${workdir}/missing-record-inventory-identifier"
+copy_valid_repo "${missing_record_inventory_identifier_repo}"
+remove_doc_text "${missing_record_inventory_identifier_repo}" "- inventory identifier \`phase-65-release-bundle-inventory-v1\`;
+"
+assert_fails_with \
+  "${missing_record_inventory_identifier_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+missing_owner_repo="${workdir}/missing-owner"
+copy_valid_repo "${missing_owner_repo}"
+remove_doc_text "${missing_owner_repo}" "| Release notes artifact set | AegisOps maintainers |"
+assert_fails_with \
+  "${missing_owner_repo}" \
+  "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding"
+
+missing_class_repo="${workdir}/missing-class"
+copy_valid_repo "${missing_class_repo}"
+remove_doc_text "${missing_class_repo}" "| Supportability evidence artifact set | IT Operations, Information Systems Department |"
+assert_fails_with \
+  "${missing_class_repo}" \
+  "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding"
+
+missing_evidence_repo="${workdir}/missing-evidence"
+copy_valid_repo "${missing_evidence_repo}"
+remove_doc_text "${missing_evidence_repo}" "evidence reference for every required artifact class;"
+assert_fails_with \
+  "${missing_evidence_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+missing_revision_binding_repo="${workdir}/missing-revision-binding"
+copy_valid_repo "${missing_revision_binding_repo}"
+remove_doc_text "${missing_revision_binding_repo}" "repository revision or reviewed tag;"
+assert_fails_with \
+  "${missing_revision_binding_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+missing_approval_binding_repo="${workdir}/missing-approval-binding"
+copy_valid_repo "${missing_approval_binding_repo}"
+remove_doc_text "${missing_approval_binding_repo}" "issue or change record that approved the bundle for beta/design-partner packaging review."
+assert_fails_with \
+  "${missing_approval_binding_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+bundle_record_bindings=(
+  "missing-release-bundle-identifier|release bundle identifier in the form \`aegisops-beta-<repository-revision>\`;|Missing required Phase 65.1 inventory term"
+  "missing-artifact-set-owner|artifact-set owner;|Missing required Phase 65.1 inventory term"
+  "missing-per-artifact-owner|per-artifact owner;|Missing required Phase 65.1 inventory term"
+  "missing-verifier-output-reference|verifier output reference;|Missing required Phase 65.1 inventory term"
+  "missing-exclusion-review-reference|explicit exclusion review reference;|Missing required Phase 65.1 inventory term"
+)
+
+for binding_case in "${bundle_record_bindings[@]}"; do
+  IFS="|" read -r fixture_name required_text expected_text <<<"${binding_case}"
+  assert_missing_doc_text_fails "${fixture_name}" "${required_text}" "${expected_text}"
+done
+
+misplaced_binding_repo="${workdir}/misplaced-binding"
+copy_valid_repo "${misplaced_binding_repo}"
+replace_doc_text \
+  "${misplaced_binding_repo}" \
+  "- per-artifact owner;
+" \
+  ""
+printf '%s\n' "Detached note: per-artifact owner;" >>"${misplaced_binding_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${misplaced_binding_repo}" \
+  "Missing Phase 65.1 bundle-record binding field"
+
+missing_row_evidence_repo="${workdir}/missing-row-evidence"
+copy_valid_repo "${missing_row_evidence_repo}"
+replace_doc_text \
+  "${missing_row_evidence_repo}" \
+  "| Install artifact set | Platform maintainers | Install entrypoint, profile selection, runtime env sample, preflight output, and bounded install evidence reference. | \`install-artifacts:<repository-revision>\` | Phase 65.2 offline install bundle contract. |" \
+  "| Install artifact set | Platform maintainers |  | \`install-artifacts:<repository-revision>\` | Phase 65.2 offline install bundle contract. |"
+assert_fails_with \
+  "${missing_row_evidence_repo}" \
+  "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding"
+
+misplaced_artifact_row_repo="${workdir}/misplaced-artifact-row"
+copy_valid_repo "${misplaced_artifact_row_repo}"
+replace_doc_text \
+  "${misplaced_artifact_row_repo}" \
+  "| Install artifact set | Platform maintainers | Install entrypoint, profile selection, runtime env sample, preflight output, and bounded install evidence reference. | \`install-artifacts:<repository-revision>\` | Phase 65.2 offline install bundle contract. |" \
+  ""
+printf '%s\n' "| Install artifact set | Platform maintainers | Install entrypoint, profile selection, runtime env sample, preflight output, and bounded install evidence reference. | \`install-artifacts:<repository-revision>\` | Phase 65.2 offline install bundle contract. |" >>"${misplaced_artifact_row_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${misplaced_artifact_row_repo}" \
+  "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding"
+
+misplaced_verifier_coverage_repo="${workdir}/misplaced-verifier-coverage"
+copy_valid_repo "${misplaced_verifier_coverage_repo}"
+replace_doc_text \
+  "${misplaced_verifier_coverage_repo}" \
+  "The verifier must reject missing version identifier, missing artifact owner, missing required artifact class, missing evidence reference, missing exclusion list, workstation-local absolute paths, production secrets, customer-private data, inferred RC pass, inferred GA pass, verifier-as-readiness-truth, and issue-lint-as-readiness-truth." \
+  ""
+printf '%s\n' "Detached verifier note: The verifier must reject missing version identifier, missing artifact owner, missing required artifact class, missing evidence reference, missing exclusion list, workstation-local absolute paths, production secrets, customer-private data, inferred RC pass, inferred GA pass, verifier-as-readiness-truth, and issue-lint-as-readiness-truth." >>"${misplaced_verifier_coverage_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${misplaced_verifier_coverage_repo}" \
+  "Missing Phase 65.1 verification coverage term in Verification section"
+
+misplaced_non_claim_repo="${workdir}/misplaced-non-claim"
+copy_valid_repo "${misplaced_non_claim_repo}"
+replace_doc_text \
+  "${misplaced_non_claim_repo}" \
+  "This inventory does not claim Phase 66 RC readiness, Phase 67 GA readiness, self-service commercial readiness, commercial replacement readiness, production entitlement enforcement, hosted update service readiness, billing readiness, release-channel readiness, offline install completeness, SBOM completeness, checksum completeness, signing completeness, licensing approval, migration readiness, beta template completeness, or design-partner evidence completeness." \
+  ""
+perl -0pi -e 's/(## 4\. Explicit Exclusions)/Detached non-claim note: This inventory does not claim Phase 66 RC readiness, Phase 67 GA readiness, self-service commercial readiness, commercial replacement readiness, production entitlement enforcement, hosted update service readiness, billing readiness, release-channel readiness, offline install completeness, SBOM completeness, checksum completeness, signing completeness, licensing approval, migration readiness, beta template completeness, or design-partner evidence completeness.\n\n$1/' \
+  "${misplaced_non_claim_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${misplaced_non_claim_repo}" \
+  "Missing Phase 65.1 non-claim term in Non-Claims section"
+
+missing_exclusion_repo="${workdir}/missing-exclusion"
+copy_valid_repo "${missing_exclusion_repo}"
+remove_doc_text "${missing_exclusion_repo}" "hosted update service behavior;"
+assert_fails_with \
+  "${missing_exclusion_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+misplaced_exclusion_repo="${workdir}/misplaced-exclusion"
+copy_valid_repo "${misplaced_exclusion_repo}"
+replace_doc_text \
+  "${misplaced_exclusion_repo}" \
+  "- hosted update service behavior;" \
+  ""
+printf '%s\n' "Later note: hosted update service behavior;" >>"${misplaced_exclusion_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${misplaced_exclusion_repo}" \
+  "explicit exclusion"
+
+missing_extended_exclusion_repo="${workdir}/missing-extended-exclusion"
+copy_valid_repo "${missing_extended_exclusion_repo}"
+remove_doc_text "${missing_extended_exclusion_repo}" "silent auto-upgrade behavior;"
+assert_fails_with \
+  "${missing_extended_exclusion_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+missing_sbom_exclusion_repo="${workdir}/missing-sbom-exclusion"
+copy_valid_repo "${missing_sbom_exclusion_repo}"
+remove_doc_text "${missing_sbom_exclusion_repo}" "SBOM generation, checksum generation, or signing implementation;"
+assert_fails_with \
+  "${missing_sbom_exclusion_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+required_exclusions=(
+  "missing-production-secret-exclusion|production secret material;"
+  "missing-customer-private-exclusion|customer-private data;"
+  "missing-workstation-path-exclusion|workstation-local absolute paths;"
+  "missing-entitlement-exclusion|production entitlement enforcement;"
+  "missing-offline-install-exclusion|full offline install packaging implementation;"
+  "missing-release-channel-exclusion|release channel implementation;"
+  "missing-licensing-exclusion|OSS licensing conclusion or redistribution approval;"
+  "missing-migration-exclusion|migration guide implementation;"
+  "missing-beta-template-exclusion|beta known-limitations template implementation;"
+  "missing-design-partner-template-exclusion|design-partner evidence template implementation;"
+  "missing-rc-gate-exclusion|RC gate acceptance;"
+  "missing-ga-readiness-exclusion|GA readiness;"
+  "missing-commercial-readiness-exclusion|self-service commercial readiness; and"
+  "missing-siem-soar-exclusion|broad SIEM/SOAR replacement readiness."
+)
+
+for exclusion_case in "${required_exclusions[@]}"; do
+  IFS="|" read -r fixture_name required_text <<<"${exclusion_case}"
+  assert_missing_doc_text_fails "${fixture_name}" "${required_text}" "Missing required Phase 65.1 inventory term"
+done
+
+unbound_version_repo="${workdir}/unbound-version"
+copy_valid_repo "${unbound_version_repo}"
+replace_doc_text \
+  "${unbound_version_repo}" \
+  "| Release notes artifact set | AegisOps maintainers | Release notes reference naming changes, known limitations, operator verification, rollback pointer, and support-bundle pointer. | \`release-notes:<repository-revision>\` | Phase 65.3 release channel metadata. |" \
+  "| Release notes artifact set | AegisOps maintainers | Release notes reference naming changes, known limitations, operator verification, rollback pointer, and support-bundle pointer. |  | Phase 65.3 release channel metadata. |"
+printf '%s\n' "\`release-notes:<repository-revision>\` appears in a detached note only." >>"${unbound_version_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${unbound_version_repo}" \
+  "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding"
+
+rc_ready_repo="${workdir}/rc-ready"
+copy_valid_repo "${rc_ready_repo}"
+printf '%s\n' "Phase 65.1 proves RC readiness." >>"${rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${rc_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 proves rc readiness"
+
+ga_ready_repo="${workdir}/ga-ready"
+copy_valid_repo "${ga_ready_repo}"
+printf '%s\n' "Phase 65.1 proves GA readiness." >>"${ga_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ga_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 proves ga readiness"
+
+direct_rc_ready_repo="${workdir}/direct-rc-ready"
+copy_valid_repo "${direct_rc_ready_repo}"
+printf '%s\n' "Phase 65.1 is RC ready." >>"${direct_rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${direct_rc_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 is rc ready"
+
+direct_ga_ready_repo="${workdir}/direct-ga-ready"
+copy_valid_repo "${direct_ga_ready_repo}"
+printf '%s\n' "Phase 65.1 is GA ready." >>"${direct_ga_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${direct_ga_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 is ga ready"
+
+hyphenated_rc_ready_repo="${workdir}/hyphenated-rc-ready"
+copy_valid_repo "${hyphenated_rc_ready_repo}"
+printf '%s\n' "Phase 65.1 is RC-ready." >>"${hyphenated_rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${hyphenated_rc_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 is rc-ready"
+
+hyphenated_ga_ready_repo="${workdir}/hyphenated-ga-ready"
+copy_valid_repo "${hyphenated_ga_ready_repo}"
+printf '%s\n' "Phase 65.1 is GA-ready." >>"${hyphenated_ga_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${hyphenated_ga_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 is ga-ready"
+
+combined_rc_ga_ready_repo="${workdir}/combined-rc-ga-ready"
+copy_valid_repo "${combined_rc_ga_ready_repo}"
+printf '%s\n' "Phase 65.1 is RC/GA ready." >>"${combined_rc_ga_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${combined_rc_ga_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+rc_gate_pass_repo="${workdir}/rc-gate-pass"
+copy_valid_repo "${rc_gate_pass_repo}"
+printf '%s\n' "Phase 65.1 passes RC gates." >>"${rc_gate_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${rc_gate_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 passes rc gates"
+
+ga_gate_pass_repo="${workdir}/ga-gate-pass"
+copy_valid_repo "${ga_gate_pass_repo}"
+printf '%s\n' "Phase 65.1 passes GA gates." >>"${ga_gate_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ga_gate_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 passes ga gates"
+
+inventory_subject_rc_ready_repo="${workdir}/inventory-subject-rc-ready"
+copy_valid_repo "${inventory_subject_rc_ready_repo}"
+printf '%s\n' "This inventory proves RC readiness." >>"${inventory_subject_rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_subject_rc_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+inventory_phase66_rc_ready_repo="${workdir}/inventory-phase66-rc-ready"
+copy_valid_repo "${inventory_phase66_rc_ready_repo}"
+printf '%s\n' "This inventory proves Phase 66 RC readiness." >>"${inventory_phase66_rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_phase66_rc_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+inventory_phase67_ga_ready_repo="${workdir}/inventory-phase67-ga-ready"
+copy_valid_repo "${inventory_phase67_ga_ready_repo}"
+printf '%s\n' "This inventory proves Phase 67 GA readiness." >>"${inventory_phase67_ga_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_phase67_ga_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+nested_inventory_phase66_rc_ready_repo="${workdir}/nested-inventory-phase66-rc-ready"
+copy_valid_repo "${nested_inventory_phase66_rc_ready_repo}"
+printf '%s\n' "This inventory claims Phase 66 is RC ready." >>"${nested_inventory_phase66_rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${nested_inventory_phase66_rc_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+inventory_infers_rc_pass_repo="${workdir}/inventory-infers-rc-pass"
+copy_valid_repo "${inventory_infers_rc_pass_repo}"
+printf '%s\n' "This inventory infers an RC pass." >>"${inventory_infers_rc_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_infers_rc_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+release_bundle_record_infers_rc_pass_repo="${workdir}/release-bundle-record-infers-rc-pass"
+copy_valid_repo "${release_bundle_record_infers_rc_pass_repo}"
+printf '%s\n' "The release bundle record infers an RC pass." >>"${release_bundle_record_infers_rc_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${release_bundle_record_infers_rc_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+inventory_infers_phase67_ga_pass_repo="${workdir}/inventory-infers-phase67-ga-pass"
+copy_valid_repo "${inventory_infers_phase67_ga_pass_repo}"
+printf '%s\n' "This inventory infers a Phase 67 GA pass." >>"${inventory_infers_phase67_ga_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_infers_phase67_ga_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+phase65_infers_rc_pass_repo="${workdir}/phase65-infers-rc-pass"
+copy_valid_repo "${phase65_infers_rc_pass_repo}"
+printf '%s\n' "Phase 65.1 infers an RC pass." >>"${phase65_infers_rc_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${phase65_infers_rc_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+phase65_infers_phase67_ga_pass_repo="${workdir}/phase65-infers-phase67-ga-pass"
+copy_valid_repo "${phase65_infers_phase67_ga_pass_repo}"
+printf '%s\n' "Phase 65.1 infers a Phase 67 GA pass." >>"${phase65_infers_phase67_ga_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${phase65_infers_phase67_ga_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+hosted_update_ready_repo="${workdir}/hosted-update-ready"
+copy_valid_repo "${hosted_update_ready_repo}"
+printf '%s\n' "This inventory establishes hosted update service readiness." >>"${hosted_update_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${hosted_update_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
+
+hosted_update_behavior_repo="${workdir}/hosted-update-behavior"
+copy_valid_repo "${hosted_update_behavior_repo}"
+printf '%s\n' "This inventory creates hosted update service behavior." >>"${hosted_update_behavior_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${hosted_update_behavior_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
+
+sbom_generation_repo="${workdir}/sbom-generation"
+copy_valid_repo "${sbom_generation_repo}"
+printf '%s\n' "This inventory approves SBOM generation." >>"${sbom_generation_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${sbom_generation_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
+
+silent_auto_upgrade_behavior_repo="${workdir}/silent-auto-upgrade-behavior"
+copy_valid_repo "${silent_auto_upgrade_behavior_repo}"
+printf '%s\n' "This inventory proves silent auto-upgrade behavior." >>"${silent_auto_upgrade_behavior_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${silent_auto_upgrade_behavior_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
+
+billing_ready_repo="${workdir}/billing-ready"
+copy_valid_repo "${billing_ready_repo}"
+printf '%s\n' "Phase 65.1 proves billing readiness." >>"${billing_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${billing_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
+
+excluded_scope_claims=(
+  "hosted-update-created|This inventory creates hosted update service."
+  "release-bundle-hosted-update-created|The release bundle creates hosted update service behavior."
+  "entitlement-enforcement|Release bundle inventory creates production entitlement enforcement."
+  "release-channel-implementation|This inventory establishes release channel implementation."
+  "billing-is-ready|This inventory is billing ready."
+  "hosted-update-is-ready|Release bundle inventory is hosted update service ready."
+  "offline-install-complete|Phase 65.1 claims offline install completeness."
+  "checksum-generation|Release bundle inventory approves checksum generation."
+  "signing-implementation|This inventory approves signing implementation."
+  "licensing-approval|Phase 65.1 creates licensing approval."
+  "migration-guide|This inventory establishes migration guide."
+  "beta-template-complete|Release bundle inventory proves beta template completeness."
+  "design-partner-template|This inventory satisfies design-partner evidence template."
+  "commercial-replacement-ready|Phase 65.1 proves commercial replacement readiness."
+  "siem-soar-replacement-ready|This inventory proves broad SIEM/SOAR replacement readiness."
+  "siem-and-soar-replacement-ready|This inventory proves broad SIEM and SOAR replacement readiness."
+  "oss-licensing-conclusion|This inventory approves OSS licensing conclusion."
+  "redistribution-approval|This inventory creates redistribution approval."
+  "hosted-release-metadata|This inventory approves hosted release metadata."
+  "offline-packaging|This inventory approves offline packaging."
+  "includes-hosted-update-behavior|This inventory includes hosted update service behavior."
+  "provides-beta-template|This inventory provides beta known-limitations template implementation."
+  "later-slice-offline-completeness|Later Phase 65 slice infers offline install completeness."
+)
+
+for claim_case in "${excluded_scope_claims[@]}"; do
+  IFS="|" read -r fixture_name claim_text <<<"${claim_case}"
+  assert_appended_claim_fails \
+    "${fixture_name}" \
+    "${claim_text}" \
+    "Forbidden Phase 65.1 release bundle inventory claim"
+done
+
+rc_ga_claims=(
+  "inventory-ga-ready|Release bundle inventory is GA ready."
+  "release-bundle-ga-ready|The release bundle is GA ready."
+  "release-bundle-manifest-ga-ready|Release bundle manifest is GA ready."
+  "definite-inventory-ga-ready|The inventory is GA ready."
+  "inventory-rc-gate-pass|This inventory passes RC gate acceptance."
+  "inventory-accepts-rc-gates|This inventory accepts RC gates."
+  "phase-rc-ga-gates|Phase 65.1 satisfies RC/GA gates."
+)
+
+for claim_case in "${rc_ga_claims[@]}"; do
+  IFS="|" read -r fixture_name claim_text <<<"${claim_case}"
+  assert_appended_claim_fails \
+    "${fixture_name}" \
+    "${claim_text}" \
+    "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+done
+
+negated_boundary_claims_repo="${workdir}/negated-boundary-claims"
+copy_valid_repo "${negated_boundary_claims_repo}"
+printf '%s\n' \
+  "Verifier output is not readiness truth." \
+  "Issue-lint output is not release truth." \
+  "Release bundle inventory is not release authority." \
+  "This inventory does not create hosted update service readiness." \
+  >>"${negated_boundary_claims_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_passes "${negated_boundary_claims_repo}"
+
+positive_after_negated_boundary_repo="${workdir}/positive-after-negated-boundary"
+copy_valid_repo "${positive_after_negated_boundary_repo}"
+printf '%s\n' "Verifier output is not readiness truth, but it is release truth." >>"${positive_after_negated_boundary_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${positive_after_negated_boundary_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: positive claim after negated boundary"
+
+verifier_truth_repo="${workdir}/verifier-truth"
+copy_valid_repo "${verifier_truth_repo}"
+printf '%s\n' "Verifier output is readiness truth." >>"${verifier_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${verifier_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: verifier output is readiness truth"
+
+issue_lint_truth_repo="${workdir}/issue-lint-truth"
+copy_valid_repo "${issue_lint_truth_repo}"
+printf '%s\n' "Issue-lint output is release truth." >>"${issue_lint_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${issue_lint_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: issue-lint output is release truth"
+
+release_gate_truth_repo="${workdir}/release-gate-truth"
+copy_valid_repo "${release_gate_truth_repo}"
+printf '%s\n' "Verifier output is release gate truth." >>"${release_gate_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${release_gate_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+issue_lint_rc_gate_truth_repo="${workdir}/issue-lint-rc-gate-truth"
+copy_valid_repo "${issue_lint_rc_gate_truth_repo}"
+printf '%s\n' "Issue-lint output is RC gate truth." >>"${issue_lint_rc_gate_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${issue_lint_rc_gate_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+workflow_truth_repo="${workdir}/workflow-truth"
+copy_valid_repo "${workflow_truth_repo}"
+printf '%s\n' "Verifier output is workflow truth." >>"${workflow_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${workflow_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+limitation_truth_repo="${workdir}/limitation-truth"
+copy_valid_repo "${limitation_truth_repo}"
+printf '%s\n' "Issue-lint output is limitation truth." >>"${limitation_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${limitation_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+ai_summary_truth_repo="${workdir}/ai-summary-truth"
+copy_valid_repo "${ai_summary_truth_repo}"
+printf '%s\n' "AI summaries prove readiness truth." >>"${ai_summary_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ai_summary_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+plural_ai_summary_truth_repo="${workdir}/plural-ai-summary-truth"
+copy_valid_repo "${plural_ai_summary_truth_repo}"
+printf '%s\n' "AI summaries are readiness truth." >>"${plural_ai_summary_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${plural_ai_summary_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+operator_summary_truth_repo="${workdir}/operator-summary-truth"
+copy_valid_repo "${operator_summary_truth_repo}"
+printf '%s\n' "Operator-facing summaries satisfy workflow truth." >>"${operator_summary_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${operator_summary_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+readiness_projection_truth_repo="${workdir}/readiness-projection-truth"
+copy_valid_repo "${readiness_projection_truth_repo}"
+printf '%s\n' "Readiness projections are readiness truth." >>"${readiness_projection_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${readiness_projection_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+ui_text_limitation_truth_repo="${workdir}/ui-text-limitation-truth"
+copy_valid_repo "${ui_text_limitation_truth_repo}"
+printf '%s\n' "UI text is limitation truth." >>"${ui_text_limitation_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ui_text_limitation_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+ai_summary_rc_gate_repo="${workdir}/ai-summary-rc-gate"
+copy_valid_repo "${ai_summary_rc_gate_repo}"
+printf '%s\n' "AI summaries satisfy RC gates." >>"${ai_summary_rc_gate_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ai_summary_rc_gate_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+ai_summary_phase66_rc_gate_repo="${workdir}/ai-summary-phase66-rc-gate"
+copy_valid_repo "${ai_summary_phase66_rc_gate_repo}"
+printf '%s\n' "AI summaries satisfy Phase 66 RC gates." >>"${ai_summary_phase66_rc_gate_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ai_summary_phase66_rc_gate_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+ai_summary_are_rc_gates_repo="${workdir}/ai-summary-are-rc-gates"
+copy_valid_repo "${ai_summary_are_rc_gates_repo}"
+printf '%s\n' "AI summaries are RC gates." >>"${ai_summary_are_rc_gates_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ai_summary_are_rc_gates_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+ai_summary_serve_as_rc_gates_repo="${workdir}/ai-summary-serve-as-rc-gates"
+copy_valid_repo "${ai_summary_serve_as_rc_gates_repo}"
+printf '%s\n' "AI summaries serve as RC gates." >>"${ai_summary_serve_as_rc_gates_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ai_summary_serve_as_rc_gates_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+modal_verifier_rc_gate_repo="${workdir}/modal-verifier-rc-gate"
+copy_valid_repo "${modal_verifier_rc_gate_repo}"
+printf '%s\n' "Verifier output can satisfy RC gates." >>"${modal_verifier_rc_gate_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${modal_verifier_rc_gate_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+release_notes_ga_gate_repo="${workdir}/release-notes-ga-gate"
+copy_valid_repo "${release_notes_ga_gate_repo}"
+printf '%s\n' "Release notes prove GA gates." >>"${release_notes_ga_gate_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${release_notes_ga_gate_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+inventory_verifier_truth_repo="${workdir}/inventory-verifier-truth"
+copy_valid_repo "${inventory_verifier_truth_repo}"
+printf '%s\n' "Release bundle inventory is verifier truth." >>"${inventory_verifier_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_verifier_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+inventory_issue_lint_truth_repo="${workdir}/inventory-issue-lint-truth"
+copy_valid_repo "${inventory_issue_lint_truth_repo}"
+printf '%s\n' "This inventory is issue-lint truth." >>"${inventory_issue_lint_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_issue_lint_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+inventory_release_truth_repo="${workdir}/inventory-release-truth"
+copy_valid_repo "${inventory_release_truth_repo}"
+printf '%s\n' "Release bundle inventory is release truth." >>"${inventory_release_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_release_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: release bundle inventory is release truth"
+
+release_bundle_release_truth_repo="${workdir}/release-bundle-release-truth"
+copy_valid_repo "${release_bundle_release_truth_repo}"
+printf '%s\n' "The release bundle is release truth." >>"${release_bundle_release_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${release_bundle_release_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+inventory_substitute_evidence_repo="${workdir}/inventory-substitute-evidence"
+copy_valid_repo "${inventory_substitute_evidence_repo}"
+printf '%s\n' "This inventory is substitute evidence for the Phase 51.3 gate contract." >>"${inventory_substitute_evidence_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_substitute_evidence_repo}" \
+  "substitute evidence assertion"
+
+definite_inventory_substitute_evidence_repo="${workdir}/definite-inventory-substitute-evidence"
+copy_valid_repo "${definite_inventory_substitute_evidence_repo}"
+printf '%s\n' "The inventory is substitute evidence for the Phase 51.3 gate contract." >>"${definite_inventory_substitute_evidence_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${definite_inventory_substitute_evidence_repo}" \
+  "substitute evidence assertion"
+
+release_bundle_substitute_evidence_repo="${workdir}/release-bundle-substitute-evidence"
+copy_valid_repo "${release_bundle_substitute_evidence_repo}"
+printf '%s\n' "The release bundle is substitute evidence for the Phase 51.3 gate contract." >>"${release_bundle_substitute_evidence_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${release_bundle_substitute_evidence_repo}" \
+  "substitute evidence assertion"
+
+workflow_authority_repo="${workdir}/workflow-authority"
+copy_valid_repo "${workflow_authority_repo}"
+printf '%s\n' "Release bundle inventory is workflow authority." >>"${workflow_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${workflow_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+definite_inventory_authority_repo="${workdir}/definite-inventory-authority"
+copy_valid_repo "${definite_inventory_authority_repo}"
+printf '%s\n' "The inventory is release gate authority." >>"${definite_inventory_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${definite_inventory_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+artifact_presence_authority_repo="${workdir}/artifact-presence-authority"
+copy_valid_repo "${artifact_presence_authority_repo}"
+printf '%s\n' "Artifact presence is release gate authority." >>"${artifact_presence_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${artifact_presence_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+release_bundle_authority_repo="${workdir}/release-bundle-authority"
+copy_valid_repo "${release_bundle_authority_repo}"
+printf '%s\n' "The release bundle is release gate authority." >>"${release_bundle_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${release_bundle_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+manifest_authority_repo="${workdir}/manifest-authority"
+copy_valid_repo "${manifest_authority_repo}"
+printf '%s\n' "Release bundle manifest is readiness authority." >>"${manifest_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${manifest_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+inventory_satisfies_authority_repo="${workdir}/inventory-satisfies-authority"
+copy_valid_repo "${inventory_satisfies_authority_repo}"
+printf '%s\n' "This inventory satisfies release gate authority." >>"${inventory_satisfies_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_satisfies_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+subordinate_gate_authority_repo="${workdir}/subordinate-gate-authority"
+copy_valid_repo "${subordinate_gate_authority_repo}"
+printf '%s\n' "Verifier output proves gate authority." >>"${subordinate_gate_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${subordinate_gate_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+planning_evidence_authority_repo="${workdir}/planning-evidence-authority"
+copy_valid_repo "${planning_evidence_authority_repo}"
+printf '%s\n' "Readiness projections are release authority." >>"${planning_evidence_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${planning_evidence_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+subordinate_release_authority_repo="${workdir}/subordinate-release-authority"
+copy_valid_repo "${subordinate_release_authority_repo}"
+printf '%s\n' "AI summaries are release authority." >>"${subordinate_release_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${subordinate_release_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+missing_runtime_execution_authority_repo="${workdir}/missing-runtime-execution-authority"
+copy_valid_repo "${missing_runtime_execution_authority_repo}"
+remove_doc_text "${missing_runtime_execution_authority_repo}" "runtime execution authority, "
+assert_fails_with \
+  "${missing_runtime_execution_authority_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+secret_repo="${workdir}/secret"
+copy_valid_repo "${secret_repo}"
+printf '%s\n' "secret = actual-production-token" >>"${secret_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${secret_repo}" \
+  "production secret-looking value detected"
+
+readme_secret_repo="${workdir}/readme-secret"
+copy_valid_repo "${readme_secret_repo}"
+printf '%s\n' "Phase 65.1 README boundary password: actual-production-token" >>"${readme_secret_repo}/README.md"
+assert_fails_with \
+  "${readme_secret_repo}" \
+  "production secret-looking value detected"
+
+readme_customer_private_repo="${workdir}/readme-customer-private"
+copy_valid_repo "${readme_customer_private_repo}"
+printf '%s\n' "Phase 65.1 README boundary customer-private: Acme incident payload" >>"${readme_customer_private_repo}/README.md"
+assert_fails_with \
+  "${readme_customer_private_repo}" \
+  "customer-private data detected"
+
+yaml_secret_repo="${workdir}/yaml-secret"
+copy_valid_repo "${yaml_secret_repo}"
+printf '%s\n' "password: actual-production-token" >>"${yaml_secret_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${yaml_secret_repo}" \
+  "production secret-looking value detected"
+
+placeholder_credential_repo="${workdir}/placeholder-credential"
+copy_valid_repo "${placeholder_credential_repo}"
+printf '%s\n' "password: <placeholder>" >>"${placeholder_credential_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${placeholder_credential_repo}" \
+  "production secret-looking value detected"
+
+placeholder_token_repo="${workdir}/placeholder-token"
+copy_valid_repo "${placeholder_token_repo}"
+printf '%s\n' "token: <placeholder>" >>"${placeholder_token_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${placeholder_token_repo}" \
+  "production secret-looking value detected"
+
+placeholder_auth_token_repo="${workdir}/placeholder-auth-token"
+copy_valid_repo "${placeholder_auth_token_repo}"
+printf '%s\n' "auth_token: <placeholder>" >>"${placeholder_auth_token_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${placeholder_auth_token_repo}" \
+  "production secret-looking value detected"
+
+encoded_secret_repo="${workdir}/encoded-secret"
+copy_valid_repo "${encoded_secret_repo}"
+printf '%s\n' "password%3A%20actual-production-token" >>"${encoded_secret_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${encoded_secret_repo}" \
+  "production secret-looking value detected"
+
+access_token_repo="${workdir}/access-token"
+copy_valid_repo "${access_token_repo}"
+printf '%s\n' "access_token: actual-production-token" >>"${access_token_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${access_token_repo}" \
+  "production secret-looking value detected"
+
+api_key_repo="${workdir}/api-key"
+copy_valid_repo "${api_key_repo}"
+printf '%s\n' "api-key: actual-production-token" >>"${api_key_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${api_key_repo}" \
+  "production secret-looking value detected"
+
+customer_private_repo="${workdir}/customer-private"
+copy_valid_repo "${customer_private_repo}"
+printf '%s\n' "customer-private data: Acme incident payload" >>"${customer_private_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${customer_private_repo}" \
+  "customer-private data detected"
+
+customer_private_space_field_repo="${workdir}/customer-private-space-field"
+copy_valid_repo "${customer_private_space_field_repo}"
+printf '%s\n' "customer private data: Acme incident payload" >>"${customer_private_space_field_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${customer_private_space_field_repo}" \
+  "customer-private data detected"
+
+bare_customer_private_repo="${workdir}/bare-customer-private"
+copy_valid_repo "${bare_customer_private_repo}"
+printf '%s\n' "customer-private: Acme incident payload" >>"${bare_customer_private_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${bare_customer_private_repo}" \
+  "customer-private data detected"
+
+customer_private_incident_repo="${workdir}/customer-private-incident"
+copy_valid_repo "${customer_private_incident_repo}"
+printf '%s\n' "customer-private incident: Acme incident payload" >>"${customer_private_incident_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${customer_private_incident_repo}" \
+  "customer-private data detected"
+
+customer_private_prose_repo="${workdir}/customer-private-prose"
+copy_valid_repo "${customer_private_prose_repo}"
+printf '%s\n' "customer-private Acme incident payload" >>"${customer_private_prose_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${customer_private_prose_repo}" \
+  "customer-private data detected"
+
+customer_private_space_prose_repo="${workdir}/customer-private-space-prose"
+copy_valid_repo "${customer_private_space_prose_repo}"
+printf '%s\n' "customer private Acme incident payload" >>"${customer_private_space_prose_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${customer_private_space_prose_repo}" \
+  "customer-private data detected"
+
+self_service_commercial_ready_repo="${workdir}/self-service-commercial-ready"
+copy_valid_repo "${self_service_commercial_ready_repo}"
+printf '%s\n' "AegisOps is self-service commercial ready." >>"${self_service_commercial_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${self_service_commercial_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: aegisops is self-service commercial ready"
+
+wrapped_verifier_truth_repo="${workdir}/wrapped-verifier-truth"
+copy_valid_repo "${wrapped_verifier_truth_repo}"
+printf '%s\n' "Verifier output is readiness" "truth." >>"${wrapped_verifier_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${wrapped_verifier_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: verifier output is readiness truth"
+
+path_repo="${workdir}/path"
+copy_valid_repo "${path_repo}"
+users_segment="Users"
+printf '%s\n' "Operator note mentions /${users_segment}/local/repo." >>"${path_repo}/docs/phase-65-1-release-bundle-inventory.md"
+git -C "${path_repo}" add docs/phase-65-1-release-bundle-inventory.md
+git -C "${path_repo}" commit -q -m "path"
+assert_fails_with \
+  "${path_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory absolute path usage detected"
+
+encoded_path_repo="${workdir}/encoded-path"
+copy_valid_repo "${encoded_path_repo}"
+printf '%s\n' "Operator note mentions /%55sers/alice/local/repo." >>"${encoded_path_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${encoded_path_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory absolute path usage detected"
+
+encoded_readme_path_repo="${workdir}/encoded-readme-path"
+copy_valid_repo "${encoded_readme_path_repo}"
+printf '%s\n' "Operator note mentions /%55sers/alice/local/repo." >>"${encoded_readme_path_repo}/README.md"
+assert_fails_with \
+  "${encoded_readme_path_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory absolute path usage detected"
+
+file_uri_path_repo="${workdir}/file-uri-path"
+copy_valid_repo "${file_uri_path_repo}"
+printf '%s\n' "Operator note mentions file:///Users/alice/local/repo." >>"${file_uri_path_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${file_uri_path_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory absolute path usage detected"
+
+if grep -Fq '>/tmp/phase65-path-hygiene' "${verifier}" || grep -Fq '2>/tmp/phase65-path-hygiene' "${verifier}"; then
+  echo "Expected verifier to avoid predictable /tmp path-hygiene output files" >&2
+  exit 1
+fi
+
+echo "Phase 65.1 release bundle inventory verifier self-test passes."
