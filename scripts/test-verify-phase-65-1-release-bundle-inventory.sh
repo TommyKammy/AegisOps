@@ -485,6 +485,13 @@ assert_fails_with \
   "${inventory_phase67_ga_ready_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
 
+nested_inventory_phase66_rc_ready_repo="${workdir}/nested-inventory-phase66-rc-ready"
+copy_valid_repo "${nested_inventory_phase66_rc_ready_repo}"
+printf '%s\n' "This inventory claims Phase 66 is RC ready." >>"${nested_inventory_phase66_rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${nested_inventory_phase66_rc_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
 inventory_infers_rc_pass_repo="${workdir}/inventory-infers-rc-pass"
 copy_valid_repo "${inventory_infers_rc_pass_repo}"
 printf '%s\n' "This inventory infers an RC pass." >>"${inventory_infers_rc_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -576,6 +583,7 @@ excluded_scope_claims=(
   "redistribution-approval|This inventory creates redistribution approval."
   "hosted-release-metadata|This inventory approves hosted release metadata."
   "offline-packaging|This inventory approves offline packaging."
+  "provides-beta-template|This inventory provides beta known-limitations template implementation."
 )
 
 for claim_case in "${excluded_scope_claims[@]}"; do
@@ -664,6 +672,20 @@ copy_valid_repo "${operator_summary_truth_repo}"
 printf '%s\n' "Operator-facing summaries satisfy workflow truth." >>"${operator_summary_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${operator_summary_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+readiness_projection_truth_repo="${workdir}/readiness-projection-truth"
+copy_valid_repo "${readiness_projection_truth_repo}"
+printf '%s\n' "Readiness projections are readiness truth." >>"${readiness_projection_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${readiness_projection_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+ui_text_limitation_truth_repo="${workdir}/ui-text-limitation-truth"
+copy_valid_repo "${ui_text_limitation_truth_repo}"
+printf '%s\n' "UI text is limitation truth." >>"${ui_text_limitation_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ui_text_limitation_truth_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
 
 ai_summary_rc_gate_repo="${workdir}/ai-summary-rc-gate"
