@@ -113,6 +113,33 @@ for phrase in "${required_phrases[@]}"; do
   require_phrase "${absolute_doc_path}" "${phrase}" "required Phase 65.1 inventory term in ${doc_path}"
 done
 
+required_baseline_paths=(
+  "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+  "docs/phase-51-5-competitive-gap-matrix.md"
+  "docs/phase-64-closeout-evaluation.md"
+  "docs/deployment/single-customer-release-bundle-inventory.md"
+)
+
+for baseline_path in "${required_baseline_paths[@]}"; do
+  require_phrase "${absolute_doc_path}" "${baseline_path}" "Phase 65.1 authoritative baseline path"
+done
+
+required_bundle_record_fields=(
+  "inventory identifier \`phase-65-release-bundle-inventory-v1\`;"
+  "release bundle identifier in the form \`aegisops-beta-<repository-revision>\`;"
+  "repository revision or reviewed tag;"
+  "artifact-set owner;"
+  "per-artifact owner;"
+  "evidence reference for every required artifact class;"
+  "verifier output reference;"
+  "explicit exclusion review reference;"
+  "issue or change record that approved the bundle for beta/design-partner packaging review."
+)
+
+for bundle_record_field in "${required_bundle_record_fields[@]}"; do
+  require_phrase "${absolute_doc_path}" "${bundle_record_field}" "Phase 65.1 bundle-record binding field"
+done
+
 required_artifact_rows=(
   "| Install artifact set | Platform maintainers | Install entrypoint, profile selection, runtime env sample, preflight output, and bounded install evidence reference. | \`install-artifacts:<repository-revision>\` | Phase 65.2 offline install bundle contract. |"
   "| Runtime configuration artifact set | Platform maintainers | Reviewed runtime config keys, secret-source placeholders, proxy boundary, certificate custody, and fail-closed config validation evidence. | \`runtime-config:<repository-revision>\` | Phase 65.2 and Phase 65.3 packaging and upgrade metadata. |"
@@ -128,19 +155,29 @@ for artifact_row in "${required_artifact_rows[@]}"; do
   require_phrase "${absolute_doc_path}" "${artifact_row}" "Phase 65.1 artifact inventory row with owner, evidence, and version binding"
 done
 
-required_version_identifiers=(
-  "install-artifacts:<repository-revision>"
-  "runtime-config:<repository-revision>"
-  "docs-pack:<repository-revision>"
-  "supportability:<repository-revision>"
-  "release-notes:<repository-revision>"
-  "upgrade-rollback:<repository-revision>"
-  "limitations:<repository-revision>"
-  "verification:<repository-revision>"
+required_exclusions=(
+  "production secret material;"
+  "customer-private data;"
+  "workstation-local absolute paths;"
+  "hosted update service behavior;"
+  "silent auto-upgrade behavior;"
+  "billing;"
+  "production entitlement enforcement;"
+  "full offline install packaging implementation;"
+  "release channel implementation;"
+  "SBOM generation, checksum generation, or signing implementation;"
+  "OSS licensing conclusion or redistribution approval;"
+  "migration guide implementation;"
+  "beta known-limitations template implementation;"
+  "design-partner evidence template implementation;"
+  "RC gate acceptance;"
+  "GA readiness;"
+  "self-service commercial readiness; and"
+  "broad SIEM/SOAR replacement readiness."
 )
 
-for version_identifier in "${required_version_identifiers[@]}"; do
-  require_phrase "${absolute_doc_path}" "${version_identifier}" "Phase 65.1 artifact version identifier"
+for exclusion in "${required_exclusions[@]}"; do
+  require_phrase "${absolute_doc_path}" "${exclusion}" "Phase 65.1 explicit exclusion"
 done
 
 forbidden_claims=(
