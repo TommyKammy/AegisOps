@@ -174,10 +174,20 @@ create_valid_repo "${placeholder_credential_repo}"
 printf '%s\n' "Placeholder credentials are valid auth for beta install." >>"${placeholder_credential_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "placeholder credentials accepted as valid auth" --repo-root "${placeholder_credential_repo}"
 
+placeholder_credential_treated_repo="${workdir}/placeholder-credential-treated"
+create_valid_repo "${placeholder_credential_treated_repo}"
+printf '%s\n' "Placeholder credentials are treated as valid auth for beta install." >>"${placeholder_credential_treated_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "placeholder credentials accepted as valid auth" --repo-root "${placeholder_credential_treated_repo}"
+
 production_installer_repo="${workdir}/production-installer"
 create_valid_repo "${production_installer_repo}"
 printf '%s\n' "This bundle provides production installer completeness." >>"${production_installer_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --repo-root "${production_installer_repo}"
+
+production_installer_complete_repo="${workdir}/production-installer-complete"
+create_valid_repo "${production_installer_complete_repo}"
+printf '%s\n' "Production installer is complete for this bundle." >>"${production_installer_complete_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --repo-root "${production_installer_complete_repo}"
 
 rc_claim_repo="${workdir}/rc-claim"
 create_valid_repo "${rc_claim_repo}"

@@ -180,10 +180,14 @@ scan_forbidden_text() {
   fi
 
   if ! printf '%s' "${decoded_text}" | perl -0ne '
-    while (/([^.?!;\n]*(?:(?:placeholder|sample|fake|todo)[^.?!;\n]*(?:secret|credential|password|token|api[ -]?key)|(?:secret|credential|password|token|api[ -]?key)[^.?!;\n]*(?:placeholder|sample|fake|todo))[^.?!;\n]*(?:are|is|count as|counts as|may be|can be|remain|stays|accepted as|allowed as)[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential)[^.?!;\n]*)[.?!;\n]/ig) {
+    my $text = $_;
+    while ($text =~ /([^.?!;\n]*(?:(?:placeholder|sample|fake|todo)[^.?!;\n]*(?:secret|credential|password|token|api[ -]?key)|(?:secret|credential|password|token|api[ -]?key)[^.?!;\n]*(?:placeholder|sample|fake|todo))[^.?!;\n]*(?:are|is|count as|counts as|may be|can be|remain|stays|accepted as|allowed as)[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential)[^.?!;\n]*)[.?!;\n]/ig) {
       my $claim = lc $1;
+      my $start = $-[1];
+      my $context_start = $start > 2000 ? $start - 2000 : 0;
+      my $context = lc substr($text, $context_start, $start - $context_start);
       next if $claim =~ /(must reject|must not|cannot|can not|do not|does not|invalid|must fail|not be)/;
-      next if $claim =~ /treated as valid/;
+      next if $context =~ /(must reject|must fail closed when|validation must fail closed when|must fail when):?[^#]*$/s;
       exit 1;
     }
   '; then
