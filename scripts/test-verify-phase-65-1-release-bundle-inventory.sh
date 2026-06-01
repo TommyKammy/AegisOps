@@ -415,6 +415,20 @@ assert_fails_with \
   "${inventory_subject_rc_ready_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
 
+inventory_phase66_rc_ready_repo="${workdir}/inventory-phase66-rc-ready"
+copy_valid_repo "${inventory_phase66_rc_ready_repo}"
+printf '%s\n' "This inventory proves Phase 66 RC readiness." >>"${inventory_phase66_rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_phase66_rc_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+inventory_phase67_ga_ready_repo="${workdir}/inventory-phase67-ga-ready"
+copy_valid_repo "${inventory_phase67_ga_ready_repo}"
+printf '%s\n' "This inventory proves Phase 67 GA readiness." >>"${inventory_phase67_ga_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_phase67_ga_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
 hosted_update_ready_repo="${workdir}/hosted-update-ready"
 copy_valid_repo "${hosted_update_ready_repo}"
 printf '%s\n' "This inventory establishes hosted update service readiness." >>"${hosted_update_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -467,6 +481,8 @@ excluded_scope_claims=(
   "siem-soar-replacement-ready|This inventory proves broad SIEM/SOAR replacement readiness."
   "oss-licensing-conclusion|This inventory approves OSS licensing conclusion."
   "redistribution-approval|This inventory creates redistribution approval."
+  "hosted-release-metadata|This inventory approves hosted release metadata."
+  "offline-packaging|This inventory approves offline packaging."
 )
 
 for claim_case in "${excluded_scope_claims[@]}"; do
@@ -547,6 +563,20 @@ assert_fails_with \
   "${operator_summary_truth_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
 
+ai_summary_rc_gate_repo="${workdir}/ai-summary-rc-gate"
+copy_valid_repo "${ai_summary_rc_gate_repo}"
+printf '%s\n' "AI summaries satisfy RC gates." >>"${ai_summary_rc_gate_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ai_summary_rc_gate_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+release_notes_ga_gate_repo="${workdir}/release-notes-ga-gate"
+copy_valid_repo "${release_notes_ga_gate_repo}"
+printf '%s\n' "Release notes prove GA gates." >>"${release_notes_ga_gate_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${release_notes_ga_gate_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
 inventory_verifier_truth_repo="${workdir}/inventory-verifier-truth"
 copy_valid_repo "${inventory_verifier_truth_repo}"
 printf '%s\n' "Release bundle inventory is verifier truth." >>"${inventory_verifier_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -573,6 +603,13 @@ copy_valid_repo "${secret_repo}"
 printf '%s\n' "secret = actual-production-token" >>"${secret_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${secret_repo}" \
+  "production secret-looking value detected"
+
+readme_secret_repo="${workdir}/readme-secret"
+copy_valid_repo "${readme_secret_repo}"
+printf '%s\n' "Phase 65.1 README boundary password: actual-production-token" >>"${readme_secret_repo}/README.md"
+assert_fails_with \
+  "${readme_secret_repo}" \
   "production secret-looking value detected"
 
 yaml_secret_repo="${workdir}/yaml-secret"
