@@ -60,14 +60,6 @@ per-artifact owner;
 evidence reference for every required artifact class;
 verifier output reference;
 explicit exclusion review reference;
-| Install artifact set | Platform maintainers |
-| Runtime configuration artifact set | Platform maintainers |
-| Documentation artifact set | IT Operations, Information Systems Department |
-| Supportability evidence artifact set | IT Operations, Information Systems Department |
-| Release notes artifact set | AegisOps maintainers |
-| Upgrade and rollback guidance artifact set | Platform maintainers |
-| Known limitation evidence artifact set | AegisOps maintainers |
-| Verification output artifact set | Platform maintainers |
 The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct, and Phase 66 remains RC while Phase 67 remains GA.
 The inventory preserves Phase 64 limitation ownership: known limitation records, mitigation posture, handoff notes, verifier output, issue-lint output, UI text, readiness projections, and AI summaries remain subordinate planning evidence only.
 AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth.
@@ -77,8 +69,16 @@ production secret material;
 customer-private data;
 workstation-local absolute paths;
 hosted update service behavior;
+silent auto-upgrade behavior;
 billing;
 production entitlement enforcement;
+full offline install packaging implementation;
+release channel implementation;
+SBOM generation, checksum generation, or signing implementation;
+OSS licensing conclusion or redistribution approval;
+migration guide implementation;
+beta known-limitations template implementation;
+design-partner evidence template implementation;
 RC gate acceptance;
 GA readiness;
 self-service commercial readiness; and
@@ -95,6 +95,21 @@ EOF_PHRASE
 
 for phrase in "${required_phrases[@]}"; do
   require_phrase "${absolute_doc_path}" "${phrase}" "required Phase 65.1 inventory term in ${doc_path}"
+done
+
+required_artifact_rows=(
+  "| Install artifact set | Platform maintainers | Install entrypoint, profile selection, runtime env sample, preflight output, and bounded install evidence reference. | \`install-artifacts:<repository-revision>\` | Phase 65.2 offline install bundle contract. |"
+  "| Runtime configuration artifact set | Platform maintainers | Reviewed runtime config keys, secret-source placeholders, proxy boundary, certificate custody, and fail-closed config validation evidence. | \`runtime-config:<repository-revision>\` | Phase 65.2 and Phase 65.3 packaging and upgrade metadata. |"
+  "| Documentation artifact set | IT Operations, Information Systems Department | Default SMB documentation pack index for installation, daily operation, source onboarding, automation catalog, AI usage, backup and restore, support bundle, upgrade, and rollback. | \`docs-pack:<repository-revision>\` | Phase 65.6 default SMB documentation pack. |"
+  "| Supportability evidence artifact set | IT Operations, Information Systems Department | Doctor, backup, restore dry-run, support bundle redaction, support handoff, and safe support-bundle submission evidence references. | \`supportability:<repository-revision>\` | Phase 65.8 beta known-limitations and design-partner evidence templates. |"
+  "| Release notes artifact set | AegisOps maintainers | Release notes reference naming changes, known limitations, operator verification, rollback pointer, and support-bundle pointer. | \`release-notes:<repository-revision>\` | Phase 65.3 release channel metadata. |"
+  "| Upgrade and rollback guidance artifact set | Platform maintainers | Upgrade plan, rollback trigger, migration owner, rollback owner, clean-state validation, and post-rollback smoke evidence references. | \`upgrade-rollback:<repository-revision>\` | Phase 65.3 release channel and upgrade manifest. |"
+  "| Known limitation evidence artifact set | AegisOps maintainers | Phase 64 limitation ownership record references, Phase 66 handoff notes, owner, mitigation posture, blocker, accepted-risk posture, and next review date. | \`limitations:<repository-revision>\` | Phase 65.8 beta known-limitations template and Phase 66 planning evidence. |"
+  "| Verification output artifact set | Platform maintainers | Focused Phase 65 inventory verifier output, publishable path hygiene output, Phase 51.3 gate verifier output, and issue-lint output reference. | \`verification:<repository-revision>\` | Phase 65.9 closeout evaluation. |"
+)
+
+for artifact_row in "${required_artifact_rows[@]}"; do
+  require_phrase "${absolute_doc_path}" "${artifact_row}" "Phase 65.1 artifact inventory row with owner, evidence, and version binding"
 done
 
 required_version_identifiers=(
@@ -115,6 +130,8 @@ done
 forbidden_claims=(
   "phase 65.1 proves rc readiness"
   "phase 65.1 proves ga readiness"
+  "phase 65.1 is rc ready"
+  "phase 65.1 is ga ready"
   "phase 65.1 proves commercial replacement readiness"
   "phase 65.1 satisfies phase 66 rc gates"
   "aegisops is rc"
@@ -148,7 +165,7 @@ while IFS= read -r line; do
   done
 done < <(visible_markdown_text "${absolute_doc_path}")
 
-if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|password[[:space:]]*=[[:space:]]*[^<[:space:]]+|secret[[:space:]]*=[[:space:]]*[^<[:space:]]+)' "${absolute_doc_path}"; then
+if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|password[[:space:]]*[:=][[:space:]]*[^<[:space:]]+|secret[[:space:]]*[:=][[:space:]]*[^<[:space:]]+)' "${absolute_doc_path}"; then
   echo "Forbidden Phase 65.1 release bundle inventory: production secret-looking value detected" >&2
   exit 1
 fi

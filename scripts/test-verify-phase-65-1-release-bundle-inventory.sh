@@ -70,6 +70,15 @@ remove_doc_text() {
     "${target}/docs/phase-65-1-release-bundle-inventory.md"
 }
 
+replace_doc_text() {
+  local target="$1"
+  local from_text="$2"
+  local to_text="$3"
+
+  FROM_TEXT="${from_text}" TO_TEXT="${to_text}" perl -0pi -e 's/\Q$ENV{FROM_TEXT}\E/$ENV{TO_TEXT}/g' \
+    "${target}/docs/phase-65-1-release-bundle-inventory.md"
+}
+
 valid_repo="${workdir}/valid"
 copy_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
@@ -101,14 +110,14 @@ copy_valid_repo "${missing_owner_repo}"
 remove_doc_text "${missing_owner_repo}" "| Release notes artifact set | AegisOps maintainers |"
 assert_fails_with \
   "${missing_owner_repo}" \
-  "Missing required Phase 65.1 inventory term"
+  "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding"
 
 missing_class_repo="${workdir}/missing-class"
 copy_valid_repo "${missing_class_repo}"
 remove_doc_text "${missing_class_repo}" "| Supportability evidence artifact set | IT Operations, Information Systems Department |"
 assert_fails_with \
   "${missing_class_repo}" \
-  "Missing required Phase 65.1 inventory term"
+  "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding"
 
 missing_evidence_repo="${workdir}/missing-evidence"
 copy_valid_repo "${missing_evidence_repo}"
@@ -117,12 +126,40 @@ assert_fails_with \
   "${missing_evidence_repo}" \
   "Missing required Phase 65.1 inventory term"
 
+missing_row_evidence_repo="${workdir}/missing-row-evidence"
+copy_valid_repo "${missing_row_evidence_repo}"
+replace_doc_text \
+  "${missing_row_evidence_repo}" \
+  "| Install artifact set | Platform maintainers | Install entrypoint, profile selection, runtime env sample, preflight output, and bounded install evidence reference. | \`install-artifacts:<repository-revision>\` | Phase 65.2 offline install bundle contract. |" \
+  "| Install artifact set | Platform maintainers |  | \`install-artifacts:<repository-revision>\` | Phase 65.2 offline install bundle contract. |"
+assert_fails_with \
+  "${missing_row_evidence_repo}" \
+  "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding"
+
 missing_exclusion_repo="${workdir}/missing-exclusion"
 copy_valid_repo "${missing_exclusion_repo}"
 remove_doc_text "${missing_exclusion_repo}" "hosted update service behavior;"
 assert_fails_with \
   "${missing_exclusion_repo}" \
   "Missing required Phase 65.1 inventory term"
+
+missing_extended_exclusion_repo="${workdir}/missing-extended-exclusion"
+copy_valid_repo "${missing_extended_exclusion_repo}"
+remove_doc_text "${missing_extended_exclusion_repo}" "silent auto-upgrade behavior;"
+assert_fails_with \
+  "${missing_extended_exclusion_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+unbound_version_repo="${workdir}/unbound-version"
+copy_valid_repo "${unbound_version_repo}"
+replace_doc_text \
+  "${unbound_version_repo}" \
+  "| Release notes artifact set | AegisOps maintainers | Release notes reference naming changes, known limitations, operator verification, rollback pointer, and support-bundle pointer. | \`release-notes:<repository-revision>\` | Phase 65.3 release channel metadata. |" \
+  "| Release notes artifact set | AegisOps maintainers | Release notes reference naming changes, known limitations, operator verification, rollback pointer, and support-bundle pointer. |  | Phase 65.3 release channel metadata. |"
+printf '%s\n' "\`release-notes:<repository-revision>\` appears in a detached note only." >>"${unbound_version_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${unbound_version_repo}" \
+  "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding"
 
 rc_ready_repo="${workdir}/rc-ready"
 copy_valid_repo "${rc_ready_repo}"
@@ -137,6 +174,20 @@ printf '%s\n' "Phase 65.1 proves GA readiness." >>"${ga_ready_repo}/docs/phase-6
 assert_fails_with \
   "${ga_ready_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 proves ga readiness"
+
+direct_rc_ready_repo="${workdir}/direct-rc-ready"
+copy_valid_repo "${direct_rc_ready_repo}"
+printf '%s\n' "Phase 65.1 is RC ready." >>"${direct_rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${direct_rc_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 is rc ready"
+
+direct_ga_ready_repo="${workdir}/direct-ga-ready"
+copy_valid_repo "${direct_ga_ready_repo}"
+printf '%s\n' "Phase 65.1 is GA ready." >>"${direct_ga_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${direct_ga_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 is ga ready"
 
 verifier_truth_repo="${workdir}/verifier-truth"
 copy_valid_repo "${verifier_truth_repo}"
@@ -157,6 +208,13 @@ copy_valid_repo "${secret_repo}"
 printf '%s\n' "secret = actual-production-token" >>"${secret_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${secret_repo}" \
+  "production secret-looking value detected"
+
+yaml_secret_repo="${workdir}/yaml-secret"
+copy_valid_repo "${yaml_secret_repo}"
+printf '%s\n' "password: actual-production-token" >>"${yaml_secret_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${yaml_secret_repo}" \
   "production secret-looking value detected"
 
 customer_private_repo="${workdir}/customer-private"
