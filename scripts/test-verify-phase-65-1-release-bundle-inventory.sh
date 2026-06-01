@@ -106,6 +106,13 @@ assert_fails_with \
   "${missing_deployment_inventory_repo}" \
   "Missing single-customer release bundle inventory baseline"
 
+missing_deployment_baseline_path_repo="${workdir}/missing-deployment-baseline-path"
+copy_valid_repo "${missing_deployment_baseline_path_repo}"
+remove_doc_text "${missing_deployment_baseline_path_repo}" "docs/deployment/single-customer-release-bundle-inventory.md"
+assert_fails_with \
+  "${missing_deployment_baseline_path_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
 missing_version_repo="${workdir}/missing-version"
 copy_valid_repo "${missing_version_repo}"
 remove_doc_text "${missing_version_repo}" "The inventory identifier is \`phase-65-release-bundle-inventory-v1\`."
@@ -247,11 +254,25 @@ assert_fails_with \
   "${combined_rc_ga_ready_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
 
+inventory_subject_rc_ready_repo="${workdir}/inventory-subject-rc-ready"
+copy_valid_repo "${inventory_subject_rc_ready_repo}"
+printf '%s\n' "This inventory proves RC readiness." >>"${inventory_subject_rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_subject_rc_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
 hosted_update_ready_repo="${workdir}/hosted-update-ready"
 copy_valid_repo "${hosted_update_ready_repo}"
 printf '%s\n' "This inventory establishes hosted update service readiness." >>"${hosted_update_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${hosted_update_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
+
+hosted_update_behavior_repo="${workdir}/hosted-update-behavior"
+copy_valid_repo "${hosted_update_behavior_repo}"
+printf '%s\n' "This inventory creates hosted update service behavior." >>"${hosted_update_behavior_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${hosted_update_behavior_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
 
 billing_ready_repo="${workdir}/billing-ready"
@@ -275,6 +296,20 @@ assert_fails_with \
   "${issue_lint_truth_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: issue-lint output is release truth"
 
+workflow_truth_repo="${workdir}/workflow-truth"
+copy_valid_repo "${workflow_truth_repo}"
+printf '%s\n' "Verifier output is workflow truth." >>"${workflow_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${workflow_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+limitation_truth_repo="${workdir}/limitation-truth"
+copy_valid_repo "${limitation_truth_repo}"
+printf '%s\n' "Issue-lint output is limitation truth." >>"${limitation_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${limitation_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
 secret_repo="${workdir}/secret"
 copy_valid_repo "${secret_repo}"
 printf '%s\n' "secret = actual-production-token" >>"${secret_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -294,6 +329,20 @@ copy_valid_repo "${placeholder_credential_repo}"
 printf '%s\n' "password: <placeholder>" >>"${placeholder_credential_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${placeholder_credential_repo}" \
+  "production secret-looking value detected"
+
+access_token_repo="${workdir}/access-token"
+copy_valid_repo "${access_token_repo}"
+printf '%s\n' "access_token: actual-production-token" >>"${access_token_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${access_token_repo}" \
+  "production secret-looking value detected"
+
+api_key_repo="${workdir}/api-key"
+copy_valid_repo "${api_key_repo}"
+printf '%s\n' "api-key: actual-production-token" >>"${api_key_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${api_key_repo}" \
   "production secret-looking value detected"
 
 customer_private_repo="${workdir}/customer-private"

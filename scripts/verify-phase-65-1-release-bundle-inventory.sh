@@ -56,6 +56,10 @@ done <<'EOF_PHRASE'
 # Phase 65.1 Release Bundle Inventory
 **Status**: Accepted as the Phase 65 beta/design-partner bundle inventory contract before offline packaging, hosted release metadata, SBOM/signing, licensing, migration, template, RC, GA, and commercial replacement claims.
 The inventory identifier is `phase-65-release-bundle-inventory-v1`.
+docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md
+docs/phase-51-5-competitive-gap-matrix.md
+docs/phase-64-closeout-evaluation.md
+docs/deployment/single-customer-release-bundle-inventory.md
 Every beta/design-partner release bundle record that consumes this inventory must include:
 inventory identifier `phase-65-release-bundle-inventory-v1`;
 release bundle identifier in the form `aegisops-beta-<repository-revision>`;
@@ -166,6 +170,9 @@ direct_readiness_claim_patterns=(
   "phase 65[.]1[[:space:]-]+(is|proves|passes|satisfies)[[:space:]-]+rc[[:space:]-]*(ready|readiness)"
   "phase 65[.]1[[:space:]-]+(is|proves|passes|satisfies)[[:space:]-]+ga[[:space:]-]*(ready|readiness)"
   "phase 65[.]1[[:space:]-]+(is|proves|passes|satisfies)[[:space:]-]+rc/ga[[:space:]-]*(ready|readiness)"
+  "(this inventory|release bundle inventory)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+rc[[:space:]-]*(ready|readiness)"
+  "(this inventory|release bundle inventory)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+ga[[:space:]-]*(ready|readiness)"
+  "(this inventory|release bundle inventory)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+rc/ga[[:space:]-]*(ready|readiness)"
 )
 
 for claim_pattern in "${direct_readiness_claim_patterns[@]}"; do
@@ -176,7 +183,7 @@ for claim_pattern in "${direct_readiness_claim_patterns[@]}"; do
 done
 
 excluded_scope_readiness_claim_patterns=(
-  "(this inventory|phase 65[.]1|release bundle inventory)[[:space:]-]+(establishes|proves|claims|satisfies|approves|creates)[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|sbom|checksum|signing|licensing|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement)[[:space:]-]+(readiness|ready|approval|approved|completeness|complete|implementation|implemented|enforcement)"
+  "(this inventory|phase 65[.]1|release bundle inventory)[[:space:]-]+(establishes|proves|claims|satisfies|approves|creates)[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|sbom|checksum|signing|licensing|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement)[[:space:]-]+(readiness|ready|approval|approved|completeness|complete|implementation|implemented|enforcement|behavior)"
 )
 
 for claim_pattern in "${excluded_scope_readiness_claim_patterns[@]}"; do
@@ -186,7 +193,18 @@ for claim_pattern in "${excluded_scope_readiness_claim_patterns[@]}"; do
   fi
 done
 
-if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|password[[:space:]]*[:=][[:space:]]*[^[:space:]]+|secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+)' "${absolute_doc_path}"; then
+derived_truth_claim_patterns=(
+  "(verifier output|issue-lint output)[[:space:]-]+is[[:space:]-]+[[:alpha:]/-]+[[:space:]-]+truth"
+)
+
+for claim_pattern in "${derived_truth_claim_patterns[@]}"; do
+  if [[ "${normalized_visible_text}" =~ ${claim_pattern} ]]; then
+    echo "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion" >&2
+    exit 1
+  fi
+done
+
+if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|password[[:space:]]*[:=][[:space:]]*[^[:space:]]+|secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+|access[_-]?token[[:space:]]*[:=][[:space:]]*[^[:space:]]+|api[_-]?key[[:space:]]*[:=][[:space:]]*[^[:space:]]+|credential[[:space:]]*[:=][[:space:]]*[^[:space:]]+|client[_-]?secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+)' "${absolute_doc_path}"; then
   echo "Forbidden Phase 65.1 release bundle inventory: production secret-looking value detected" >&2
   exit 1
 fi
