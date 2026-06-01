@@ -305,6 +305,13 @@ assert_fails_with \
   "${sbom_generation_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
 
+silent_auto_upgrade_behavior_repo="${workdir}/silent-auto-upgrade-behavior"
+copy_valid_repo "${silent_auto_upgrade_behavior_repo}"
+printf '%s\n' "This inventory proves silent auto-upgrade behavior." >>"${silent_auto_upgrade_behavior_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${silent_auto_upgrade_behavior_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
+
 billing_ready_repo="${workdir}/billing-ready"
 copy_valid_repo "${billing_ready_repo}"
 printf '%s\n' "Phase 65.1 proves billing readiness." >>"${billing_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -338,6 +345,20 @@ copy_valid_repo "${limitation_truth_repo}"
 printf '%s\n' "Issue-lint output is limitation truth." >>"${limitation_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${limitation_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+inventory_verifier_truth_repo="${workdir}/inventory-verifier-truth"
+copy_valid_repo "${inventory_verifier_truth_repo}"
+printf '%s\n' "Release bundle inventory is verifier truth." >>"${inventory_verifier_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_verifier_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+inventory_issue_lint_truth_repo="${workdir}/inventory-issue-lint-truth"
+copy_valid_repo "${inventory_issue_lint_truth_repo}"
+printf '%s\n' "This inventory is issue-lint truth." >>"${inventory_issue_lint_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_issue_lint_truth_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
 
 workflow_authority_repo="${workdir}/workflow-authority"
