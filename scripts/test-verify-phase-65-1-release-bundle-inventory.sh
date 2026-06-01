@@ -216,12 +216,22 @@ assert_fails_with \
   "${missing_deployment_inventory_repo}" \
   "Missing single-customer release bundle inventory baseline"
 
-missing_deployment_baseline_path_repo="${workdir}/missing-deployment-baseline-path"
-copy_valid_repo "${missing_deployment_baseline_path_repo}"
-remove_doc_text "${missing_deployment_baseline_path_repo}" "docs/deployment/single-customer-release-bundle-inventory.md"
-assert_fails_with \
-  "${missing_deployment_baseline_path_repo}" \
-  "Missing required Phase 65.1 inventory term"
+required_baseline_paths=(
+  "missing-phase51-gate-baseline-path|docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+  "missing-phase51-gap-baseline-path|docs/phase-51-5-competitive-gap-matrix.md"
+  "missing-phase64-closeout-baseline-path|docs/phase-64-closeout-evaluation.md"
+  "missing-deployment-baseline-path|docs/deployment/single-customer-release-bundle-inventory.md"
+)
+
+for baseline_case in "${required_baseline_paths[@]}"; do
+  IFS="|" read -r fixture_name required_path <<<"${baseline_case}"
+  baseline_path_repo="${workdir}/${fixture_name}"
+  copy_valid_repo "${baseline_path_repo}"
+  remove_doc_text "${baseline_path_repo}" "${required_path}"
+  assert_fails_with \
+    "${baseline_path_repo}" \
+    "Missing required Phase 65.1 inventory term"
+done
 
 missing_subordinate_boundary_repo="${workdir}/missing-subordinate-boundary"
 copy_valid_repo "${missing_subordinate_boundary_repo}"
@@ -445,6 +455,13 @@ copy_valid_repo "${rc_gate_pass_repo}"
 printf '%s\n' "Phase 65.1 passes RC gates." >>"${rc_gate_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${rc_gate_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+ga_gate_pass_repo="${workdir}/ga-gate-pass"
+copy_valid_repo "${ga_gate_pass_repo}"
+printf '%s\n' "Phase 65.1 passes GA gates." >>"${ga_gate_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ga_gate_pass_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
 
 inventory_subject_rc_ready_repo="${workdir}/inventory-subject-rc-ready"
