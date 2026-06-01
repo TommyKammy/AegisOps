@@ -176,6 +176,11 @@ assert_fails_with \
   "${readme_overclaim_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
 
+readme_later_phase_claim_repo="${workdir}/readme-later-phase-claim"
+copy_valid_repo "${readme_later_phase_claim_repo}"
+printf '%s\n' "Phase 66 closeout evidence proves Phase 66 RC readiness." >>"${readme_later_phase_claim_repo}/README.md"
+assert_passes "${readme_later_phase_claim_repo}"
+
 invalid_phase51_gate_repo="${workdir}/invalid-phase51-gate"
 copy_valid_repo "${invalid_phase51_gate_repo}"
 printf '%s\n' "x" >"${invalid_phase51_gate_repo}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
@@ -470,6 +475,13 @@ assert_fails_with \
   "${inventory_infers_rc_pass_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
 
+release_bundle_record_infers_rc_pass_repo="${workdir}/release-bundle-record-infers-rc-pass"
+copy_valid_repo "${release_bundle_record_infers_rc_pass_repo}"
+printf '%s\n' "The release bundle record infers an RC pass." >>"${release_bundle_record_infers_rc_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${release_bundle_record_infers_rc_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
 inventory_infers_phase67_ga_pass_repo="${workdir}/inventory-infers-phase67-ga-pass"
 copy_valid_repo "${inventory_infers_phase67_ga_pass_repo}"
 printf '%s\n' "This inventory infers a Phase 67 GA pass." >>"${inventory_infers_phase67_ga_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -542,6 +554,7 @@ excluded_scope_claims=(
   "design-partner-template|This inventory satisfies design-partner evidence template."
   "commercial-replacement-ready|Phase 65.1 proves commercial replacement readiness."
   "siem-soar-replacement-ready|This inventory proves broad SIEM/SOAR replacement readiness."
+  "siem-and-soar-replacement-ready|This inventory proves broad SIEM and SOAR replacement readiness."
   "oss-licensing-conclusion|This inventory approves OSS licensing conclusion."
   "redistribution-approval|This inventory creates redistribution approval."
   "hosted-release-metadata|This inventory approves hosted release metadata."
@@ -560,6 +573,7 @@ rc_ga_claims=(
   "inventory-ga-ready|Release bundle inventory is GA ready."
   "release-bundle-ga-ready|The release bundle is GA ready."
   "inventory-rc-gate-pass|This inventory passes RC gate acceptance."
+  "inventory-accepts-rc-gates|This inventory accepts RC gates."
   "phase-rc-ga-gates|Phase 65.1 satisfies RC/GA gates."
 )
 
@@ -675,6 +689,13 @@ printf '%s\n' "Release bundle inventory is release truth." >>"${inventory_releas
 assert_fails_with \
   "${inventory_release_truth_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: release bundle inventory is release truth"
+
+release_bundle_release_truth_repo="${workdir}/release-bundle-release-truth"
+copy_valid_repo "${release_bundle_release_truth_repo}"
+printf '%s\n' "The release bundle is release truth." >>"${release_bundle_release_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${release_bundle_release_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
 
 inventory_substitute_evidence_repo="${workdir}/inventory-substitute-evidence"
 copy_valid_repo "${inventory_substitute_evidence_repo}"
