@@ -130,7 +130,6 @@ bash scripts/test-verify-phase-65-1-release-bundle-inventory.sh
 bash scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh
 bash scripts/verify-publishable-path-hygiene.sh
 node <codex-supervisor-root>/dist/index.js issue-lint 1379 --config <supervisor-config-path>
-The verifier must reject missing version identifier, missing artifact owner, missing required artifact class, missing evidence reference, missing exclusion list, workstation-local absolute paths, production secrets, customer-private data, inferred RC pass, inferred GA pass, verifier-as-readiness-truth, and issue-lint-as-readiness-truth.
 This inventory does not claim Phase 66 RC readiness, Phase 67 GA readiness, self-service commercial readiness, commercial replacement readiness, production entitlement enforcement, hosted update service readiness, billing readiness, release-channel readiness, offline install completeness, SBOM completeness, checksum completeness, signing completeness, licensing approval, migration readiness, beta template completeness, or design-partner evidence completeness.
 This inventory is a root packaging contract for later Phase 65 work. It is not workflow authority, support authority, runtime execution authority, release gate authority, RC gate authority, GA gate authority, entitlement authority, billing authority, verifier truth, issue-lint truth, UI truth, AI truth, or substitute evidence for the Phase 51.3 gate contract.
 EOF_PHRASE
@@ -187,6 +186,24 @@ artifact_section_text="$(markdown_section_text "${absolute_doc_path}" "## 2. Req
 for artifact_row in "${required_artifact_rows[@]}"; do
   if ! grep -Fq -- "${artifact_row}" <<<"${artifact_section_text}"; then
     echo "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding: ${artifact_row}" >&2
+    exit 1
+  fi
+done
+
+verification_section_text="$(markdown_section_text "${absolute_doc_path}" "## 5. Verification")"
+
+required_verification_phrases=(
+  "bash scripts/verify-phase-65-1-release-bundle-inventory.sh"
+  "bash scripts/test-verify-phase-65-1-release-bundle-inventory.sh"
+  "bash scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh"
+  "bash scripts/verify-publishable-path-hygiene.sh"
+  "node <codex-supervisor-root>/dist/index.js issue-lint 1379 --config <supervisor-config-path>"
+  "The verifier must reject missing version identifier, missing artifact owner, missing required artifact class, missing evidence reference, missing exclusion list, workstation-local absolute paths, production secrets, customer-private data, inferred RC pass, inferred GA pass, verifier-as-readiness-truth, and issue-lint-as-readiness-truth."
+)
+
+for verification_phrase in "${required_verification_phrases[@]}"; do
+  if ! grep -Fq -- "${verification_phrase}" <<<"${verification_section_text}"; then
+    echo "Missing Phase 65.1 verification coverage term in Verification section: ${verification_phrase}" >&2
     exit 1
   fi
 done
@@ -257,8 +274,15 @@ normalized_visible_text="$(
 phase65_readiness_scan_text="$(
   {
     visible_markdown_text "${absolute_doc_path}"
-    visible_markdown_text "${readme_path}" | grep -Fi 'Phase 65.1 release bundle inventory' || true
-  } | tr '\n' ' ' | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+/ /g'
+    visible_markdown_text "${readme_path}"
+  } | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+/ /g'
+)"
+
+claim_scan_text="$(
+  printf '%s' "${normalized_visible_text}" |
+    sed -E \
+      -e 's/(this inventory|the inventory|release bundle inventory|release bundle manifest|(the )?release bundle( record)?|verifier output|issue-lint output|ai summaries|operator-facing summaries|readiness projections|ui text|release notes)[^.?!;]*(is|are|does|do|can|must)[ -]+not[^.?!;]*(truth|authority|ready|readiness|gate|gates|gate acceptance|gate pass)[^.?!;]*[.?!;]/ /g' \
+      -e 's/(this inventory|the inventory|release bundle inventory|release bundle manifest|(the )?release bundle( record)?|verifier output|issue-lint output|ai summaries|operator-facing summaries|readiness projections|ui text|release notes)[^.?!;]*(cannot|can[ -]+not|must[ -]+not|does[ -]+not|do[ -]+not)[^.?!;]*(truth|authority|ready|readiness|gate|gates|gate acceptance|gate pass)[^.?!;]*[.?!;]/ /g'
 )"
 
 boundary_secret_scan_paths=("${absolute_doc_path}" "${readme_path}")
@@ -271,8 +295,8 @@ for claim in "${forbidden_claims[@]}"; do
 done
 
 direct_readiness_claim_patterns=(
-  "(^|[^[:alpha:]])(proves|passes|satisfies|establishes|claims|approves|accepts|creates)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?(is[[:space:]-]+)?rc[[:space:]-]*(ready|readiness|gate|gates|gate acceptance|gate pass)"
-  "(^|[^[:alpha:]])(proves|passes|satisfies|establishes|claims|approves|accepts|creates)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?(is[[:space:]-]+)?ga[[:space:]-]*(ready|readiness|gate|gates|gate acceptance|gate pass)"
+  "phase 65[.]1[^[:cntrl:]]*(is|proves|passes|satisfies|claims|approves|accepts|creates|establishes)[[:space:]-]+rc[[:space:]-]*(ready|readiness|gate|gates|gate acceptance|gate pass)"
+  "phase 65[.]1[^[:cntrl:]]*(is|proves|passes|satisfies|claims|approves|accepts|creates|establishes)[[:space:]-]+ga[[:space:]-]*(ready|readiness|gate|gates|gate acceptance|gate pass)"
   "phase 65[.]1[[:space:]-]+(is|proves|passes|satisfies)[[:space:]-]+rc[[:space:]-]*(ready|readiness)"
   "phase 65[.]1[[:space:]-]+(is|proves|passes|satisfies)[[:space:]-]+ga[[:space:]-]*(ready|readiness)"
   "phase 65[.]1[[:space:]-]+(is|proves|passes|satisfies)[[:space:]-]+rc/ga[[:space:]-]*(ready|readiness)"
@@ -304,7 +328,7 @@ excluded_scope_readiness_claim_patterns=(
 )
 
 for claim_pattern in "${excluded_scope_readiness_claim_patterns[@]}"; do
-  if [[ "${normalized_visible_text}" =~ ${claim_pattern} ]]; then
+  if [[ "${claim_scan_text}" =~ ${claim_pattern} ]]; then
     echo "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion" >&2
     exit 1
   fi
@@ -316,7 +340,7 @@ authority_claim_patterns=(
 )
 
 for claim_pattern in "${authority_claim_patterns[@]}"; do
-  if [[ "${normalized_visible_text}" =~ ${claim_pattern} ]]; then
+  if [[ "${claim_scan_text}" =~ ${claim_pattern} ]]; then
     echo "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion" >&2
     exit 1
   fi
@@ -329,7 +353,7 @@ derived_truth_claim_patterns=(
 )
 
 for claim_pattern in "${derived_truth_claim_patterns[@]}"; do
-  if [[ "${normalized_visible_text}" =~ ${claim_pattern} ]]; then
+  if [[ "${claim_scan_text}" =~ ${claim_pattern} ]]; then
     echo "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion" >&2
     exit 1
   fi

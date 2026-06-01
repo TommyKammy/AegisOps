@@ -176,6 +176,13 @@ assert_fails_with \
   "${readme_overclaim_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
 
+readme_inventory_subject_claim_repo="${workdir}/readme-inventory-subject-claim"
+copy_valid_repo "${readme_inventory_subject_claim_repo}"
+printf '%s\n' "Release bundle inventory is GA ready." >>"${readme_inventory_subject_claim_repo}/README.md"
+assert_fails_with \
+  "${readme_inventory_subject_claim_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
 readme_later_phase_claim_repo="${workdir}/readme-later-phase-claim"
 copy_valid_repo "${readme_later_phase_claim_repo}"
 printf '%s\n' "Phase 66 closeout evidence proves Phase 66 RC readiness." >>"${readme_later_phase_claim_repo}/README.md"
@@ -335,6 +342,17 @@ printf '%s\n' "| Install artifact set | Platform maintainers | Install entrypoin
 assert_fails_with \
   "${misplaced_artifact_row_repo}" \
   "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding"
+
+misplaced_verifier_coverage_repo="${workdir}/misplaced-verifier-coverage"
+copy_valid_repo "${misplaced_verifier_coverage_repo}"
+replace_doc_text \
+  "${misplaced_verifier_coverage_repo}" \
+  "The verifier must reject missing version identifier, missing artifact owner, missing required artifact class, missing evidence reference, missing exclusion list, workstation-local absolute paths, production secrets, customer-private data, inferred RC pass, inferred GA pass, verifier-as-readiness-truth, and issue-lint-as-readiness-truth." \
+  ""
+printf '%s\n' "Detached verifier note: The verifier must reject missing version identifier, missing artifact owner, missing required artifact class, missing evidence reference, missing exclusion list, workstation-local absolute paths, production secrets, customer-private data, inferred RC pass, inferred GA pass, verifier-as-readiness-truth, and issue-lint-as-readiness-truth." >>"${misplaced_verifier_coverage_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${misplaced_verifier_coverage_repo}" \
+  "Missing Phase 65.1 verification coverage term in Verification section"
 
 missing_exclusion_repo="${workdir}/missing-exclusion"
 copy_valid_repo "${missing_exclusion_repo}"
@@ -612,6 +630,16 @@ for claim_case in "${rc_ga_claims[@]}"; do
     "${claim_text}" \
     "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
 done
+
+negated_boundary_claims_repo="${workdir}/negated-boundary-claims"
+copy_valid_repo "${negated_boundary_claims_repo}"
+printf '%s\n' \
+  "Verifier output is not readiness truth." \
+  "Issue-lint output is not release truth." \
+  "Release bundle inventory is not release authority." \
+  "This inventory does not create hosted update service readiness." \
+  >>"${negated_boundary_claims_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_passes "${negated_boundary_claims_repo}"
 
 verifier_truth_repo="${workdir}/verifier-truth"
 copy_valid_repo "${verifier_truth_repo}"
