@@ -434,14 +434,14 @@ copy_valid_repo "${hyphenated_rc_ready_repo}"
 printf '%s\n' "Phase 65.1 is RC-ready." >>"${hyphenated_rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${hyphenated_rc_ready_repo}" \
-  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 is rc-ready"
 
 hyphenated_ga_ready_repo="${workdir}/hyphenated-ga-ready"
 copy_valid_repo "${hyphenated_ga_ready_repo}"
 printf '%s\n' "Phase 65.1 is GA-ready." >>"${hyphenated_ga_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${hyphenated_ga_ready_repo}" \
-  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 is ga-ready"
 
 combined_rc_ga_ready_repo="${workdir}/combined-rc-ga-ready"
 copy_valid_repo "${combined_rc_ga_ready_repo}"
@@ -455,14 +455,14 @@ copy_valid_repo "${rc_gate_pass_repo}"
 printf '%s\n' "Phase 65.1 passes RC gates." >>"${rc_gate_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${rc_gate_pass_repo}" \
-  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 passes rc gates"
 
 ga_gate_pass_repo="${workdir}/ga-gate-pass"
 copy_valid_repo "${ga_gate_pass_repo}"
 printf '%s\n' "Phase 65.1 passes GA gates." >>"${ga_gate_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${ga_gate_pass_repo}" \
-  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+  "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 passes ga gates"
 
 inventory_subject_rc_ready_repo="${workdir}/inventory-subject-rc-ready"
 copy_valid_repo "${inventory_subject_rc_ready_repo}"
@@ -589,6 +589,7 @@ done
 rc_ga_claims=(
   "inventory-ga-ready|Release bundle inventory is GA ready."
   "release-bundle-ga-ready|The release bundle is GA ready."
+  "release-bundle-manifest-ga-ready|Release bundle manifest is GA ready."
   "inventory-rc-gate-pass|This inventory passes RC gate acceptance."
   "inventory-accepts-rc-gates|This inventory accepts RC gates."
   "phase-rc-ga-gates|Phase 65.1 satisfies RC/GA gates."
@@ -735,6 +736,13 @@ assert_fails_with \
   "${release_bundle_authority_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
 
+manifest_authority_repo="${workdir}/manifest-authority"
+copy_valid_repo "${manifest_authority_repo}"
+printf '%s\n' "Release bundle manifest is readiness authority." >>"${manifest_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${manifest_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
 inventory_satisfies_authority_repo="${workdir}/inventory-satisfies-authority"
 copy_valid_repo "${inventory_satisfies_authority_repo}"
 printf '%s\n' "This inventory satisfies release gate authority." >>"${inventory_satisfies_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -859,6 +867,13 @@ copy_valid_repo "${customer_private_prose_repo}"
 printf '%s\n' "customer-private Acme incident payload" >>"${customer_private_prose_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${customer_private_prose_repo}" \
+  "customer-private data detected"
+
+customer_private_space_prose_repo="${workdir}/customer-private-space-prose"
+copy_valid_repo "${customer_private_space_prose_repo}"
+printf '%s\n' "customer private Acme incident payload" >>"${customer_private_space_prose_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${customer_private_space_prose_repo}" \
   "customer-private data detected"
 
 self_service_commercial_ready_repo="${workdir}/self-service-commercial-ready"

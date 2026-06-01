@@ -226,8 +226,12 @@ forbidden_claims=(
   "phase 65.1 proves ga readiness"
   "phase 65.1 is rc ready"
   "phase 65.1 is ga ready"
+  "phase 65.1 is rc-ready"
+  "phase 65.1 is ga-ready"
   "phase 65.1 proves commercial replacement readiness"
   "phase 65.1 satisfies phase 66 rc gates"
+  "phase 65.1 passes rc gates"
+  "phase 65.1 passes ga gates"
   "aegisops is rc"
   "aegisops is ga"
   "aegisops is self-service commercial ready"
@@ -275,14 +279,14 @@ direct_readiness_claim_patterns=(
   "phase 65[.]1[[:space:]-]+(passes|satisfies|proves|claims|approves|accepts|creates|establishes)[[:space:]-]+rc[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
   "phase 65[.]1[[:space:]-]+(passes|satisfies|proves|claims|approves|accepts|creates|establishes)[[:space:]-]+ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
   "phase 65[.]1[[:space:]-]+(passes|satisfies|proves|claims|approves|accepts|creates|establishes)[[:space:]-]+rc/ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
-  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|accepts|creates)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]*(ready|readiness)"
-  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|accepts|creates)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]*(ready|readiness)"
-  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|accepts|creates)[[:space:]-]+rc/ga[[:space:]-]*(ready|readiness)"
-  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(passes|satisfies|proves|claims|approves|accepts|creates|establishes)[[:space:]-]+rc[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
-  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(passes|satisfies|proves|claims|approves|accepts|creates|establishes)[[:space:]-]+ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
-  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(passes|satisfies|proves|claims|approves|accepts|creates|establishes)[[:space:]-]+rc/ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
-  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]+pass"
-  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]+pass"
+  "(this inventory|release bundle inventory|release bundle manifest|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|accepts|creates)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]*(ready|readiness)"
+  "(this inventory|release bundle inventory|release bundle manifest|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|accepts|creates)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]*(ready|readiness)"
+  "(this inventory|release bundle inventory|release bundle manifest|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|accepts|creates)[[:space:]-]+rc/ga[[:space:]-]*(ready|readiness)"
+  "(this inventory|release bundle inventory|release bundle manifest|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(passes|satisfies|proves|claims|approves|accepts|creates|establishes)[[:space:]-]+rc[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
+  "(this inventory|release bundle inventory|release bundle manifest|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(passes|satisfies|proves|claims|approves|accepts|creates|establishes)[[:space:]-]+ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
+  "(this inventory|release bundle inventory|release bundle manifest|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(passes|satisfies|proves|claims|approves|accepts|creates|establishes)[[:space:]-]+rc/ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
+  "(this inventory|release bundle inventory|release bundle manifest|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]+pass"
+  "(this inventory|release bundle inventory|release bundle manifest|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]+pass"
   "phase 65[.]1[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]+pass"
   "phase 65[.]1[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]+pass"
 )
@@ -295,8 +299,8 @@ for claim_pattern in "${direct_readiness_claim_patterns[@]}"; do
 done
 
 excluded_scope_readiness_claim_patterns=(
-  "(this inventory|phase 65[.]1|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(establishes|proves|claims|satisfies|approves|creates)[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|hosted release metadata|hosted-release metadata|silent auto-upgrade behavior|silent auto-upgrade|silent auto upgrade behavior|silent auto upgrade|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|offline packaging|offline install packaging|full offline install packaging|sbom|checksum|signing|oss licensing|licensing|redistribution|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement|broad siem/soar replacement|broad siem-soar replacement|broad siem soar replacement|broad siem and soar replacement|siem/soar replacement|siem-soar replacement|siem soar replacement|siem and soar replacement)([[:space:]-]+(readiness|ready|approval|approved|completeness|complete|implementation|implemented|enforcement|behavior|generation|packaging|metadata|guide|template|conclusion))?"
-  "(this inventory|phase 65[.]1|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+is[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|hosted release metadata|hosted-release metadata|silent auto-upgrade behavior|silent auto-upgrade|silent auto upgrade behavior|silent auto upgrade|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|offline packaging|offline install packaging|full offline install packaging|sbom|checksum|signing|oss licensing|licensing|redistribution|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement|broad siem/soar replacement|broad siem-soar replacement|broad siem soar replacement|broad siem and soar replacement|siem/soar replacement|siem-soar replacement|siem soar replacement|siem and soar replacement)[[:space:]-]+(ready|readiness|complete|approved|implemented)"
+  "(this inventory|phase 65[.]1|release bundle inventory|release bundle manifest|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(establishes|proves|claims|satisfies|approves|creates|enables|delivers)[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|hosted release metadata|hosted-release metadata|release channel metadata|release-channel metadata|silent auto-upgrade behavior|silent auto-upgrade|silent auto upgrade behavior|silent auto upgrade|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|offline packaging|offline install packaging|full offline install packaging|sbom|checksum|signing|oss licensing|licensing|redistribution|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement|broad siem/soar replacement|broad siem-soar replacement|broad siem soar replacement|broad siem and soar replacement|siem/soar replacement|siem-soar replacement|siem soar replacement|siem and soar replacement)([[:space:]-]+(readiness|ready|approval|approved|completeness|complete|implementation|implemented|enforcement|behavior|generation|packaging|metadata|guide|template|conclusion))?"
+  "(this inventory|phase 65[.]1|release bundle inventory|release bundle manifest|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+is[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|hosted release metadata|hosted-release metadata|release channel metadata|release-channel metadata|silent auto-upgrade behavior|silent auto-upgrade|silent auto upgrade behavior|silent auto upgrade|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|offline packaging|offline install packaging|full offline install packaging|sbom|checksum|signing|oss licensing|licensing|redistribution|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement|broad siem/soar replacement|broad siem-soar replacement|broad siem soar replacement|broad siem and soar replacement|siem/soar replacement|siem-soar replacement|siem soar replacement|siem and soar replacement)[[:space:]-]+(ready|readiness|complete|approved|implemented)"
 )
 
 for claim_pattern in "${excluded_scope_readiness_claim_patterns[@]}"; do
@@ -307,7 +311,7 @@ for claim_pattern in "${excluded_scope_readiness_claim_patterns[@]}"; do
 done
 
 authority_claim_patterns=(
-  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates|satisfies)[[:space:]-]+(workflow|support|release gate|rc gate|ga gate|entitlement|billing|runtime execution|release|gate)[[:space:]-]+authority"
+  "(this inventory|release bundle inventory|release bundle manifest|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates|satisfies)[[:space:]-]+(workflow|support|release gate|rc gate|ga gate|entitlement|billing|runtime execution|release|gate|readiness)[[:space:]-]+authority"
   "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|are|acts as|serve as|serves as|becomes|become|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+(workflow|support|release gate|rc gate|ga gate|entitlement|billing|runtime execution|release|gate)[[:space:]-]+authority"
 )
 
@@ -321,7 +325,7 @@ done
 derived_truth_claim_patterns=(
   "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|are|acts as|serve as|serves as|becomes|become|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+([[:alpha:]/-]+[[:space:]-]+){0,4}truth"
   "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|acts as|serves as|becomes|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?(rc|ga)[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
-  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates|satisfies)[[:space:]-]+(verifier|issue-lint|ui|ai|release)[[:space:]-]+truth"
+  "(this inventory|release bundle inventory|release bundle manifest|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates|satisfies)[[:space:]-]+(verifier|issue-lint|ui|ai|release|gate|readiness|workflow|limitation)[[:space:]-]+truth"
 )
 
 for claim_pattern in "${derived_truth_claim_patterns[@]}"; do
@@ -354,7 +358,7 @@ if grep -Eiq -- 'customer-private([[:space:]]+[^[:space:];:=]+)?[[:space:]]*[:=]
   exit 1
 fi
 
-if grep -Eiq -- 'customer-private[[:space:]]+(record|payload|incident|customer|tenant|account|case|evidence|support|[^[:space:];:=,.]+[[:space:]]+(record|payload|incident|customer|tenant|account|case|evidence|support))' <<<"${decoded_boundary_text}"; then
+if grep -Eiq -- '(customer-private|customer private)[[:space:]]+(record|payload|incident|customer|tenant|account|case|evidence|support|[^[:space:];:=,.]+[[:space:]]+(record|payload|incident|customer|tenant|account|case|evidence|support))' <<<"${decoded_boundary_text}"; then
   echo "Forbidden Phase 65.1 release bundle inventory: customer-private data detected" >&2
   exit 1
 fi
