@@ -389,6 +389,9 @@ excluded_scope_claims=(
   "beta-template-complete|Release bundle inventory proves beta template completeness."
   "design-partner-template|This inventory satisfies design-partner evidence template."
   "commercial-replacement-ready|Phase 65.1 proves commercial replacement readiness."
+  "siem-soar-replacement-ready|This inventory proves broad SIEM/SOAR replacement readiness."
+  "oss-licensing-conclusion|This inventory approves OSS licensing conclusion."
+  "redistribution-approval|This inventory creates redistribution approval."
 )
 
 for claim_case in "${excluded_scope_claims[@]}"; do
@@ -453,6 +456,20 @@ copy_valid_repo "${limitation_truth_repo}"
 printf '%s\n' "Issue-lint output is limitation truth." >>"${limitation_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${limitation_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+ai_summary_truth_repo="${workdir}/ai-summary-truth"
+copy_valid_repo "${ai_summary_truth_repo}"
+printf '%s\n' "AI summaries prove readiness truth." >>"${ai_summary_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ai_summary_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+operator_summary_truth_repo="${workdir}/operator-summary-truth"
+copy_valid_repo "${operator_summary_truth_repo}"
+printf '%s\n' "Operator-facing summaries satisfy workflow truth." >>"${operator_summary_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${operator_summary_truth_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
 
 inventory_verifier_truth_repo="${workdir}/inventory-verifier-truth"
