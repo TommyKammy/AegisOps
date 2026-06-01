@@ -217,12 +217,33 @@ assert_fails_with \
   "${yaml_secret_repo}" \
   "production secret-looking value detected"
 
+placeholder_credential_repo="${workdir}/placeholder-credential"
+copy_valid_repo "${placeholder_credential_repo}"
+printf '%s\n' "password: <placeholder>" >>"${placeholder_credential_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${placeholder_credential_repo}" \
+  "production secret-looking value detected"
+
 customer_private_repo="${workdir}/customer-private"
 copy_valid_repo "${customer_private_repo}"
 printf '%s\n' "customer-private data: Acme incident payload" >>"${customer_private_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${customer_private_repo}" \
   "customer-private data detected"
+
+customer_private_incident_repo="${workdir}/customer-private-incident"
+copy_valid_repo "${customer_private_incident_repo}"
+printf '%s\n' "customer-private incident: Acme incident payload" >>"${customer_private_incident_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${customer_private_incident_repo}" \
+  "customer-private data detected"
+
+wrapped_verifier_truth_repo="${workdir}/wrapped-verifier-truth"
+copy_valid_repo "${wrapped_verifier_truth_repo}"
+printf '%s\n' "Verifier output is readiness" "truth." >>"${wrapped_verifier_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${wrapped_verifier_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: verifier output is readiness truth"
 
 path_repo="${workdir}/path"
 copy_valid_repo "${path_repo}"

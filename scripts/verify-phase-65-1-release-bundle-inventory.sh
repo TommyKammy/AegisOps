@@ -147,30 +147,21 @@ forbidden_claims=(
   "issue-lint output is release truth"
 )
 
-allowed_non_claim_line="This inventory does not claim Phase 66 RC readiness, Phase 67 GA readiness, self-service commercial readiness, commercial replacement readiness, production entitlement enforcement, hosted update service readiness, billing readiness, release-channel readiness, offline install completeness, SBOM completeness, checksum completeness, signing completeness, licensing approval, migration readiness, beta template completeness, or design-partner evidence completeness."
-allowed_non_claim_line_lower="$(printf '%s' "${allowed_non_claim_line}" | tr '[:upper:]' '[:lower:]')"
-allowed_authority_line="This inventory is a root packaging contract for later Phase 65 work. It is not workflow authority, support authority, release gate authority, RC gate authority, GA gate authority, entitlement authority, billing authority, verifier truth, issue-lint truth, UI truth, AI truth, or substitute evidence for the Phase 51.3 gate contract."
-allowed_authority_line_lower="$(printf '%s' "${allowed_authority_line}" | tr '[:upper:]' '[:lower:]')"
+normalized_visible_text="$(visible_markdown_text "${absolute_doc_path}" | tr '\n' ' ' | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+/ /g')"
 
-while IFS= read -r line; do
-  line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
-  if [[ "${line_lower}" == "${allowed_non_claim_line_lower}" || "${line_lower}" == "${allowed_authority_line_lower}" ]]; then
-    continue
+for claim in "${forbidden_claims[@]}"; do
+  if [[ "${normalized_visible_text}" == *"${claim}"* ]]; then
+    echo "Forbidden Phase 65.1 release bundle inventory claim: ${claim}" >&2
+    exit 1
   fi
-  for claim in "${forbidden_claims[@]}"; do
-    if [[ "${line_lower}" == *"${claim}"* ]]; then
-      echo "Forbidden Phase 65.1 release bundle inventory claim: ${claim}" >&2
-      exit 1
-    fi
-  done
-done < <(visible_markdown_text "${absolute_doc_path}")
+done
 
-if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|password[[:space:]]*[:=][[:space:]]*[^<[:space:]]+|secret[[:space:]]*[:=][[:space:]]*[^<[:space:]]+)' "${absolute_doc_path}"; then
+if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|password[[:space:]]*[:=][[:space:]]*[^[:space:]]+|secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+)' "${absolute_doc_path}"; then
   echo "Forbidden Phase 65.1 release bundle inventory: production secret-looking value detected" >&2
   exit 1
 fi
 
-if grep -Eiq -- 'customer-private[[:space:]]+(record|payload|data)[[:space:]]*[:=][[:space:]]*[^<[:space:]]+' "${absolute_doc_path}"; then
+if grep -Eiq -- 'customer-private[[:space:]]+[^[:space:];:=]+[[:space:]]*[:=][[:space:]]*[^[:space:]]+' "${absolute_doc_path}"; then
   echo "Forbidden Phase 65.1 release bundle inventory: customer-private data detected" >&2
   exit 1
 fi
