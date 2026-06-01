@@ -591,6 +591,13 @@ assert_fails_with \
   "${inventory_issue_lint_truth_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
 
+inventory_release_truth_repo="${workdir}/inventory-release-truth"
+copy_valid_repo "${inventory_release_truth_repo}"
+printf '%s\n' "Release bundle inventory is release truth." >>"${inventory_release_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_release_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: release bundle inventory is release truth"
+
 workflow_authority_repo="${workdir}/workflow-authority"
 copy_valid_repo "${workflow_authority_repo}"
 printf '%s\n' "Release bundle inventory is workflow authority." >>"${workflow_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -611,6 +618,13 @@ printf '%s\n' "Phase 65.1 README boundary password: actual-production-token" >>"
 assert_fails_with \
   "${readme_secret_repo}" \
   "production secret-looking value detected"
+
+readme_customer_private_repo="${workdir}/readme-customer-private"
+copy_valid_repo "${readme_customer_private_repo}"
+printf '%s\n' "Phase 65.1 README boundary customer-private: Acme incident payload" >>"${readme_customer_private_repo}/README.md"
+assert_fails_with \
+  "${readme_customer_private_repo}" \
+  "customer-private data detected"
 
 yaml_secret_repo="${workdir}/yaml-secret"
 copy_valid_repo "${yaml_secret_repo}"
@@ -661,6 +675,13 @@ assert_fails_with \
   "${customer_private_incident_repo}" \
   "customer-private data detected"
 
+self_service_commercial_ready_repo="${workdir}/self-service-commercial-ready"
+copy_valid_repo "${self_service_commercial_ready_repo}"
+printf '%s\n' "AegisOps is self-service commercial ready." >>"${self_service_commercial_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${self_service_commercial_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: aegisops is self-service commercial ready"
+
 wrapped_verifier_truth_repo="${workdir}/wrapped-verifier-truth"
 copy_valid_repo "${wrapped_verifier_truth_repo}"
 printf '%s\n' "Verifier output is readiness" "truth." >>"${wrapped_verifier_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -677,5 +698,10 @@ git -C "${path_repo}" commit -q -m "path"
 assert_fails_with \
   "${path_repo}" \
   "Forbidden Phase 65.1 release bundle inventory absolute path usage detected"
+
+if grep -Fq '>/tmp/phase65-path-hygiene' "${verifier}" || grep -Fq '2>/tmp/phase65-path-hygiene' "${verifier}"; then
+  echo "Expected verifier to avoid predictable /tmp path-hygiene output files" >&2
+  exit 1
+fi
 
 echo "Phase 65.1 release bundle inventory verifier self-test passes."

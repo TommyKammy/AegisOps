@@ -196,10 +196,12 @@ forbidden_claims=(
   "phase 65.1 satisfies phase 66 rc gates"
   "aegisops is rc"
   "aegisops is ga"
+  "aegisops is self-service commercial ready"
   "aegisops is self-service commercially ready"
   "aegisops is a commercial replacement for every siem/soar capability"
   "release bundle inventory is readiness truth"
   "release bundle inventory is gate truth"
+  "release bundle inventory is release truth"
   "release bundle inventory is workflow truth"
   "verifier output is readiness truth"
   "verifier output is release truth"
@@ -273,7 +275,7 @@ done
 derived_truth_claim_patterns=(
   "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|acts as|serves as|becomes|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+([[:alpha:]/-]+[[:space:]-]+){0,4}truth"
   "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|acts as|serves as|becomes|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+(rc|ga)[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
-  "(this inventory|release bundle inventory)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates)[[:space:]-]+(verifier|issue-lint|ui|ai)[[:space:]-]+truth"
+  "(this inventory|release bundle inventory)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates)[[:space:]-]+(verifier|issue-lint|ui|ai|release)[[:space:]-]+truth"
 )
 
 for claim_pattern in "${derived_truth_claim_patterns[@]}"; do
@@ -288,7 +290,7 @@ if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH
   exit 1
 fi
 
-if grep -Eiq -- 'customer-private([[:space:]]+[^[:space:];:=]+)?[[:space:]]*[:=][[:space:]]*[^[:space:]]+' "${absolute_doc_path}"; then
+if grep -Eiq -- 'customer-private([[:space:]]+[^[:space:];:=]+)?[[:space:]]*[:=][[:space:]]*[^[:space:]]+' "${boundary_secret_scan_paths[@]}"; then
   echo "Forbidden Phase 65.1 release bundle inventory: customer-private data detected" >&2
   exit 1
 fi
@@ -303,9 +305,12 @@ if grep -Eq "${workstation_local_path_pattern}" "${absolute_doc_path}"; then
   exit 1
 fi
 
-if ! bash "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${repo_root}" >/tmp/phase65-path-hygiene.out 2>/tmp/phase65-path-hygiene.err; then
-  cat /tmp/phase65-path-hygiene.out >&2
-  cat /tmp/phase65-path-hygiene.err >&2
+path_hygiene_tmpdir="$(mktemp -d)"
+trap 'rm -rf "${path_hygiene_tmpdir}"' EXIT
+
+if ! bash "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${repo_root}" >"${path_hygiene_tmpdir}/phase65-path-hygiene.out" 2>"${path_hygiene_tmpdir}/phase65-path-hygiene.err"; then
+  cat "${path_hygiene_tmpdir}/phase65-path-hygiene.out" >&2
+  cat "${path_hygiene_tmpdir}/phase65-path-hygiene.err" >&2
   echo "Forbidden Phase 65.1 release bundle inventory absolute path usage detected" >&2
   exit 1
 fi
