@@ -113,6 +113,14 @@ assert_fails_with \
   "${missing_version_repo}" \
   "Missing required Phase 65.1 inventory term"
 
+missing_record_inventory_identifier_repo="${workdir}/missing-record-inventory-identifier"
+copy_valid_repo "${missing_record_inventory_identifier_repo}"
+remove_doc_text "${missing_record_inventory_identifier_repo}" "- inventory identifier \`phase-65-release-bundle-inventory-v1\`;
+"
+assert_fails_with \
+  "${missing_record_inventory_identifier_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
 missing_owner_repo="${workdir}/missing-owner"
 copy_valid_repo "${missing_owner_repo}"
 remove_doc_text "${missing_owner_repo}" "| Release notes artifact set | AegisOps maintainers |"

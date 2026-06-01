@@ -56,6 +56,8 @@ done <<'EOF_PHRASE'
 # Phase 65.1 Release Bundle Inventory
 **Status**: Accepted as the Phase 65 beta/design-partner bundle inventory contract before offline packaging, hosted release metadata, SBOM/signing, licensing, migration, template, RC, GA, and commercial replacement claims.
 The inventory identifier is `phase-65-release-bundle-inventory-v1`.
+Every beta/design-partner release bundle record that consumes this inventory must include:
+inventory identifier `phase-65-release-bundle-inventory-v1`;
 release bundle identifier in the form `aegisops-beta-<repository-revision>`;
 repository revision or reviewed tag;
 artifact-set owner;
