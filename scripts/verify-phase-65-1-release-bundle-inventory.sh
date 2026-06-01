@@ -47,11 +47,17 @@ require_file "${phase51_gap_path}" "Phase 51.5 competitive gap matrix"
 require_file "${phase64_closeout_path}" "Phase 64 closeout evaluation"
 require_file "${deployment_inventory_path}" "single-customer release bundle inventory baseline"
 
-if ! phase51_gate_output="$(bash "${repo_root}/scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh" "${repo_root}" 2>&1)"; then
-  printf '%s\n' "${phase51_gate_output}" >&2
-  echo "Phase 65.1 inherited Phase 51.3 gate verifier failed" >&2
-  exit 1
-fi
+run_inherited_verifier() {
+  local script_path="$1"
+  local description="$2"
+  local verifier_output
+
+  if ! verifier_output="$(bash "${script_path}" "${repo_root}" 2>&1)"; then
+    printf '%s\n' "${verifier_output}" >&2
+    echo "Phase 65.1 inherited ${description} failed" >&2
+    exit 1
+  fi
+}
 
 require_phrase "${readme_path}" "- [Phase 65.1 release bundle inventory](docs/phase-65-1-release-bundle-inventory.md)" "README canonical cross-phase boundary bullet"
 
@@ -79,6 +85,7 @@ issue or change record that approved the bundle for beta/design-partner packagin
 The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct, and Phase 66 remains RC while Phase 67 remains GA.
 The inventory preserves Phase 64 limitation ownership: known limitation records, mitigation posture, handoff notes, verifier output, issue-lint output, UI text, readiness projections, and AI summaries remain subordinate planning evidence only.
 AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth.
+Wazuh, Shuffle, AI, tickets, reports, support notes, dashboards, exports, browser state, UI cache, downstream receipts, release notes, bundle files, verifier output, issue-lint output, and operator-facing summaries cannot satisfy RC gates, GA gates, workflow truth, limitation truth, release truth, or readiness truth by themselves.
 Missing owner, missing version identifier, missing evidence reference, missing required artifact class, missing exclusion review, placeholder credential, production secret material, customer-private data, workstation-local absolute path, inferred RC pass, inferred GA pass, verifier-as-readiness-truth, or issue-lint-as-readiness-truth must block the release bundle record until the prerequisite is corrected.
 The Phase 65.1 inventory explicitly excludes:
 production secret material;
@@ -239,7 +246,7 @@ for claim_pattern in "${direct_readiness_claim_patterns[@]}"; do
 done
 
 excluded_scope_readiness_claim_patterns=(
-  "(this inventory|phase 65[.]1|release bundle inventory)[[:space:]-]+(establishes|proves|claims|satisfies|approves|creates)[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|silent auto-upgrade behavior|silent auto-upgrade|silent auto upgrade behavior|silent auto upgrade|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|sbom|checksum|signing|oss licensing|licensing|redistribution|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement|broad siem/soar replacement|broad siem-soar replacement|broad siem soar replacement|siem/soar replacement|siem-soar replacement|siem soar replacement)[[:space:]-]+(readiness|ready|approval|approved|completeness|complete|implementation|implemented|enforcement|behavior|generation|packaging|guide|template|conclusion)"
+  "(this inventory|phase 65[.]1|release bundle inventory)[[:space:]-]+(establishes|proves|claims|satisfies|approves|creates)[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|silent auto-upgrade behavior|silent auto-upgrade|silent auto upgrade behavior|silent auto upgrade|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|sbom|checksum|signing|oss licensing|licensing|redistribution|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement|broad siem/soar replacement|broad siem-soar replacement|broad siem soar replacement|siem/soar replacement|siem-soar replacement|siem soar replacement)([[:space:]-]+(readiness|ready|approval|approved|completeness|complete|implementation|implemented|enforcement|behavior|generation|packaging|guide|template|conclusion))?"
   "(this inventory|phase 65[.]1|release bundle inventory)[[:space:]-]+is[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|silent auto-upgrade behavior|silent auto-upgrade|silent auto upgrade behavior|silent auto upgrade|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|sbom|checksum|signing|oss licensing|licensing|redistribution|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement|broad siem/soar replacement|broad siem-soar replacement|broad siem soar replacement|siem/soar replacement|siem-soar replacement|siem soar replacement)[[:space:]-]+(ready|readiness|complete|approved|implemented)"
 )
 
@@ -299,5 +306,10 @@ if ! bash "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${repo_root
   echo "Forbidden Phase 65.1 release bundle inventory absolute path usage detected" >&2
   exit 1
 fi
+
+run_inherited_verifier "${repo_root}/scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh" "Phase 51.3 gate verifier"
+run_inherited_verifier "${repo_root}/scripts/verify-phase-51-5-competitive-gap-matrix.sh" "Phase 51.5 competitive gap matrix verifier"
+run_inherited_verifier "${repo_root}/scripts/verify-phase-64-6-closeout-evaluation.sh" "Phase 64 closeout verifier"
+run_inherited_verifier "${repo_root}/scripts/verify-single-customer-release-bundle-inventory.sh" "single-customer release bundle inventory verifier"
 
 echo "Phase 65.1 release bundle inventory is present, versioned, bounded, and fail-closed."

@@ -7,6 +7,7 @@ verifier="${repo_root}/scripts/verify-phase-65-1-release-bundle-inventory.sh"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
+valid_template="${workdir}/valid-template"
 
 pass_stdout="${workdir}/pass.out"
 pass_stderr="${workdir}/pass.err"
@@ -42,26 +43,71 @@ assert_fails_with() {
   fi
 }
 
+create_valid_repo_template() {
+  if [[ -d "${valid_template}" ]]; then
+    return
+  fi
+
+  copy_repo_path() {
+    local relative_path="$1"
+
+    mkdir -p "${valid_template}/$(dirname "${relative_path}")"
+    cp -pR "${repo_root}/${relative_path}" "${valid_template}/${relative_path}"
+  }
+
+  mkdir -p "${valid_template}"
+  copy_repo_path "README.md"
+  copy_repo_path "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+  copy_repo_path "docs/phase-51-5-competitive-gap-matrix.md"
+  copy_repo_path "docs/phase-51-6-authority-boundary-negative-test-policy.md"
+  copy_repo_path "docs/phase-63-closeout-evaluation.md"
+  copy_repo_path "docs/phase-64-1-known-limitation-ownership-record-contract.md"
+  copy_repo_path "docs/phase-64-1-reviewed-limitation-ownership-records.md"
+  copy_repo_path "docs/phase-64-5-phase66-limitation-handoff.md"
+  copy_repo_path "docs/phase-64-closeout-evaluation.md"
+  copy_repo_path "docs/phase-65-1-release-bundle-inventory.md"
+  copy_repo_path "docs/deployment/customer-like-rehearsal-environment.md"
+  copy_repo_path "docs/deployment/operational-evidence-handoff-pack.md"
+  copy_repo_path "docs/deployment/restore-rollback-upgrade-evidence-rehearsal.md"
+  copy_repo_path "docs/deployment/runtime-smoke-bundle.md"
+  copy_repo_path "docs/deployment/single-customer-profile.md"
+  copy_repo_path "docs/deployment/single-customer-release-bundle-inventory.md"
+  copy_repo_path "docs/runbook.md"
+  copy_repo_path "scripts/run-phase-37-runtime-smoke-gate.sh"
+  copy_repo_path "scripts/test-verify-single-customer-release-bundle-inventory.sh"
+  copy_repo_path "scripts/verify-customer-like-rehearsal-environment.sh"
+  copy_repo_path "scripts/verify-phase-37-restore-rollback-upgrade-evidence.sh"
+  copy_repo_path "scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh"
+  copy_repo_path "scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh"
+  copy_repo_path "scripts/verify-phase-51-5-competitive-gap-matrix.sh"
+  copy_repo_path "scripts/verify-phase-64-6-closeout-evaluation.sh"
+  copy_repo_path "scripts/verify-phase-65-1-release-bundle-inventory.sh"
+  copy_repo_path "scripts/verify-publishable-path-hygiene.sh"
+  copy_repo_path "scripts/verify-single-customer-release-bundle-inventory.sh"
+  mkdir -p "${valid_template}/control-plane/aegisops/control_plane"
+  : >"${valid_template}/control-plane/aegisops/__init__.py"
+  : >"${valid_template}/control-plane/aegisops/control_plane/__init__.py"
+  copy_repo_path "control-plane/aegisops/control_plane/publishable_paths.py"
+  copy_repo_path "control-plane/deployment/first-boot/Dockerfile"
+  copy_repo_path "control-plane/deployment/first-boot/bootstrap.env.sample"
+  copy_repo_path "control-plane/deployment/first-boot/control-plane-entrypoint.sh"
+  copy_repo_path "control-plane/deployment/first-boot/docker-compose.yml"
+  copy_repo_path "control-plane/tests/fixtures/phase37/reviewed-record-chain-rehearsal.json"
+  copy_repo_path "postgres/control-plane/migrations"
+  copy_repo_path "proxy/nginx/conf.d-first-boot/control-plane.conf"
+  copy_repo_path "proxy/nginx/nginx.conf"
+  git -C "${valid_template}" init -q
+  git -C "${valid_template}" config user.email "aegisops@example.invalid"
+  git -C "${valid_template}" config user.name "AegisOps Test"
+  git -C "${valid_template}" add README.md docs scripts control-plane proxy postgres
+  git -C "${valid_template}" commit -q -m "fixture"
+}
+
 copy_valid_repo() {
   local target="$1"
 
-  mkdir -p "${target}/docs/deployment" "${target}/scripts" "${target}/control-plane/aegisops/control_plane"
-  cp "${repo_root}/README.md" "${target}/README.md"
-  cp "${repo_root}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "${target}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
-  cp "${repo_root}/docs/phase-51-5-competitive-gap-matrix.md" "${target}/docs/phase-51-5-competitive-gap-matrix.md"
-  cp "${repo_root}/docs/phase-64-closeout-evaluation.md" "${target}/docs/phase-64-closeout-evaluation.md"
-  cp "${repo_root}/docs/phase-65-1-release-bundle-inventory.md" "${target}/docs/phase-65-1-release-bundle-inventory.md"
-  cp "${repo_root}/docs/deployment/single-customer-release-bundle-inventory.md" "${target}/docs/deployment/single-customer-release-bundle-inventory.md"
-  cp "${repo_root}/scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh" "${target}/scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh"
-  cp "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${target}/scripts/verify-publishable-path-hygiene.sh"
-  : >"${target}/control-plane/aegisops/__init__.py"
-  : >"${target}/control-plane/aegisops/control_plane/__init__.py"
-  cp "${repo_root}/control-plane/aegisops/control_plane/publishable_paths.py" "${target}/control-plane/aegisops/control_plane/publishable_paths.py"
-  git -C "${target}" init -q
-  git -C "${target}" config user.email "aegisops@example.invalid"
-  git -C "${target}" config user.name "AegisOps Test"
-  git -C "${target}" add README.md docs scripts control-plane/aegisops
-  git -C "${target}" commit -q -m "fixture"
+  create_valid_repo_template
+  cp -pR "${valid_template}" "${target}"
 }
 
 remove_doc_text() {
@@ -137,6 +183,27 @@ assert_fails_with \
   "${invalid_phase51_gate_repo}" \
   "Phase 65.1 inherited Phase 51.3 gate verifier failed"
 
+invalid_phase51_gap_repo="${workdir}/invalid-phase51-gap"
+copy_valid_repo "${invalid_phase51_gap_repo}"
+printf '%s\n' "x" >"${invalid_phase51_gap_repo}/docs/phase-51-5-competitive-gap-matrix.md"
+assert_fails_with \
+  "${invalid_phase51_gap_repo}" \
+  "Phase 65.1 inherited Phase 51.5 competitive gap matrix verifier failed"
+
+invalid_phase64_closeout_repo="${workdir}/invalid-phase64-closeout"
+copy_valid_repo "${invalid_phase64_closeout_repo}"
+printf '%s\n' "x" >"${invalid_phase64_closeout_repo}/docs/phase-64-closeout-evaluation.md"
+assert_fails_with \
+  "${invalid_phase64_closeout_repo}" \
+  "Phase 65.1 inherited Phase 64 closeout verifier failed"
+
+invalid_deployment_inventory_repo="${workdir}/invalid-deployment-inventory"
+copy_valid_repo "${invalid_deployment_inventory_repo}"
+printf '%s\n' "x" >"${invalid_deployment_inventory_repo}/docs/deployment/single-customer-release-bundle-inventory.md"
+assert_fails_with \
+  "${invalid_deployment_inventory_repo}" \
+  "Phase 65.1 inherited single-customer release bundle inventory verifier failed"
+
 missing_deployment_inventory_repo="${workdir}/missing-deployment-inventory"
 copy_valid_repo "${missing_deployment_inventory_repo}"
 rm "${missing_deployment_inventory_repo}/docs/deployment/single-customer-release-bundle-inventory.md"
@@ -149,6 +216,13 @@ copy_valid_repo "${missing_deployment_baseline_path_repo}"
 remove_doc_text "${missing_deployment_baseline_path_repo}" "docs/deployment/single-customer-release-bundle-inventory.md"
 assert_fails_with \
   "${missing_deployment_baseline_path_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+missing_subordinate_boundary_repo="${workdir}/missing-subordinate-boundary"
+copy_valid_repo "${missing_subordinate_boundary_repo}"
+remove_doc_text "${missing_subordinate_boundary_repo}" "Wazuh, Shuffle, AI, tickets, reports, support notes, dashboards, exports, browser state, UI cache, downstream receipts, release notes, bundle files, verifier output, issue-lint output, and operator-facing summaries cannot satisfy RC gates, GA gates, workflow truth, limitation truth, release truth, or readiness truth by themselves."
+assert_fails_with \
+  "${missing_subordinate_boundary_repo}" \
   "Missing required Phase 65.1 inventory term"
 
 missing_version_repo="${workdir}/missing-version"
@@ -377,6 +451,7 @@ assert_fails_with \
   "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
 
 excluded_scope_claims=(
+  "hosted-update-created|This inventory creates hosted update service."
   "entitlement-enforcement|Release bundle inventory creates production entitlement enforcement."
   "release-channel-implementation|This inventory establishes release channel implementation."
   "billing-is-ready|This inventory is billing ready."
