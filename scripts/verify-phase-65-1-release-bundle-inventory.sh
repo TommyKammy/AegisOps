@@ -258,14 +258,14 @@ direct_readiness_claim_patterns=(
   "phase 65[.]1[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
   "phase 65[.]1[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
   "phase 65[.]1[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc/ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
-  "(this inventory|release bundle inventory)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]*(ready|readiness)"
-  "(this inventory|release bundle inventory)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]*(ready|readiness)"
-  "(this inventory|release bundle inventory)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+rc/ga[[:space:]-]*(ready|readiness)"
-  "(this inventory|release bundle inventory)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
-  "(this inventory|release bundle inventory)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
-  "(this inventory|release bundle inventory)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc/ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
-  "(this inventory|release bundle inventory)[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]+pass"
-  "(this inventory|release bundle inventory)[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]+pass"
+  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]*(ready|readiness)"
+  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]*(ready|readiness)"
+  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+rc/ga[[:space:]-]*(ready|readiness)"
+  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
+  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
+  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc/ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
+  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle)[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]+pass"
+  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle)[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]+pass"
   "phase 65[.]1[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]+pass"
   "phase 65[.]1[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]+pass"
 )
@@ -290,7 +290,7 @@ for claim_pattern in "${excluded_scope_readiness_claim_patterns[@]}"; do
 done
 
 authority_claim_patterns=(
-  "(this inventory|release bundle inventory)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates)[[:space:]-]+(workflow|support|release gate|rc gate|ga gate|entitlement|billing|runtime execution|release|gate)[[:space:]-]+authority"
+  "(this inventory|release bundle inventory)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates|satisfies)[[:space:]-]+(workflow|support|release gate|rc gate|ga gate|entitlement|billing|runtime execution|release|gate)[[:space:]-]+authority"
   "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|are|acts as|serve as|serves as|becomes|become|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+(workflow|support|release gate|rc gate|ga gate|entitlement|billing|runtime execution|release|gate)[[:space:]-]+authority"
 )
 
@@ -302,7 +302,7 @@ for claim_pattern in "${authority_claim_patterns[@]}"; do
 done
 
 derived_truth_claim_patterns=(
-  "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|acts as|serves as|becomes|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+([[:alpha:]/-]+[[:space:]-]+){0,4}truth"
+  "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|are|acts as|serve as|serves as|becomes|become|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+([[:alpha:]/-]+[[:space:]-]+){0,4}truth"
   "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|acts as|serves as|becomes|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?(rc|ga)[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
   "(this inventory|release bundle inventory)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates)[[:space:]-]+(verifier|issue-lint|ui|ai|release)[[:space:]-]+truth"
 )
@@ -327,7 +327,7 @@ done
 
 decoded_boundary_text="$(perl -0pe 's/%([0-9A-Fa-f]{2})/chr(hex($1))/eg' "${boundary_secret_scan_paths[@]}")"
 
-if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|password[[:space:]]*[:=][[:space:]]*[^[:space:]]+|secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+|access[_-]?token[[:space:]]*[:=][[:space:]]*[^[:space:]]+|api[_-]?key[[:space:]]*[:=][[:space:]]*[^[:space:]]+|credential[[:space:]]*[:=][[:space:]]*[^[:space:]]+|client[_-]?secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+)' <<<"${decoded_boundary_text}"; then
+if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|password[[:space:]]*[:=][[:space:]]*[^[:space:]]+|secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+|access[_-]?token[[:space:]]*[:=][[:space:]]*[^[:space:]]+|auth[_-]?token[[:space:]]*[:=][[:space:]]*[^[:space:]]+|(^|[^[:alnum:]_-])token[[:space:]]*[:=][[:space:]]*[^[:space:]]+|api[_-]?key[[:space:]]*[:=][[:space:]]*[^[:space:]]+|credential[[:space:]]*[:=][[:space:]]*[^[:space:]]+|client[_-]?secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+)' <<<"${decoded_boundary_text}"; then
   echo "Forbidden Phase 65.1 release bundle inventory: production secret-looking value detected" >&2
   exit 1
 fi
@@ -337,10 +337,15 @@ if grep -Eiq -- 'customer-private([[:space:]]+[^[:space:];:=]+)?[[:space:]]*[:=]
   exit 1
 fi
 
+if grep -Eiq -- 'customer-private[[:space:]]+(record|payload|incident|customer|tenant|account|case|evidence|support|[^[:space:];:=,.]+[[:space:]]+(record|payload|incident|customer|tenant|account|case|evidence|support))' <<<"${decoded_boundary_text}"; then
+  echo "Forbidden Phase 65.1 release bundle inventory: customer-private data detected" >&2
+  exit 1
+fi
+
 macos_home_pattern='/'"Users"'/[^[:space:])>]+'
 linux_home_pattern='/'"home"'/[^[:space:])>]+'
 windows_home_pattern='[A-Za-z]:\\'"Users"'\\[^[:space:])>]+'
-workstation_local_path_pattern="(^|[^[:alnum:]_./-])(~[/\\\\]|${macos_home_pattern}|${linux_home_pattern}|${windows_home_pattern})"
+workstation_local_path_pattern="(^|[^[:alnum:]_.-])(~[/\\\\]|${macos_home_pattern}|${linux_home_pattern}|${windows_home_pattern})"
 
 if grep -Eq "${workstation_local_path_pattern}" <<<"${decoded_boundary_text}"; then
   echo "Forbidden Phase 65.1 release bundle inventory absolute path usage detected" >&2

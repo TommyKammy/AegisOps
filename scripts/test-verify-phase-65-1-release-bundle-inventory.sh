@@ -534,6 +534,7 @@ done
 
 rc_ga_claims=(
   "inventory-ga-ready|Release bundle inventory is GA ready."
+  "release-bundle-ga-ready|The release bundle is GA ready."
   "inventory-rc-gate-pass|This inventory passes RC gate acceptance."
   "phase-rc-ga-gates|Phase 65.1 satisfies RC/GA gates."
 )
@@ -593,6 +594,13 @@ copy_valid_repo "${ai_summary_truth_repo}"
 printf '%s\n' "AI summaries prove readiness truth." >>"${ai_summary_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${ai_summary_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+plural_ai_summary_truth_repo="${workdir}/plural-ai-summary-truth"
+copy_valid_repo "${plural_ai_summary_truth_repo}"
+printf '%s\n' "AI summaries are readiness truth." >>"${plural_ai_summary_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${plural_ai_summary_truth_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
 
 operator_summary_truth_repo="${workdir}/operator-summary-truth"
@@ -658,6 +666,13 @@ assert_fails_with \
   "${workflow_authority_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
 
+inventory_satisfies_authority_repo="${workdir}/inventory-satisfies-authority"
+copy_valid_repo "${inventory_satisfies_authority_repo}"
+printf '%s\n' "This inventory satisfies release gate authority." >>"${inventory_satisfies_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_satisfies_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
 subordinate_gate_authority_repo="${workdir}/subordinate-gate-authority"
 copy_valid_repo "${subordinate_gate_authority_repo}"
 printf '%s\n' "Verifier output proves gate authority." >>"${subordinate_gate_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -714,6 +729,20 @@ assert_fails_with \
   "${placeholder_credential_repo}" \
   "production secret-looking value detected"
 
+placeholder_token_repo="${workdir}/placeholder-token"
+copy_valid_repo "${placeholder_token_repo}"
+printf '%s\n' "token: <placeholder>" >>"${placeholder_token_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${placeholder_token_repo}" \
+  "production secret-looking value detected"
+
+placeholder_auth_token_repo="${workdir}/placeholder-auth-token"
+copy_valid_repo "${placeholder_auth_token_repo}"
+printf '%s\n' "auth_token: <placeholder>" >>"${placeholder_auth_token_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${placeholder_auth_token_repo}" \
+  "production secret-looking value detected"
+
 encoded_secret_repo="${workdir}/encoded-secret"
 copy_valid_repo "${encoded_secret_repo}"
 printf '%s\n' "password%3A%20actual-production-token" >>"${encoded_secret_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -756,6 +785,13 @@ assert_fails_with \
   "${customer_private_incident_repo}" \
   "customer-private data detected"
 
+customer_private_prose_repo="${workdir}/customer-private-prose"
+copy_valid_repo "${customer_private_prose_repo}"
+printf '%s\n' "customer-private Acme incident payload" >>"${customer_private_prose_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${customer_private_prose_repo}" \
+  "customer-private data detected"
+
 self_service_commercial_ready_repo="${workdir}/self-service-commercial-ready"
 copy_valid_repo "${self_service_commercial_ready_repo}"
 printf '%s\n' "AegisOps is self-service commercial ready." >>"${self_service_commercial_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -792,6 +828,13 @@ copy_valid_repo "${encoded_readme_path_repo}"
 printf '%s\n' "Operator note mentions /%55sers/alice/local/repo." >>"${encoded_readme_path_repo}/README.md"
 assert_fails_with \
   "${encoded_readme_path_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory absolute path usage detected"
+
+file_uri_path_repo="${workdir}/file-uri-path"
+copy_valid_repo "${file_uri_path_repo}"
+printf '%s\n' "Operator note mentions file:///Users/alice/local/repo." >>"${file_uri_path_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${file_uri_path_repo}" \
   "Forbidden Phase 65.1 release bundle inventory absolute path usage detected"
 
 if grep -Fq '>/tmp/phase65-path-hygiene' "${verifier}" || grep -Fq '2>/tmp/phase65-path-hygiene' "${verifier}"; then
