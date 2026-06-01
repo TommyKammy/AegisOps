@@ -224,7 +224,7 @@ for claim_pattern in "${authority_claim_patterns[@]}"; do
 done
 
 derived_truth_claim_patterns=(
-  "(verifier output|issue-lint output)[[:space:]-]+is[[:space:]-]+[[:alpha:]/-]+[[:space:]-]+truth"
+  "(verifier output|issue-lint output)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates)[[:space:]-]+([[:alpha:]/-]+[[:space:]-]+){0,4}truth"
   "(this inventory|release bundle inventory)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates)[[:space:]-]+(verifier|issue-lint|ui|ai)[[:space:]-]+truth"
 )
 

@@ -81,6 +81,28 @@ replace_doc_text() {
     "${target}/docs/phase-65-1-release-bundle-inventory.md"
 }
 
+assert_missing_doc_text_fails() {
+  local fixture_name="$1"
+  local text="$2"
+  local expected="$3"
+
+  local target="${workdir}/${fixture_name}"
+  copy_valid_repo "${target}"
+  remove_doc_text "${target}" "${text}"
+  assert_fails_with "${target}" "${expected}"
+}
+
+assert_appended_claim_fails() {
+  local fixture_name="$1"
+  local claim="$2"
+  local expected="$3"
+
+  local target="${workdir}/${fixture_name}"
+  copy_valid_repo "${target}"
+  printf '%s\n' "${claim}" >>"${target}/docs/phase-65-1-release-bundle-inventory.md"
+  assert_fails_with "${target}" "${expected}"
+}
+
 valid_repo="${workdir}/valid"
 copy_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
@@ -179,6 +201,19 @@ assert_fails_with \
   "${missing_approval_binding_repo}" \
   "Missing required Phase 65.1 inventory term"
 
+bundle_record_bindings=(
+  "missing-release-bundle-identifier|release bundle identifier in the form \`aegisops-beta-<repository-revision>\`;|Missing required Phase 65.1 inventory term"
+  "missing-artifact-set-owner|artifact-set owner;|Missing required Phase 65.1 inventory term"
+  "missing-per-artifact-owner|per-artifact owner;|Missing required Phase 65.1 inventory term"
+  "missing-verifier-output-reference|verifier output reference;|Missing required Phase 65.1 inventory term"
+  "missing-exclusion-review-reference|explicit exclusion review reference;|Missing required Phase 65.1 inventory term"
+)
+
+for binding_case in "${bundle_record_bindings[@]}"; do
+  IFS="|" read -r fixture_name required_text expected_text <<<"${binding_case}"
+  assert_missing_doc_text_fails "${fixture_name}" "${required_text}" "${expected_text}"
+done
+
 missing_row_evidence_repo="${workdir}/missing-row-evidence"
 copy_valid_repo "${missing_row_evidence_repo}"
 replace_doc_text \
@@ -209,6 +244,28 @@ remove_doc_text "${missing_sbom_exclusion_repo}" "SBOM generation, checksum gene
 assert_fails_with \
   "${missing_sbom_exclusion_repo}" \
   "Missing required Phase 65.1 inventory term"
+
+required_exclusions=(
+  "missing-production-secret-exclusion|production secret material;"
+  "missing-customer-private-exclusion|customer-private data;"
+  "missing-workstation-path-exclusion|workstation-local absolute paths;"
+  "missing-entitlement-exclusion|production entitlement enforcement;"
+  "missing-offline-install-exclusion|full offline install packaging implementation;"
+  "missing-release-channel-exclusion|release channel implementation;"
+  "missing-licensing-exclusion|OSS licensing conclusion or redistribution approval;"
+  "missing-migration-exclusion|migration guide implementation;"
+  "missing-beta-template-exclusion|beta known-limitations template implementation;"
+  "missing-design-partner-template-exclusion|design-partner evidence template implementation;"
+  "missing-rc-gate-exclusion|RC gate acceptance;"
+  "missing-ga-readiness-exclusion|GA readiness;"
+  "missing-commercial-readiness-exclusion|self-service commercial readiness; and"
+  "missing-siem-soar-exclusion|broad SIEM/SOAR replacement readiness."
+)
+
+for exclusion_case in "${required_exclusions[@]}"; do
+  IFS="|" read -r fixture_name required_text <<<"${exclusion_case}"
+  assert_missing_doc_text_fails "${fixture_name}" "${required_text}" "Missing required Phase 65.1 inventory term"
+done
 
 unbound_version_repo="${workdir}/unbound-version"
 copy_valid_repo "${unbound_version_repo}"
@@ -319,6 +376,41 @@ assert_fails_with \
   "${billing_ready_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
 
+excluded_scope_claims=(
+  "entitlement-enforcement|Release bundle inventory creates production entitlement enforcement."
+  "release-channel-implementation|This inventory establishes release channel implementation."
+  "offline-install-complete|Phase 65.1 claims offline install completeness."
+  "checksum-generation|Release bundle inventory approves checksum generation."
+  "signing-implementation|This inventory approves signing implementation."
+  "licensing-approval|Phase 65.1 creates licensing approval."
+  "migration-guide|This inventory establishes migration guide."
+  "beta-template-complete|Release bundle inventory proves beta template completeness."
+  "design-partner-template|This inventory satisfies design-partner evidence template."
+  "commercial-replacement-ready|Phase 65.1 proves commercial replacement readiness."
+)
+
+for claim_case in "${excluded_scope_claims[@]}"; do
+  IFS="|" read -r fixture_name claim_text <<<"${claim_case}"
+  assert_appended_claim_fails \
+    "${fixture_name}" \
+    "${claim_text}" \
+    "Forbidden Phase 65.1 release bundle inventory claim"
+done
+
+rc_ga_claims=(
+  "inventory-ga-ready|Release bundle inventory is GA ready."
+  "inventory-rc-gate-pass|This inventory passes RC gate acceptance."
+  "phase-rc-ga-gates|Phase 65.1 satisfies RC/GA gates."
+)
+
+for claim_case in "${rc_ga_claims[@]}"; do
+  IFS="|" read -r fixture_name claim_text <<<"${claim_case}"
+  assert_appended_claim_fails \
+    "${fixture_name}" \
+    "${claim_text}" \
+    "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+done
+
 verifier_truth_repo="${workdir}/verifier-truth"
 copy_valid_repo "${verifier_truth_repo}"
 printf '%s\n' "Verifier output is readiness truth." >>"${verifier_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -332,6 +424,20 @@ printf '%s\n' "Issue-lint output is release truth." >>"${issue_lint_truth_repo}/
 assert_fails_with \
   "${issue_lint_truth_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: issue-lint output is release truth"
+
+release_gate_truth_repo="${workdir}/release-gate-truth"
+copy_valid_repo "${release_gate_truth_repo}"
+printf '%s\n' "Verifier output is release gate truth." >>"${release_gate_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${release_gate_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+issue_lint_rc_gate_truth_repo="${workdir}/issue-lint-rc-gate-truth"
+copy_valid_repo "${issue_lint_rc_gate_truth_repo}"
+printf '%s\n' "Issue-lint output is RC gate truth." >>"${issue_lint_rc_gate_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${issue_lint_rc_gate_truth_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
 
 workflow_truth_repo="${workdir}/workflow-truth"
 copy_valid_repo "${workflow_truth_repo}"
