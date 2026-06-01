@@ -118,6 +118,12 @@ require_bundle_file_pattern() {
   fi
 }
 
+escape_extended_regex() {
+  local value="$1"
+
+  printf '%s' "${value}" | sed -E 's/[][(){}.^$*+?|\\]/\\&/g'
+}
+
 require_bundle_doc_matches_repo() {
   local bundle_root="$1"
   local relative_path="$2"
@@ -153,7 +159,14 @@ scan_forbidden_text() {
 
   local decoded_text normalized_text claim_scan_text
   decoded_text="$(perl -0pe 's/%([0-9A-Fa-f]{2})/chr(hex($1))/eg' "$@")"
-  normalized_text="$(printf '%s' "${decoded_text}" | tr '\n' ' ' | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+/ /g')"
+  normalized_text="$(
+    printf '%s' "${decoded_text}" |
+      tr '\n' ' ' |
+      tr '[:upper:]' '[:lower:]' |
+      sed -E \
+        -e 's/[[:space:]]+/ /g' \
+        -e 's/,[[:space:]]+(and|but)[[:space:]]+((hidden hosted dependency|hosted update services?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|production installer|production entitlement enforcement|commercial billing)[^,.?!;]*(is|are)[^,.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered))/. \2/g'
+  )"
   claim_scan_text="$(
     printf '%s' "${normalized_text}" |
       sed -E \
@@ -389,6 +402,7 @@ if [[ -n "${bundle_dir}" ]]; then
   required_artifact_manifest_path="$(require_manifest_value "${bundle_manifest}" "required artifact manifest path")"
   exclusion_review="$(require_manifest_value "${bundle_manifest}" "exclusion review")"
   verifier_output="$(require_manifest_value "${bundle_manifest}" "verifier output")"
+  approval_record="$(require_manifest_value "${bundle_manifest}" "approval record")"
 
   if [[ "${contract_identifier}" != "phase-65-offline-install-bundle-contract-v1" ]]; then
     echo "Invalid offline install bundle contract identifier: ${contract_identifier}" >&2
@@ -436,18 +450,21 @@ if [[ -n "${bundle_dir}" ]]; then
     exit 1
   fi
 
-  if [[ -z "${bundle_owner}" || -z "${per_artifact_owner}" || -z "${exclusion_review}" ]]; then
-    echo "Missing offline install bundle metadata value: owner or exclusion review" >&2
+  if [[ -z "${bundle_owner}" || -z "${per_artifact_owner}" || -z "${exclusion_review}" || -z "${approval_record}" ]]; then
+    echo "Missing offline install bundle metadata value: owner, exclusion review, or approval record" >&2
     exit 1
   fi
+
+  escaped_release_bundle_identifier="$(escape_extended_regex "${release_bundle_identifier}")"
+  escaped_repository_revision="$(escape_extended_regex "${repository_revision}")"
 
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'offline[[:space:]-]+install' "offline install entry guidance"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command)' "install entry command"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(selected[[:space:]-]+profile|profile)' "selected profile"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)' "dependency assumptions and manual prerequisites"
   require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" 'docs/deployment/env-secrets-certs-contract[.]md' "secret-source contract citation"
-  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "release bundle identifier:[[:space:]]*${release_bundle_identifier}" "matching release bundle identifier"
-  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "repository revision:[[:space:]]*${repository_revision}" "matching repository revision"
+  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "release bundle identifier:[[:space:]]*${escaped_release_bundle_identifier}" "matching release bundle identifier"
+  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "repository revision:[[:space:]]*${escaped_repository_revision}" "matching repository revision"
 
   bundled_repo_docs=(
     "docs/phase-65-2-offline-install-bundle-contract.md"

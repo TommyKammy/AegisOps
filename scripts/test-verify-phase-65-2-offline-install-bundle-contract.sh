@@ -87,6 +87,7 @@ environment assumption: offline-beta-design-partner
 required artifact manifest path: BUNDLE-MANIFEST.md
 exclusion review: no workstation-local paths, production secrets, customer-private data, hidden hosted dependency, hosted update service, silent update, production installer, entitlement, billing, RC pass, or GA pass claims.
 verifier output: bash scripts/verify-phase-65-2-offline-install-bundle-contract.sh --bundle-dir <release-bundle-dir>
+approval record: issue #1384 / PR #1389
 EOF_MANIFEST
 
   cat >"${target}/install/README.md" <<'EOF_INSTALL'
@@ -198,10 +199,30 @@ valid_bundle="${workdir}/valid-bundle"
 create_valid_bundle "${valid_bundle}"
 assert_passes --bundle-dir "${valid_bundle}"
 
+dotted_revision_bundle="${workdir}/dotted-revision-bundle"
+create_valid_bundle "${dotted_revision_bundle}"
+perl -0pi -e 's/cea7db232373/v1.2.3/g; s/aegisops-beta-cea7db232373/aegisops-beta-v1.2.3/g' \
+  "${dotted_revision_bundle}/BUNDLE-MANIFEST.md" \
+  "${dotted_revision_bundle}/evidence/install-preflight-output.txt"
+assert_passes --bundle-dir "${dotted_revision_bundle}"
+
+dotted_revision_mismatch="${workdir}/dotted-revision-mismatch"
+create_valid_bundle "${dotted_revision_mismatch}"
+perl -0pi -e 's/cea7db232373/v1.2.3/g; s/aegisops-beta-cea7db232373/aegisops-beta-v1.2.3/g' \
+  "${dotted_revision_mismatch}/BUNDLE-MANIFEST.md"
+perl -0pi -e 's/cea7db232373/v1X2X3/g; s/aegisops-beta-cea7db232373/aegisops-beta-v1X2X3/g' \
+  "${dotted_revision_mismatch}/evidence/install-preflight-output.txt"
+assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching release bundle identifier" --bundle-dir "${dotted_revision_mismatch}"
+
 missing_bundle_metadata="${workdir}/missing-bundle-metadata"
 create_valid_bundle "${missing_bundle_metadata}"
 perl -0pi -e 's/^bundle creation timestamp:.*\n//m' "${missing_bundle_metadata}/BUNDLE-MANIFEST.md"
 assert_fails_with "Missing offline install bundle metadata value: bundle creation timestamp" --bundle-dir "${missing_bundle_metadata}"
+
+missing_approval_record="${workdir}/missing-approval-record"
+create_valid_bundle "${missing_approval_record}"
+perl -0pi -e 's/^approval record:.*\n//m' "${missing_approval_record}/BUNDLE-MANIFEST.md"
+assert_fails_with "Missing offline install bundle metadata value: approval record" --bundle-dir "${missing_approval_record}"
 
 blank_bundle_owner="${workdir}/blank-bundle-owner"
 create_valid_bundle "${blank_bundle_owner}"
@@ -277,6 +298,11 @@ bundle_silent_update="${workdir}/bundle-silent-update"
 create_valid_bundle "${bundle_silent_update}"
 printf '%s\n' "Silent auto-upgrade is enabled after install." >>"${bundle_silent_update}/install/README.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_silent_update}"
+
+bundle_mixed_silent_update="${workdir}/bundle-mixed-silent-update"
+create_valid_bundle "${bundle_mixed_silent_update}"
+printf '%s\n' "Unsupported hosted update services are documented, and silent auto-upgrade is enabled after install." >>"${bundle_mixed_silent_update}/install/README.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_mixed_silent_update}"
 
 bundle_production_installer="${workdir}/bundle-production-installer"
 create_valid_bundle "${bundle_production_installer}"
