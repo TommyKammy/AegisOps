@@ -305,6 +305,17 @@ assert_fails_with \
   "${missing_exclusion_repo}" \
   "Missing required Phase 65.1 inventory term"
 
+misplaced_exclusion_repo="${workdir}/misplaced-exclusion"
+copy_valid_repo "${misplaced_exclusion_repo}"
+replace_doc_text \
+  "${misplaced_exclusion_repo}" \
+  "- hosted update service behavior;" \
+  ""
+printf '%s\n' "Later note: hosted update service behavior;" >>"${misplaced_exclusion_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${misplaced_exclusion_repo}" \
+  "explicit exclusion"
+
 missing_extended_exclusion_repo="${workdir}/missing-extended-exclusion"
 copy_valid_repo "${missing_extended_exclusion_repo}"
 remove_doc_text "${missing_extended_exclusion_repo}" "silent auto-upgrade behavior;"
@@ -619,6 +630,13 @@ assert_fails_with \
   "${inventory_release_truth_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: release bundle inventory is release truth"
 
+inventory_substitute_evidence_repo="${workdir}/inventory-substitute-evidence"
+copy_valid_repo "${inventory_substitute_evidence_repo}"
+printf '%s\n' "This inventory is substitute evidence for the Phase 51.3 gate contract." >>"${inventory_substitute_evidence_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_substitute_evidence_repo}" \
+  "substitute evidence assertion"
+
 workflow_authority_repo="${workdir}/workflow-authority"
 copy_valid_repo "${workflow_authority_repo}"
 printf '%s\n' "Release bundle inventory is workflow authority." >>"${workflow_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -659,6 +677,13 @@ copy_valid_repo "${placeholder_credential_repo}"
 printf '%s\n' "password: <placeholder>" >>"${placeholder_credential_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${placeholder_credential_repo}" \
+  "production secret-looking value detected"
+
+encoded_secret_repo="${workdir}/encoded-secret"
+copy_valid_repo "${encoded_secret_repo}"
+printf '%s\n' "password%3A%20actual-production-token" >>"${encoded_secret_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${encoded_secret_repo}" \
   "production secret-looking value detected"
 
 access_token_repo="${workdir}/access-token"
@@ -725,6 +750,13 @@ copy_valid_repo "${encoded_path_repo}"
 printf '%s\n' "Operator note mentions /%55sers/alice/local/repo." >>"${encoded_path_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${encoded_path_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory absolute path usage detected"
+
+encoded_readme_path_repo="${workdir}/encoded-readme-path"
+copy_valid_repo "${encoded_readme_path_repo}"
+printf '%s\n' "Operator note mentions /%55sers/alice/local/repo." >>"${encoded_readme_path_repo}/README.md"
+assert_fails_with \
+  "${encoded_readme_path_repo}" \
   "Forbidden Phase 65.1 release bundle inventory absolute path usage detected"
 
 if grep -Fq '>/tmp/phase65-path-hygiene' "${verifier}" || grep -Fq '2>/tmp/phase65-path-hygiene' "${verifier}"; then

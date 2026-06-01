@@ -40,6 +40,25 @@ require_phrase() {
   fi
 }
 
+markdown_section_text() {
+  local file="$1"
+  local heading="$2"
+
+  visible_markdown_text "${file}" | awk -v heading="${heading}" '
+    $0 == heading {
+      in_section = 1
+      print
+      next
+    }
+    /^## / && in_section {
+      exit
+    }
+    in_section {
+      print
+    }
+  '
+}
+
 require_file "${absolute_doc_path}" "Phase 65.1 release bundle inventory"
 require_file "${readme_path}" "README for Phase 65.1 inventory link check"
 require_file "${phase51_gate_path}" "Phase 51.3 gate contract"
@@ -183,8 +202,13 @@ required_exclusions=(
   "broad SIEM/SOAR replacement readiness."
 )
 
+explicit_exclusions_text="$(markdown_section_text "${absolute_doc_path}" "## 4. Explicit Exclusions")"
+
 for exclusion in "${required_exclusions[@]}"; do
-  require_phrase "${absolute_doc_path}" "${exclusion}" "Phase 65.1 explicit exclusion"
+  if ! grep -Fq -- "${exclusion}" <<<"${explicit_exclusions_text}"; then
+    echo "Missing Phase 65.1 explicit exclusion in exclusion list: ${exclusion}" >&2
+    exit 1
+  fi
 done
 
 forbidden_claims=(
@@ -287,12 +311,25 @@ for claim_pattern in "${derived_truth_claim_patterns[@]}"; do
   fi
 done
 
-if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|password[[:space:]]*[:=][[:space:]]*[^[:space:]]+|secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+|access[_-]?token[[:space:]]*[:=][[:space:]]*[^[:space:]]+|api[_-]?key[[:space:]]*[:=][[:space:]]*[^[:space:]]+|credential[[:space:]]*[:=][[:space:]]*[^[:space:]]+|client[_-]?secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+)' "${boundary_secret_scan_paths[@]}"; then
+substitute_evidence_claim_patterns=(
+  "(this inventory|phase 65[.]1|release bundle inventory)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates)[[:space:]-]+(substitute[[:space:]-]+)?evidence[[:space:]-]+for[[:space:]-]+(the[[:space:]-]+)?phase[[:space:]-]+51[.]3[[:space:]-]+gate[[:space:]-]+contract"
+)
+
+for claim_pattern in "${substitute_evidence_claim_patterns[@]}"; do
+  if [[ "${normalized_visible_text}" =~ ${claim_pattern} ]]; then
+    echo "Forbidden Phase 65.1 release bundle inventory claim: substitute evidence assertion" >&2
+    exit 1
+  fi
+done
+
+decoded_boundary_text="$(perl -0pe 's/%([0-9A-Fa-f]{2})/chr(hex($1))/eg' "${boundary_secret_scan_paths[@]}")"
+
+if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|password[[:space:]]*[:=][[:space:]]*[^[:space:]]+|secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+|access[_-]?token[[:space:]]*[:=][[:space:]]*[^[:space:]]+|api[_-]?key[[:space:]]*[:=][[:space:]]*[^[:space:]]+|credential[[:space:]]*[:=][[:space:]]*[^[:space:]]+|client[_-]?secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+)' <<<"${decoded_boundary_text}"; then
   echo "Forbidden Phase 65.1 release bundle inventory: production secret-looking value detected" >&2
   exit 1
 fi
 
-if grep -Eiq -- 'customer-private([[:space:]]+[^[:space:];:=]+)?[[:space:]]*[:=][[:space:]]*[^[:space:]]+' "${boundary_secret_scan_paths[@]}"; then
+if grep -Eiq -- 'customer-private([[:space:]]+[^[:space:];:=]+)?[[:space:]]*[:=][[:space:]]*[^[:space:]]+' <<<"${decoded_boundary_text}"; then
   echo "Forbidden Phase 65.1 release bundle inventory: customer-private data detected" >&2
   exit 1
 fi
@@ -301,9 +338,8 @@ macos_home_pattern='/'"Users"'/[^[:space:])>]+'
 linux_home_pattern='/'"home"'/[^[:space:])>]+'
 windows_home_pattern='[A-Za-z]:\\'"Users"'\\[^[:space:])>]+'
 workstation_local_path_pattern="(^|[^[:alnum:]_./-])(~[/\\\\]|${macos_home_pattern}|${linux_home_pattern}|${windows_home_pattern})"
-decoded_inventory_text="$(perl -0pe 's/%([0-9A-Fa-f]{2})/chr(hex($1))/eg' "${absolute_doc_path}")"
 
-if grep -Eq "${workstation_local_path_pattern}" <<<"${decoded_inventory_text}"; then
+if grep -Eq "${workstation_local_path_pattern}" <<<"${decoded_boundary_text}"; then
   echo "Forbidden Phase 65.1 release bundle inventory absolute path usage detected" >&2
   exit 1
 fi
