@@ -665,6 +665,13 @@ printf '%s\n' \
   >>"${negated_boundary_claims_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_passes "${negated_boundary_claims_repo}"
 
+positive_after_negated_boundary_repo="${workdir}/positive-after-negated-boundary"
+copy_valid_repo "${positive_after_negated_boundary_repo}"
+printf '%s\n' "Verifier output is not readiness truth, but it is release truth." >>"${positive_after_negated_boundary_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${positive_after_negated_boundary_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: positive claim after negated boundary"
+
 verifier_truth_repo="${workdir}/verifier-truth"
 copy_valid_repo "${verifier_truth_repo}"
 printf '%s\n' "Verifier output is readiness truth." >>"${verifier_truth_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -826,6 +833,13 @@ assert_fails_with \
   "${definite_inventory_substitute_evidence_repo}" \
   "substitute evidence assertion"
 
+release_bundle_substitute_evidence_repo="${workdir}/release-bundle-substitute-evidence"
+copy_valid_repo "${release_bundle_substitute_evidence_repo}"
+printf '%s\n' "The release bundle is substitute evidence for the Phase 51.3 gate contract." >>"${release_bundle_substitute_evidence_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${release_bundle_substitute_evidence_repo}" \
+  "substitute evidence assertion"
+
 workflow_authority_repo="${workdir}/workflow-authority"
 copy_valid_repo "${workflow_authority_repo}"
 printf '%s\n' "Release bundle inventory is workflow authority." >>"${workflow_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -838,6 +852,13 @@ copy_valid_repo "${definite_inventory_authority_repo}"
 printf '%s\n' "The inventory is release gate authority." >>"${definite_inventory_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${definite_inventory_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+artifact_presence_authority_repo="${workdir}/artifact-presence-authority"
+copy_valid_repo "${artifact_presence_authority_repo}"
+printf '%s\n' "Artifact presence is release gate authority." >>"${artifact_presence_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${artifact_presence_authority_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
 
 release_bundle_authority_repo="${workdir}/release-bundle-authority"
