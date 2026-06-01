@@ -45,12 +45,13 @@ assert_fails_with() {
 copy_valid_repo() {
   local target="$1"
 
-  mkdir -p "${target}/docs" "${target}/scripts" "${target}/control-plane/aegisops/control_plane"
+  mkdir -p "${target}/docs/deployment" "${target}/scripts" "${target}/control-plane/aegisops/control_plane"
   cp "${repo_root}/README.md" "${target}/README.md"
   cp "${repo_root}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "${target}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
   cp "${repo_root}/docs/phase-51-5-competitive-gap-matrix.md" "${target}/docs/phase-51-5-competitive-gap-matrix.md"
   cp "${repo_root}/docs/phase-64-closeout-evaluation.md" "${target}/docs/phase-64-closeout-evaluation.md"
   cp "${repo_root}/docs/phase-65-1-release-bundle-inventory.md" "${target}/docs/phase-65-1-release-bundle-inventory.md"
+  cp "${repo_root}/docs/deployment/single-customer-release-bundle-inventory.md" "${target}/docs/deployment/single-customer-release-bundle-inventory.md"
   cp "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${target}/scripts/verify-publishable-path-hygiene.sh"
   : >"${target}/control-plane/aegisops/__init__.py"
   : >"${target}/control-plane/aegisops/control_plane/__init__.py"
@@ -97,6 +98,13 @@ perl -0pi -e 's/- \[Phase 65\.1 release bundle inventory\]\(docs\/phase-65-1-rel
 assert_fails_with \
   "${missing_readme_repo}" \
   "Missing README canonical cross-phase boundary bullet"
+
+missing_deployment_inventory_repo="${workdir}/missing-deployment-inventory"
+copy_valid_repo "${missing_deployment_inventory_repo}"
+rm "${missing_deployment_inventory_repo}/docs/deployment/single-customer-release-bundle-inventory.md"
+assert_fails_with \
+  "${missing_deployment_inventory_repo}" \
+  "Missing single-customer release bundle inventory baseline"
 
 missing_version_repo="${workdir}/missing-version"
 copy_valid_repo "${missing_version_repo}"
@@ -164,6 +172,13 @@ assert_fails_with \
   "${missing_extended_exclusion_repo}" \
   "Missing required Phase 65.1 inventory term"
 
+missing_sbom_exclusion_repo="${workdir}/missing-sbom-exclusion"
+copy_valid_repo "${missing_sbom_exclusion_repo}"
+remove_doc_text "${missing_sbom_exclusion_repo}" "SBOM generation, checksum generation, or signing implementation;"
+assert_fails_with \
+  "${missing_sbom_exclusion_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
 unbound_version_repo="${workdir}/unbound-version"
 copy_valid_repo "${unbound_version_repo}"
 replace_doc_text \
@@ -202,6 +217,41 @@ printf '%s\n' "Phase 65.1 is GA ready." >>"${direct_ga_ready_repo}/docs/phase-65
 assert_fails_with \
   "${direct_ga_ready_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: phase 65.1 is ga ready"
+
+hyphenated_rc_ready_repo="${workdir}/hyphenated-rc-ready"
+copy_valid_repo "${hyphenated_rc_ready_repo}"
+printf '%s\n' "Phase 65.1 is RC-ready." >>"${hyphenated_rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${hyphenated_rc_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+hyphenated_ga_ready_repo="${workdir}/hyphenated-ga-ready"
+copy_valid_repo "${hyphenated_ga_ready_repo}"
+printf '%s\n' "Phase 65.1 is GA-ready." >>"${hyphenated_ga_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${hyphenated_ga_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+combined_rc_ga_ready_repo="${workdir}/combined-rc-ga-ready"
+copy_valid_repo "${combined_rc_ga_ready_repo}"
+printf '%s\n' "Phase 65.1 is RC/GA ready." >>"${combined_rc_ga_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${combined_rc_ga_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+hosted_update_ready_repo="${workdir}/hosted-update-ready"
+copy_valid_repo "${hosted_update_ready_repo}"
+printf '%s\n' "This inventory establishes hosted update service readiness." >>"${hosted_update_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${hosted_update_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
+
+billing_ready_repo="${workdir}/billing-ready"
+copy_valid_repo "${billing_ready_repo}"
+printf '%s\n' "Phase 65.1 proves billing readiness." >>"${billing_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${billing_ready_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
 
 verifier_truth_repo="${workdir}/verifier-truth"
 copy_valid_repo "${verifier_truth_repo}"

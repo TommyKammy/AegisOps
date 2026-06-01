@@ -11,6 +11,7 @@ readme_path="${repo_root}/README.md"
 phase51_gate_path="${repo_root}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
 phase51_gap_path="${repo_root}/docs/phase-51-5-competitive-gap-matrix.md"
 phase64_closeout_path="${repo_root}/docs/phase-64-closeout-evaluation.md"
+deployment_inventory_path="${repo_root}/docs/deployment/single-customer-release-bundle-inventory.md"
 
 require_file() {
   local path="$1"
@@ -44,6 +45,7 @@ require_file "${readme_path}" "README for Phase 65.1 inventory link check"
 require_file "${phase51_gate_path}" "Phase 51.3 gate contract"
 require_file "${phase51_gap_path}" "Phase 51.5 competitive gap matrix"
 require_file "${phase64_closeout_path}" "Phase 64 closeout evaluation"
+require_file "${deployment_inventory_path}" "single-customer release bundle inventory baseline"
 
 require_phrase "${readme_path}" "- [Phase 65.1 release bundle inventory](docs/phase-65-1-release-bundle-inventory.md)" "README canonical cross-phase boundary bullet"
 
@@ -154,6 +156,30 @@ normalized_visible_text="$(visible_markdown_text "${absolute_doc_path}" | tr '\n
 for claim in "${forbidden_claims[@]}"; do
   if [[ "${normalized_visible_text}" == *"${claim}"* ]]; then
     echo "Forbidden Phase 65.1 release bundle inventory claim: ${claim}" >&2
+    exit 1
+  fi
+done
+
+direct_readiness_claim_patterns=(
+  "phase 65[.]1[[:space:]-]+(is|proves|passes|satisfies)[[:space:]-]+rc[[:space:]-]*(ready|readiness)"
+  "phase 65[.]1[[:space:]-]+(is|proves|passes|satisfies)[[:space:]-]+ga[[:space:]-]*(ready|readiness)"
+  "phase 65[.]1[[:space:]-]+(is|proves|passes|satisfies)[[:space:]-]+rc/ga[[:space:]-]*(ready|readiness)"
+)
+
+for claim_pattern in "${direct_readiness_claim_patterns[@]}"; do
+  if [[ "${normalized_visible_text}" =~ ${claim_pattern} ]]; then
+    echo "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion" >&2
+    exit 1
+  fi
+done
+
+excluded_scope_readiness_claim_patterns=(
+  "(this inventory|phase 65[.]1|release bundle inventory)[[:space:]-]+(establishes|proves|claims|satisfies|approves|creates)[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|sbom|checksum|signing|licensing|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement)[[:space:]-]+(readiness|ready|approval|approved|completeness|complete|implementation|implemented|enforcement)"
+)
+
+for claim_pattern in "${excluded_scope_readiness_claim_patterns[@]}"; do
+  if [[ "${normalized_visible_text}" =~ ${claim_pattern} ]]; then
+    echo "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion" >&2
     exit 1
   fi
 done
