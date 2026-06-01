@@ -55,11 +55,13 @@ done <<'EOF_PHRASE'
 **Status**: Accepted as the Phase 65 beta/design-partner bundle inventory contract before offline packaging, hosted release metadata, SBOM/signing, licensing, migration, template, RC, GA, and commercial replacement claims.
 The inventory identifier is `phase-65-release-bundle-inventory-v1`.
 release bundle identifier in the form `aegisops-beta-<repository-revision>`;
+repository revision or reviewed tag;
 artifact-set owner;
 per-artifact owner;
 evidence reference for every required artifact class;
 verifier output reference;
 explicit exclusion review reference;
+issue or change record that approved the bundle for beta/design-partner packaging review.
 The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct, and Phase 66 remains RC while Phase 67 remains GA.
 The inventory preserves Phase 64 limitation ownership: known limitation records, mitigation posture, handoff notes, verifier output, issue-lint output, UI text, readiness projections, and AI summaries remain subordinate planning evidence only.
 AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth.
@@ -161,7 +163,7 @@ if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH
   exit 1
 fi
 
-if grep -Eiq -- 'customer-private[[:space:]]+[^[:space:];:=]+[[:space:]]*[:=][[:space:]]*[^[:space:]]+' "${absolute_doc_path}"; then
+if grep -Eiq -- 'customer-private([[:space:]]+[^[:space:];:=]+)?[[:space:]]*[:=][[:space:]]*[^[:space:]]+' "${absolute_doc_path}"; then
   echo "Forbidden Phase 65.1 release bundle inventory: customer-private data detected" >&2
   exit 1
 fi

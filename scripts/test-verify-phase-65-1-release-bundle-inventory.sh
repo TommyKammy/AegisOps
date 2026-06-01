@@ -126,6 +126,20 @@ assert_fails_with \
   "${missing_evidence_repo}" \
   "Missing required Phase 65.1 inventory term"
 
+missing_revision_binding_repo="${workdir}/missing-revision-binding"
+copy_valid_repo "${missing_revision_binding_repo}"
+remove_doc_text "${missing_revision_binding_repo}" "repository revision or reviewed tag;"
+assert_fails_with \
+  "${missing_revision_binding_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
+missing_approval_binding_repo="${workdir}/missing-approval-binding"
+copy_valid_repo "${missing_approval_binding_repo}"
+remove_doc_text "${missing_approval_binding_repo}" "issue or change record that approved the bundle for beta/design-partner packaging review."
+assert_fails_with \
+  "${missing_approval_binding_repo}" \
+  "Missing required Phase 65.1 inventory term"
+
 missing_row_evidence_repo="${workdir}/missing-row-evidence"
 copy_valid_repo "${missing_row_evidence_repo}"
 replace_doc_text \
@@ -229,6 +243,13 @@ copy_valid_repo "${customer_private_repo}"
 printf '%s\n' "customer-private data: Acme incident payload" >>"${customer_private_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${customer_private_repo}" \
+  "customer-private data detected"
+
+bare_customer_private_repo="${workdir}/bare-customer-private"
+copy_valid_repo "${bare_customer_private_repo}"
+printf '%s\n' "customer-private: Acme incident payload" >>"${bare_customer_private_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${bare_customer_private_repo}" \
   "customer-private data detected"
 
 customer_private_incident_repo="${workdir}/customer-private-incident"
