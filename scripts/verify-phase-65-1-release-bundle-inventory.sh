@@ -47,6 +47,12 @@ require_file "${phase51_gap_path}" "Phase 51.5 competitive gap matrix"
 require_file "${phase64_closeout_path}" "Phase 64 closeout evaluation"
 require_file "${deployment_inventory_path}" "single-customer release bundle inventory baseline"
 
+if ! phase51_gate_output="$(bash "${repo_root}/scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh" "${repo_root}" 2>&1)"; then
+  printf '%s\n' "${phase51_gate_output}" >&2
+  echo "Phase 65.1 inherited Phase 51.3 gate verifier failed" >&2
+  exit 1
+fi
+
 require_phrase "${readme_path}" "- [Phase 65.1 release bundle inventory](docs/phase-65-1-release-bundle-inventory.md)" "README canonical cross-phase boundary bullet"
 
 required_phrases=()
@@ -157,7 +163,12 @@ forbidden_claims=(
   "issue-lint output is release truth"
 )
 
-normalized_visible_text="$(visible_markdown_text "${absolute_doc_path}" | tr '\n' ' ' | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+/ /g')"
+normalized_visible_text="$(
+  {
+    visible_markdown_text "${absolute_doc_path}"
+    visible_markdown_text "${readme_path}"
+  } | tr '\n' ' ' | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+/ /g'
+)"
 
 for claim in "${forbidden_claims[@]}"; do
   if [[ "${normalized_visible_text}" == *"${claim}"* ]]; then
@@ -167,12 +178,20 @@ for claim in "${forbidden_claims[@]}"; do
 done
 
 direct_readiness_claim_patterns=(
+  "(^|[^[:alpha:]])(proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+rc[[:space:]-]*(ready|readiness|gate|gates|gate acceptance|gate pass)"
+  "(^|[^[:alpha:]])(proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+ga[[:space:]-]*(ready|readiness|gate|gates|gate acceptance|gate pass)"
   "phase 65[.]1[[:space:]-]+(is|proves|passes|satisfies)[[:space:]-]+rc[[:space:]-]*(ready|readiness)"
   "phase 65[.]1[[:space:]-]+(is|proves|passes|satisfies)[[:space:]-]+ga[[:space:]-]*(ready|readiness)"
   "phase 65[.]1[[:space:]-]+(is|proves|passes|satisfies)[[:space:]-]+rc/ga[[:space:]-]*(ready|readiness)"
+  "phase 65[.]1[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
+  "phase 65[.]1[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
+  "phase 65[.]1[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc/ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
   "(this inventory|release bundle inventory)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+rc[[:space:]-]*(ready|readiness)"
   "(this inventory|release bundle inventory)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+ga[[:space:]-]*(ready|readiness)"
   "(this inventory|release bundle inventory)[[:space:]-]+(is|proves|passes|satisfies|establishes|claims|approves|creates)[[:space:]-]+rc/ga[[:space:]-]*(ready|readiness)"
+  "(this inventory|release bundle inventory)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
+  "(this inventory|release bundle inventory)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
+  "(this inventory|release bundle inventory)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc/ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
 )
 
 for claim_pattern in "${direct_readiness_claim_patterns[@]}"; do
@@ -183,12 +202,23 @@ for claim_pattern in "${direct_readiness_claim_patterns[@]}"; do
 done
 
 excluded_scope_readiness_claim_patterns=(
-  "(this inventory|phase 65[.]1|release bundle inventory)[[:space:]-]+(establishes|proves|claims|satisfies|approves|creates)[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|sbom|checksum|signing|licensing|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement)[[:space:]-]+(readiness|ready|approval|approved|completeness|complete|implementation|implemented|enforcement|behavior)"
+  "(this inventory|phase 65[.]1|release bundle inventory)[[:space:]-]+(establishes|proves|claims|satisfies|approves|creates)[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|sbom|checksum|signing|licensing|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement)[[:space:]-]+(readiness|ready|approval|approved|completeness|complete|implementation|implemented|enforcement|behavior|generation|packaging|guide|template)"
 )
 
 for claim_pattern in "${excluded_scope_readiness_claim_patterns[@]}"; do
   if [[ "${normalized_visible_text}" =~ ${claim_pattern} ]]; then
     echo "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion" >&2
+    exit 1
+  fi
+done
+
+authority_claim_patterns=(
+  "(this inventory|release bundle inventory)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates)[[:space:]-]+(workflow|support|release gate|rc gate|ga gate|entitlement|billing|runtime execution|release|gate)[[:space:]-]+authority"
+)
+
+for claim_pattern in "${authority_claim_patterns[@]}"; do
+  if [[ "${normalized_visible_text}" =~ ${claim_pattern} ]]; then
+    echo "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion" >&2
     exit 1
   fi
 done

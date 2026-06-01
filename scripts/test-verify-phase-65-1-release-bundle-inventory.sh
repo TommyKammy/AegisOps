@@ -52,6 +52,7 @@ copy_valid_repo() {
   cp "${repo_root}/docs/phase-64-closeout-evaluation.md" "${target}/docs/phase-64-closeout-evaluation.md"
   cp "${repo_root}/docs/phase-65-1-release-bundle-inventory.md" "${target}/docs/phase-65-1-release-bundle-inventory.md"
   cp "${repo_root}/docs/deployment/single-customer-release-bundle-inventory.md" "${target}/docs/deployment/single-customer-release-bundle-inventory.md"
+  cp "${repo_root}/scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh" "${target}/scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh"
   cp "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${target}/scripts/verify-publishable-path-hygiene.sh"
   : >"${target}/control-plane/aegisops/__init__.py"
   : >"${target}/control-plane/aegisops/control_plane/__init__.py"
@@ -98,6 +99,21 @@ perl -0pi -e 's/- \[Phase 65\.1 release bundle inventory\]\(docs\/phase-65-1-rel
 assert_fails_with \
   "${missing_readme_repo}" \
   "Missing README canonical cross-phase boundary bullet"
+
+readme_overclaim_repo="${workdir}/readme-overclaim"
+copy_valid_repo "${readme_overclaim_repo}"
+perl -0pi -e 's/(- \[Phase 65\.1 release bundle inventory\]\(docs\/phase-65-1-release-bundle-inventory\.md\)[^\n]*)/$1 and proves GA readiness./m' \
+  "${readme_overclaim_repo}/README.md"
+assert_fails_with \
+  "${readme_overclaim_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+invalid_phase51_gate_repo="${workdir}/invalid-phase51-gate"
+copy_valid_repo "${invalid_phase51_gate_repo}"
+printf '%s\n' "x" >"${invalid_phase51_gate_repo}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+assert_fails_with \
+  "${invalid_phase51_gate_repo}" \
+  "Phase 65.1 inherited Phase 51.3 gate verifier failed"
 
 missing_deployment_inventory_repo="${workdir}/missing-deployment-inventory"
 copy_valid_repo "${missing_deployment_inventory_repo}"
@@ -254,6 +270,13 @@ assert_fails_with \
   "${combined_rc_ga_ready_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
 
+rc_gate_pass_repo="${workdir}/rc-gate-pass"
+copy_valid_repo "${rc_gate_pass_repo}"
+printf '%s\n' "Phase 65.1 passes RC gates." >>"${rc_gate_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${rc_gate_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
 inventory_subject_rc_ready_repo="${workdir}/inventory-subject-rc-ready"
 copy_valid_repo "${inventory_subject_rc_ready_repo}"
 printf '%s\n' "This inventory proves RC readiness." >>"${inventory_subject_rc_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -273,6 +296,13 @@ copy_valid_repo "${hosted_update_behavior_repo}"
 printf '%s\n' "This inventory creates hosted update service behavior." >>"${hosted_update_behavior_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${hosted_update_behavior_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
+
+sbom_generation_repo="${workdir}/sbom-generation"
+copy_valid_repo "${sbom_generation_repo}"
+printf '%s\n' "This inventory approves SBOM generation." >>"${sbom_generation_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${sbom_generation_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: excluded-scope readiness assertion"
 
 billing_ready_repo="${workdir}/billing-ready"
@@ -309,6 +339,13 @@ printf '%s\n' "Issue-lint output is limitation truth." >>"${limitation_truth_rep
 assert_fails_with \
   "${limitation_truth_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+workflow_authority_repo="${workdir}/workflow-authority"
+copy_valid_repo "${workflow_authority_repo}"
+printf '%s\n' "Release bundle inventory is workflow authority." >>"${workflow_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${workflow_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
 
 secret_repo="${workdir}/secret"
 copy_valid_repo "${secret_repo}"
