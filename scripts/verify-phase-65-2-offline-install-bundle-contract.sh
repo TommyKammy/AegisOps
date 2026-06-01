@@ -69,6 +69,65 @@ require_phrase() {
   fi
 }
 
+manifest_value() {
+  local file="$1"
+  local label="$2"
+
+  perl -Mstrict -Mwarnings -e '
+    my $label = shift @ARGV;
+    while (my $line = <>) {
+      if ($line =~ /^\s*\Q$label\E\s*:\s*(.*?)\s*$/i) {
+        print "$1\n";
+        last;
+      }
+    }
+  ' "${label}" "${file}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
+}
+
+is_placeholder_value() {
+  local value="$1"
+  local normalized_value
+
+  normalized_value="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+  [[ -z "${normalized_value}" || "${normalized_value}" =~ ^(<[^>]+>|todo|tbd|none|n/a|na|placeholder|sample|example|changeme|change-me|replace-me)$ ]]
+}
+
+require_manifest_value() {
+  local manifest="$1"
+  local label="$2"
+  local value
+
+  value="$(manifest_value "${manifest}" "${label}")"
+  if is_placeholder_value "${value}"; then
+    echo "Missing offline install bundle metadata value: ${label}" >&2
+    exit 1
+  fi
+
+  printf '%s' "${value}"
+}
+
+require_bundle_file_pattern() {
+  local bundle_root="$1"
+  local relative_path="$2"
+  local pattern="$3"
+  local description="$4"
+
+  if ! grep -Eiq -- "${pattern}" "${bundle_root}/${relative_path}"; then
+    echo "Missing offline install bundle artifact content in ${relative_path}: ${description}" >&2
+    exit 1
+  fi
+}
+
+require_bundle_doc_matches_repo() {
+  local bundle_root="$1"
+  local relative_path="$2"
+
+  if ! cmp -s "${repo_root}/${relative_path}" "${bundle_root}/${relative_path}"; then
+    echo "Invalid offline install bundle inherited document content: ${relative_path}" >&2
+    exit 1
+  fi
+}
+
 markdown_section_text() {
   local file="$1"
   local heading="$2"
@@ -120,12 +179,29 @@ scan_forbidden_text() {
     exit 1
   fi
 
+  if ! printf '%s' "${decoded_text}" | perl -0ne '
+    while (/([^.?!;\n]*(?:(?:placeholder|sample|fake|todo)[^.?!;\n]*(?:secret|credential|password|token|api[ -]?key)|(?:secret|credential|password|token|api[ -]?key)[^.?!;\n]*(?:placeholder|sample|fake|todo))[^.?!;\n]*(?:are|is|count as|counts as|may be|can be|remain|stays|accepted as|allowed as)[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential)[^.?!;\n]*)[.?!;\n]/ig) {
+      my $claim = lc $1;
+      next if $claim =~ /(must reject|must not|cannot|can not|do not|does not|invalid|must fail|not be)/;
+      next if $claim =~ /treated as valid/;
+      exit 1;
+    }
+  '; then
+    echo "Forbidden ${description}: placeholder credentials accepted as valid auth detected" >&2
+    exit 1
+  fi
+
   if grep -Eiq -- '(customer-private|customer private|customer-confidential|customer confidential)[[:space:]-]+(data|payload|record|records)[[:space:]-]+(included|packaged|present|bundled|provided)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: customer-private data claim detected" >&2
     exit 1
   fi
 
-  if grep -Eiq -- '(hidden hosted dependency|hosted update service|network update service|silent update|silent auto-upgrade|silent auto upgrade|production installer|production entitlement enforcement|commercial billing)[[:space:]-]+(is[[:space:]-]+)?(enabled|implemented|included|available|ready|required|assumed|approved)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(hidden hosted dependency|hosted update service|network update service|silent update|silent auto-upgrade|silent auto upgrade|production installer([[:space:]-]+(behavior|completeness))?|production entitlement enforcement|commercial billing)[[:space:]-]+(is[[:space:]-]+)?(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered)' <<<"${claim_scan_text}"; then
+    echo "Forbidden ${description}: hosted, silent update, production installer, entitlement, or billing claim detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(provides|delivers|establishes|proves|satisfies|includes|contains)[^.?!;]*(production installer|production installer completeness|hosted update service|silent auto-upgrade|silent auto upgrade|production entitlement enforcement|commercial billing)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: hosted, silent update, production installer, entitlement, or billing claim detected" >&2
     exit 1
   fi
@@ -298,24 +374,89 @@ if [[ -n "${bundle_dir}" ]]; then
   done
 
   bundle_manifest="${bundle_dir}/BUNDLE-MANIFEST.md"
-  required_manifest_phrases=(
-    "contract identifier: phase-65-offline-install-bundle-contract-v1"
-    "inventory identifier: phase-65-release-bundle-inventory-v1"
-    "release bundle identifier: aegisops-beta-<repository-revision>"
-    "repository revision: <repository-revision>"
-    "bundle owner:"
-    "per-artifact owner:"
-    "bundle creation timestamp:"
-    "environment assumption: offline-beta-design-partner"
-    "exclusion review:"
-    "verifier output: bash scripts/verify-phase-65-2-offline-install-bundle-contract.sh --bundle-dir <release-bundle-dir>"
+  contract_identifier="$(require_manifest_value "${bundle_manifest}" "contract identifier")"
+  inventory_identifier="$(require_manifest_value "${bundle_manifest}" "inventory identifier")"
+  release_bundle_identifier="$(require_manifest_value "${bundle_manifest}" "release bundle identifier")"
+  repository_revision="$(require_manifest_value "${bundle_manifest}" "repository revision")"
+  bundle_owner="$(require_manifest_value "${bundle_manifest}" "bundle owner")"
+  per_artifact_owner="$(require_manifest_value "${bundle_manifest}" "per-artifact owner")"
+  bundle_creation_timestamp="$(require_manifest_value "${bundle_manifest}" "bundle creation timestamp")"
+  environment_assumption="$(require_manifest_value "${bundle_manifest}" "environment assumption")"
+  required_artifact_manifest_path="$(require_manifest_value "${bundle_manifest}" "required artifact manifest path")"
+  exclusion_review="$(require_manifest_value "${bundle_manifest}" "exclusion review")"
+  verifier_output="$(require_manifest_value "${bundle_manifest}" "verifier output")"
+
+  if [[ "${contract_identifier}" != "phase-65-offline-install-bundle-contract-v1" ]]; then
+    echo "Invalid offline install bundle contract identifier: ${contract_identifier}" >&2
+    exit 1
+  fi
+
+  if [[ "${inventory_identifier}" != "phase-65-release-bundle-inventory-v1" ]]; then
+    echo "Invalid offline install bundle inventory identifier: ${inventory_identifier}" >&2
+    exit 1
+  fi
+
+  placeholder_marker_pattern='<[^>]+>'
+  if [[ "${release_bundle_identifier}" =~ ${placeholder_marker_pattern} || ! "${release_bundle_identifier}" =~ ^aegisops-beta-[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    echo "Invalid offline install bundle release identifier: ${release_bundle_identifier}" >&2
+    exit 1
+  fi
+
+  if [[ "${repository_revision}" =~ ${placeholder_marker_pattern} || ! "${repository_revision}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    echo "Invalid offline install bundle repository revision: ${repository_revision}" >&2
+    exit 1
+  fi
+
+  if [[ "${release_bundle_identifier}" != "aegisops-beta-${repository_revision}" ]]; then
+    echo "Invalid offline install bundle release binding: ${release_bundle_identifier} does not match repository revision ${repository_revision}" >&2
+    exit 1
+  fi
+
+  if [[ ! "${bundle_creation_timestamp}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?Z$ ]]; then
+    echo "Invalid offline install bundle creation timestamp: ${bundle_creation_timestamp}" >&2
+    exit 1
+  fi
+
+  if [[ "${environment_assumption}" != "offline-beta-design-partner" ]]; then
+    echo "Invalid offline install bundle environment assumption: ${environment_assumption}" >&2
+    exit 1
+  fi
+
+  if [[ "${required_artifact_manifest_path}" != "BUNDLE-MANIFEST.md" ]]; then
+    echo "Invalid offline install bundle required artifact manifest path: ${required_artifact_manifest_path}" >&2
+    exit 1
+  fi
+
+  if [[ "${verifier_output}" != *"bash scripts/verify-phase-65-2-offline-install-bundle-contract.sh --bundle-dir"* ]]; then
+    echo "Invalid offline install bundle verifier output reference: ${verifier_output}" >&2
+    exit 1
+  fi
+
+  if [[ -z "${bundle_owner}" || -z "${per_artifact_owner}" || -z "${exclusion_review}" ]]; then
+    echo "Missing offline install bundle metadata value: owner or exclusion review" >&2
+    exit 1
+  fi
+
+  require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'offline[[:space:]-]+install' "offline install entry guidance"
+  require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command)' "install entry command"
+  require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(selected[[:space:]-]+profile|profile)' "selected profile"
+  require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)' "dependency assumptions and manual prerequisites"
+  require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" 'docs/deployment/env-secrets-certs-contract[.]md' "secret-source contract citation"
+  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "release bundle identifier:[[:space:]]*${release_bundle_identifier}" "matching release bundle identifier"
+  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "repository revision:[[:space:]]*${repository_revision}" "matching repository revision"
+
+  bundled_repo_docs=(
+    "docs/phase-65-2-offline-install-bundle-contract.md"
+    "docs/phase-65-1-release-bundle-inventory.md"
+    "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+    "docs/deployment/first-user-stack.md"
+    "docs/deployment/host-preflight-contract.md"
+    "docs/deployment/clean-host-smoke-skeleton.md"
+    "docs/runbook.md"
   )
 
-  for manifest_phrase in "${required_manifest_phrases[@]}"; do
-    if ! grep -Fq -- "${manifest_phrase}" "${bundle_manifest}"; then
-      echo "Missing offline install bundle metadata: ${manifest_phrase}" >&2
-      exit 1
-    fi
+  for bundled_repo_doc in "${bundled_repo_docs[@]}"; do
+    require_bundle_doc_matches_repo "${bundle_dir}" "${bundled_repo_doc}"
   done
 
   bundle_scan_files=()

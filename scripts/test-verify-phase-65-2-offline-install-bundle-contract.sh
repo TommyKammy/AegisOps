@@ -78,12 +78,13 @@ create_valid_bundle() {
 
 contract identifier: phase-65-offline-install-bundle-contract-v1
 inventory identifier: phase-65-release-bundle-inventory-v1
-release bundle identifier: aegisops-beta-<repository-revision>
-repository revision: <repository-revision>
+release bundle identifier: aegisops-beta-cea7db232373
+repository revision: cea7db232373
 bundle owner: AegisOps maintainers
 per-artifact owner: Platform maintainers
-bundle creation timestamp: <bundle-created-at>
+bundle creation timestamp: 2026-06-02T00:00:00Z
 environment assumption: offline-beta-design-partner
+required artifact manifest path: BUNDLE-MANIFEST.md
 exclusion review: no workstation-local paths, production secrets, customer-private data, hidden hosted dependency, hosted update service, silent update, production installer, entitlement, billing, RC pass, or GA pass claims.
 verifier output: bash scripts/verify-phase-65-2-offline-install-bundle-contract.sh --bundle-dir <release-bundle-dir>
 EOF_MANIFEST
@@ -91,8 +92,8 @@ EOF_MANIFEST
   cat >"${target}/install/README.md" <<'EOF_INSTALL'
 # Offline Install Entry
 
-Run the reviewed install entrypoint from the release bundle root after host preflight passes.
-Use repo-relative guidance and retain output under <evidence-dir>.
+Run the reviewed offline install entrypoint from the release bundle root after host preflight passes.
+Use the selected profile `smb-single-node`, keep dependency assumptions explicit, complete manual prerequisites, and retain output under <evidence-dir>.
 EOF_INSTALL
 
   cat >"${target}/config/runtime.env.sample" <<'EOF_ENV'
@@ -100,12 +101,13 @@ EOF_INSTALL
 
 AEGISOPS_PROFILE=smb-single-node
 AEGISOPS_RUNTIME_ENV=<runtime-env-file>
+AEGISOPS_SECRET_SOURCE_DOC=docs/deployment/env-secrets-certs-contract.md
 # Secrets must come from trusted local custody and must not be embedded here.
 EOF_ENV
 
   cat >"${target}/evidence/install-preflight-output.txt" <<'EOF_EVIDENCE'
-release bundle identifier: aegisops-beta-<repository-revision>
-repository revision: <repository-revision>
+release bundle identifier: aegisops-beta-cea7db232373
+repository revision: cea7db232373
 preflight output: retained placeholder for beta/design-partner packaging review.
 EOF_EVIDENCE
 
@@ -167,6 +169,16 @@ create_valid_repo "${hosted_update_repo}"
 printf '%s\n' "Hosted update service is enabled by this bundle." >>"${hosted_update_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --repo-root "${hosted_update_repo}"
 
+placeholder_credential_repo="${workdir}/placeholder-credential"
+create_valid_repo "${placeholder_credential_repo}"
+printf '%s\n' "Placeholder credentials are valid auth for beta install." >>"${placeholder_credential_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "placeholder credentials accepted as valid auth" --repo-root "${placeholder_credential_repo}"
+
+production_installer_repo="${workdir}/production-installer"
+create_valid_repo "${production_installer_repo}"
+printf '%s\n' "This bundle provides production installer completeness." >>"${production_installer_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --repo-root "${production_installer_repo}"
+
 rc_claim_repo="${workdir}/rc-claim"
 create_valid_repo "${rc_claim_repo}"
 printf '%s\n' "Offline install bundle proves RC readiness." >>"${rc_claim_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
@@ -179,12 +191,52 @@ assert_passes --bundle-dir "${valid_bundle}"
 missing_bundle_metadata="${workdir}/missing-bundle-metadata"
 create_valid_bundle "${missing_bundle_metadata}"
 perl -0pi -e 's/^bundle creation timestamp:.*\n//m' "${missing_bundle_metadata}/BUNDLE-MANIFEST.md"
-assert_fails_with "Missing offline install bundle metadata: bundle creation timestamp:" --bundle-dir "${missing_bundle_metadata}"
+assert_fails_with "Missing offline install bundle metadata value: bundle creation timestamp" --bundle-dir "${missing_bundle_metadata}"
+
+blank_bundle_owner="${workdir}/blank-bundle-owner"
+create_valid_bundle "${blank_bundle_owner}"
+perl -0pi -e 's/^bundle owner:.*$/bundle owner: /m' "${blank_bundle_owner}/BUNDLE-MANIFEST.md"
+assert_fails_with "Missing offline install bundle metadata value: bundle owner" --bundle-dir "${blank_bundle_owner}"
+
+placeholder_bundle_revision="${workdir}/placeholder-bundle-revision"
+create_valid_bundle "${placeholder_bundle_revision}"
+perl -0pi -e 's/^release bundle identifier:.*$/release bundle identifier: aegisops-beta-<repository-revision>/m' "${placeholder_bundle_revision}/BUNDLE-MANIFEST.md"
+assert_fails_with "Invalid offline install bundle release identifier" --bundle-dir "${placeholder_bundle_revision}"
+
+placeholder_repository_revision="${workdir}/placeholder-repository-revision"
+create_valid_bundle "${placeholder_repository_revision}"
+perl -0pi -e 's/^repository revision:.*$/repository revision: <repository-revision>/m' "${placeholder_repository_revision}/BUNDLE-MANIFEST.md"
+assert_fails_with "Missing offline install bundle metadata value: repository revision" --bundle-dir "${placeholder_repository_revision}"
+
+mismatched_bundle_revision="${workdir}/mismatched-bundle-revision"
+create_valid_bundle "${mismatched_bundle_revision}"
+perl -0pi -e 's/^repository revision:.*$/repository revision: deadbeef1234/m' "${mismatched_bundle_revision}/BUNDLE-MANIFEST.md"
+assert_fails_with "Invalid offline install bundle release binding" --bundle-dir "${mismatched_bundle_revision}"
 
 missing_bundle_artifact="${workdir}/missing-bundle-artifact"
 create_valid_bundle "${missing_bundle_artifact}"
 rm "${missing_bundle_artifact}/config/runtime.env.sample"
 assert_fails_with "Missing offline install bundle required artifact: config/runtime.env.sample" --bundle-dir "${missing_bundle_artifact}"
+
+invalid_install_readme="${workdir}/invalid-install-readme"
+create_valid_bundle "${invalid_install_readme}"
+printf '%s\n' "# Offline Install Entry" "Run it." >"${invalid_install_readme}/install/README.md"
+assert_fails_with "Missing offline install bundle artifact content in install/README.md" --bundle-dir "${invalid_install_readme}"
+
+invalid_runtime_sample="${workdir}/invalid-runtime-sample"
+create_valid_bundle "${invalid_runtime_sample}"
+perl -0pi -e 's/^AEGISOPS_SECRET_SOURCE_DOC=.*\n//m' "${invalid_runtime_sample}/config/runtime.env.sample"
+assert_fails_with "Missing offline install bundle artifact content in config/runtime.env.sample" --bundle-dir "${invalid_runtime_sample}"
+
+invalid_preflight_revision="${workdir}/invalid-preflight-revision"
+create_valid_bundle "${invalid_preflight_revision}"
+perl -0pi -e 's/^repository revision:.*$/repository revision: deadbeef1234/m' "${invalid_preflight_revision}/evidence/install-preflight-output.txt"
+assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching repository revision" --bundle-dir "${invalid_preflight_revision}"
+
+invalid_bundled_inventory="${workdir}/invalid-bundled-inventory"
+create_valid_bundle "${invalid_bundled_inventory}"
+printf '%s\n' "# Invalid Inventory" >"${invalid_bundled_inventory}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with "Invalid offline install bundle inherited document content: docs/phase-65-1-release-bundle-inventory.md" --bundle-dir "${invalid_bundled_inventory}"
 
 bundle_local_path="${workdir}/bundle-local-path"
 create_valid_bundle "${bundle_local_path}"
@@ -195,6 +247,11 @@ bundle_secret="${workdir}/bundle-secret"
 create_valid_bundle "${bundle_secret}"
 printf '%s\n' "password: live-production-password" >>"${bundle_secret}/config/runtime.env.sample"
 assert_fails_with "production secret-looking value" --bundle-dir "${bundle_secret}"
+
+bundle_placeholder_credential="${workdir}/bundle-placeholder-credential"
+create_valid_bundle "${bundle_placeholder_credential}"
+printf '%s\n' "Placeholder credentials are valid auth for bootstrap." >>"${bundle_placeholder_credential}/config/runtime.env.sample"
+assert_fails_with "placeholder credentials accepted as valid auth" --bundle-dir "${bundle_placeholder_credential}"
 
 bundle_customer_private="${workdir}/bundle-customer-private"
 create_valid_bundle "${bundle_customer_private}"
@@ -210,6 +267,11 @@ bundle_silent_update="${workdir}/bundle-silent-update"
 create_valid_bundle "${bundle_silent_update}"
 printf '%s\n' "Silent auto-upgrade is enabled after install." >>"${bundle_silent_update}/install/README.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_silent_update}"
+
+bundle_production_installer="${workdir}/bundle-production-installer"
+create_valid_bundle "${bundle_production_installer}"
+printf '%s\n' "This bundle provides production installer completeness." >>"${bundle_production_installer}/BUNDLE-MANIFEST.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_production_installer}"
 
 bundle_ga_claim="${workdir}/bundle-ga-claim"
 create_valid_bundle "${bundle_ga_claim}"
