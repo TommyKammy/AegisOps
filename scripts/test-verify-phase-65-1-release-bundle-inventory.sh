@@ -379,6 +379,8 @@ assert_fails_with \
 excluded_scope_claims=(
   "entitlement-enforcement|Release bundle inventory creates production entitlement enforcement."
   "release-channel-implementation|This inventory establishes release channel implementation."
+  "billing-is-ready|This inventory is billing ready."
+  "hosted-update-is-ready|Release bundle inventory is hosted update service ready."
   "offline-install-complete|Phase 65.1 claims offline install completeness."
   "checksum-generation|Release bundle inventory approves checksum generation."
   "signing-implementation|This inventory approves signing implementation."
