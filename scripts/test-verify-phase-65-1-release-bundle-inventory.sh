@@ -247,6 +247,17 @@ assert_fails_with \
   "${missing_subordinate_boundary_repo}" \
   "Missing required Phase 65.1 inventory term"
 
+misplaced_subordinate_boundary_repo="${workdir}/misplaced-subordinate-boundary"
+copy_valid_repo "${misplaced_subordinate_boundary_repo}"
+replace_doc_text \
+  "${misplaced_subordinate_boundary_repo}" \
+  "Wazuh, Shuffle, AI, tickets, reports, support notes, dashboards, exports, browser state, UI cache, downstream receipts, release notes, bundle files, verifier output, issue-lint output, and operator-facing summaries cannot satisfy RC gates, GA gates, workflow truth, limitation truth, release truth, or readiness truth by themselves." \
+  ""
+printf '%s\n' "Detached evidence note: Wazuh, Shuffle, AI, tickets, reports, support notes, dashboards, exports, browser state, UI cache, downstream receipts, release notes, bundle files, verifier output, issue-lint output, and operator-facing summaries cannot satisfy RC gates, GA gates, workflow truth, limitation truth, release truth, or readiness truth by themselves." >>"${misplaced_subordinate_boundary_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${misplaced_subordinate_boundary_repo}" \
+  "Missing Phase 65.1 evidence and authority boundary term in Evidence section"
+
 missing_version_repo="${workdir}/missing-version"
 copy_valid_repo "${missing_version_repo}"
 remove_doc_text "${missing_version_repo}" "The inventory identifier is \`phase-65-release-bundle-inventory-v1\`."
@@ -353,6 +364,18 @@ printf '%s\n' "Detached verifier note: The verifier must reject missing version 
 assert_fails_with \
   "${misplaced_verifier_coverage_repo}" \
   "Missing Phase 65.1 verification coverage term in Verification section"
+
+misplaced_non_claim_repo="${workdir}/misplaced-non-claim"
+copy_valid_repo "${misplaced_non_claim_repo}"
+replace_doc_text \
+  "${misplaced_non_claim_repo}" \
+  "This inventory does not claim Phase 66 RC readiness, Phase 67 GA readiness, self-service commercial readiness, commercial replacement readiness, production entitlement enforcement, hosted update service readiness, billing readiness, release-channel readiness, offline install completeness, SBOM completeness, checksum completeness, signing completeness, licensing approval, migration readiness, beta template completeness, or design-partner evidence completeness." \
+  ""
+perl -0pi -e 's/(## 4\. Explicit Exclusions)/Detached non-claim note: This inventory does not claim Phase 66 RC readiness, Phase 67 GA readiness, self-service commercial readiness, commercial replacement readiness, production entitlement enforcement, hosted update service readiness, billing readiness, release-channel readiness, offline install completeness, SBOM completeness, checksum completeness, signing completeness, licensing approval, migration readiness, beta template completeness, or design-partner evidence completeness.\n\n$1/' \
+  "${misplaced_non_claim_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${misplaced_non_claim_repo}" \
+  "Missing Phase 65.1 non-claim term in Non-Claims section"
 
 missing_exclusion_repo="${workdir}/missing-exclusion"
 copy_valid_repo "${missing_exclusion_repo}"
@@ -603,6 +626,7 @@ excluded_scope_claims=(
   "offline-packaging|This inventory approves offline packaging."
   "includes-hosted-update-behavior|This inventory includes hosted update service behavior."
   "provides-beta-template|This inventory provides beta known-limitations template implementation."
+  "later-slice-offline-completeness|Later Phase 65 slice infers offline install completeness."
 )
 
 for claim_case in "${excluded_scope_claims[@]}"; do
@@ -746,6 +770,13 @@ assert_fails_with \
   "${ai_summary_serve_as_rc_gates_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
 
+modal_verifier_rc_gate_repo="${workdir}/modal-verifier-rc-gate"
+copy_valid_repo "${modal_verifier_rc_gate_repo}"
+printf '%s\n' "Verifier output can satisfy RC gates." >>"${modal_verifier_rc_gate_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${modal_verifier_rc_gate_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
 release_notes_ga_gate_repo="${workdir}/release-notes-ga-gate"
 copy_valid_repo "${release_notes_ga_gate_repo}"
 printf '%s\n' "Release notes prove GA gates." >>"${release_notes_ga_gate_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -788,11 +819,25 @@ assert_fails_with \
   "${inventory_substitute_evidence_repo}" \
   "substitute evidence assertion"
 
+definite_inventory_substitute_evidence_repo="${workdir}/definite-inventory-substitute-evidence"
+copy_valid_repo "${definite_inventory_substitute_evidence_repo}"
+printf '%s\n' "The inventory is substitute evidence for the Phase 51.3 gate contract." >>"${definite_inventory_substitute_evidence_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${definite_inventory_substitute_evidence_repo}" \
+  "substitute evidence assertion"
+
 workflow_authority_repo="${workdir}/workflow-authority"
 copy_valid_repo "${workflow_authority_repo}"
 printf '%s\n' "Release bundle inventory is workflow authority." >>"${workflow_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${workflow_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+definite_inventory_authority_repo="${workdir}/definite-inventory-authority"
+copy_valid_repo "${definite_inventory_authority_repo}"
+printf '%s\n' "The inventory is release gate authority." >>"${definite_inventory_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${definite_inventory_authority_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
 
 release_bundle_authority_repo="${workdir}/release-bundle-authority"
@@ -821,6 +866,13 @@ copy_valid_repo "${subordinate_gate_authority_repo}"
 printf '%s\n' "Verifier output proves gate authority." >>"${subordinate_gate_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${subordinate_gate_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+planning_evidence_authority_repo="${workdir}/planning-evidence-authority"
+copy_valid_repo "${planning_evidence_authority_repo}"
+printf '%s\n' "Readiness projections are release authority." >>"${planning_evidence_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${planning_evidence_authority_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
 
 subordinate_release_authority_repo="${workdir}/subordinate-release-authority"
