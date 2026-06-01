@@ -162,8 +162,13 @@ required_bundle_record_fields=(
   "issue or change record that approved the bundle for beta/design-partner packaging review."
 )
 
+binding_section_text="$(markdown_section_text "${absolute_doc_path}" "## 1. Version and Ownership Binding")"
+
 for bundle_record_field in "${required_bundle_record_fields[@]}"; do
-  require_phrase "${absolute_doc_path}" "${bundle_record_field}" "Phase 65.1 bundle-record binding field"
+  if ! grep -Fq -- "${bundle_record_field}" <<<"${binding_section_text}"; then
+    echo "Missing Phase 65.1 bundle-record binding field: ${bundle_record_field}" >&2
+    exit 1
+  fi
 done
 
 required_artifact_rows=(
@@ -177,8 +182,13 @@ required_artifact_rows=(
   "| Verification output artifact set | Platform maintainers | Focused Phase 65 inventory verifier output, publishable path hygiene output, Phase 51.3 gate verifier output, and issue-lint output reference. | \`verification:<repository-revision>\` | Phase 65.9 closeout evaluation. |"
 )
 
+artifact_section_text="$(markdown_section_text "${absolute_doc_path}" "## 2. Required Artifact Classes")"
+
 for artifact_row in "${required_artifact_rows[@]}"; do
-  require_phrase "${absolute_doc_path}" "${artifact_row}" "Phase 65.1 artifact inventory row with owner, evidence, and version binding"
+  if ! grep -Fq -- "${artifact_row}" <<<"${artifact_section_text}"; then
+    echo "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding: ${artifact_row}" >&2
+    exit 1
+  fi
 done
 
 required_exclusions=(
@@ -278,8 +288,8 @@ for claim_pattern in "${direct_readiness_claim_patterns[@]}"; do
 done
 
 excluded_scope_readiness_claim_patterns=(
-  "(this inventory|phase 65[.]1|release bundle inventory)[[:space:]-]+(establishes|proves|claims|satisfies|approves|creates)[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|hosted release metadata|hosted-release metadata|silent auto-upgrade behavior|silent auto-upgrade|silent auto upgrade behavior|silent auto upgrade|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|offline packaging|offline install packaging|full offline install packaging|sbom|checksum|signing|oss licensing|licensing|redistribution|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement|broad siem/soar replacement|broad siem-soar replacement|broad siem soar replacement|siem/soar replacement|siem-soar replacement|siem soar replacement)([[:space:]-]+(readiness|ready|approval|approved|completeness|complete|implementation|implemented|enforcement|behavior|generation|packaging|metadata|guide|template|conclusion))?"
-  "(this inventory|phase 65[.]1|release bundle inventory)[[:space:]-]+is[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|hosted release metadata|hosted-release metadata|silent auto-upgrade behavior|silent auto-upgrade|silent auto upgrade behavior|silent auto upgrade|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|offline packaging|offline install packaging|full offline install packaging|sbom|checksum|signing|oss licensing|licensing|redistribution|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement|broad siem/soar replacement|broad siem-soar replacement|broad siem soar replacement|siem/soar replacement|siem-soar replacement|siem soar replacement)[[:space:]-]+(ready|readiness|complete|approved|implemented)"
+  "(this inventory|phase 65[.]1|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(establishes|proves|claims|satisfies|approves|creates)[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|hosted release metadata|hosted-release metadata|silent auto-upgrade behavior|silent auto-upgrade|silent auto upgrade behavior|silent auto upgrade|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|offline packaging|offline install packaging|full offline install packaging|sbom|checksum|signing|oss licensing|licensing|redistribution|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement|broad siem/soar replacement|broad siem-soar replacement|broad siem soar replacement|siem/soar replacement|siem-soar replacement|siem soar replacement)([[:space:]-]+(readiness|ready|approval|approved|completeness|complete|implementation|implemented|enforcement|behavior|generation|packaging|metadata|guide|template|conclusion))?"
+  "(this inventory|phase 65[.]1|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+is[[:space:]-]+(hosted update service|hosted-update service|hosted update|hosted-update|hosted release metadata|hosted-release metadata|silent auto-upgrade behavior|silent auto-upgrade|silent auto upgrade behavior|silent auto upgrade|release channel|release-channel|billing|production entitlement enforcement|entitlement enforcement|production entitlement|offline install|offline packaging|offline install packaging|full offline install packaging|sbom|checksum|signing|oss licensing|licensing|redistribution|migration|beta template|known-limitations template|design-partner evidence|self-service commercial|commercial replacement|broad siem/soar replacement|broad siem-soar replacement|broad siem soar replacement|siem/soar replacement|siem-soar replacement|siem soar replacement)[[:space:]-]+(ready|readiness|complete|approved|implemented)"
 )
 
 for claim_pattern in "${excluded_scope_readiness_claim_patterns[@]}"; do
@@ -290,7 +300,7 @@ for claim_pattern in "${excluded_scope_readiness_claim_patterns[@]}"; do
 done
 
 authority_claim_patterns=(
-  "(this inventory|release bundle inventory)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates|satisfies)[[:space:]-]+(workflow|support|release gate|rc gate|ga gate|entitlement|billing|runtime execution|release|gate)[[:space:]-]+authority"
+  "(this inventory|release bundle inventory|(the[[:space:]-]+)?release bundle( record)?)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates|satisfies)[[:space:]-]+(workflow|support|release gate|rc gate|ga gate|entitlement|billing|runtime execution|release|gate)[[:space:]-]+authority"
   "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|are|acts as|serve as|serves as|becomes|become|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+(workflow|support|release gate|rc gate|ga gate|entitlement|billing|runtime execution|release|gate)[[:space:]-]+authority"
 )
 

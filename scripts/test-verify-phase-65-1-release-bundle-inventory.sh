@@ -288,6 +288,18 @@ for binding_case in "${bundle_record_bindings[@]}"; do
   assert_missing_doc_text_fails "${fixture_name}" "${required_text}" "${expected_text}"
 done
 
+misplaced_binding_repo="${workdir}/misplaced-binding"
+copy_valid_repo "${misplaced_binding_repo}"
+replace_doc_text \
+  "${misplaced_binding_repo}" \
+  "- per-artifact owner;
+" \
+  ""
+printf '%s\n' "Detached note: per-artifact owner;" >>"${misplaced_binding_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${misplaced_binding_repo}" \
+  "Missing Phase 65.1 bundle-record binding field"
+
 missing_row_evidence_repo="${workdir}/missing-row-evidence"
 copy_valid_repo "${missing_row_evidence_repo}"
 replace_doc_text \
@@ -296,6 +308,17 @@ replace_doc_text \
   "| Install artifact set | Platform maintainers |  | \`install-artifacts:<repository-revision>\` | Phase 65.2 offline install bundle contract. |"
 assert_fails_with \
   "${missing_row_evidence_repo}" \
+  "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding"
+
+misplaced_artifact_row_repo="${workdir}/misplaced-artifact-row"
+copy_valid_repo "${misplaced_artifact_row_repo}"
+replace_doc_text \
+  "${misplaced_artifact_row_repo}" \
+  "| Install artifact set | Platform maintainers | Install entrypoint, profile selection, runtime env sample, preflight output, and bounded install evidence reference. | \`install-artifacts:<repository-revision>\` | Phase 65.2 offline install bundle contract. |" \
+  ""
+printf '%s\n' "| Install artifact set | Platform maintainers | Install entrypoint, profile selection, runtime env sample, preflight output, and bounded install evidence reference. | \`install-artifacts:<repository-revision>\` | Phase 65.2 offline install bundle contract. |" >>"${misplaced_artifact_row_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${misplaced_artifact_row_repo}" \
   "Missing Phase 65.1 artifact inventory row with owner, evidence, and version binding"
 
 missing_exclusion_repo="${workdir}/missing-exclusion"
@@ -505,6 +528,7 @@ assert_fails_with \
 
 excluded_scope_claims=(
   "hosted-update-created|This inventory creates hosted update service."
+  "release-bundle-hosted-update-created|The release bundle creates hosted update service behavior."
   "entitlement-enforcement|Release bundle inventory creates production entitlement enforcement."
   "release-channel-implementation|This inventory establishes release channel implementation."
   "billing-is-ready|This inventory is billing ready."
@@ -664,6 +688,13 @@ copy_valid_repo "${workflow_authority_repo}"
 printf '%s\n' "Release bundle inventory is workflow authority." >>"${workflow_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${workflow_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+release_bundle_authority_repo="${workdir}/release-bundle-authority"
+copy_valid_repo "${release_bundle_authority_repo}"
+printf '%s\n' "The release bundle is release gate authority." >>"${release_bundle_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${release_bundle_authority_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
 
 inventory_satisfies_authority_repo="${workdir}/inventory-satisfies-authority"
