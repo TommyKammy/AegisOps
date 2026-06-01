@@ -454,6 +454,20 @@ assert_fails_with \
   "${inventory_infers_phase67_ga_pass_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
 
+phase65_infers_rc_pass_repo="${workdir}/phase65-infers-rc-pass"
+copy_valid_repo "${phase65_infers_rc_pass_repo}"
+printf '%s\n' "Phase 65.1 infers an RC pass." >>"${phase65_infers_rc_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${phase65_infers_rc_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+phase65_infers_phase67_ga_pass_repo="${workdir}/phase65-infers-phase67-ga-pass"
+copy_valid_repo "${phase65_infers_phase67_ga_pass_repo}"
+printf '%s\n' "Phase 65.1 infers a Phase 67 GA pass." >>"${phase65_infers_phase67_ga_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${phase65_infers_phase67_ga_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
 hosted_update_ready_repo="${workdir}/hosted-update-ready"
 copy_valid_repo "${hosted_update_ready_repo}"
 printf '%s\n' "This inventory establishes hosted update service readiness." >>"${hosted_update_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -643,6 +657,27 @@ printf '%s\n' "Release bundle inventory is workflow authority." >>"${workflow_au
 assert_fails_with \
   "${workflow_authority_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+subordinate_gate_authority_repo="${workdir}/subordinate-gate-authority"
+copy_valid_repo "${subordinate_gate_authority_repo}"
+printf '%s\n' "Verifier output proves gate authority." >>"${subordinate_gate_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${subordinate_gate_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+subordinate_release_authority_repo="${workdir}/subordinate-release-authority"
+copy_valid_repo "${subordinate_release_authority_repo}"
+printf '%s\n' "AI summaries are release authority." >>"${subordinate_release_authority_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${subordinate_release_authority_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: forbidden authority assertion"
+
+missing_runtime_execution_authority_repo="${workdir}/missing-runtime-execution-authority"
+copy_valid_repo "${missing_runtime_execution_authority_repo}"
+remove_doc_text "${missing_runtime_execution_authority_repo}" "runtime execution authority, "
+assert_fails_with \
+  "${missing_runtime_execution_authority_repo}" \
+  "Missing required Phase 65.1 inventory term"
 
 secret_repo="${workdir}/secret"
 copy_valid_repo "${secret_repo}"

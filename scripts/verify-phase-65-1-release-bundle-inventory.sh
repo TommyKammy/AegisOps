@@ -132,7 +132,7 @@ bash scripts/verify-publishable-path-hygiene.sh
 node <codex-supervisor-root>/dist/index.js issue-lint 1379 --config <supervisor-config-path>
 The verifier must reject missing version identifier, missing artifact owner, missing required artifact class, missing evidence reference, missing exclusion list, workstation-local absolute paths, production secrets, customer-private data, inferred RC pass, inferred GA pass, verifier-as-readiness-truth, and issue-lint-as-readiness-truth.
 This inventory does not claim Phase 66 RC readiness, Phase 67 GA readiness, self-service commercial readiness, commercial replacement readiness, production entitlement enforcement, hosted update service readiness, billing readiness, release-channel readiness, offline install completeness, SBOM completeness, checksum completeness, signing completeness, licensing approval, migration readiness, beta template completeness, or design-partner evidence completeness.
-This inventory is a root packaging contract for later Phase 65 work. It is not workflow authority, support authority, release gate authority, RC gate authority, GA gate authority, entitlement authority, billing authority, verifier truth, issue-lint truth, UI truth, AI truth, or substitute evidence for the Phase 51.3 gate contract.
+This inventory is a root packaging contract for later Phase 65 work. It is not workflow authority, support authority, runtime execution authority, release gate authority, RC gate authority, GA gate authority, entitlement authority, billing authority, verifier truth, issue-lint truth, UI truth, AI truth, or substitute evidence for the Phase 51.3 gate contract.
 EOF_PHRASE
 
 for phrase in "${required_phrases[@]}"; do
@@ -266,6 +266,8 @@ direct_readiness_claim_patterns=(
   "(this inventory|release bundle inventory)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc/ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
   "(this inventory|release bundle inventory)[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]+pass"
   "(this inventory|release bundle inventory)[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]+pass"
+  "phase 65[.]1[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]+pass"
+  "phase 65[.]1[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]+pass"
 )
 
 for claim_pattern in "${direct_readiness_claim_patterns[@]}"; do
@@ -289,6 +291,7 @@ done
 
 authority_claim_patterns=(
   "(this inventory|release bundle inventory)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates)[[:space:]-]+(workflow|support|release gate|rc gate|ga gate|entitlement|billing|runtime execution|release|gate)[[:space:]-]+authority"
+  "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|are|acts as|serve as|serves as|becomes|become|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+(workflow|support|release gate|rc gate|ga gate|entitlement|billing|runtime execution|release|gate)[[:space:]-]+authority"
 )
 
 for claim_pattern in "${authority_claim_patterns[@]}"; do
