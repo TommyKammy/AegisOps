@@ -583,6 +583,7 @@ excluded_scope_claims=(
   "redistribution-approval|This inventory creates redistribution approval."
   "hosted-release-metadata|This inventory approves hosted release metadata."
   "offline-packaging|This inventory approves offline packaging."
+  "includes-hosted-update-behavior|This inventory includes hosted update service behavior."
   "provides-beta-template|This inventory provides beta known-limitations template implementation."
 )
 
@@ -598,6 +599,7 @@ rc_ga_claims=(
   "inventory-ga-ready|Release bundle inventory is GA ready."
   "release-bundle-ga-ready|The release bundle is GA ready."
   "release-bundle-manifest-ga-ready|Release bundle manifest is GA ready."
+  "definite-inventory-ga-ready|The inventory is GA ready."
   "inventory-rc-gate-pass|This inventory passes RC gate acceptance."
   "inventory-accepts-rc-gates|This inventory accepts RC gates."
   "phase-rc-ga-gates|Phase 65.1 satisfies RC/GA gates."
@@ -700,6 +702,20 @@ copy_valid_repo "${ai_summary_phase66_rc_gate_repo}"
 printf '%s\n' "AI summaries satisfy Phase 66 RC gates." >>"${ai_summary_phase66_rc_gate_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${ai_summary_phase66_rc_gate_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+ai_summary_are_rc_gates_repo="${workdir}/ai-summary-are-rc-gates"
+copy_valid_repo "${ai_summary_are_rc_gates_repo}"
+printf '%s\n' "AI summaries are RC gates." >>"${ai_summary_are_rc_gates_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ai_summary_are_rc_gates_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
+ai_summary_serve_as_rc_gates_repo="${workdir}/ai-summary-serve-as-rc-gates"
+copy_valid_repo "${ai_summary_serve_as_rc_gates_repo}"
+printf '%s\n' "AI summaries serve as RC gates." >>"${ai_summary_serve_as_rc_gates_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ai_summary_serve_as_rc_gates_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
 
 release_notes_ga_gate_repo="${workdir}/release-notes-ga-gate"
@@ -868,6 +884,13 @@ copy_valid_repo "${customer_private_repo}"
 printf '%s\n' "customer-private data: Acme incident payload" >>"${customer_private_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with \
   "${customer_private_repo}" \
+  "customer-private data detected"
+
+customer_private_space_field_repo="${workdir}/customer-private-space-field"
+copy_valid_repo "${customer_private_space_field_repo}"
+printf '%s\n' "customer private data: Acme incident payload" >>"${customer_private_space_field_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${customer_private_space_field_repo}" \
   "customer-private data detected"
 
 bare_customer_private_repo="${workdir}/bare-customer-private"
