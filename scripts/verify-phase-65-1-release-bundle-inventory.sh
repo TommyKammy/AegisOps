@@ -240,6 +240,8 @@ direct_readiness_claim_patterns=(
   "(this inventory|release bundle inventory)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
   "(this inventory|release bundle inventory)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
   "(this inventory|release bundle inventory)[[:space:]-]+(passes|satisfies|proves|claims|approves|creates|establishes)[[:space:]-]+rc/ga[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
+  "(this inventory|release bundle inventory)[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?rc[[:space:]-]+pass"
+  "(this inventory|release bundle inventory)[[:space:]-]+infers[[:space:]-]+(an?[[:space:]-]+)?(phase[[:space:]-]+[0-9]+[[:space:]-]+)?ga[[:space:]-]+pass"
 )
 
 for claim_pattern in "${direct_readiness_claim_patterns[@]}"; do
@@ -274,7 +276,7 @@ done
 
 derived_truth_claim_patterns=(
   "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|acts as|serves as|becomes|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+([[:alpha:]/-]+[[:space:]-]+){0,4}truth"
-  "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|acts as|serves as|becomes|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+(rc|ga)[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
+  "(ai summaries|operator-facing summaries|wazuh|shuffle|ai|tickets|reports|support notes|dashboards|exports|browser state|ui cache|downstream receipts|release notes|bundle files|verifier output|issue-lint output)[[:space:]-]+(is|acts as|serves as|becomes|establish|establishes|prove|proves|claim|claims|approve|approves|create|creates|satisfy|satisfies)[[:space:]-]+(phase[[:space:]-]+[0-9]+[[:space:]-]+)?(rc|ga)[[:space:]-]*(gate|gates|gate acceptance|gate pass)"
   "(this inventory|release bundle inventory)[[:space:]-]+(is|acts as|serves as|becomes|establishes|proves|claims|approves|creates)[[:space:]-]+(verifier|issue-lint|ui|ai|release)[[:space:]-]+truth"
 )
 
@@ -299,8 +301,9 @@ macos_home_pattern='/'"Users"'/[^[:space:])>]+'
 linux_home_pattern='/'"home"'/[^[:space:])>]+'
 windows_home_pattern='[A-Za-z]:\\'"Users"'\\[^[:space:])>]+'
 workstation_local_path_pattern="(^|[^[:alnum:]_./-])(~[/\\\\]|${macos_home_pattern}|${linux_home_pattern}|${windows_home_pattern})"
+decoded_inventory_text="$(perl -0pe 's/%([0-9A-Fa-f]{2})/chr(hex($1))/eg' "${absolute_doc_path}")"
 
-if grep -Eq "${workstation_local_path_pattern}" "${absolute_doc_path}"; then
+if grep -Eq "${workstation_local_path_pattern}" <<<"${decoded_inventory_text}"; then
   echo "Forbidden Phase 65.1 release bundle inventory absolute path usage detected" >&2
   exit 1
 fi

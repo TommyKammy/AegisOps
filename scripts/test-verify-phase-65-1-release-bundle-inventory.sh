@@ -429,6 +429,20 @@ assert_fails_with \
   "${inventory_phase67_ga_ready_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
 
+inventory_infers_rc_pass_repo="${workdir}/inventory-infers-rc-pass"
+copy_valid_repo "${inventory_infers_rc_pass_repo}"
+printf '%s\n' "This inventory infers an RC pass." >>"${inventory_infers_rc_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_infers_rc_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
+inventory_infers_phase67_ga_pass_repo="${workdir}/inventory-infers-phase67-ga-pass"
+copy_valid_repo "${inventory_infers_phase67_ga_pass_repo}"
+printf '%s\n' "This inventory infers a Phase 67 GA pass." >>"${inventory_infers_phase67_ga_pass_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${inventory_infers_phase67_ga_pass_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: direct RC/GA readiness assertion"
+
 hosted_update_ready_repo="${workdir}/hosted-update-ready"
 copy_valid_repo "${hosted_update_ready_repo}"
 printf '%s\n' "This inventory establishes hosted update service readiness." >>"${hosted_update_ready_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -570,6 +584,13 @@ assert_fails_with \
   "${ai_summary_rc_gate_repo}" \
   "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
 
+ai_summary_phase66_rc_gate_repo="${workdir}/ai-summary-phase66-rc-gate"
+copy_valid_repo "${ai_summary_phase66_rc_gate_repo}"
+printf '%s\n' "AI summaries satisfy Phase 66 RC gates." >>"${ai_summary_phase66_rc_gate_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${ai_summary_phase66_rc_gate_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory claim: derived verifier or issue-lint truth assertion"
+
 release_notes_ga_gate_repo="${workdir}/release-notes-ga-gate"
 copy_valid_repo "${release_notes_ga_gate_repo}"
 printf '%s\n' "Release notes prove GA gates." >>"${release_notes_ga_gate_repo}/docs/phase-65-1-release-bundle-inventory.md"
@@ -697,6 +718,13 @@ git -C "${path_repo}" add docs/phase-65-1-release-bundle-inventory.md
 git -C "${path_repo}" commit -q -m "path"
 assert_fails_with \
   "${path_repo}" \
+  "Forbidden Phase 65.1 release bundle inventory absolute path usage detected"
+
+encoded_path_repo="${workdir}/encoded-path"
+copy_valid_repo "${encoded_path_repo}"
+printf '%s\n' "Operator note mentions /%55sers/alice/local/repo." >>"${encoded_path_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with \
+  "${encoded_path_repo}" \
   "Forbidden Phase 65.1 release bundle inventory absolute path usage detected"
 
 if grep -Fq '>/tmp/phase65-path-hygiene' "${verifier}" || grep -Fq '2>/tmp/phase65-path-hygiene' "${verifier}"; then
