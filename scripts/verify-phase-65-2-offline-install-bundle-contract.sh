@@ -230,6 +230,10 @@ scan_forbidden_text() {
     push @candidates, $json_unescaped if $json_unescaped ne $_;
 
     for my $text (@candidates) {
+      if ($text =~ m{\bfile://+(?:[A-Za-z]:[\\\/]+)?(?:Users|home)[\\\/]+[^\\\/\s]+(?:[\\\/][^\s]*)?}i || $text =~ m{\bfile://+(?:root)(?:[\\\/][^\s]*)?}i) {
+        exit 1;
+      }
+
       if ($text =~ /(^|[^A-Za-z0-9_.\/\\-])([A-Za-z]:[\\\/]+Users[\\\/]+[^\\\/\s]+(?:[\\\/][^\s]*)?)/i) {
         exit 1;
       }
@@ -632,15 +636,15 @@ if [[ -n "${bundle_dir}" ]]; then
   reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)[^.?!;\n]*((is|are)[ -]+not|cannot|can not|missing|absent|omitted|unavailable|not[[:space:]-]+provided|not[[:space:]-]+documented|not[[:space:]-]+selected)' "negated install guidance"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'offline[[:space:]-]+install' "offline install entry guidance"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command)' "install entry command"
-  require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'aegisops[[:space:]]+(init|up|doctor)[^`\n]*(--profile[[:space:]]+smb-single-node[^`\n]*--runtime-env[[:space:]]+<runtime-env-file>|--runtime-env[[:space:]]+<runtime-env-file>[^`\n]*--profile[[:space:]]+smb-single-node)' "concrete install command"
+  require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'aegisops[[:space:]]+up[^`\n]*(--profile[[:space:]]+smb-single-node[^`\n]*--runtime-env[[:space:]]+<runtime-env-file>|--runtime-env[[:space:]]+<runtime-env-file>[^`\n]*--profile[[:space:]]+smb-single-node)' "concrete install command"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(selected[[:space:]-]+profile|profile)' "selected profile"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)' "dependency assumptions and manual prerequisites"
   require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" 'docs/deployment/env-secrets-certs-contract[.]md' "secret-source contract citation"
-  require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_PROFILE[[:space:]]*=' "runtime configuration key"
-    require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_RUNTIME_ENV[[:space:]]*=[[:space:]]*<runtime-env-file>([[:space:]]|$)' "placeholder runtime env key"
+  require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_PROFILE[[:space:]]*=[[:space:]]*smb-single-node([[:space:]]|$)' "selected profile runtime configuration key"
+  require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_RUNTIME_ENV[[:space:]]*=[[:space:]]*<runtime-env-file>([[:space:]]|$)' "placeholder runtime env key"
   require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_SECRET_SOURCE_DOC[[:space:]]*=[[:space:]]*docs/deployment/env-secrets-certs-contract[.]md([[:space:]]|$)' "secret-source contract key"
-  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "^[[:space:]]*release bundle identifier:[[:space:]]*${escaped_release_bundle_identifier}([[:space:]]|\$)" "matching release bundle identifier"
-  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "^[[:space:]]*repository revision:[[:space:]]*${escaped_repository_revision}([[:space:]]|\$)" "matching repository revision"
+  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "^[[:space:]]*release bundle identifier:[[:space:]]*${escaped_release_bundle_identifier}[[:space:]]*$" "matching release bundle identifier"
+  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "^[[:space:]]*repository revision:[[:space:]]*${escaped_repository_revision}[[:space:]]*$" "matching repository revision"
 
   bundled_repo_docs=(
     "docs/phase-65-2-offline-install-bundle-contract.md"

@@ -181,6 +181,12 @@ local_home_path="/""Users/example/aegisops"
 printf '%s\n' "Do not use ${local_home_path} in publishable guidance." >>"${local_path_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "workstation-local absolute path" --repo-root "${local_path_repo}"
 
+file_url_local_path_repo="${workdir}/file-url-local-path"
+create_valid_repo "${file_url_local_path_repo}"
+file_url_home_path="file://${local_home_path}"
+printf '%s\n' "Do not use ${file_url_home_path} in publishable guidance." >>"${file_url_local_path_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "workstation-local absolute path" --repo-root "${file_url_local_path_repo}"
+
 root_path_repo="${workdir}/root-path"
 create_valid_repo "${root_path_repo}"
 root_home_path="/""root/private/aegisops"
@@ -350,6 +356,11 @@ Dependency assumptions and manual prerequisites are documented.
 EOF_INSTALL
 assert_fails_with "Missing offline install bundle artifact content in install/README.md: concrete install command" --bundle-dir "${placeholder_install_command}"
 
+doctor_only_install_command="${workdir}/doctor-only-install-command"
+create_valid_bundle "${doctor_only_install_command}"
+perl -0pi -e 's/aegisops up/aegisops doctor/g' "${doctor_only_install_command}/install/README.md"
+assert_fails_with "Missing offline install bundle artifact content in install/README.md: concrete install command" --bundle-dir "${doctor_only_install_command}"
+
 negated_install_readme="${workdir}/negated-install-readme"
 create_valid_bundle "${negated_install_readme}"
 cat >"${negated_install_readme}/install/README.md" <<'EOF_INSTALL'
@@ -371,12 +382,17 @@ create_valid_bundle "${runtime_sample_doc_only}"
 cat >"${runtime_sample_doc_only}/config/runtime.env.sample" <<'EOF_ENV'
 AEGISOPS_SECRET_SOURCE_DOC=docs/deployment/env-secrets-certs-contract.md
 EOF_ENV
-assert_fails_with "Missing offline install bundle artifact content in config/runtime.env.sample: runtime configuration key" --bundle-dir "${runtime_sample_doc_only}"
+assert_fails_with "Missing offline install bundle artifact content in config/runtime.env.sample: selected profile runtime configuration key" --bundle-dir "${runtime_sample_doc_only}"
 
 runtime_sample_concrete_env="${workdir}/runtime-sample-concrete-env"
 create_valid_bundle "${runtime_sample_concrete_env}"
 perl -0pi -e 's/^AEGISOPS_RUNTIME_ENV=.*$/AEGISOPS_RUNTIME_ENV=\/etc\/aegisops\/runtime.env/m' "${runtime_sample_concrete_env}/config/runtime.env.sample"
 assert_fails_with "Missing offline install bundle artifact content in config/runtime.env.sample: placeholder runtime env key" --bundle-dir "${runtime_sample_concrete_env}"
+
+runtime_sample_profile_mismatch="${workdir}/runtime-sample-profile-mismatch"
+create_valid_bundle "${runtime_sample_profile_mismatch}"
+perl -0pi -e 's/^AEGISOPS_PROFILE=.*$/AEGISOPS_PROFILE=enterprise-prod/m' "${runtime_sample_profile_mismatch}/config/runtime.env.sample"
+assert_fails_with "Missing offline install bundle artifact content in config/runtime.env.sample: selected profile runtime configuration key" --bundle-dir "${runtime_sample_profile_mismatch}"
 
 hidden_install_readme_content="${workdir}/hidden-install-readme-content"
 create_valid_bundle "${hidden_install_readme_content}"
@@ -405,6 +421,15 @@ suffix_preflight_revision="${workdir}/suffix-preflight-revision"
 create_valid_bundle "${suffix_preflight_revision}"
 perl -0pi -e 's/^release bundle identifier:.*$/release bundle identifier: aegisops-beta-cea7db232373-extra/m' "${suffix_preflight_revision}/evidence/install-preflight-output.txt"
 assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching release bundle identifier" --bundle-dir "${suffix_preflight_revision}"
+
+stale_preflight_suffix_tokens="${workdir}/stale-preflight-suffix-tokens"
+create_valid_bundle "${stale_preflight_suffix_tokens}"
+cat >"${stale_preflight_suffix_tokens}/evidence/install-preflight-output.txt" <<'EOF_EVIDENCE'
+release bundle identifier: aegisops-beta-cea7db232373 stale-bundle
+repository revision: cea7db232373 stale-revision
+preflight output: retained placeholder for beta/design-partner packaging review.
+EOF_EVIDENCE
+assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching release bundle identifier" --bundle-dir "${stale_preflight_suffix_tokens}"
 
 invalid_bundled_inventory="${workdir}/invalid-bundled-inventory"
 create_valid_bundle "${invalid_bundled_inventory}"
@@ -440,6 +465,11 @@ bundle_local_path="${workdir}/bundle-local-path"
 create_valid_bundle "${bundle_local_path}"
 printf '%s\n' "operator path: ${local_home_path}" >>"${bundle_local_path}/BUNDLE-MANIFEST.md"
 assert_fails_with "workstation-local absolute path" --bundle-dir "${bundle_local_path}"
+
+bundle_file_url_local_path="${workdir}/bundle-file-url-local-path"
+create_valid_bundle "${bundle_file_url_local_path}"
+printf '%s\n' "operator path: ${file_url_home_path}" >>"${bundle_file_url_local_path}/install/README.md"
+assert_fails_with "workstation-local absolute path" --bundle-dir "${bundle_file_url_local_path}"
 
 bundle_secret="${workdir}/bundle-secret"
 create_valid_bundle "${bundle_secret}"
