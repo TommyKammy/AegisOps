@@ -204,6 +204,11 @@ valid_bundle="${workdir}/valid-bundle"
 create_valid_bundle "${valid_bundle}"
 assert_passes --bundle-dir "${valid_bundle}"
 
+placeholder_secret_sample_bundle="${workdir}/placeholder-secret-sample-bundle"
+create_valid_bundle "${placeholder_secret_sample_bundle}"
+printf '%s\n' "DB_PASSWORD=<db-password>" "API_KEY=placeholder" >>"${placeholder_secret_sample_bundle}/config/runtime.env.sample"
+assert_passes --bundle-dir "${placeholder_secret_sample_bundle}"
+
 dotted_revision_bundle="${workdir}/dotted-revision-bundle"
 create_valid_bundle "${dotted_revision_bundle}"
 perl -0pi -e 's/cea7db232373/v1.2.3/g; s/aegisops-beta-cea7db232373/aegisops-beta-v1.2.3/g' \
@@ -299,6 +304,11 @@ create_valid_bundle "${bundle_hidden_hosted}"
 printf '%s\n' "Hidden hosted dependency is required during install." >>"${bundle_hidden_hosted}/install/README.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_hidden_hosted}"
 
+bundle_hidden_downloads="${workdir}/bundle-hidden-downloads"
+create_valid_bundle "${bundle_hidden_downloads}"
+printf '%s\n' "Hidden hosted downloads are required during install." >>"${bundle_hidden_downloads}/install/README.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_hidden_downloads}"
+
 bundle_silent_update="${workdir}/bundle-silent-update"
 create_valid_bundle "${bundle_silent_update}"
 printf '%s\n' "Silent auto-upgrade is enabled after install." >>"${bundle_silent_update}/install/README.md"
@@ -318,5 +328,11 @@ bundle_ga_claim="${workdir}/bundle-ga-claim"
 create_valid_bundle "${bundle_ga_claim}"
 printf '%s\n' "Bundle manifest proves GA readiness." >>"${bundle_ga_claim}/BUNDLE-MANIFEST.md"
 assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_ga_claim}"
+
+bundle_symlink_artifact="${workdir}/bundle-symlink-artifact"
+create_valid_bundle "${bundle_symlink_artifact}"
+mv "${bundle_symlink_artifact}/install/README.md" "${workdir}/external-install-readme.md"
+ln -s "${workdir}/external-install-readme.md" "${bundle_symlink_artifact}/install/README.md"
+assert_fails_with "symlink is not allowed" --bundle-dir "${bundle_symlink_artifact}"
 
 echo "Phase 65.2 offline install bundle contract verifier self-test passed."

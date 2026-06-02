@@ -165,7 +165,7 @@ scan_forbidden_text() {
       tr '[:upper:]' '[:lower:]' |
       sed -E \
         -e 's/[[:space:]]+/ /g' \
-        -e 's/,[[:space:]]+(and|but)[[:space:]]+((hidden hosted dependency|hosted update services?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|production installer|production entitlement enforcement|commercial billing)[^,.?!;]*(is|are)[^,.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered))/. \2/g'
+        -e 's/,[[:space:]]+(and|but)[[:space:]]+((hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|production installer|production entitlement enforcement|commercial billing)[^,.?!;]*(is|are)[^,.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered))/. \2/g'
   )"
   claim_scan_text="$(
     printf '%s' "${normalized_text}" |
@@ -187,19 +187,39 @@ scan_forbidden_text() {
     exit 1
   fi
 
-  if grep -Eiq -- '(AKIA[0-9A-Z]{16}|aws_secret_access_key|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|password[[:space:]]*[:=][[:space:]]*[^[:space:]]+|secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+|access[_-]?token[[:space:]]*[:=][[:space:]]*[^[:space:]]+|auth[_-]?token[[:space:]]*[:=][[:space:]]*[^[:space:]]+|(^|[^[:alnum:]_-])token[[:space:]]*[:=][[:space:]]*[^[:space:]]+|api[_-]?key[[:space:]]*[:=][[:space:]]*[^[:space:]]+|credential[[:space:]]*[:=][[:space:]]*[^[:space:]]+|client[_-]?secret[[:space:]]*[:=][[:space:]]*[^[:space:]]+)' <<<"${decoded_text}"; then
+  if ! printf '%s' "${decoded_text}" | perl -Mstrict -Mwarnings -0ne '
+    my $text = $_;
+    exit 1 if $text =~ /(AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})/i;
+
+    for my $line (split /\n/, $text) {
+      $line =~ s/[[:space:]]+#.*$//;
+      while ($line =~ /(^|[^[:alnum:]_-])((?:secret|token|credential)|[A-Za-z0-9_-]*(?:password|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
+        my $value = $3;
+        $value =~ s/^["'\'']//;
+        $value =~ s/["'\'']$//;
+        next if $value =~ /\A(<[^>]+>|todo|tbd|none|n\/a|na|placeholder|sample|example|changeme|change-me|replace-me)\z/i;
+        exit 1;
+      }
+    }
+  '; then
     echo "Forbidden ${description}: production secret-looking value detected" >&2
     exit 1
   fi
 
   if ! printf '%s' "${decoded_text}" | perl -0ne '
     my $text = $_;
-    while ($text =~ /([^.?!;\n]*(?:(?:placeholder|sample|fake|todo)[^.?!;\n]*(?:secret|credential|password|token|api[ -]?key)|(?:secret|credential|password|token|api[ -]?key)[^.?!;\n]*(?:placeholder|sample|fake|todo))[^.?!;\n]*(?:are|is|count as|counts as|may be|can be|remain|stays|accepted as|allowed as)[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential)[^.?!;\n]*)[.?!;\n]/ig) {
-      my $claim = lc $1;
-      my $start = $-[1];
-      my $context_start = $start > 2000 ? $start - 2000 : 0;
+    my $offset = 0;
+    for my $sentence (split /(?<=[.?!;\n])\s*/, $text) {
+      my $claim = lc $sentence;
+      my $start = index($text, $sentence, $offset);
+      $start = $offset if $start < 0;
+      $offset = $start + length($sentence);
+      my $context_start = $start > 1200 ? $start - 1200 : 0;
       my $context = lc substr($text, $context_start, $start - $context_start);
-      next if $claim =~ /(must reject|must not|cannot|can not|do not|does not|invalid|must fail|not be)/;
+      next unless $claim =~ /(?:placeholder|sample|fake|todo)/;
+      next unless $claim =~ /(?:secret|credential|password|token|api[ -]?key)/;
+      next unless $claim =~ /(?:(?:are|is|count as|counts as|may be|can be|remain|stays|accepted as|allowed as)[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential)|(?:are|is)[^.?!;\n]*treated as[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential))/;
+      next if $claim =~ /(must reject|must not|cannot|can not|do not|does not|invalid|must fail|must block|not be)/;
       next if $context =~ /(must reject|must fail closed when|validation must fail closed when|must fail when):?[^#]*$/s;
       exit 1;
     }
@@ -213,7 +233,7 @@ scan_forbidden_text() {
     exit 1
   fi
 
-  if grep -Eiq -- '(hidden hosted dependency|hosted update service|network update service|silent update|silent auto-upgrade|silent auto upgrade|production installer([[:space:]-]+(behavior|completeness))?|production entitlement enforcement|commercial billing)[[:space:]-]+(is[[:space:]-]+)?(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update service|network update service|silent update|silent auto-upgrade|silent auto upgrade|production installer([[:space:]-]+(behavior|completeness))?|production entitlement enforcement|commercial billing)[[:space:]-]+((is|are)[[:space:]-]+)?(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: hosted, silent update, production installer, entitlement, or billing claim detected" >&2
     exit 1
   fi
@@ -405,6 +425,12 @@ if [[ -n "${bundle_dir}" ]]; then
     "docs/deployment/clean-host-smoke-skeleton.md"
     "docs/runbook.md"
   )
+
+  symlink_path="$(find "${bundle_dir}" -type l -print -quit)"
+  if [[ -n "${symlink_path}" ]]; then
+    echo "Invalid offline install bundle artifact: symlink is not allowed: ${symlink_path#"${bundle_dir}/"}" >&2
+    exit 1
+  fi
 
   for bundle_file in "${required_bundle_files[@]}"; do
     if [[ ! -s "${bundle_dir}/${bundle_file}" ]]; then
