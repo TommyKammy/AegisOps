@@ -64,6 +64,17 @@ create_valid_repo() {
   copy_repo_path "${repo_root}" "${target}" "docs/runbook.md"
 }
 
+create_reviewed_tag_repo() {
+  local target="$1"
+  local tag="$2"
+
+  create_valid_repo "${target}"
+  git -C "${target}" init -q
+  git -C "${target}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" add README.md docs
+  git -C "${target}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" commit -q -m "Create reviewed offline bundle baseline"
+  git -C "${target}" tag "${tag}"
+}
+
 create_valid_bundle() {
   local target="$1"
 
@@ -285,7 +296,9 @@ create_valid_bundle "${dotted_revision_bundle}"
 perl -0pi -e 's/cea7db232373/v1.2.3/g; s/aegisops-beta-cea7db232373/aegisops-beta-v1.2.3/g' \
   "${dotted_revision_bundle}/BUNDLE-MANIFEST.md" \
   "${dotted_revision_bundle}/evidence/install-preflight-output.txt"
-assert_passes --bundle-dir "${dotted_revision_bundle}"
+reviewed_tag_repo="${workdir}/reviewed-tag-repo"
+create_reviewed_tag_repo "${reviewed_tag_repo}" "v1.2.3"
+assert_passes --repo-root "${reviewed_tag_repo}" --bundle-dir "${dotted_revision_bundle}"
 
 dotted_revision_mismatch="${workdir}/dotted-revision-mismatch"
 create_valid_bundle "${dotted_revision_mismatch}"
@@ -293,7 +306,7 @@ perl -0pi -e 's/cea7db232373/v1.2.3/g; s/aegisops-beta-cea7db232373/aegisops-bet
   "${dotted_revision_mismatch}/BUNDLE-MANIFEST.md"
 perl -0pi -e 's/cea7db232373/v1X2X3/g; s/aegisops-beta-cea7db232373/aegisops-beta-v1X2X3/g' \
   "${dotted_revision_mismatch}/evidence/install-preflight-output.txt"
-assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching release bundle identifier" --bundle-dir "${dotted_revision_mismatch}"
+assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching release bundle identifier" --repo-root "${reviewed_tag_repo}" --bundle-dir "${dotted_revision_mismatch}"
 
 missing_bundle_metadata="${workdir}/missing-bundle-metadata"
 create_valid_bundle "${missing_bundle_metadata}"
@@ -309,6 +322,26 @@ missing_approval_record="${workdir}/missing-approval-record"
 create_valid_bundle "${missing_approval_record}"
 perl -0pi -e 's/^approval record:.*\n//m' "${missing_approval_record}/BUNDLE-MANIFEST.md"
 assert_fails_with "Missing offline install bundle metadata value: approval record" --bundle-dir "${missing_approval_record}"
+
+negated_exclusion_review="${workdir}/negated-exclusion-review"
+create_valid_bundle "${negated_exclusion_review}"
+perl -0pi -e 's/^exclusion review:.*$/exclusion review: not reviewed/m' "${negated_exclusion_review}/BUNDLE-MANIFEST.md"
+assert_fails_with "Invalid offline install bundle metadata value: exclusion review" --bundle-dir "${negated_exclusion_review}"
+
+negated_approval_record="${workdir}/negated-approval-record"
+create_valid_bundle "${negated_approval_record}"
+perl -0pi -e 's/^approval record:.*$/approval record: not approved/m' "${negated_approval_record}/BUNDLE-MANIFEST.md"
+assert_fails_with "Invalid offline install bundle metadata value: approval record" --bundle-dir "${negated_approval_record}"
+
+missing_approval_link="${workdir}/missing-approval-link"
+create_valid_bundle "${missing_approval_link}"
+perl -0pi -e 's/^approval record:.*$/approval record: maintainer reviewed/m' "${missing_approval_link}/BUNDLE-MANIFEST.md"
+assert_fails_with "Invalid offline install bundle metadata value: approval record" --bundle-dir "${missing_approval_link}"
+
+duplicate_manifest_metadata="${workdir}/duplicate-manifest-metadata"
+create_valid_bundle "${duplicate_manifest_metadata}"
+printf '%s\n' "release bundle identifier: aegisops-beta-deadbeef1234" >>"${duplicate_manifest_metadata}/BUNDLE-MANIFEST.md"
+assert_fails_with "Duplicate offline install bundle metadata field: release bundle identifier" --bundle-dir "${duplicate_manifest_metadata}"
 
 commented_manifest_metadata="${workdir}/commented-manifest-metadata"
 create_valid_bundle "${commented_manifest_metadata}"
@@ -334,6 +367,13 @@ mismatched_bundle_revision="${workdir}/mismatched-bundle-revision"
 create_valid_bundle "${mismatched_bundle_revision}"
 perl -0pi -e 's/^repository revision:.*$/repository revision: deadbeef1234/m' "${mismatched_bundle_revision}/BUNDLE-MANIFEST.md"
 assert_fails_with "Invalid offline install bundle release binding" --bundle-dir "${mismatched_bundle_revision}"
+
+unknown_bundle_revision="${workdir}/unknown-bundle-revision"
+create_valid_bundle "${unknown_bundle_revision}"
+perl -0pi -e 's/cea7db232373/notarealrevision/g; s/aegisops-beta-cea7db232373/aegisops-beta-notarealrevision/g' \
+  "${unknown_bundle_revision}/BUNDLE-MANIFEST.md" \
+  "${unknown_bundle_revision}/evidence/install-preflight-output.txt"
+assert_fails_with "Invalid offline install bundle repository revision: notarealrevision does not resolve in repository" --bundle-dir "${unknown_bundle_revision}"
 
 missing_bundle_artifact="${workdir}/missing-bundle-artifact"
 create_valid_bundle "${missing_bundle_artifact}"

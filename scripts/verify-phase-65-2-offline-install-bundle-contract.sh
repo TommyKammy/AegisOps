@@ -92,6 +92,22 @@ manifest_value() {
   ' "${label}" "${file}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
 }
 
+manifest_label_count() {
+  local file="$1"
+  local label="$2"
+
+  perl -Mstrict -Mwarnings -0 -e '
+    my $label = shift @ARGV;
+    my $text = <>;
+    $text =~ s/<!--.*?-->//gs;
+    my $count = 0;
+    for my $line (split /\n/, $text) {
+      $count++ if $line =~ /^\s*\Q$label\E\s*:/i;
+    }
+    print "$count\n";
+  ' "${label}" "${file}"
+}
+
 is_placeholder_value() {
   local value="$1"
   local normalized_value
@@ -103,7 +119,13 @@ is_placeholder_value() {
 require_manifest_value() {
   local manifest="$1"
   local label="$2"
-  local value
+  local count value
+
+  count="$(manifest_label_count "${manifest}" "${label}")"
+  if [[ "${count}" -gt 1 ]]; then
+    echo "Duplicate offline install bundle metadata field: ${label}" >&2
+    exit 1
+  fi
 
   value="$(manifest_value "${manifest}" "${label}")"
   if is_placeholder_value "${value}"; then
@@ -112,6 +134,34 @@ require_manifest_value() {
   fi
 
   printf '%s' "${value}"
+}
+
+reject_negative_manifest_value() {
+  local label="$1"
+  local value="$2"
+  local normalized_value
+
+  normalized_value="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+
+  case "${label}" in
+    "exclusion review")
+      if [[ "${normalized_value}" =~ (^|[^a-z0-9])((not|never)[[:space:]-]+reviewed|unreviewed|not[[:space:]-]+performed|not[[:space:]-]+required|not[[:space:]-]+complete|missing|absent)([^a-z0-9]|$) ]]; then
+        echo "Invalid offline install bundle metadata value: ${label}" >&2
+        exit 1
+      fi
+      ;;
+    "approval record")
+      if [[ "${normalized_value}" =~ (^|[^a-z0-9])((not|never)[[:space:]-]+approved|unapproved|not[[:space:]-]+reviewed|not[[:space:]-]+required|missing|absent|no[[:space:]-]+approval|no[[:space:]-]+change[[:space:]-]+record|no[[:space:]-]+issue)([^a-z0-9]|$) ]]; then
+        echo "Invalid offline install bundle metadata value: ${label}" >&2
+        exit 1
+      fi
+
+      if [[ ! "${normalized_value}" =~ (issue|pr|pull[[:space:]-]+request|change[[:space:]-]+record|ticket)[^a-z0-9#-]*[#]?[a-z0-9][a-z0-9._-]* ]]; then
+        echo "Invalid offline install bundle metadata value: ${label}" >&2
+        exit 1
+      fi
+      ;;
+  esac
 }
 
 validate_utc_timestamp() {
@@ -604,6 +654,11 @@ if [[ -n "${bundle_dir}" ]]; then
     exit 1
   fi
 
+  if ! git -C "${repo_root}" rev-parse --verify --quiet "${repository_revision}^{commit}" >/dev/null; then
+    echo "Invalid offline install bundle repository revision: ${repository_revision} does not resolve in repository" >&2
+    exit 1
+  fi
+
   if [[ ! "${bundle_creation_timestamp}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?Z$ ]] || ! validate_utc_timestamp "${bundle_creation_timestamp}"; then
     echo "Invalid offline install bundle creation timestamp: ${bundle_creation_timestamp}" >&2
     exit 1
@@ -628,6 +683,8 @@ if [[ -n "${bundle_dir}" ]]; then
     echo "Missing offline install bundle metadata value: owner, exclusion review, or approval record" >&2
     exit 1
   fi
+  reject_negative_manifest_value "exclusion review" "${exclusion_review}"
+  reject_negative_manifest_value "approval record" "${approval_record}"
 
   escaped_release_bundle_identifier="$(escape_extended_regex "${release_bundle_identifier}")"
   escaped_repository_revision="$(escape_extended_regex "${repository_revision}")"
