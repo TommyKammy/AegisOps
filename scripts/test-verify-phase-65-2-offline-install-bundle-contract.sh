@@ -373,6 +373,11 @@ AEGISOPS_SECRET_SOURCE_DOC=docs/deployment/env-secrets-certs-contract.md
 EOF_ENV
 assert_fails_with "Missing offline install bundle artifact content in config/runtime.env.sample: runtime configuration key" --bundle-dir "${runtime_sample_doc_only}"
 
+runtime_sample_concrete_env="${workdir}/runtime-sample-concrete-env"
+create_valid_bundle "${runtime_sample_concrete_env}"
+perl -0pi -e 's/^AEGISOPS_RUNTIME_ENV=.*$/AEGISOPS_RUNTIME_ENV=\/etc\/aegisops\/runtime.env/m' "${runtime_sample_concrete_env}/config/runtime.env.sample"
+assert_fails_with "Missing offline install bundle artifact content in config/runtime.env.sample: placeholder runtime env key" --bundle-dir "${runtime_sample_concrete_env}"
+
 hidden_install_readme_content="${workdir}/hidden-install-readme-content"
 create_valid_bundle "${hidden_install_readme_content}"
 cat >"${hidden_install_readme_content}/install/README.md" <<'EOF_INSTALL'
@@ -496,6 +501,11 @@ create_valid_bundle "${bundle_production_billing}"
 printf '%s\n' "Production billing is enabled after install." >>"${bundle_production_billing}/install/README.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_production_billing}"
 
+bundle_bare_billing="${workdir}/bundle-bare-billing"
+create_valid_bundle "${bundle_bare_billing}"
+printf '%s\n' "Billing is enabled after install." >>"${bundle_bare_billing}/BUNDLE-MANIFEST.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_bare_billing}"
+
 bundle_mixed_silent_update="${workdir}/bundle-mixed-silent-update"
 create_valid_bundle "${bundle_mixed_silent_update}"
 printf '%s\n' "Unsupported hosted update services are documented, and silent auto-upgrade is enabled after install." >>"${bundle_mixed_silent_update}/install/README.md"
@@ -516,6 +526,21 @@ create_valid_bundle "${bundle_checksum_completeness}"
 printf '%s\n' "Bundle files provide checksum completeness." >>"${bundle_checksum_completeness}/BUNDLE-MANIFEST.md"
 assert_fails_with "unsupported completeness, approval, or readiness claim" --bundle-dir "${bundle_checksum_completeness}"
 
+bundle_sbom_generation="${workdir}/bundle-sbom-generation"
+create_valid_bundle "${bundle_sbom_generation}"
+printf '%s\n' "SBOM generation is supported by this bundle." >>"${bundle_sbom_generation}/BUNDLE-MANIFEST.md"
+assert_fails_with "unsupported completeness, approval, or readiness claim" --bundle-dir "${bundle_sbom_generation}"
+
+bundle_migration_implementation="${workdir}/bundle-migration-implementation"
+create_valid_bundle "${bundle_migration_implementation}"
+printf '%s\n' "Migration guide implementation is supported by this bundle." >>"${bundle_migration_implementation}/BUNDLE-MANIFEST.md"
+assert_fails_with "unsupported completeness, approval, or readiness claim" --bundle-dir "${bundle_migration_implementation}"
+
+bundle_licensing_conclusions="${workdir}/bundle-licensing-conclusions"
+create_valid_bundle "${bundle_licensing_conclusions}"
+printf '%s\n' "Licensing conclusions are approved by this bundle." >>"${bundle_licensing_conclusions}/BUNDLE-MANIFEST.md"
+assert_fails_with "unsupported completeness, approval, or readiness claim" --bundle-dir "${bundle_licensing_conclusions}"
+
 bundle_commercial_replacement="${workdir}/bundle-commercial-replacement"
 create_valid_bundle "${bundle_commercial_replacement}"
 printf '%s\n' "Offline install bundle proves commercial replacement readiness." >>"${bundle_commercial_replacement}/BUNDLE-MANIFEST.md"
@@ -535,6 +560,11 @@ bundle_authorization_header="${workdir}/bundle-authorization-header"
 create_valid_bundle "${bundle_authorization_header}"
 printf '%s\n' "Authorization: Bearer live-production-token-abcdef1234567890" >>"${bundle_authorization_header}/config/runtime.env.sample"
 assert_fails_with "production secret-looking value" --bundle-dir "${bundle_authorization_header}"
+
+bundle_credential_url="${workdir}/bundle-credential-url"
+create_valid_bundle "${bundle_credential_url}"
+printf '%s\n' "DATABASE_URL=postgres://prod_user:live-production-password-abcdef123456@db.example/aegisops" >>"${bundle_credential_url}/config/runtime.env.sample"
+assert_fails_with "production secret-looking value" --bundle-dir "${bundle_credential_url}"
 
 bundle_inline_comment_secret="${workdir}/bundle-inline-comment-secret"
 create_valid_bundle "${bundle_inline_comment_secret}"
@@ -560,6 +590,11 @@ bundle_ga_claim="${workdir}/bundle-ga-claim"
 create_valid_bundle "${bundle_ga_claim}"
 printf '%s\n' "Bundle manifest proves GA readiness." >>"${bundle_ga_claim}/BUNDLE-MANIFEST.md"
 assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_ga_claim}"
+
+bundle_rc_proof="${workdir}/bundle-rc-proof"
+create_valid_bundle "${bundle_rc_proof}"
+printf '%s\n' "This bundle provides RC proof." >>"${bundle_rc_proof}/BUNDLE-MANIFEST.md"
+assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_rc_proof}"
 
 bundle_files_readiness_claim="${workdir}/bundle-files-readiness-claim"
 create_valid_bundle "${bundle_files_readiness_claim}"
@@ -595,6 +630,11 @@ bundle_authority="${workdir}/bundle-authority"
 create_valid_bundle "${bundle_authority}"
 printf '%s\n' "This contract is release gate authority." >>"${bundle_authority}/BUNDLE-MANIFEST.md"
 assert_fails_with "bundle authority claim" --bundle-dir "${bundle_authority}"
+
+bundle_gate_substitute="${workdir}/bundle-gate-substitute"
+create_valid_bundle "${bundle_gate_substitute}"
+printf '%s\n' "This contract is substitute evidence for the Phase 51.3 gate contract." >>"${bundle_gate_substitute}/BUNDLE-MANIFEST.md"
+assert_fails_with "bundle authority claim" --bundle-dir "${bundle_gate_substitute}"
 
 bundle_self_authority="${workdir}/bundle-self-authority"
 create_valid_bundle "${bundle_self_authority}"

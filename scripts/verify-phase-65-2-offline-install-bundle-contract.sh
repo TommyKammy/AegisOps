@@ -251,11 +251,12 @@ scan_forbidden_text() {
   fi
 
   if ! printf '%s' "${decoded_text}" | perl -Mstrict -Mwarnings -0ne '
-    my $text = $_;
-    exit 1 if $text =~ /(AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})/i;
-    exit 1 if $text =~ /\bauthorization\s*:\s*(?:bearer|basic)\s+(?!<[^>]+>)[A-Za-z0-9_+\.\/=-]{12,}/i;
+      my $text = $_;
+      exit 1 if $text =~ /(AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})/i;
+      exit 1 if $text =~ /\bauthorization\s*:\s*(?:bearer|basic)\s+(?!<[^>]+>)[A-Za-z0-9_+\.\/=-]{12,}/i;
+      exit 1 if $text =~ m{\b[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]+:(?!<[^>]+>@)[^/\s@]{8,}@}i;
 
-    for my $line (split /\n/, $text) {
+      for my $line (split /\n/, $text) {
       while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|[A-Za-z0-9_-]*(?:password|secret[_-]?key|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
         my $value = $3;
         $value =~ s/^["'\'']//;
@@ -311,35 +312,35 @@ scan_forbidden_text() {
     exit 1
   fi
 
-  if grep -Eiq -- '(hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?([[:space:]-]+readiness)?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|background entitlement checks?|production installer([[:space:]-]+(behavior|completeness))?|(production[[:space:]-]+)?entitlement enforcement|production billing|commercial billing|release[[:space:]-]+channel([[:space:]-]+(behavior|services?|updates?|readiness))?)[[:space:]-]+((is|are)[[:space:]-]+)?(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered)' <<<"${claim_scan_text}"; then
-    echo "Forbidden ${description}: hosted, silent update, production installer, entitlement, or billing claim detected" >&2
-    exit 1
-  fi
+    if grep -Eiq -- '(hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?([[:space:]-]+readiness)?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|background entitlement checks?|production installer([[:space:]-]+(behavior|completeness))?|(production[[:space:]-]+)?entitlement enforcement|billing|production billing|commercial billing|release[[:space:]-]+channel([[:space:]-]+(behavior|services?|updates?|readiness))?)[[:space:]-]+((is|are)[[:space:]-]+)?(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: hosted, silent update, production installer, entitlement, or billing claim detected" >&2
+      exit 1
+    fi
 
   if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(provides|delivers|establishes|proves|satisfies|includes|contains)[^.?!;]*(production installer|production installer completeness|hosted update services?([[:space:]-]+readiness)?|network update services?|silent auto-upgrade|silent auto upgrade|background entitlement checks?|(production[[:space:]-]+)?entitlement enforcement|production billing|commercial billing|release[[:space:]-]+channel([[:space:]-]+(behavior|services?|updates?|readiness))?)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: hosted, silent update, production installer, entitlement, or billing claim detected" >&2
     exit 1
   fi
 
-  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output|docs|release notes?|operator-facing summaries|downstream receipts)[^.?!;]*(prove|proves|satisfy|satisfies|pass|passes|claim|claims|approve|approves|accept|accepts|create|creates|establish|establishes|infer|infers)[^.?!;]*(beta|rc|ga)[[:space:]-]+(pass|readiness|gate|gates|gate acceptance)' <<<"${claim_scan_text}"; then
-    echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
-    exit 1
-  fi
+    if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output|docs|release notes?|operator-facing summaries|downstream receipts)[^.?!;]*(prove|proves|satisfy|satisfies|pass|passes|claim|claims|approve|approves|accept|accepts|create|creates|establish|establishes|infer|infers|provide|provides|deliver|delivers|include|includes)[^.?!;]*(beta|rc|ga)[[:space:]-]+(pass|proof|readiness|gate|gates|gate acceptance)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
+      exit 1
+    fi
 
-  if grep -Eiq -- '(beta|rc|ga)[[:space:]-]+(pass|readiness|gate|gates|gate acceptance)[^.?!;]*(is|are|becomes|become)[^.?!;]*(proven|satisfied|passed|approved|accepted|created|established)[^.?!;]*(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output|docs|release notes?|operator-facing summaries|downstream receipts)' <<<"${claim_scan_text}"; then
-    echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
-    exit 1
-  fi
+    if grep -Eiq -- '(beta|rc|ga)[[:space:]-]+(pass|proof|readiness|gate|gates|gate acceptance)[^.?!;]*(is|are|becomes|become)[^.?!;]*(proven|satisfied|passed|approved|accepted|created|established|provided|delivered|included)[^.?!;]*(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output|docs|release notes?|operator-facing summaries|downstream receipts)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
+      exit 1
+    fi
 
-  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output|docs|release notes?|operator-facing summaries|downstream receipts)[^.?!;]*(prove|proves|satisfy|satisfies|pass|passes|claim|claims|approve|approves|accept|accepts|create|creates|establish|establishes|infer|infers|provide|provides|deliver|delivers|include|includes)[^.?!;]*((sbom|checksum|signing)[[:space:]-]+completeness|licensing[[:space:]-]+approval|migration[[:space:]-]+readiness|support[[:space:]-]+readiness|(self-service[[:space:]-]+commercial|commercial[[:space:]-]+replacement)[[:space:]-]+readiness|design-partner[[:space:]-]+evidence[[:space:]-]+completeness)' <<<"${claim_scan_text}"; then
-    echo "Forbidden ${description}: unsupported completeness, approval, or readiness claim detected" >&2
-    exit 1
-  fi
+    if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output|docs|release notes?|operator-facing summaries|downstream receipts)[^.?!;]*(prove|proves|satisfy|satisfies|pass|passes|claim|claims|approve|approves|accept|accepts|create|creates|establish|establishes|infer|infers|provide|provides|deliver|delivers|include|includes|support|supports|implement|implements)[^.?!;]*((sbom|checksum|signing)[[:space:]-]+(completeness|generation)|(licensing[[:space:]-]+(approval|conclusions?))|(migration[[:space:]-]+(readiness|guide[[:space:]-]+implementation|implementation))|support[[:space:]-]+readiness|(self-service[[:space:]-]+commercial|commercial[[:space:]-]+replacement)[[:space:]-]+readiness|design-partner[[:space:]-]+evidence[[:space:]-]+completeness)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: unsupported completeness, approval, or readiness claim detected" >&2
+      exit 1
+    fi
 
-  if grep -Eiq -- '((sbom|checksum|signing)[[:space:]-]+completeness|licensing[[:space:]-]+approval|migration[[:space:]-]+readiness|support[[:space:]-]+readiness|(self-service[[:space:]-]+commercial|commercial[[:space:]-]+replacement)[[:space:]-]+readiness|design-partner[[:space:]-]+evidence[[:space:]-]+completeness)[^.?!;]*(is|are|becomes|become)[^.?!;]*(proven|satisfied|passed|approved|accepted|created|established|provided|delivered|included)[^.?!;]*(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output|docs|release notes?|operator-facing summaries|downstream receipts)' <<<"${claim_scan_text}"; then
-    echo "Forbidden ${description}: unsupported completeness, approval, or readiness claim detected" >&2
-    exit 1
-  fi
+    if grep -Eiq -- '((sbom|checksum|signing)[[:space:]-]+(completeness|generation)|(licensing[[:space:]-]+(approval|conclusions?))|(migration[[:space:]-]+(readiness|guide[[:space:]-]+implementation|implementation))|support[[:space:]-]+readiness|(self-service[[:space:]-]+commercial|commercial[[:space:]-]+replacement)[[:space:]-]+readiness|design-partner[[:space:]-]+evidence[[:space:]-]+completeness)[^.?!;]*(is|are|becomes|become)[^.?!;]*(proven|satisfied|passed|approved|accepted|created|established|provided|delivered|included|supported|implemented)[^.?!;]*(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output|docs|release notes?|operator-facing summaries|downstream receipts)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: unsupported completeness, approval, or readiness claim detected" >&2
+      exit 1
+    fi
 
   if grep -Eiq -- '(verifier output|issue-lint output|install output|smoke output|offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|docs|release notes?|operator-facing summaries|downstream receipts)[[:space:]-]+(is|are|acts as|serve as|serves as|becomes|become|establishes|prove|proves|satisfies)[[:space:]-]+([[:alnum:] /-]+[[:space:]-]+)?(readiness|release|gate|workflow|limitation|install|smoke)[[:space:]-]+truth' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: verifier, issue-lint, install, or smoke truth claim detected" >&2
@@ -356,10 +357,15 @@ scan_forbidden_text() {
     exit 1
   fi
 
-  if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|this contract)[^.?!;]*(is|are|acts as|serve as|serves as|becomes|become|provides|establishes|creates)[^.?!;]*(workflow|support|runtime[[:space:]-]+execution|release[[:space:]-]+gate|beta[[:space:]-]+gate|rc[[:space:]-]+gate|ga[[:space:]-]+gate|entitlement|billing)[[:space:]-]+authority' <<<"${claim_scan_text}"; then
-    echo "Forbidden ${description}: bundle authority claim detected" >&2
-    exit 1
-  fi
+    if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|this contract)[^.?!;]*(is|are|acts as|serve as|serves as|becomes|become|provides|establishes|creates)[^.?!;]*(workflow|support|runtime[[:space:]-]+execution|release[[:space:]-]+gate|beta[[:space:]-]+gate|rc[[:space:]-]+gate|ga[[:space:]-]+gate|entitlement|billing)[[:space:]-]+authority' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: bundle authority claim detected" >&2
+      exit 1
+    fi
+
+    if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|this contract)[^.?!;]*(is|are|acts as|serve as|serves as|becomes|become|provides|establishes|creates)[^.?!;]*(substitute[[:space:]-]+evidence|evidence[[:space:]-]+substitute)[^.?!;]*(phase[[:space:]-]+51[.]3[[:space:]-]+gate[[:space:]-]+contract|gate[[:space:]-]+contract)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: bundle authority claim detected" >&2
+      exit 1
+    fi
 
   if grep -Eiq -- '(workflow|support|runtime[[:space:]-]+execution|release[[:space:]-]+gate|beta[[:space:]-]+gate|rc[[:space:]-]+gate|ga[[:space:]-]+gate|entitlement|billing)[[:space:]-]+authority[^.?!;]*(is|are|becomes|become|comes from|depends on|is satisfied by|are satisfied by|is proven by|are proven by|established by|created by)[^.?!;]*(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|this contract)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: bundle authority claim detected" >&2
@@ -631,7 +637,7 @@ if [[ -n "${bundle_dir}" ]]; then
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)' "dependency assumptions and manual prerequisites"
   require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" 'docs/deployment/env-secrets-certs-contract[.]md' "secret-source contract citation"
   require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_PROFILE[[:space:]]*=' "runtime configuration key"
-  require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_RUNTIME_ENV[[:space:]]*=' "runtime configuration key"
+    require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_RUNTIME_ENV[[:space:]]*=[[:space:]]*<runtime-env-file>([[:space:]]|$)' "placeholder runtime env key"
   require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_SECRET_SOURCE_DOC[[:space:]]*=[[:space:]]*docs/deployment/env-secrets-certs-contract[.]md([[:space:]]|$)' "secret-source contract key"
   require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "^[[:space:]]*release bundle identifier:[[:space:]]*${escaped_release_bundle_identifier}([[:space:]]|\$)" "matching release bundle identifier"
   require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "^[[:space:]]*repository revision:[[:space:]]*${escaped_repository_revision}([[:space:]]|\$)" "matching repository revision"
