@@ -194,7 +194,7 @@ scan_forbidden_text() {
       tr '[:upper:]' '[:lower:]' |
       sed -E \
         -e 's/[[:space:]]+/ /g' \
-        -e 's/,[[:space:]]+(and|but)[[:space:]]+((hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|production installer|production entitlement enforcement|commercial billing|sbom|checksum|signing|licensing|migration|support|design-partner evidence|release notes?)[^,.?!;]*(is|are)[^,.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered|accepted))/. \2/g'
+        -e 's/([,;][[:space:]]*)?(and|but)[[:space:]]+((hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?([[:space:]-]+readiness)?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|production installer|production entitlement enforcement|commercial billing|sbom|checksum|signing|licensing|migration|support|design-partner evidence|release notes?)[^,.?!;]*(is|are)[^,.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered|accepted))/. \3/g'
   )"
   claim_scan_text="$(
     printf '%s' "${normalized_text}" |
@@ -235,7 +235,6 @@ scan_forbidden_text() {
     exit 1 if $text =~ /\bauthorization\s*:\s*(?:bearer|basic)\s+(?!<[^>]+>)[A-Za-z0-9_+\.\/=-]{12,}/i;
 
     for my $line (split /\n/, $text) {
-      $line =~ s/[[:space:]]+#.*$//;
       while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|[A-Za-z0-9_-]*(?:password|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
         my $value = $3;
         $value =~ s/^["'\'']//;
@@ -281,12 +280,12 @@ scan_forbidden_text() {
     exit 1
   fi
 
-  if grep -Eiq -- '(hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|background entitlement checks?|production installer([[:space:]-]+(behavior|completeness))?|(production[[:space:]-]+)?entitlement enforcement|production billing|commercial billing|release[[:space:]-]+channel([[:space:]-]+(behavior|services?|updates?|readiness))?)[[:space:]-]+((is|are)[[:space:]-]+)?(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?([[:space:]-]+readiness)?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|background entitlement checks?|production installer([[:space:]-]+(behavior|completeness))?|(production[[:space:]-]+)?entitlement enforcement|production billing|commercial billing|release[[:space:]-]+channel([[:space:]-]+(behavior|services?|updates?|readiness))?)[[:space:]-]+((is|are)[[:space:]-]+)?(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: hosted, silent update, production installer, entitlement, or billing claim detected" >&2
     exit 1
   fi
 
-  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(provides|delivers|establishes|proves|satisfies|includes|contains)[^.?!;]*(production installer|production installer completeness|hosted update services?|network update services?|silent auto-upgrade|silent auto upgrade|background entitlement checks?|(production[[:space:]-]+)?entitlement enforcement|production billing|commercial billing|release[[:space:]-]+channel([[:space:]-]+(behavior|services?|updates?|readiness))?)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(provides|delivers|establishes|proves|satisfies|includes|contains)[^.?!;]*(production installer|production installer completeness|hosted update services?([[:space:]-]+readiness)?|network update services?|silent auto-upgrade|silent auto upgrade|background entitlement checks?|(production[[:space:]-]+)?entitlement enforcement|production billing|commercial billing|release[[:space:]-]+channel([[:space:]-]+(behavior|services?|updates?|readiness))?)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: hosted, silent update, production installer, entitlement, or billing claim detected" >&2
     exit 1
   fi
