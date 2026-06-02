@@ -118,6 +118,7 @@ EOF_EVIDENCE
   copy_repo_path "${repo_root}" "${target}" "docs/deployment/first-user-stack.md"
   copy_repo_path "${repo_root}" "${target}" "docs/deployment/host-preflight-contract.md"
   copy_repo_path "${repo_root}" "${target}" "docs/deployment/clean-host-smoke-skeleton.md"
+  copy_repo_path "${repo_root}" "${target}" "docs/deployment/env-secrets-certs-contract.md"
   copy_repo_path "${repo_root}" "${target}" "docs/runbook.md"
 }
 
@@ -165,6 +166,24 @@ local_home_path="/""Users/example/aegisops"
 printf '%s\n' "Do not use ${local_home_path} in publishable guidance." >>"${local_path_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "workstation-local absolute path" --repo-root "${local_path_repo}"
 
+root_path_repo="${workdir}/root-path"
+create_valid_repo "${root_path_repo}"
+root_home_path="/""root/private/aegisops"
+printf '%s\n' "Do not use ${root_home_path} in publishable guidance." >>"${root_path_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "workstation-local absolute path" --repo-root "${root_path_repo}"
+
+windows_posix_path_repo="${workdir}/windows-posix-path"
+create_valid_repo "${windows_posix_path_repo}"
+windows_posix_home_path="C:""/""Users/example/aegisops"
+printf '%s\n' "Do not use ${windows_posix_home_path} in publishable guidance." >>"${windows_posix_path_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "workstation-local absolute path" --repo-root "${windows_posix_path_repo}"
+
+json_escaped_path_repo="${workdir}/json-escaped-path"
+create_valid_repo "${json_escaped_path_repo}"
+json_escaped_home_path='\/'"home"'\/example\/aegisops'
+printf '%s\n' "Do not use ${json_escaped_home_path} in publishable guidance." >>"${json_escaped_path_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "workstation-local absolute path" --repo-root "${json_escaped_path_repo}"
+
 secret_repo="${workdir}/secret"
 create_valid_repo "${secret_repo}"
 printf '%s\n' "api_key = live-secret-looking-value" >>"${secret_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
@@ -200,6 +219,16 @@ create_valid_repo "${rc_claim_repo}"
 printf '%s\n' "Offline install bundle proves RC readiness." >>"${rc_claim_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "inferred Beta/RC/GA readiness claim" --repo-root "${rc_claim_repo}"
 
+reversed_rc_claim_repo="${workdir}/reversed-rc-claim"
+create_valid_repo "${reversed_rc_claim_repo}"
+printf '%s\n' "RC readiness is proven by verifier output." >>"${reversed_rc_claim_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "inferred Beta/RC/GA readiness claim" --repo-root "${reversed_rc_claim_repo}"
+
+reversed_truth_repo="${workdir}/reversed-truth"
+create_valid_repo "${reversed_truth_repo}"
+printf '%s\n' "Readiness truth is satisfied by issue-lint output." >>"${reversed_truth_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "verifier, issue-lint, install, or smoke truth claim" --repo-root "${reversed_truth_repo}"
+
 valid_bundle="${workdir}/valid-bundle"
 create_valid_bundle "${valid_bundle}"
 assert_passes --bundle-dir "${valid_bundle}"
@@ -233,6 +262,11 @@ missing_approval_record="${workdir}/missing-approval-record"
 create_valid_bundle "${missing_approval_record}"
 perl -0pi -e 's/^approval record:.*\n//m' "${missing_approval_record}/BUNDLE-MANIFEST.md"
 assert_fails_with "Missing offline install bundle metadata value: approval record" --bundle-dir "${missing_approval_record}"
+
+commented_manifest_metadata="${workdir}/commented-manifest-metadata"
+create_valid_bundle "${commented_manifest_metadata}"
+perl -0pi -e 's/^contract identifier:.*$/<!-- contract identifier: phase-65-offline-install-bundle-contract-v1 -->/m' "${commented_manifest_metadata}/BUNDLE-MANIFEST.md"
+assert_fails_with "Missing offline install bundle metadata value: contract identifier" --bundle-dir "${commented_manifest_metadata}"
 
 blank_bundle_owner="${workdir}/blank-bundle-owner"
 create_valid_bundle "${blank_bundle_owner}"
@@ -274,10 +308,20 @@ create_valid_bundle "${invalid_preflight_revision}"
 perl -0pi -e 's/^repository revision:.*$/repository revision: deadbeef1234/m' "${invalid_preflight_revision}/evidence/install-preflight-output.txt"
 assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching repository revision" --bundle-dir "${invalid_preflight_revision}"
 
+suffix_preflight_revision="${workdir}/suffix-preflight-revision"
+create_valid_bundle "${suffix_preflight_revision}"
+perl -0pi -e 's/^release bundle identifier:.*$/release bundle identifier: aegisops-beta-cea7db232373-extra/m' "${suffix_preflight_revision}/evidence/install-preflight-output.txt"
+assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching release bundle identifier" --bundle-dir "${suffix_preflight_revision}"
+
 invalid_bundled_inventory="${workdir}/invalid-bundled-inventory"
 create_valid_bundle "${invalid_bundled_inventory}"
 printf '%s\n' "# Invalid Inventory" >"${invalid_bundled_inventory}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with "Invalid offline install bundle inherited document content: docs/phase-65-1-release-bundle-inventory.md" --bundle-dir "${invalid_bundled_inventory}"
+
+missing_bundled_secrets_contract="${workdir}/missing-bundled-secrets-contract"
+create_valid_bundle "${missing_bundled_secrets_contract}"
+rm "${missing_bundled_secrets_contract}/docs/deployment/env-secrets-certs-contract.md"
+assert_fails_with "Missing offline install bundle required artifact: docs/deployment/env-secrets-certs-contract.md" --bundle-dir "${missing_bundled_secrets_contract}"
 
 bundle_local_path="${workdir}/bundle-local-path"
 create_valid_bundle "${bundle_local_path}"
@@ -299,6 +343,11 @@ create_valid_bundle "${bundle_customer_private}"
 printf '%s\n' "Customer-private data included for convenience." >>"${bundle_customer_private}/BUNDLE-MANIFEST.md"
 assert_fails_with "customer-private data claim" --bundle-dir "${bundle_customer_private}"
 
+bundle_customer_private_copula="${workdir}/bundle-customer-private-copula"
+create_valid_bundle "${bundle_customer_private_copula}"
+printf '%s\n' "Customer-private records are included for convenience." >>"${bundle_customer_private_copula}/BUNDLE-MANIFEST.md"
+assert_fails_with "customer-private data claim" --bundle-dir "${bundle_customer_private_copula}"
+
 bundle_hidden_hosted="${workdir}/bundle-hidden-hosted"
 create_valid_bundle "${bundle_hidden_hosted}"
 printf '%s\n' "Hidden hosted dependency is required during install." >>"${bundle_hidden_hosted}/install/README.md"
@@ -314,6 +363,16 @@ create_valid_bundle "${bundle_silent_update}"
 printf '%s\n' "Silent auto-upgrade is enabled after install." >>"${bundle_silent_update}/install/README.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_silent_update}"
 
+bundle_network_update="${workdir}/bundle-network-update"
+create_valid_bundle "${bundle_network_update}"
+printf '%s\n' "Network update services are available after install." >>"${bundle_network_update}/install/README.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_network_update}"
+
+bundle_background_entitlement="${workdir}/bundle-background-entitlement"
+create_valid_bundle "${bundle_background_entitlement}"
+printf '%s\n' "Background entitlement checks are enabled after install." >>"${bundle_background_entitlement}/install/README.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_background_entitlement}"
+
 bundle_mixed_silent_update="${workdir}/bundle-mixed-silent-update"
 create_valid_bundle "${bundle_mixed_silent_update}"
 printf '%s\n' "Unsupported hosted update services are documented, and silent auto-upgrade is enabled after install." >>"${bundle_mixed_silent_update}/install/README.md"
@@ -328,6 +387,16 @@ bundle_ga_claim="${workdir}/bundle-ga-claim"
 create_valid_bundle "${bundle_ga_claim}"
 printf '%s\n' "Bundle manifest proves GA readiness." >>"${bundle_ga_claim}/BUNDLE-MANIFEST.md"
 assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_ga_claim}"
+
+bundle_reversed_ga_claim="${workdir}/bundle-reversed-ga-claim"
+create_valid_bundle "${bundle_reversed_ga_claim}"
+printf '%s\n' "GA readiness is proven by bundle manifest." >>"${bundle_reversed_ga_claim}/BUNDLE-MANIFEST.md"
+assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_reversed_ga_claim}"
+
+bundle_reversed_truth="${workdir}/bundle-reversed-truth"
+create_valid_bundle "${bundle_reversed_truth}"
+printf '%s\n' "Release truth is established by verifier output." >>"${bundle_reversed_truth}/BUNDLE-MANIFEST.md"
+assert_fails_with "verifier, issue-lint, install, or smoke truth claim" --bundle-dir "${bundle_reversed_truth}"
 
 bundle_symlink_artifact="${workdir}/bundle-symlink-artifact"
 create_valid_bundle "${bundle_symlink_artifact}"

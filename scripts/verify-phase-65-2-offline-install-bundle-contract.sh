@@ -73,9 +73,11 @@ manifest_value() {
   local file="$1"
   local label="$2"
 
-  perl -Mstrict -Mwarnings -e '
+  perl -Mstrict -Mwarnings -0 -e '
     my $label = shift @ARGV;
-    while (my $line = <>) {
+    my $text = <>;
+    $text =~ s/<!--.*?-->//gs;
+    for my $line (split /\n/, $text) {
       if ($line =~ /^\s*\Q$label\E\s*:\s*(.*?)\s*$/i) {
         print "$1\n";
         last;
@@ -174,15 +176,28 @@ scan_forbidden_text() {
         -e 's/[^.?!;]*(unsupported|excludes|manual)[^.?!;]*(hosted|silent|production|entitlement|billing|rc|ga|readiness)[^.?!;]*[.?!;]/ /g'
   )"
 
-  local mac_home_fragment linux_home_fragment windows_home_fragment encoded_mac_home_fragment encoded_windows_home_fragment workstation_path_pattern
-  mac_home_fragment="/""Users/"
-  linux_home_fragment="/""home/[^/[:space:]]+"
-  windows_home_fragment="C:""\\""Users""\\"
-  encoded_mac_home_fragment="%2f""Users%2f"
-  encoded_windows_home_fragment="%5c""Users%5c"
-  workstation_path_pattern="(^|[^[:alnum:]_.-])(${mac_home_fragment}|${linux_home_fragment}|${windows_home_fragment}|${encoded_mac_home_fragment}|${encoded_windows_home_fragment})"
+  if ! printf '%s' "${decoded_text}" | perl -Mstrict -Mwarnings -0ne '
+    my @candidates = ($_);
+    (my $json_unescaped = $_) =~ s{\\/}{/}g;
+    push @candidates, $json_unescaped if $json_unescaped ne $_;
 
-  if grep -Eiq -- "${workstation_path_pattern}" <<<"${decoded_text}"; then
+    for my $text (@candidates) {
+      if ($text =~ /(^|[^A-Za-z0-9_.\/\\-])([A-Za-z]:[\\\/]+Users[\\\/]+[^\\\/\s]+(?:[\\\/][^\s]*)?)/i) {
+        exit 1;
+      }
+
+      my $mac_home_prefix = "/" . "Users" . "/";
+      my $linux_home_prefix = "/" . "home" . "/";
+      my $root_home_prefix = "/" . "root";
+      my $unix_home_re = qr{(?:\Q$mac_home_prefix\E|\Q$linux_home_prefix\E)[^/\s]+(?:/[^\s]*)?|\Q$root_home_prefix\E/[^\s]*};
+      while ($text =~ /$unix_home_re/g) {
+        my $start = $-[0];
+        next if $start > 0 && substr($text, $start - 1, 1) =~ /[A-Za-z0-9_.\/\\-]/;
+        next if substr($text, $start, length($mac_home_prefix)) eq $mac_home_prefix && substr($text, 0, $start) =~ /(?:^|[^A-Za-z0-9_])[A-Za-z]:$/;
+        exit 1;
+      }
+    }
+  '; then
     echo "Forbidden ${description}: workstation-local absolute path detected" >&2
     exit 1
   fi
@@ -228,17 +243,17 @@ scan_forbidden_text() {
     exit 1
   fi
 
-  if grep -Eiq -- '(customer-private|customer private|customer-confidential|customer confidential)[[:space:]-]+(data|payload|record|records)[[:space:]-]+(included|packaged|present|bundled|provided)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(customer-private|customer private|customer-confidential|customer confidential)[[:space:]-]+(data|payload|record|records)[[:space:]-]+((is|are)[[:space:]-]+)?(included|packaged|present|bundled|provided)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: customer-private data claim detected" >&2
     exit 1
   fi
 
-  if grep -Eiq -- '(hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update service|network update service|silent update|silent auto-upgrade|silent auto upgrade|production installer([[:space:]-]+(behavior|completeness))?|production entitlement enforcement|commercial billing)[[:space:]-]+((is|are)[[:space:]-]+)?(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|background entitlement checks?|production installer([[:space:]-]+(behavior|completeness))?|production entitlement enforcement|commercial billing)[[:space:]-]+((is|are)[[:space:]-]+)?(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: hosted, silent update, production installer, entitlement, or billing claim detected" >&2
     exit 1
   fi
 
-  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(provides|delivers|establishes|proves|satisfies|includes|contains)[^.?!;]*(production installer|production installer completeness|hosted update service|silent auto-upgrade|silent auto upgrade|production entitlement enforcement|commercial billing)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(provides|delivers|establishes|proves|satisfies|includes|contains)[^.?!;]*(production installer|production installer completeness|hosted update services?|network update services?|silent auto-upgrade|silent auto upgrade|background entitlement checks?|production entitlement enforcement|commercial billing)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: hosted, silent update, production installer, entitlement, or billing claim detected" >&2
     exit 1
   fi
@@ -248,7 +263,17 @@ scan_forbidden_text() {
     exit 1
   fi
 
+  if grep -Eiq -- '(beta|rc|ga)[[:space:]-]+(pass|readiness|gate|gates|gate acceptance)[^.?!;]*(is|are|becomes|become)[^.?!;]*(proven|satisfied|passed|approved|accepted|created|established)[^.?!;]*(offline install bundle|offline bundle|bundle manifest|install output|smoke output|verifier output|issue-lint output)' <<<"${claim_scan_text}"; then
+    echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
+    exit 1
+  fi
+
   if grep -Eiq -- '(verifier output|issue-lint output|install output|smoke output|bundle files|manifest entries)[[:space:]-]+(is|are|acts as|serve as|serves as|becomes|become|establishes|prove|proves|satisfies)[[:space:]-]+([[:alnum:] /-]+[[:space:]-]+)?(readiness|release|gate|workflow|limitation|install|smoke)[[:space:]-]+truth' <<<"${claim_scan_text}"; then
+    echo "Forbidden ${description}: verifier, issue-lint, install, or smoke truth claim detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(readiness|release|gate|workflow|limitation|install|smoke)[[:space:]-]+truth[^.?!;]*(is|are|becomes|become|comes from|depends on|is satisfied by|are satisfied by|is proven by|are proven by|established by|created by)[^.?!;]*(verifier output|issue-lint output|install output|smoke output|bundle files|manifest entries)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: verifier, issue-lint, install, or smoke truth claim detected" >&2
     exit 1
   fi
@@ -362,6 +387,7 @@ required_bundle_rows=(
   "| \`docs/deployment/first-user-stack.md\` | Platform maintainers | Reviewed first-user install and operating guidance. | Reject the bundle because install guidance is absent. |"
   "| \`docs/deployment/host-preflight-contract.md\` | Platform maintainers | Reviewed host preflight expectations. | Reject the bundle because host assumptions are not inspectable. |"
   "| \`docs/deployment/clean-host-smoke-skeleton.md\` | Platform maintainers | Reviewed clean-host smoke skeleton and false-success rejection posture. | Reject the bundle because clean-host smoke expectations are absent. |"
+  "| \`docs/deployment/env-secrets-certs-contract.md\` | Platform maintainers | Reviewed placeholder-only runtime env, secret-source, and certificate custody contract cited by the runtime sample. | Reject the bundle because secret-source custody guidance is absent. |"
   "| \`docs/runbook.md\` | IT Operations, Information Systems Department | Startup, shutdown, evidence capture, and operator handoff guidance. | Reject the bundle because operator runbook guidance is absent. |"
 )
 
@@ -423,6 +449,7 @@ if [[ -n "${bundle_dir}" ]]; then
     "docs/deployment/first-user-stack.md"
     "docs/deployment/host-preflight-contract.md"
     "docs/deployment/clean-host-smoke-skeleton.md"
+    "docs/deployment/env-secrets-certs-contract.md"
     "docs/runbook.md"
   )
 
@@ -512,8 +539,8 @@ if [[ -n "${bundle_dir}" ]]; then
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(selected[[:space:]-]+profile|profile)' "selected profile"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)' "dependency assumptions and manual prerequisites"
   require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" 'docs/deployment/env-secrets-certs-contract[.]md' "secret-source contract citation"
-  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "release bundle identifier:[[:space:]]*${escaped_release_bundle_identifier}" "matching release bundle identifier"
-  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "repository revision:[[:space:]]*${escaped_repository_revision}" "matching repository revision"
+  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "release bundle identifier:[[:space:]]*${escaped_release_bundle_identifier}([[:space:]]|\$)" "matching release bundle identifier"
+  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "repository revision:[[:space:]]*${escaped_repository_revision}([[:space:]]|\$)" "matching repository revision"
 
   bundled_repo_docs=(
     "docs/phase-65-2-offline-install-bundle-contract.md"
@@ -522,6 +549,7 @@ if [[ -n "${bundle_dir}" ]]; then
     "docs/deployment/first-user-stack.md"
     "docs/deployment/host-preflight-contract.md"
     "docs/deployment/clean-host-smoke-skeleton.md"
+    "docs/deployment/env-secrets-certs-contract.md"
     "docs/runbook.md"
   )
 
@@ -531,6 +559,17 @@ if [[ -n "${bundle_dir}" ]]; then
 
   bundle_scan_files=()
   while IFS= read -r -d '' bundle_scan_file; do
+    relative_bundle_scan_file="${bundle_scan_file#"${bundle_dir}/"}"
+    skip_exact_repo_doc=false
+    for bundled_repo_doc in "${bundled_repo_docs[@]}"; do
+      if [[ "${relative_bundle_scan_file}" == "${bundled_repo_doc}" ]]; then
+        skip_exact_repo_doc=true
+        break
+      fi
+    done
+    if [[ "${skip_exact_repo_doc}" == true ]]; then
+      continue
+    fi
     bundle_scan_files+=("${bundle_scan_file}")
   done < <(find "${bundle_dir}" -type f -print0)
   scan_forbidden_text "offline install bundle content" "${bundle_scan_files[@]}"

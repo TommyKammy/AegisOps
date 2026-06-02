@@ -47,6 +47,7 @@ The offline install bundle must contain these required files:
 | `docs/deployment/first-user-stack.md` | Platform maintainers | Reviewed first-user install and operating guidance. | Reject the bundle because install guidance is absent. |
 | `docs/deployment/host-preflight-contract.md` | Platform maintainers | Reviewed host preflight expectations. | Reject the bundle because host assumptions are not inspectable. |
 | `docs/deployment/clean-host-smoke-skeleton.md` | Platform maintainers | Reviewed clean-host smoke skeleton and false-success rejection posture. | Reject the bundle because clean-host smoke expectations are absent. |
+| `docs/deployment/env-secrets-certs-contract.md` | Platform maintainers | Reviewed placeholder-only runtime env, secret-source, and certificate custody contract cited by the runtime sample. | Reject the bundle because secret-source custody guidance is absent. |
 | `docs/runbook.md` | IT Operations, Information Systems Department | Startup, shutdown, evidence capture, and operator handoff guidance. | Reject the bundle because operator runbook guidance is absent. |
 
 These files define bundle completeness only. Their presence does not prove install success, clean-host success, Beta readiness, RC readiness, GA readiness, release truth, gate truth, workflow truth, or commercial replacement readiness.
