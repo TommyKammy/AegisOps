@@ -136,6 +136,15 @@ require_bundle_doc_matches_repo() {
   fi
 }
 
+require_bundle_doc_phrase() {
+  local bundle_root="$1"
+  local relative_path="$2"
+  local phrase="$3"
+  local description="$4"
+
+  require_phrase "${bundle_root}/${relative_path}" "${phrase}" "offline install bundle inherited document content in ${relative_path}: ${description}"
+}
+
 markdown_section_text() {
   local file="$1"
   local heading="$2"
@@ -557,6 +566,24 @@ if [[ -n "${bundle_dir}" ]]; then
     "docs/deployment/env-secrets-certs-contract.md"
     "docs/runbook.md"
   )
+
+  require_bundle_doc_phrase "${bundle_dir}" "docs/phase-65-2-offline-install-bundle-contract.md" "The contract identifier is \`phase-65-offline-install-bundle-contract-v1\`." "Phase 65.2 contract identifier"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/phase-65-2-offline-install-bundle-contract.md" "This contract does not claim Phase 66 RC readiness, Phase 67 GA readiness, Beta gate acceptance, RC gate acceptance, GA gate acceptance, self-service commercial readiness, commercial replacement readiness, production entitlement enforcement, hosted update service readiness, release-channel readiness, production installer completeness, SBOM completeness, checksum completeness, signing completeness, licensing approval, migration readiness, support readiness, or design-partner evidence completeness." "Phase 65.2 non-claim boundary"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/phase-65-1-release-bundle-inventory.md" "The inventory identifier is \`phase-65-release-bundle-inventory-v1\`." "Phase 65.1 inventory identifier"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/phase-65-1-release-bundle-inventory.md" "The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct, and Phase 66 remains RC while Phase 67 remains GA." "Phase 65.1 gate boundary carry-forward"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "# Phase 51.3 Pilot, Beta, RC, and GA Gate Contract" "Phase 51.3 gate contract heading"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "Phase 66 is RC and must not be described as GA." "Phase 51.3 RC boundary"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "Phase 67 is GA and must not be materialized until the GA gate evidence exists." "Phase 51.3 GA boundary"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/deployment/first-user-stack.md" "# Phase 52.9 First-User Stack Overview" "first-user stack heading"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/deployment/first-user-stack.md" "First-user docs are operator guidance only." "first-user operator guidance boundary"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/deployment/host-preflight-contract.md" "# Phase 52.6 Host Preflight Contract" "host preflight heading"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/deployment/host-preflight-contract.md" "The host preflight contract gives later setup commands one fail-closed checklist for host prerequisites before the executable first-user stack is started." "host preflight purpose"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/deployment/clean-host-smoke-skeleton.md" "# Phase 52.8 Clean-Host Smoke Skeleton" "clean-host smoke heading"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/deployment/clean-host-smoke-skeleton.md" "Each mocked or skipped step must include the command, the missing prerequisite, the later closing phase, and a safe next action." "clean-host false-success boundary"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/deployment/env-secrets-certs-contract.md" "# Phase 52.5 Env, Secrets, and Cert Generation Contract" "env secrets certs heading"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/deployment/env-secrets-certs-contract.md" "AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, limitation, release, gate, and closeout truth." "env secrets certs authority boundary"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/runbook.md" "# AegisOps Runbook" "runbook heading"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/runbook.md" "This runbook defines the reviewed operator procedure for the current AegisOps startup and shutdown path." "runbook reviewed procedure boundary"
 
   for bundled_repo_doc in "${bundled_repo_docs[@]}"; do
     require_bundle_doc_matches_repo "${bundle_dir}" "${bundled_repo_doc}"

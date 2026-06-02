@@ -160,6 +160,21 @@ create_valid_repo "${corrupt_inventory_repo}"
 printf '%s\n' "x" >"${corrupt_inventory_repo}/docs/phase-65-1-release-bundle-inventory.md"
 assert_fails_with "Missing inherited baseline contract term in docs/phase-65-1-release-bundle-inventory.md" --repo-root "${corrupt_inventory_repo}"
 
+corrupt_gate_repo="${workdir}/corrupt-gate"
+create_valid_repo "${corrupt_gate_repo}"
+printf '%s\n' "x" >"${corrupt_gate_repo}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+assert_fails_with "Missing inherited baseline contract term in docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" --repo-root "${corrupt_gate_repo}"
+
+corrupt_env_contract_repo="${workdir}/corrupt-env-contract"
+create_valid_repo "${corrupt_env_contract_repo}"
+printf '%s\n' "x" >"${corrupt_env_contract_repo}/docs/deployment/env-secrets-certs-contract.md"
+assert_fails_with "Missing inherited baseline contract term in docs/deployment/env-secrets-certs-contract.md" --repo-root "${corrupt_env_contract_repo}"
+
+corrupt_runbook_repo="${workdir}/corrupt-runbook"
+create_valid_repo "${corrupt_runbook_repo}"
+printf '%s\n' "x" >"${corrupt_runbook_repo}/docs/runbook.md"
+assert_fails_with "Missing inherited baseline contract term in docs/runbook.md" --repo-root "${corrupt_runbook_repo}"
+
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"
 local_home_path="/""Users/example/aegisops"
@@ -334,7 +349,27 @@ assert_fails_with "Missing offline install bundle artifact content in evidence/i
 invalid_bundled_inventory="${workdir}/invalid-bundled-inventory"
 create_valid_bundle "${invalid_bundled_inventory}"
 printf '%s\n' "# Invalid Inventory" >"${invalid_bundled_inventory}/docs/phase-65-1-release-bundle-inventory.md"
-assert_fails_with "Invalid offline install bundle inherited document content: docs/phase-65-1-release-bundle-inventory.md" --bundle-dir "${invalid_bundled_inventory}"
+assert_fails_with "Missing offline install bundle inherited document content in docs/phase-65-1-release-bundle-inventory.md" --bundle-dir "${invalid_bundled_inventory}"
+
+invalid_bundled_contract="${workdir}/invalid-bundled-contract"
+create_valid_bundle "${invalid_bundled_contract}"
+printf '%s\n' "# Invalid Contract" >"${invalid_bundled_contract}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "Missing offline install bundle inherited document content in docs/phase-65-2-offline-install-bundle-contract.md" --bundle-dir "${invalid_bundled_contract}"
+
+invalid_bundled_gate="${workdir}/invalid-bundled-gate"
+create_valid_bundle "${invalid_bundled_gate}"
+printf '%s\n' "# Invalid Gate Contract" >"${invalid_bundled_gate}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+assert_fails_with "Missing offline install bundle inherited document content in docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" --bundle-dir "${invalid_bundled_gate}"
+
+invalid_bundled_env_contract="${workdir}/invalid-bundled-env-contract"
+create_valid_bundle "${invalid_bundled_env_contract}"
+printf '%s\n' "# Invalid Env Contract" >"${invalid_bundled_env_contract}/docs/deployment/env-secrets-certs-contract.md"
+assert_fails_with "Missing offline install bundle inherited document content in docs/deployment/env-secrets-certs-contract.md" --bundle-dir "${invalid_bundled_env_contract}"
+
+invalid_bundled_runbook="${workdir}/invalid-bundled-runbook"
+create_valid_bundle "${invalid_bundled_runbook}"
+printf '%s\n' "# Invalid Runbook" >"${invalid_bundled_runbook}/docs/runbook.md"
+assert_fails_with "Missing offline install bundle inherited document content in docs/runbook.md" --bundle-dir "${invalid_bundled_runbook}"
 
 missing_bundled_secrets_contract="${workdir}/missing-bundled-secrets-contract"
 create_valid_bundle "${missing_bundled_secrets_contract}"
