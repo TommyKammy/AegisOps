@@ -209,6 +209,11 @@ create_valid_repo "${hosted_update_repo}"
 printf '%s\n' "Hosted update service is enabled by this bundle." >>"${hosted_update_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --repo-root "${hosted_update_repo}"
 
+release_channel_repo="${workdir}/release-channel"
+create_valid_repo "${release_channel_repo}"
+printf '%s\n' "Release-channel behavior is implemented by this bundle." >>"${release_channel_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --repo-root "${release_channel_repo}"
+
 placeholder_credential_repo="${workdir}/placeholder-credential"
 create_valid_repo "${placeholder_credential_repo}"
 printf '%s\n' "Placeholder credentials are valid auth for beta install." >>"${placeholder_credential_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
@@ -247,6 +252,7 @@ assert_fails_with "verifier, issue-lint, install, or smoke truth claim" --repo-r
 valid_bundle="${workdir}/valid-bundle"
 create_valid_bundle "${valid_bundle}"
 assert_passes --bundle-dir "${valid_bundle}"
+assert_passes --bundle-dir "${valid_bundle}/"
 
 placeholder_secret_sample_bundle="${workdir}/placeholder-secret-sample-bundle"
 create_valid_bundle "${placeholder_secret_sample_bundle}"
@@ -400,6 +406,11 @@ bundle_customer_private_copula="${workdir}/bundle-customer-private-copula"
 create_valid_bundle "${bundle_customer_private_copula}"
 printf '%s\n' "Customer-private records are included for convenience." >>"${bundle_customer_private_copula}/BUNDLE-MANIFEST.md"
 assert_fails_with "customer-private data claim" --bundle-dir "${bundle_customer_private_copula}"
+
+bundle_customer_private_required="${workdir}/bundle-customer-private-required"
+create_valid_bundle "${bundle_customer_private_required}"
+printf '%s\n' "Customer-private data is required during install." >>"${bundle_customer_private_required}/install/README.md"
+assert_fails_with "customer-private data claim" --bundle-dir "${bundle_customer_private_required}"
 
 bundle_hidden_hosted="${workdir}/bundle-hidden-hosted"
 create_valid_bundle "${bundle_hidden_hosted}"
