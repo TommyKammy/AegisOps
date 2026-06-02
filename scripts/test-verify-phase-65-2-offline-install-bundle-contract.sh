@@ -613,6 +613,36 @@ replace_default_bundle_revision "forbidden-doc-claim-v1" \
 printf '%s\n' "Offline install bundle proves GA readiness." >>"${forbidden_inherited_doc_claim_bundle}/docs/runbook.md"
 assert_fails_with "inferred Beta/RC/GA readiness claim" --repo-root "${forbidden_inherited_doc_claim_repo}" --bundle-dir "${forbidden_inherited_doc_claim_bundle}"
 
+forbidden_inherited_doc_truth_claim_repo="${workdir}/forbidden-inherited-doc-truth-claim-repo"
+create_valid_repo "${forbidden_inherited_doc_truth_claim_repo}"
+printf '%s\n' "Readiness truth is satisfied by issue-lint output." >>"${forbidden_inherited_doc_truth_claim_repo}/docs/runbook.md"
+git -C "${forbidden_inherited_doc_truth_claim_repo}" init -q
+git -C "${forbidden_inherited_doc_truth_claim_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" add README.md docs
+git -C "${forbidden_inherited_doc_truth_claim_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" commit -q -m "Create forbidden inherited doc truth claim fixture"
+git -C "${forbidden_inherited_doc_truth_claim_repo}" tag "forbidden-doc-truth-claim-v1"
+forbidden_inherited_doc_truth_claim_bundle="${workdir}/forbidden-inherited-doc-truth-claim-bundle"
+create_valid_bundle "${forbidden_inherited_doc_truth_claim_bundle}"
+replace_default_bundle_revision "forbidden-doc-truth-claim-v1" \
+  "${forbidden_inherited_doc_truth_claim_bundle}/BUNDLE-MANIFEST.md" \
+  "${forbidden_inherited_doc_truth_claim_bundle}/evidence/install-preflight-output.txt"
+printf '%s\n' "Readiness truth is satisfied by issue-lint output." >>"${forbidden_inherited_doc_truth_claim_bundle}/docs/runbook.md"
+assert_fails_with "verifier, issue-lint, install, or smoke truth claim" --repo-root "${forbidden_inherited_doc_truth_claim_repo}" --bundle-dir "${forbidden_inherited_doc_truth_claim_bundle}"
+
+forbidden_inherited_doc_support_bundle_repo="${workdir}/forbidden-inherited-doc-support-bundle-repo"
+create_valid_repo "${forbidden_inherited_doc_support_bundle_repo}"
+printf '%s\n' "This bundle supports automatic support bundle submission." >>"${forbidden_inherited_doc_support_bundle_repo}/docs/runbook.md"
+git -C "${forbidden_inherited_doc_support_bundle_repo}" init -q
+git -C "${forbidden_inherited_doc_support_bundle_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" add README.md docs
+git -C "${forbidden_inherited_doc_support_bundle_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" commit -q -m "Create forbidden inherited doc support bundle fixture"
+git -C "${forbidden_inherited_doc_support_bundle_repo}" tag "forbidden-doc-support-bundle-v1"
+forbidden_inherited_doc_support_bundle="${workdir}/forbidden-inherited-doc-support-bundle"
+create_valid_bundle "${forbidden_inherited_doc_support_bundle}"
+replace_default_bundle_revision "forbidden-doc-support-bundle-v1" \
+  "${forbidden_inherited_doc_support_bundle}/BUNDLE-MANIFEST.md" \
+  "${forbidden_inherited_doc_support_bundle}/evidence/install-preflight-output.txt"
+printf '%s\n' "This bundle supports automatic support bundle submission." >>"${forbidden_inherited_doc_support_bundle}/docs/runbook.md"
+assert_fails_with "unsupported support-bundle automation claim" --repo-root "${forbidden_inherited_doc_support_bundle_repo}" --bundle-dir "${forbidden_inherited_doc_support_bundle}"
+
 missing_bundled_secrets_contract="${workdir}/missing-bundled-secrets-contract"
 create_valid_bundle "${missing_bundled_secrets_contract}"
 rm "${missing_bundled_secrets_contract}/docs/deployment/env-secrets-certs-contract.md"
@@ -808,6 +838,11 @@ create_valid_bundle "${bundle_private_key}"
 printf '%s\n' "PRIVATE_KEY=live-production-key-abcdef1234567890" >>"${bundle_private_key}/config/runtime.env.sample"
 assert_fails_with "production secret-looking value" --bundle-dir "${bundle_private_key}"
 
+bundle_pgp_private_key="${workdir}/bundle-pgp-private-key"
+create_valid_bundle "${bundle_pgp_private_key}"
+printf '%s\n' "-----BEGIN PGP PRIVATE KEY BLOCK-----" >>"${bundle_pgp_private_key}/config/runtime.env.sample"
+assert_fails_with "production secret-looking value" --bundle-dir "${bundle_pgp_private_key}"
+
 bundle_production_secret_claim="${workdir}/bundle-production-secret-claim"
 create_valid_bundle "${bundle_production_secret_claim}"
 printf '%s\n' "Production secrets are included in this bundle." >>"${bundle_production_secret_claim}/BUNDLE-MANIFEST.md"
@@ -907,6 +942,11 @@ bundle_reversed_support_automation="${workdir}/bundle-reversed-support-automatio
 create_valid_bundle "${bundle_reversed_support_automation}"
 printf '%s\n' "This bundle supports automatic support-bundle submission." >>"${bundle_reversed_support_automation}/BUNDLE-MANIFEST.md"
 assert_fails_with "unsupported support-bundle automation claim" --bundle-dir "${bundle_reversed_support_automation}"
+
+bundle_unhyphenated_support_automation="${workdir}/bundle-unhyphenated-support-automation"
+create_valid_bundle "${bundle_unhyphenated_support_automation}"
+printf '%s\n' "This bundle supports automatic support bundle submission." >>"${bundle_unhyphenated_support_automation}/BUNDLE-MANIFEST.md"
+assert_fails_with "unsupported support-bundle automation claim" --bundle-dir "${bundle_unhyphenated_support_automation}"
 
 bundle_negated_clause_support_automation="${workdir}/bundle-negated-clause-support-automation"
 create_valid_bundle "${bundle_negated_clause_support_automation}"

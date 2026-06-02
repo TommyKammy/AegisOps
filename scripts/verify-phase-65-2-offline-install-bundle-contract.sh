@@ -362,7 +362,7 @@ scan_forbidden_text() {
 
   if ! printf '%s' "${decoded_text}" | perl -Mstrict -Mwarnings -0ne '
       my $text = $_;
-      exit 1 if $text =~ /(AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})/i;
+      exit 1 if $text =~ /(AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|BEGIN PGP PRIVATE KEY BLOCK|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})/i;
       exit 1 if $text =~ /\bauthorization\s*:\s*(?:bearer|basic)\s+(?!<[^>]+>)[A-Za-z0-9_+\.\/=-]{12,}/i;
       exit 1 if $text =~ m{\b[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]+:(?!<[^>]+>@)[^/\s@]{8,}@}i;
 
@@ -487,12 +487,12 @@ scan_forbidden_text() {
     exit 1
   fi
 
-  if grep -Eiq -- '(automatic[[:space:]-]+support-bundle[[:space:]-]+submission|support-bundle[[:space:]-]+(automation|submission))[^.?!;]*(is|are)[^.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|delivered)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(automatic[[:space:]-]+support[[:space:]-]+bundle[[:space:]-]+submission|support[[:space:]-]+bundle[[:space:]-]+(automation|submission))[^.?!;]*(is|are)[^.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|delivered)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: unsupported support-bundle automation claim detected" >&2
     exit 1
   fi
 
-  if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files)[^.?!;]*(supports|provides|includes|contains|enables|delivers)[^.?!;]*(automatic[[:space:]-]+support-bundle[[:space:]-]+submission|support-bundle[[:space:]-]+(automation|submission))' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files)[^.?!;]*(supports|provides|includes|contains|enables|delivers)[^.?!;]*(automatic[[:space:]-]+support[[:space:]-]+bundle[[:space:]-]+submission|support[[:space:]-]+bundle[[:space:]-]+(automation|submission))' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: unsupported support-bundle automation claim detected" >&2
     exit 1
   fi
@@ -559,7 +559,7 @@ scan_forbidden_material_text() {
 
   if ! printf '%s' "${decoded_text}" | perl -Mstrict -Mwarnings -0ne '
       my $text = $_;
-      exit 1 if $text =~ /(AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})/i;
+      exit 1 if $text =~ /(AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|BEGIN PGP PRIVATE KEY BLOCK|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})/i;
       exit 1 if $text =~ /\bauthorization\s*:\s*(?:bearer|basic)\s+(?!<[^>]+>)[A-Za-z0-9_+\.\/=-]{12,}/i;
       exit 1 if $text =~ m{\b[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]+:(?!<[^>]+>@)[^/\s@]{8,}@}i;
 
@@ -617,6 +617,26 @@ scan_forbidden_inherited_doc_claim_text() {
 
     if grep -Eiq -- '(beta|rc|ga)[[:space:]-]+(pass|proof|readiness|gate|gates|gate acceptance)[^.?!;]*(is|are|becomes|become)[^.?!;]*(proven|satisfied|passed|approved|accepted|created|established|provided|delivered|included)[^.?!;]*(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries)' <<<"${claim_scan_text}"; then
       echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
+      exit 1
+    fi
+
+    if grep -Eiq -- '(verifier output|issue-lint output|install output|smoke output|offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|docs|release notes?|operator-facing summaries|downstream receipts)[[:space:]-]+(is|are|acts as|serve as|serves as|becomes|become|establishes|prove|proves|satisfies)[[:space:]-]+([[:alnum:] /-]+[[:space:]-]+)?(readiness|release|gate|workflow|limitation|install|smoke)[[:space:]-]+truth' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: verifier, issue-lint, install, or smoke truth claim detected" >&2
+      exit 1
+    fi
+
+    if grep -Eiq -- '(readiness|release|gate|workflow|limitation|install|smoke)[[:space:]-]+truth[^.?!;]*(is|are|becomes|become|comes from|depends on|is satisfied by|are satisfied by|is proven by|are proven by|established by|created by)[^.?!;]*(verifier output|issue-lint output|install output|smoke output|offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|docs|release notes?|operator-facing summaries|downstream receipts)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: verifier, issue-lint, install, or smoke truth claim detected" >&2
+      exit 1
+    fi
+
+    if grep -Eiq -- '(automatic[[:space:]-]+support[[:space:]-]+bundle[[:space:]-]+submission|support[[:space:]-]+bundle[[:space:]-]+(automation|submission))[^.?!;]*(is|are)[^.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|delivered)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: unsupported support-bundle automation claim detected" >&2
+      exit 1
+    fi
+
+    if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files)[^.?!;]*(supports|provides|includes|contains|enables|delivers)[^.?!;]*(automatic[[:space:]-]+support[[:space:]-]+bundle[[:space:]-]+submission|support[[:space:]-]+bundle[[:space:]-]+(automation|submission))' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: unsupported support-bundle automation claim detected" >&2
       exit 1
     fi
   done
