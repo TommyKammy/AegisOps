@@ -367,7 +367,7 @@ scan_forbidden_text() {
       exit 1 if $text =~ m{\b[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]+:(?!<[^>]+>@)[^/\s@]{8,}@}i;
 
       for my $line (split /\n/, $text) {
-      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|[A-Za-z0-9_-]*(?:password|private[_-]?key|secret[_-]?key|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
+      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|(?!(?:aegisops[_-]?)?secret[_-]?source[_-]?doc\b)[A-Za-z0-9_-]*(?:password|private[_-]?key|secret(?:[_-]?key)?|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
         my $value = $3;
         $value =~ s/^["'\'']//;
         $value =~ s/["'\'']$//;
@@ -564,7 +564,7 @@ scan_forbidden_material_text() {
       exit 1 if $text =~ m{\b[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]+:(?!<[^>]+>@)[^/\s@]{8,}@}i;
 
       for my $line (split /\n/, $text) {
-      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|[A-Za-z0-9_-]*(?:password|private[_-]?key|secret[_-]?key|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
+      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|(?!(?:aegisops[_-]?)?secret[_-]?source[_-]?doc\b)[A-Za-z0-9_-]*(?:password|private[_-]?key|secret(?:[_-]?key)?|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
         my $value = $3;
         $value =~ s/^["'\'']//;
         $value =~ s/["'\'']$//;
@@ -609,6 +609,11 @@ scan_forbidden_inherited_doc_claim_text() {
           -e 's/[^.?!;]*((does|do|must|can|is|are)[ -]+not|cannot|can not)[^.?!;]*(claim|claims|prove|proves|satisfy|satisfies|ready|readiness|truth|authority|gate|gates|hosted|silent|production)[^.?!;]*[.?!;]/ /g' \
           -e 's/[^.?!;]*(unsupported|excludes|manual)[^.?!;]*(hosted|silent|production|entitlement|billing|rc|ga|readiness)[^.?!;]*[.?!;]/ /g'
     )"
+
+    if grep -Eiq -- 'https?://[^[:space:]`'"'"'"]*(updates?|downloads?|dependency|artifact)[^[:space:]`'"'"'"]*|https?://[^[:space:]`'"'"'"]*[.](tgz|tar[.]gz|zip|deb|rpm|pkg|dmg|exe|msi)([^[:alnum:]]|$)' <<<"${decoded_text}"; then
+      echo "Forbidden ${description}: hosted download command detected" >&2
+      exit 1
+    fi
 
     if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries)[^.?!;]*(prove|proves|satisfy|satisfies|pass|passes|claim|claims|approve|approves|accept|accepts|create|creates|establish|establishes|infer|infers|provide|provides|deliver|delivers|include|includes)[^.?!;]*(beta|rc|ga)[[:space:]-]+(pass|proof|readiness|gate|gates|gate acceptance)' <<<"${claim_scan_text}"; then
       echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
@@ -854,12 +859,12 @@ if [[ -n "${bundle_dir}" ]]; then
   fi
 
   placeholder_marker_pattern='<[^>]+>'
-  if [[ "${release_bundle_identifier}" =~ ${placeholder_marker_pattern} || ! "${release_bundle_identifier}" =~ ^aegisops-beta-[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+  if [[ "${release_bundle_identifier}" =~ ${placeholder_marker_pattern} || ! "${release_bundle_identifier}" =~ ^aegisops-beta-[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
     echo "Invalid offline install bundle release identifier: ${release_bundle_identifier}" >&2
     exit 1
   fi
 
-  if [[ "${repository_revision}" =~ ${placeholder_marker_pattern} || ! "${repository_revision}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+  if [[ "${repository_revision}" =~ ${placeholder_marker_pattern} || ! "${repository_revision}" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
     echo "Invalid offline install bundle repository revision: ${repository_revision}" >&2
     exit 1
   fi

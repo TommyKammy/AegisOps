@@ -330,6 +330,15 @@ hex_like_tag_repo="${workdir}/hex-like-tag-repo"
 create_reviewed_tag_repo "${hex_like_tag_repo}" "20260602"
 assert_passes --repo-root "${hex_like_tag_repo}" --bundle-dir "${hex_like_tag_bundle}"
 
+slash_qualified_tag_bundle="${workdir}/slash-qualified-tag-bundle"
+create_valid_bundle "${slash_qualified_tag_bundle}"
+replace_default_bundle_revision "reviewed/phase-65.2" \
+  "${slash_qualified_tag_bundle}/BUNDLE-MANIFEST.md" \
+  "${slash_qualified_tag_bundle}/evidence/install-preflight-output.txt"
+slash_qualified_tag_repo="${workdir}/slash-qualified-tag-repo"
+create_reviewed_tag_repo "${slash_qualified_tag_repo}" "reviewed/phase-65.2"
+assert_passes --repo-root "${slash_qualified_tag_repo}" --bundle-dir "${slash_qualified_tag_bundle}"
+
 dotted_revision_mismatch="${workdir}/dotted-revision-mismatch"
 create_valid_bundle "${dotted_revision_mismatch}"
 replace_default_bundle_revision "v1.2.3" \
@@ -643,6 +652,21 @@ replace_default_bundle_revision "forbidden-doc-support-bundle-v1" \
 printf '%s\n' "This bundle supports automatic support bundle submission." >>"${forbidden_inherited_doc_support_bundle}/docs/runbook.md"
 assert_fails_with "unsupported support-bundle automation claim" --repo-root "${forbidden_inherited_doc_support_bundle_repo}" --bundle-dir "${forbidden_inherited_doc_support_bundle}"
 
+forbidden_inherited_doc_hosted_download_repo="${workdir}/forbidden-inherited-doc-hosted-download-repo"
+create_valid_repo "${forbidden_inherited_doc_hosted_download_repo}"
+printf '%s\n' "Fetch the dependency tarball from https://cdn.example.com/aegisops.tgz" >>"${forbidden_inherited_doc_hosted_download_repo}/docs/runbook.md"
+git -C "${forbidden_inherited_doc_hosted_download_repo}" init -q
+git -C "${forbidden_inherited_doc_hosted_download_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" add README.md docs
+git -C "${forbidden_inherited_doc_hosted_download_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" commit -q -m "Create forbidden inherited doc hosted download fixture"
+git -C "${forbidden_inherited_doc_hosted_download_repo}" tag "forbidden-doc-hosted-download-v1"
+forbidden_inherited_doc_hosted_download="${workdir}/forbidden-inherited-doc-hosted-download"
+create_valid_bundle "${forbidden_inherited_doc_hosted_download}"
+replace_default_bundle_revision "forbidden-doc-hosted-download-v1" \
+  "${forbidden_inherited_doc_hosted_download}/BUNDLE-MANIFEST.md" \
+  "${forbidden_inherited_doc_hosted_download}/evidence/install-preflight-output.txt"
+printf '%s\n' "Fetch the dependency tarball from https://cdn.example.com/aegisops.tgz" >>"${forbidden_inherited_doc_hosted_download}/docs/runbook.md"
+assert_fails_with "hosted download command" --repo-root "${forbidden_inherited_doc_hosted_download_repo}" --bundle-dir "${forbidden_inherited_doc_hosted_download}"
+
 missing_bundled_secrets_contract="${workdir}/missing-bundled-secrets-contract"
 create_valid_bundle "${missing_bundled_secrets_contract}"
 rm "${missing_bundled_secrets_contract}/docs/deployment/env-secrets-certs-contract.md"
@@ -832,6 +856,11 @@ bundle_secret_key="${workdir}/bundle-secret-key"
 create_valid_bundle "${bundle_secret_key}"
 printf '%s\n' "SECRET_KEY=live-production-key-abcdef1234567890" >>"${bundle_secret_key}/config/runtime.env.sample"
 assert_fails_with "production secret-looking value" --bundle-dir "${bundle_secret_key}"
+
+bundle_jwt_secret="${workdir}/bundle-jwt-secret"
+create_valid_bundle "${bundle_jwt_secret}"
+printf '%s\n' "JWT_SECRET=live-production-secret-abcdef1234567890" >>"${bundle_jwt_secret}/config/runtime.env.sample"
+assert_fails_with "production secret-looking value" --bundle-dir "${bundle_jwt_secret}"
 
 bundle_private_key="${workdir}/bundle-private-key"
 create_valid_bundle "${bundle_private_key}"
