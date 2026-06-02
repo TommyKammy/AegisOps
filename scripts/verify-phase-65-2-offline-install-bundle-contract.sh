@@ -113,7 +113,7 @@ is_placeholder_value() {
   local normalized_value
 
   normalized_value="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
-  [[ -z "${normalized_value}" || "${normalized_value}" =~ ^(<[^>]+>|todo|tbd|none|n/a|na|placeholder|sample|example|changeme|change-me|replace-me)$ ]]
+  [[ -z "${normalized_value}" || "${normalized_value}" =~ ^(<[^>]+>|todo|tbd|none|n/a|na|placeholder|sample|example|changeme|change-me|replace-me|unknown|missing|absent|unassigned|not[[:space:]-]+assigned|not[[:space:]-]+provided|to[[:space:]-]+be[[:space:]-]+assigned)$ ]]
 }
 
 require_manifest_value() {
@@ -206,7 +206,9 @@ validate_repository_revision() {
     if [[ -n "${resolved_revision}" && "${normalized_resolved_revision}" == "${normalized_revision}"* ]]; then
       return
     fi
-  elif git -C "${repo_root}" show-ref --verify --quiet "refs/tags/${revision}" &&
+  fi
+
+  if git -C "${repo_root}" show-ref --verify --quiet "refs/tags/${revision}" &&
     git -C "${repo_root}" rev-parse --verify --quiet "refs/tags/${revision}^{commit}" >/dev/null; then
     return
   fi
@@ -378,7 +380,7 @@ scan_forbidden_text() {
     exit 1
   fi
 
-  if grep -Eiq -- '(^|[^[:alnum:]_-])(curl|wget)[^`'"'"'\n;|&]*https?://|https?://[^[:space:]`'"'"'"]*(updates?|downloads?|dependency|artifact)[^[:space:]`'"'"'"]*' <<<"${decoded_text}"; then
+  if grep -Eiq -- '(^|[^[:alnum:]_-])(curl|wget)[^`'"'"'\n;|&]*https?://|(^|[^[:alnum:]_-])(fetch|download|retrieve|pull|install)[^.?!;\n]*https?://|https?://[^[:space:]`'"'"'"]*(updates?|downloads?|dependency|artifact)[^[:space:]`'"'"'"]*|https?://[^[:space:]`'"'"'"]*[.](tgz|tar[.]gz|zip|deb|rpm|pkg|dmg|exe|msi)([^[:alnum:]]|$)' <<<"${decoded_text}"; then
     echo "Forbidden ${description}: hosted download command detected" >&2
     exit 1
   fi
@@ -450,7 +452,7 @@ scan_forbidden_text() {
       exit 1
     fi
 
-  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(provides|delivers|establishes|proves|satisfies|includes|contains)[^.?!;]*(production installer|production installer completeness|hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?([[:space:]-]+readiness)?|network update services?|silent auto-upgrade|silent auto upgrade|background entitlement checks?|(production[[:space:]-]+)?entitlement enforcement|production billing|commercial billing|release[[:space:]-]+channel([[:space:]-]+(behavior|services?|updates?|readiness))?)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(provides|delivers|establishes|proves|satisfies|includes|contains|enables|supports)[^.?!;]*(production installer|production installer completeness|hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?([[:space:]-]+readiness)?|network update services?|silent auto-upgrade|silent auto upgrade|background entitlement checks?|(production[[:space:]-]+)?entitlement enforcement|production billing|commercial billing|release[[:space:]-]+channel([[:space:]-]+(behavior|services?|updates?|readiness))?)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: hosted, silent update, production installer, entitlement, or billing claim detected" >&2
     exit 1
   fi
@@ -877,9 +879,9 @@ if [[ -n "${bundle_dir}" ]]; then
   reject_negative_manifest_value "approval record" "${approval_record}"
 
   reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])((does|do|is|are)[ -]+not|cannot|can not|no|missing|absent|without|omits?|unavailable)([^[:alnum:]_-]|$)[^.?!;\n]*(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)' "negated install guidance"
-  reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)[^.?!;\n]*((is|are)[ -]+not|cannot|can not|missing|absent|omitted|unavailable|not[[:space:]-]+provided|not[[:space:]-]+documented|not[[:space:]-]+selected)' "negated install guidance"
+  reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)[^.?!;\n]*((is|are)[ -]+not[[:space:]-]+(provided|documented|selected|available|included|specified|defined)|cannot|can not|missing|absent|omitted|unavailable|not[[:space:]-]+provided|not[[:space:]-]+documented|not[[:space:]-]+selected)' "negated install guidance"
   reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])((do|does|must|should)[ -]+not|cannot|can not)[^.?!;]*aegisops[[:space:]]+up' "negated install command"
-  reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])(curl|wget)[^`'"'"'\n;|&]*https?://|https?://[^[:space:]`'"'"'"]*(updates?|downloads?|dependency|artifact)[^[:space:]`'"'"'"]*' "hosted download command"
+  reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])(curl|wget)[^`'"'"'\n;|&]*https?://|(^|[^[:alnum:]_-])(fetch|download|retrieve|pull|install)[^.?!;\n]*https?://|https?://[^[:space:]`'"'"'"]*(updates?|downloads?|dependency|artifact)[^[:space:]`'"'"'"]*|https?://[^[:space:]`'"'"'"]*[.](tgz|tar[.]gz|zip|deb|rpm|pkg|dmg|exe|msi)([^[:alnum:]]|$)' "hosted download command"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'offline[[:space:]-]+install' "offline install entry guidance"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command)' "install entry command"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'aegisops[[:space:]]+up[^`\n]*(--profile[[:space:]]+smb-single-node[^`\n]*--runtime-env[[:space:]]+<runtime-env-file>|--runtime-env[[:space:]]+<runtime-env-file>[^`\n]*--profile[[:space:]]+smb-single-node)' "concrete install command"

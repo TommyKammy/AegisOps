@@ -302,6 +302,11 @@ create_valid_bundle "${valid_bundle}"
 assert_passes --bundle-dir "${valid_bundle}"
 assert_passes --bundle-dir "${valid_bundle}/"
 
+valid_not_optional_install_readme="${workdir}/valid-not-optional-install-readme"
+create_valid_bundle "${valid_not_optional_install_readme}"
+printf '%s\n' "Manual prerequisites are not optional." >>"${valid_not_optional_install_readme}/install/README.md"
+assert_passes --bundle-dir "${valid_not_optional_install_readme}"
+
 placeholder_secret_sample_bundle="${workdir}/placeholder-secret-sample-bundle"
 create_valid_bundle "${placeholder_secret_sample_bundle}"
 printf '%s\n' "DB_PASSWORD=<db-password>" "API_KEY=placeholder" >>"${placeholder_secret_sample_bundle}/config/runtime.env.sample"
@@ -315,6 +320,15 @@ replace_default_bundle_revision "v1.2.3" \
 reviewed_tag_repo="${workdir}/reviewed-tag-repo"
 create_reviewed_tag_repo "${reviewed_tag_repo}" "v1.2.3"
 assert_passes --repo-root "${reviewed_tag_repo}" --bundle-dir "${dotted_revision_bundle}"
+
+hex_like_tag_bundle="${workdir}/hex-like-tag-bundle"
+create_valid_bundle "${hex_like_tag_bundle}"
+replace_default_bundle_revision "20260602" \
+  "${hex_like_tag_bundle}/BUNDLE-MANIFEST.md" \
+  "${hex_like_tag_bundle}/evidence/install-preflight-output.txt"
+hex_like_tag_repo="${workdir}/hex-like-tag-repo"
+create_reviewed_tag_repo "${hex_like_tag_repo}" "20260602"
+assert_passes --repo-root "${hex_like_tag_repo}" --bundle-dir "${hex_like_tag_bundle}"
 
 dotted_revision_mismatch="${workdir}/dotted-revision-mismatch"
 create_valid_bundle "${dotted_revision_mismatch}"
@@ -378,6 +392,11 @@ blank_bundle_owner="${workdir}/blank-bundle-owner"
 create_valid_bundle "${blank_bundle_owner}"
 perl -0pi -e 's/^bundle owner:.*$/bundle owner: /m' "${blank_bundle_owner}/BUNDLE-MANIFEST.md"
 assert_fails_with "Missing offline install bundle metadata value: bundle owner" --bundle-dir "${blank_bundle_owner}"
+
+unassigned_bundle_owner="${workdir}/unassigned-bundle-owner"
+create_valid_bundle "${unassigned_bundle_owner}"
+perl -0pi -e 's/^bundle owner:.*$/bundle owner: not assigned/m; s/^per-artifact owner:.*$/per-artifact owner: unassigned/m' "${unassigned_bundle_owner}/BUNDLE-MANIFEST.md"
+assert_fails_with "Missing offline install bundle metadata value: bundle owner" --bundle-dir "${unassigned_bundle_owner}"
 
 placeholder_bundle_revision="${workdir}/placeholder-bundle-revision"
 create_valid_bundle "${placeholder_bundle_revision}"
@@ -460,6 +479,11 @@ hosted_download_install_command="${workdir}/hosted-download-install-command"
 create_valid_bundle "${hosted_download_install_command}"
 printf '%s\n' 'Fetch dependency: `curl https://updates.example.com/aegisops/dependency.tgz`.' >>"${hosted_download_install_command}/install/README.md"
 assert_fails_with "hosted download command" --bundle-dir "${hosted_download_install_command}"
+
+unclassified_https_download="${workdir}/unclassified-https-download"
+create_valid_bundle "${unclassified_https_download}"
+printf '%s\n' "Fetch the dependency tarball from https://cdn.example.com/aegisops.tgz" >>"${unclassified_https_download}/install/README.md"
+assert_fails_with "hosted download command" --bundle-dir "${unclassified_https_download}"
 
 invalid_runtime_sample="${workdir}/invalid-runtime-sample"
 create_valid_bundle "${invalid_runtime_sample}"
@@ -674,10 +698,20 @@ create_valid_bundle "${bundle_network_update}"
 printf '%s\n' "Network update services are available after install." >>"${bundle_network_update}/install/README.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_network_update}"
 
+bundle_enables_hosted_update="${workdir}/bundle-enables-hosted-update"
+create_valid_bundle "${bundle_enables_hosted_update}"
+printf '%s\n' "This bundle enables hosted update services." >>"${bundle_enables_hosted_update}/BUNDLE-MANIFEST.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_enables_hosted_update}"
+
 bundle_hosted_dependency_url="${workdir}/bundle-hosted-dependency-url"
 create_valid_bundle "${bundle_hosted_dependency_url}"
 printf '%s\n' "DEPENDENCY_URL=https://updates.example.com/aegisops/dependency.tgz" >>"${bundle_hosted_dependency_url}/config/runtime.env.sample"
 assert_fails_with "hosted download command" --bundle-dir "${bundle_hosted_dependency_url}"
+
+bundle_unclassified_https_download="${workdir}/bundle-unclassified-https-download"
+create_valid_bundle "${bundle_unclassified_https_download}"
+printf '%s\n' "Fetch the dependency tarball from https://cdn.example.com/aegisops.tgz" >>"${bundle_unclassified_https_download}/evidence/install-preflight-output.txt"
+assert_fails_with "hosted download command" --bundle-dir "${bundle_unclassified_https_download}"
 
 bundle_background_entitlement="${workdir}/bundle-background-entitlement"
 create_valid_bundle "${bundle_background_entitlement}"
