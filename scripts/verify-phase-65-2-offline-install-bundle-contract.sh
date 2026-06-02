@@ -149,6 +149,11 @@ reject_negative_manifest_value() {
         echo "Invalid offline install bundle metadata value: ${label}" >&2
         exit 1
       fi
+
+      if [[ ! "${normalized_value}" =~ (issue|pr|pull[[:space:]-]+request|change[[:space:]-]+record|ticket)[^a-z0-9#-]*[#]?[a-z0-9][a-z0-9._-]* ]]; then
+        echo "Invalid offline install bundle metadata value: ${label}" >&2
+        exit 1
+      fi
       ;;
     "approval record")
       if [[ "${normalized_value}" =~ (^|[^a-z0-9])((not|never)[[:space:]-]+approved|unapproved|not[[:space:]-]+reviewed|not[[:space:]-]+required|missing|absent|no[[:space:]-]+approval|no[[:space:]-]+change[[:space:]-]+record|no[[:space:]-]+issue)([^a-z0-9]|$) ]]; then
@@ -185,6 +190,31 @@ sys.exit(1)
 PY
 }
 
+validate_repository_revision() {
+  local revision="$1"
+  local normalized_revision resolved_revision normalized_resolved_revision
+
+  normalized_revision="$(printf '%s' "${revision}" | tr '[:upper:]' '[:lower:]')"
+  if [[ "${normalized_revision}" =~ ^(head|main|master|trunk|develop|development)$ ]]; then
+    echo "Invalid offline install bundle repository revision: ${revision} is mutable" >&2
+    exit 1
+  fi
+
+  if [[ "${revision}" =~ ^[0-9A-Fa-f]{7,40}$ ]]; then
+    resolved_revision="$(git -C "${repo_root}" rev-parse --verify --quiet "${revision}^{commit}" || true)"
+    normalized_resolved_revision="$(printf '%s' "${resolved_revision}" | tr '[:upper:]' '[:lower:]')"
+    if [[ -n "${resolved_revision}" && "${normalized_resolved_revision}" == "${normalized_revision}"* ]]; then
+      return
+    fi
+  elif git -C "${repo_root}" show-ref --verify --quiet "refs/tags/${revision}" &&
+    git -C "${repo_root}" rev-parse --verify --quiet "refs/tags/${revision}^{commit}" >/dev/null; then
+    return
+  fi
+
+  echo "Invalid offline install bundle repository revision: ${revision} does not resolve in repository" >&2
+  exit 1
+}
+
 require_bundle_file_pattern() {
   local bundle_root="$1"
   local relative_path="$2"
@@ -215,11 +245,12 @@ escape_extended_regex() {
   printf '%s' "${value}" | sed -E 's/[][(){}.^$*+?|\\]/\\&/g'
 }
 
-require_bundle_doc_matches_repo() {
+require_bundle_doc_matches_repo_revision() {
   local bundle_root="$1"
   local relative_path="$2"
+  local repository_revision="$3"
 
-  if ! cmp -s "${repo_root}/${relative_path}" "${bundle_root}/${relative_path}"; then
+  if ! git -C "${repo_root}" show "${repository_revision}:${relative_path}" 2>/dev/null | cmp -s - "${bundle_root}/${relative_path}"; then
     echo "Invalid offline install bundle inherited document content: ${relative_path}" >&2
     exit 1
   fi
@@ -324,6 +355,16 @@ scan_forbidden_text() {
     exit 1
   fi
 
+  if grep -Eiq -- '(customer-private|customer private|customer-confidential|customer confidential)[[:space:]-]+(data|payload|record|records)[[:space:]]*[:=]' <<<"${decoded_text}"; then
+    echo "Forbidden ${description}: customer-private data detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(production[[:space:]-]+secrets?|production[[:space:]-]+secret[[:space:]-]+material)[[:space:]]*[:=]' <<<"${decoded_text}"; then
+    echo "Forbidden ${description}: production secret material detected" >&2
+    exit 1
+  fi
+
   if ! printf '%s' "${decoded_text}" | perl -0ne '
     my $text = $_;
     my $offset = 0;
@@ -423,6 +464,74 @@ scan_forbidden_text() {
 
   if grep -Eiq -- '(workflow|support|runtime[[:space:]-]+execution|release[[:space:]-]+gate|beta[[:space:]-]+gate|rc[[:space:]-]+gate|ga[[:space:]-]+gate|entitlement|billing)[[:space:]-]+authority[^.?!;]*(is|are|becomes|become|comes from|depends on|is satisfied by|are satisfied by|is proven by|are proven by|established by|created by)[^.?!;]*(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|this contract)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: bundle authority claim detected" >&2
+    exit 1
+  fi
+}
+
+scan_forbidden_material_text() {
+  local description="$1"
+  shift
+
+  local decoded_text
+  decoded_text="$(perl -0pe 's/%([0-9A-Fa-f]{2})/chr(hex($1))/eg' "$@")"
+
+  if ! printf '%s' "${decoded_text}" | perl -Mstrict -Mwarnings -0ne '
+    my @candidates = ($_);
+    (my $json_unescaped = $_) =~ s{\\/}{/}g;
+    push @candidates, $json_unescaped if $json_unescaped ne $_;
+
+    for my $text (@candidates) {
+      if ($text =~ m{\bfile://+(?:[A-Za-z]:[\\\/]+)?(?:Users|home)[\\\/]+[^\\\/\s]+(?:[\\\/][^\s]*)?}i || $text =~ m{\bfile://+(?:root)(?:[\\\/][^\s]*)?}i) {
+        exit 1;
+      }
+
+      if ($text =~ /(^|[^A-Za-z0-9_.\/\\-])([A-Za-z]:[\\\/]+Users[\\\/]+[^\\\/\s]+(?:[\\\/][^\s]*)?)/i) {
+        exit 1;
+      }
+
+      my $mac_home_prefix = "/" . "Users" . "/";
+      my $linux_home_prefix = "/" . "home" . "/";
+      my $root_home_prefix = "/" . "root";
+      my $unix_home_re = qr{(?:\Q$mac_home_prefix\E|\Q$linux_home_prefix\E)[^/\s]+(?:/[^\s]*)?|\Q$root_home_prefix\E/[^\s]*};
+      while ($text =~ /$unix_home_re/g) {
+        my $start = $-[0];
+        next if $start > 0 && substr($text, $start - 1, 1) =~ /[A-Za-z0-9_.\/\\-]/;
+        next if substr($text, $start, length($mac_home_prefix)) eq $mac_home_prefix && substr($text, 0, $start) =~ /(?:^|[^A-Za-z0-9_])[A-Za-z]:$/;
+        exit 1;
+      }
+    }
+  '; then
+    echo "Forbidden ${description}: workstation-local absolute path detected" >&2
+    exit 1
+  fi
+
+  if ! printf '%s' "${decoded_text}" | perl -Mstrict -Mwarnings -0ne '
+      my $text = $_;
+      exit 1 if $text =~ /(AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})/i;
+      exit 1 if $text =~ /\bauthorization\s*:\s*(?:bearer|basic)\s+(?!<[^>]+>)[A-Za-z0-9_+\.\/=-]{12,}/i;
+      exit 1 if $text =~ m{\b[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]+:(?!<[^>]+>@)[^/\s@]{8,}@}i;
+
+      for my $line (split /\n/, $text) {
+      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|[A-Za-z0-9_-]*(?:password|secret[_-]?key|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
+        my $value = $3;
+        $value =~ s/^["'\'']//;
+        $value =~ s/["'\'']$//;
+        next if $value =~ /\A(<[^>]+>|todo|tbd|none|n\/a|na|placeholder|sample|example|changeme|change-me|replace-me)\z/i;
+        exit 1;
+      }
+    }
+  '; then
+    echo "Forbidden ${description}: production secret-looking value detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(customer-private|customer private|customer-confidential|customer confidential)[[:space:]-]+(data|payload|record|records)[[:space:]]*[:=]' <<<"${decoded_text}"; then
+    echo "Forbidden ${description}: customer-private data detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(production[[:space:]-]+secrets?|production[[:space:]-]+secret[[:space:]-]+material)[[:space:]]*[:=]' <<<"${decoded_text}"; then
+    echo "Forbidden ${description}: production secret material detected" >&2
     exit 1
   fi
 }
@@ -654,10 +763,7 @@ if [[ -n "${bundle_dir}" ]]; then
     exit 1
   fi
 
-  if ! git -C "${repo_root}" rev-parse --verify --quiet "${repository_revision}^{commit}" >/dev/null; then
-    echo "Invalid offline install bundle repository revision: ${repository_revision} does not resolve in repository" >&2
-    exit 1
-  fi
+  validate_repository_revision "${repository_revision}"
 
   if [[ ! "${bundle_creation_timestamp}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?Z$ ]] || ! validate_utc_timestamp "${bundle_creation_timestamp}"; then
     echo "Invalid offline install bundle creation timestamp: ${bundle_creation_timestamp}" >&2
@@ -691,6 +797,8 @@ if [[ -n "${bundle_dir}" ]]; then
 
   reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])((does|do|is|are)[ -]+not|cannot|can not|no|missing|absent|without|omits?|unavailable)([^[:alnum:]_-]|$)[^.?!;\n]*(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)' "negated install guidance"
   reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)[^.?!;\n]*((is|are)[ -]+not|cannot|can not|missing|absent|omitted|unavailable|not[[:space:]-]+provided|not[[:space:]-]+documented|not[[:space:]-]+selected)' "negated install guidance"
+  reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])((do|does|must|should)[ -]+not|cannot|can not)[^.?!;]*aegisops[[:space:]]+up' "negated install command"
+  reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])(curl|wget)[^`'"'"'\n;|&]*https?://|https?://[^[:space:]`'"'"'"]*(updates?|downloads?|dependency|artifact)[^[:space:]`'"'"'"]*' "hosted download command"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'offline[[:space:]-]+install' "offline install entry guidance"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command)' "install entry command"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'aegisops[[:space:]]+up[^`\n]*(--profile[[:space:]]+smb-single-node[^`\n]*--runtime-env[[:space:]]+<runtime-env-file>|--runtime-env[[:space:]]+<runtime-env-file>[^`\n]*--profile[[:space:]]+smb-single-node)' "concrete install command"
@@ -733,25 +841,28 @@ if [[ -n "${bundle_dir}" ]]; then
   require_bundle_doc_phrase "${bundle_dir}" "docs/runbook.md" "This runbook defines the reviewed operator procedure for the current AegisOps startup and shutdown path." "runbook reviewed procedure boundary"
 
   for bundled_repo_doc in "${bundled_repo_docs[@]}"; do
-    require_bundle_doc_matches_repo "${bundle_dir}" "${bundled_repo_doc}"
+    require_bundle_doc_matches_repo_revision "${bundle_dir}" "${bundled_repo_doc}" "${repository_revision}"
   done
 
   bundle_scan_files=()
+  bundle_doc_scan_files=()
   while IFS= read -r -d '' bundle_scan_file; do
     relative_bundle_scan_file="${bundle_scan_file#"${bundle_dir}/"}"
-    skip_exact_repo_doc=false
+    skip_full_scan=false
     for bundled_repo_doc in "${bundled_repo_docs[@]}"; do
       if [[ "${relative_bundle_scan_file}" == "${bundled_repo_doc}" ]]; then
-        skip_exact_repo_doc=true
+        bundle_doc_scan_files+=("${bundle_scan_file}")
+        skip_full_scan=true
         break
       fi
     done
-    if [[ "${skip_exact_repo_doc}" == true ]]; then
+    if [[ "${skip_full_scan}" == true ]]; then
       continue
     fi
     bundle_scan_files+=("${bundle_scan_file}")
   done < <(find "${bundle_dir}" -type f -print0)
   scan_forbidden_text "offline install bundle content" "${bundle_scan_files[@]}"
+  scan_forbidden_material_text "offline install bundle inherited document content" "${bundle_doc_scan_files[@]}"
 fi
 
 echo "Phase 65.2 offline install bundle contract is present and fail-closed."

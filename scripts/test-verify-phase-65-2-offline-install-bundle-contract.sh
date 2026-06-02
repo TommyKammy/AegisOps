@@ -4,6 +4,8 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 verifier="${repo_root}/scripts/verify-phase-65-2-offline-install-bundle-contract.sh"
+default_repository_revision="$(git -C "${repo_root}" rev-parse --short=12 HEAD)"
+default_release_bundle_identifier="aegisops-beta-${default_repository_revision}"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
@@ -75,6 +77,20 @@ create_reviewed_tag_repo() {
   git -C "${target}" tag "${tag}"
 }
 
+replace_default_bundle_revision() {
+  local revision="$1"
+  shift
+
+  DEFAULT_RELEASE_BUNDLE_IDENTIFIER="${default_release_bundle_identifier}" \
+    DEFAULT_REPOSITORY_REVISION="${default_repository_revision}" \
+    RELEASE_BUNDLE_IDENTIFIER="aegisops-beta-${revision}" \
+    REPOSITORY_REVISION="${revision}" \
+    perl -0pi -e '
+      s/\Q$ENV{DEFAULT_RELEASE_BUNDLE_IDENTIFIER}\E/$ENV{RELEASE_BUNDLE_IDENTIFIER}/g;
+      s/\Q$ENV{DEFAULT_REPOSITORY_REVISION}\E/$ENV{REPOSITORY_REVISION}/g;
+    ' "$@"
+}
+
 create_valid_bundle() {
   local target="$1"
 
@@ -84,19 +100,19 @@ create_valid_bundle() {
     "${target}/evidence" \
     "${target}/docs/deployment"
 
-  cat >"${target}/BUNDLE-MANIFEST.md" <<'EOF_MANIFEST'
+  cat >"${target}/BUNDLE-MANIFEST.md" <<EOF_MANIFEST
 # Offline Install Bundle Manifest
 
 contract identifier: phase-65-offline-install-bundle-contract-v1
 inventory identifier: phase-65-release-bundle-inventory-v1
-release bundle identifier: aegisops-beta-cea7db232373
-repository revision: cea7db232373
+release bundle identifier: ${default_release_bundle_identifier}
+repository revision: ${default_repository_revision}
 bundle owner: AegisOps maintainers
 per-artifact owner: Platform maintainers
 bundle creation timestamp: 2026-06-02T00:00:00Z
 environment assumption: offline-beta-design-partner
 required artifact manifest path: BUNDLE-MANIFEST.md
-exclusion review: no workstation-local paths, production secrets, customer-private data, hidden hosted dependency, hosted update service, silent update, production installer, entitlement, billing, RC pass, or GA pass claims.
+exclusion review: issue #1384 / PR #1389 reviewed no workstation-local paths, production secrets, customer-private data, hidden hosted dependency, hosted update service, silent update, production installer, entitlement, billing, RC pass, or GA pass claims.
 verifier output: bash scripts/verify-phase-65-2-offline-install-bundle-contract.sh --bundle-dir <release-bundle-dir>
 approval record: issue #1384 / PR #1389
 EOF_MANIFEST
@@ -117,9 +133,9 @@ AEGISOPS_SECRET_SOURCE_DOC=docs/deployment/env-secrets-certs-contract.md
 # Secrets must come from trusted local custody and must not be embedded here.
 EOF_ENV
 
-  cat >"${target}/evidence/install-preflight-output.txt" <<'EOF_EVIDENCE'
-release bundle identifier: aegisops-beta-cea7db232373
-repository revision: cea7db232373
+  cat >"${target}/evidence/install-preflight-output.txt" <<EOF_EVIDENCE
+release bundle identifier: ${default_release_bundle_identifier}
+repository revision: ${default_repository_revision}
 preflight output: retained placeholder for beta/design-partner packaging review.
 EOF_EVIDENCE
 
@@ -293,7 +309,7 @@ assert_passes --bundle-dir "${placeholder_secret_sample_bundle}"
 
 dotted_revision_bundle="${workdir}/dotted-revision-bundle"
 create_valid_bundle "${dotted_revision_bundle}"
-perl -0pi -e 's/cea7db232373/v1.2.3/g; s/aegisops-beta-cea7db232373/aegisops-beta-v1.2.3/g' \
+replace_default_bundle_revision "v1.2.3" \
   "${dotted_revision_bundle}/BUNDLE-MANIFEST.md" \
   "${dotted_revision_bundle}/evidence/install-preflight-output.txt"
 reviewed_tag_repo="${workdir}/reviewed-tag-repo"
@@ -302,9 +318,9 @@ assert_passes --repo-root "${reviewed_tag_repo}" --bundle-dir "${dotted_revision
 
 dotted_revision_mismatch="${workdir}/dotted-revision-mismatch"
 create_valid_bundle "${dotted_revision_mismatch}"
-perl -0pi -e 's/cea7db232373/v1.2.3/g; s/aegisops-beta-cea7db232373/aegisops-beta-v1.2.3/g' \
+replace_default_bundle_revision "v1.2.3" \
   "${dotted_revision_mismatch}/BUNDLE-MANIFEST.md"
-perl -0pi -e 's/cea7db232373/v1X2X3/g; s/aegisops-beta-cea7db232373/aegisops-beta-v1X2X3/g' \
+replace_default_bundle_revision "v1X2X3" \
   "${dotted_revision_mismatch}/evidence/install-preflight-output.txt"
 assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching release bundle identifier" --repo-root "${reviewed_tag_repo}" --bundle-dir "${dotted_revision_mismatch}"
 
@@ -338,6 +354,11 @@ create_valid_bundle "${missing_approval_link}"
 perl -0pi -e 's/^approval record:.*$/approval record: maintainer reviewed/m' "${missing_approval_link}/BUNDLE-MANIFEST.md"
 assert_fails_with "Invalid offline install bundle metadata value: approval record" --bundle-dir "${missing_approval_link}"
 
+missing_exclusion_review_link="${workdir}/missing-exclusion-review-link"
+create_valid_bundle "${missing_exclusion_review_link}"
+perl -0pi -e 's/^exclusion review:.*$/exclusion review: reviewed/m' "${missing_exclusion_review_link}/BUNDLE-MANIFEST.md"
+assert_fails_with "Invalid offline install bundle metadata value: exclusion review" --bundle-dir "${missing_exclusion_review_link}"
+
 duplicate_manifest_metadata="${workdir}/duplicate-manifest-metadata"
 create_valid_bundle "${duplicate_manifest_metadata}"
 printf '%s\n' "release bundle identifier: aegisops-beta-deadbeef1234" >>"${duplicate_manifest_metadata}/BUNDLE-MANIFEST.md"
@@ -370,10 +391,17 @@ assert_fails_with "Invalid offline install bundle release binding" --bundle-dir 
 
 unknown_bundle_revision="${workdir}/unknown-bundle-revision"
 create_valid_bundle "${unknown_bundle_revision}"
-perl -0pi -e 's/cea7db232373/notarealrevision/g; s/aegisops-beta-cea7db232373/aegisops-beta-notarealrevision/g' \
+replace_default_bundle_revision "notarealrevision" \
   "${unknown_bundle_revision}/BUNDLE-MANIFEST.md" \
   "${unknown_bundle_revision}/evidence/install-preflight-output.txt"
 assert_fails_with "Invalid offline install bundle repository revision: notarealrevision does not resolve in repository" --bundle-dir "${unknown_bundle_revision}"
+
+mutable_branch_revision="${workdir}/mutable-branch-revision"
+create_valid_bundle "${mutable_branch_revision}"
+replace_default_bundle_revision "main" \
+  "${mutable_branch_revision}/BUNDLE-MANIFEST.md" \
+  "${mutable_branch_revision}/evidence/install-preflight-output.txt"
+assert_fails_with "Invalid offline install bundle repository revision: main is mutable" --bundle-dir "${mutable_branch_revision}"
 
 missing_bundle_artifact="${workdir}/missing-bundle-artifact"
 create_valid_bundle "${missing_bundle_artifact}"
@@ -411,6 +439,22 @@ Selected profile is not documented.
 Dependency assumptions and manual prerequisites are unavailable.
 EOF_INSTALL
 assert_fails_with "negated install guidance" --bundle-dir "${negated_install_readme}"
+
+negated_install_command="${workdir}/negated-install-command"
+create_valid_bundle "${negated_install_command}"
+cat >"${negated_install_command}/install/README.md" <<'EOF_INSTALL'
+# Offline Install Entry
+
+Do not run `aegisops up --profile smb-single-node --runtime-env <runtime-env-file>`; this command is documented for a later release.
+Selected profile: smb-single-node.
+Dependency assumptions and manual prerequisites are documented.
+EOF_INSTALL
+assert_fails_with "negated install command" --bundle-dir "${negated_install_command}"
+
+hosted_download_install_command="${workdir}/hosted-download-install-command"
+create_valid_bundle "${hosted_download_install_command}"
+printf '%s\n' 'Fetch dependency: `curl https://updates.example.com/aegisops/dependency.tgz`.' >>"${hosted_download_install_command}/install/README.md"
+assert_fails_with "hosted download command" --bundle-dir "${hosted_download_install_command}"
 
 invalid_runtime_sample="${workdir}/invalid-runtime-sample"
 create_valid_bundle "${invalid_runtime_sample}"
@@ -459,14 +503,14 @@ assert_fails_with "Missing offline install bundle artifact content in evidence/i
 
 suffix_preflight_revision="${workdir}/suffix-preflight-revision"
 create_valid_bundle "${suffix_preflight_revision}"
-perl -0pi -e 's/^release bundle identifier:.*$/release bundle identifier: aegisops-beta-cea7db232373-extra/m' "${suffix_preflight_revision}/evidence/install-preflight-output.txt"
+perl -0pi -e "s/^release bundle identifier:.*\$/release bundle identifier: ${default_release_bundle_identifier}-extra/m" "${suffix_preflight_revision}/evidence/install-preflight-output.txt"
 assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching release bundle identifier" --bundle-dir "${suffix_preflight_revision}"
 
 stale_preflight_suffix_tokens="${workdir}/stale-preflight-suffix-tokens"
 create_valid_bundle "${stale_preflight_suffix_tokens}"
-cat >"${stale_preflight_suffix_tokens}/evidence/install-preflight-output.txt" <<'EOF_EVIDENCE'
-release bundle identifier: aegisops-beta-cea7db232373 stale-bundle
-repository revision: cea7db232373 stale-revision
+cat >"${stale_preflight_suffix_tokens}/evidence/install-preflight-output.txt" <<EOF_EVIDENCE
+release bundle identifier: ${default_release_bundle_identifier} stale-bundle
+repository revision: ${default_repository_revision} stale-revision
 preflight output: retained placeholder for beta/design-partner packaging review.
 EOF_EVIDENCE
 assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching release bundle identifier" --bundle-dir "${stale_preflight_suffix_tokens}"
@@ -495,6 +539,35 @@ invalid_bundled_runbook="${workdir}/invalid-bundled-runbook"
 create_valid_bundle "${invalid_bundled_runbook}"
 printf '%s\n' "# Invalid Runbook" >"${invalid_bundled_runbook}/docs/runbook.md"
 assert_fails_with "Missing offline install bundle inherited document content in docs/runbook.md" --bundle-dir "${invalid_bundled_runbook}"
+
+reviewed_revision_doc_mismatch_repo="${workdir}/reviewed-revision-doc-mismatch-repo"
+create_valid_repo "${reviewed_revision_doc_mismatch_repo}"
+printf '%s\n' "Reviewed revision marker for offline bundle comparison." >>"${reviewed_revision_doc_mismatch_repo}/docs/runbook.md"
+git -C "${reviewed_revision_doc_mismatch_repo}" init -q
+git -C "${reviewed_revision_doc_mismatch_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" add README.md docs
+git -C "${reviewed_revision_doc_mismatch_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" commit -q -m "Create reviewed offline bundle doc revision"
+git -C "${reviewed_revision_doc_mismatch_repo}" tag "reviewed-doc-v1"
+reviewed_revision_doc_mismatch_bundle="${workdir}/reviewed-revision-doc-mismatch-bundle"
+create_valid_bundle "${reviewed_revision_doc_mismatch_bundle}"
+replace_default_bundle_revision "reviewed-doc-v1" \
+  "${reviewed_revision_doc_mismatch_bundle}/BUNDLE-MANIFEST.md" \
+  "${reviewed_revision_doc_mismatch_bundle}/evidence/install-preflight-output.txt"
+assert_fails_with "Invalid offline install bundle inherited document content: docs/runbook.md" --repo-root "${reviewed_revision_doc_mismatch_repo}" --bundle-dir "${reviewed_revision_doc_mismatch_bundle}"
+
+forbidden_inherited_doc_repo="${workdir}/forbidden-inherited-doc-repo"
+create_valid_repo "${forbidden_inherited_doc_repo}"
+printf '%s\n' "production secret material: alpha bravo charlie delta" >>"${forbidden_inherited_doc_repo}/docs/runbook.md"
+git -C "${forbidden_inherited_doc_repo}" init -q
+git -C "${forbidden_inherited_doc_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" add README.md docs
+git -C "${forbidden_inherited_doc_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" commit -q -m "Create forbidden inherited doc fixture"
+git -C "${forbidden_inherited_doc_repo}" tag "forbidden-doc-v1"
+forbidden_inherited_doc_bundle="${workdir}/forbidden-inherited-doc-bundle"
+create_valid_bundle "${forbidden_inherited_doc_bundle}"
+replace_default_bundle_revision "forbidden-doc-v1" \
+  "${forbidden_inherited_doc_bundle}/BUNDLE-MANIFEST.md" \
+  "${forbidden_inherited_doc_bundle}/evidence/install-preflight-output.txt"
+printf '%s\n' "production secret material: alpha bravo charlie delta" >>"${forbidden_inherited_doc_bundle}/docs/runbook.md"
+assert_fails_with "production secret material" --repo-root "${forbidden_inherited_doc_repo}" --bundle-dir "${forbidden_inherited_doc_bundle}"
 
 missing_bundled_secrets_contract="${workdir}/missing-bundled-secrets-contract"
 create_valid_bundle "${missing_bundled_secrets_contract}"
@@ -535,6 +608,11 @@ bundle_customer_private_required="${workdir}/bundle-customer-private-required"
 create_valid_bundle "${bundle_customer_private_required}"
 printf '%s\n' "Customer-private data is required during install." >>"${bundle_customer_private_required}/install/README.md"
 assert_fails_with "customer-private data claim" --bundle-dir "${bundle_customer_private_required}"
+
+bundle_customer_private_label="${workdir}/bundle-customer-private-label"
+create_valid_bundle "${bundle_customer_private_label}"
+printf '%s\n' "customer-private records: Acme Corp incident INC-123 includes user jane@example.com" >>"${bundle_customer_private_label}/evidence/install-preflight-output.txt"
+assert_fails_with "customer-private data" --bundle-dir "${bundle_customer_private_label}"
 
 bundle_hidden_hosted="${workdir}/bundle-hidden-hosted"
 create_valid_bundle "${bundle_hidden_hosted}"
@@ -651,6 +729,11 @@ create_valid_bundle "${bundle_production_secret_claim}"
 printf '%s\n' "Production secrets are included in this bundle." >>"${bundle_production_secret_claim}/BUNDLE-MANIFEST.md"
 assert_fails_with "production secret material claim" --bundle-dir "${bundle_production_secret_claim}"
 
+bundle_production_secret_label="${workdir}/bundle-production-secret-label"
+create_valid_bundle "${bundle_production_secret_label}"
+printf '%s\n' "production secret material: alpha bravo charlie delta" >>"${bundle_production_secret_label}/config/runtime.env.sample"
+assert_fails_with "production secret material" --bundle-dir "${bundle_production_secret_label}"
+
 bundle_customer_specific_secret_provisioning="${workdir}/bundle-customer-specific-secret-provisioning"
 create_valid_bundle "${bundle_customer_specific_secret_provisioning}"
 printf '%s\n' "Customer-specific secret provisioning is supported by this bundle." >>"${bundle_customer_specific_secret_provisioning}/BUNDLE-MANIFEST.md"
@@ -713,10 +796,10 @@ assert_fails_with "bundle authority claim" --bundle-dir "${bundle_self_authority
 
 bundle_stale_preflight_release="${workdir}/bundle-stale-preflight-release"
 create_valid_bundle "${bundle_stale_preflight_release}"
-cat >"${bundle_stale_preflight_release}/evidence/install-preflight-output.txt" <<'EOF_EVIDENCE'
-previous release bundle identifier: aegisops-beta-cea7db232373
+cat >"${bundle_stale_preflight_release}/evidence/install-preflight-output.txt" <<EOF_EVIDENCE
+previous release bundle identifier: ${default_release_bundle_identifier}
 release bundle identifier: aegisops-beta-deadbeef1234
-repository revision: cea7db232373
+repository revision: ${default_repository_revision}
 preflight output: retained placeholder for beta/design-partner packaging review.
 EOF_EVIDENCE
 assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching release bundle identifier" --bundle-dir "${bundle_stale_preflight_release}"
