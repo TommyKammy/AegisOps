@@ -83,7 +83,13 @@ manifest_value() {
     my $label = shift @ARGV;
     my $text = <>;
     $text =~ s/<!--.*?-->//gs;
+    my $in_fence = 0;
     for my $line (split /\n/, $text) {
+      if ($line =~ /^\s*```/) {
+        $in_fence = !$in_fence;
+        next;
+      }
+      next if $in_fence;
       if ($line =~ /^\s*\Q$label\E\s*:\s*(.*?)\s*$/i) {
         print "$1\n";
         last;
@@ -101,7 +107,13 @@ manifest_label_count() {
     my $text = <>;
     $text =~ s/<!--.*?-->//gs;
     my $count = 0;
+    my $in_fence = 0;
     for my $line (split /\n/, $text) {
+      if ($line =~ /^\s*```/) {
+        $in_fence = !$in_fence;
+        next;
+      }
+      next if $in_fence;
       $count++ if $line =~ /^\s*\Q$label\E\s*:/i;
     }
     print "$count\n";
@@ -156,7 +168,7 @@ reject_negative_manifest_value() {
       fi
       ;;
     "approval record")
-      if [[ "${normalized_value}" =~ (^|[^a-z0-9])((not|never)[[:space:]-]+approved|unapproved|not[[:space:]-]+reviewed|not[[:space:]-]+required|missing|absent|no[[:space:]-]+approval|no[[:space:]-]+change[[:space:]-]+record|no[[:space:]-]+issue)([^a-z0-9]|$) ]]; then
+      if [[ "${normalized_value}" =~ (^|[^a-z0-9])((not|never)[[:space:]-]+approved|unapproved|not[[:space:]-]+reviewed|not[[:space:]-]+required|pending([[:space:]-]+approval)?|approval[[:space:]-]+pending|awaiting[[:space:]-]+approval|approval[[:space:]-]+requested|missing|absent|no[[:space:]-]+approval|no[[:space:]-]+change[[:space:]-]+record|no[[:space:]-]+issue)([^a-z0-9]|$) ]]; then
         echo "Invalid offline install bundle metadata value: ${label}" >&2
         exit 1
       fi
@@ -477,6 +489,11 @@ scan_forbidden_text() {
       exit 1
     fi
 
+    if grep -Eiq -- '(^|[^[:alnum:]_-])((sbom|checksum|signing)[[:space:]-]+(completeness|generation)|(licensing[[:space:]-]+(approval|conclusions?))|(migration[[:space:]-]+(readiness|guide[[:space:]-]+implementation|implementation))|support[[:space:]-]+readiness|(self-service[[:space:]-]+commercial|commercial[[:space:]-]+replacement)[[:space:]-]+readiness|design-partner[[:space:]-]+evidence[[:space:]-]+completeness)[^.?!;]*(is|are|becomes|become)[^.?!;]*(complete|completed|approved|accepted|implemented|supported|ready|available|delivered|done)([^[:alnum:]_-]|$)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: unsupported completeness, approval, or readiness claim detected" >&2
+      exit 1
+    fi
+
   if grep -Eiq -- '(verifier output|issue-lint output|install output|smoke output|offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|docs|release notes?|operator-facing summaries|downstream receipts)[[:space:]-]+(is|are|acts as|serve as|serves as|becomes|become|establishes|prove|proves|satisfies)[[:space:]-]+([[:alnum:] /-]+[[:space:]-]+)?(readiness|release|gate|workflow|limitation|install|smoke)[[:space:]-]+truth' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: verifier, issue-lint, install, or smoke truth claim detected" >&2
     exit 1
@@ -642,6 +659,11 @@ scan_forbidden_inherited_doc_claim_text() {
 
     if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files)[^.?!;]*(supports|provides|includes|contains|enables|delivers)[^.?!;]*(automatic[[:space:]-]+support[[:space:]-]+bundle[[:space:]-]+submission|support[[:space:]-]+bundle[[:space:]-]+(automation|submission))' <<<"${claim_scan_text}"; then
       echo "Forbidden ${description}: unsupported support-bundle automation claim detected" >&2
+      exit 1
+    fi
+
+    if grep -Eiq -- '(^|[^[:alnum:]_-])((sbom|checksum|signing)[[:space:]-]+(completeness|generation)|(licensing[[:space:]-]+(approval|conclusions?))|(migration[[:space:]-]+(readiness|guide[[:space:]-]+implementation|implementation))|support[[:space:]-]+readiness|(self-service[[:space:]-]+commercial|commercial[[:space:]-]+replacement)[[:space:]-]+readiness|design-partner[[:space:]-]+evidence[[:space:]-]+completeness)[^.?!;]*(is|are|becomes|become)[^.?!;]*(complete|completed|approved|accepted|implemented|supported|ready|available|delivered|done)([^[:alnum:]_-]|$)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: unsupported completeness, approval, or readiness claim detected" >&2
       exit 1
     fi
   done

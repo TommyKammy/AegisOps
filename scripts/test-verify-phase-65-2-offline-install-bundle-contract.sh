@@ -372,6 +372,11 @@ create_valid_bundle "${negated_approval_record}"
 perl -0pi -e 's/^approval record:.*$/approval record: not approved/m' "${negated_approval_record}/BUNDLE-MANIFEST.md"
 assert_fails_with "Invalid offline install bundle metadata value: approval record" --bundle-dir "${negated_approval_record}"
 
+pending_approval_record="${workdir}/pending-approval-record"
+create_valid_bundle "${pending_approval_record}"
+perl -0pi -e 's/^approval record:.*$/approval record: issue #1384 pending approval/m' "${pending_approval_record}/BUNDLE-MANIFEST.md"
+assert_fails_with "Invalid offline install bundle metadata value: approval record" --bundle-dir "${pending_approval_record}"
+
 missing_approval_link="${workdir}/missing-approval-link"
 create_valid_bundle "${missing_approval_link}"
 perl -0pi -e 's/^approval record:.*$/approval record: maintainer reviewed/m' "${missing_approval_link}/BUNDLE-MANIFEST.md"
@@ -396,6 +401,11 @@ commented_manifest_metadata="${workdir}/commented-manifest-metadata"
 create_valid_bundle "${commented_manifest_metadata}"
 perl -0pi -e 's/^contract identifier:.*$/<!-- contract identifier: phase-65-offline-install-bundle-contract-v1 -->/m' "${commented_manifest_metadata}/BUNDLE-MANIFEST.md"
 assert_fails_with "Missing offline install bundle metadata value: contract identifier" --bundle-dir "${commented_manifest_metadata}"
+
+fenced_manifest_metadata="${workdir}/fenced-manifest-metadata"
+create_valid_bundle "${fenced_manifest_metadata}"
+perl -0pi -e 's/\A/```\n/; s/\z/\n```\n/' "${fenced_manifest_metadata}/BUNDLE-MANIFEST.md"
+assert_fails_with "Missing offline install bundle metadata value: contract identifier" --bundle-dir "${fenced_manifest_metadata}"
 
 blank_bundle_owner="${workdir}/blank-bundle-owner"
 create_valid_bundle "${blank_bundle_owner}"
@@ -652,6 +662,21 @@ replace_default_bundle_revision "forbidden-doc-support-bundle-v1" \
 printf '%s\n' "This bundle supports automatic support bundle submission." >>"${forbidden_inherited_doc_support_bundle}/docs/runbook.md"
 assert_fails_with "unsupported support-bundle automation claim" --repo-root "${forbidden_inherited_doc_support_bundle_repo}" --bundle-dir "${forbidden_inherited_doc_support_bundle}"
 
+forbidden_inherited_doc_sbom_complete_repo="${workdir}/forbidden-inherited-doc-sbom-complete-repo"
+create_valid_repo "${forbidden_inherited_doc_sbom_complete_repo}"
+printf '%s\n' "SBOM generation is complete." >>"${forbidden_inherited_doc_sbom_complete_repo}/docs/runbook.md"
+git -C "${forbidden_inherited_doc_sbom_complete_repo}" init -q
+git -C "${forbidden_inherited_doc_sbom_complete_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" add README.md docs
+git -C "${forbidden_inherited_doc_sbom_complete_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" commit -q -m "Create forbidden inherited doc SBOM fixture"
+git -C "${forbidden_inherited_doc_sbom_complete_repo}" tag "forbidden-doc-sbom-complete-v1"
+forbidden_inherited_doc_sbom_complete="${workdir}/forbidden-inherited-doc-sbom-complete"
+create_valid_bundle "${forbidden_inherited_doc_sbom_complete}"
+replace_default_bundle_revision "forbidden-doc-sbom-complete-v1" \
+  "${forbidden_inherited_doc_sbom_complete}/BUNDLE-MANIFEST.md" \
+  "${forbidden_inherited_doc_sbom_complete}/evidence/install-preflight-output.txt"
+printf '%s\n' "SBOM generation is complete." >>"${forbidden_inherited_doc_sbom_complete}/docs/runbook.md"
+assert_fails_with "unsupported completeness, approval, or readiness claim" --repo-root "${forbidden_inherited_doc_sbom_complete_repo}" --bundle-dir "${forbidden_inherited_doc_sbom_complete}"
+
 forbidden_inherited_doc_hosted_download_repo="${workdir}/forbidden-inherited-doc-hosted-download-repo"
 create_valid_repo "${forbidden_inherited_doc_hosted_download_repo}"
 printf '%s\n' "Fetch the dependency tarball from https://cdn.example.com/aegisops.tgz" >>"${forbidden_inherited_doc_hosted_download_repo}/docs/runbook.md"
@@ -811,6 +836,11 @@ bundle_sbom_generation="${workdir}/bundle-sbom-generation"
 create_valid_bundle "${bundle_sbom_generation}"
 printf '%s\n' "SBOM generation is supported by this bundle." >>"${bundle_sbom_generation}/BUNDLE-MANIFEST.md"
 assert_fails_with "unsupported completeness, approval, or readiness claim" --bundle-dir "${bundle_sbom_generation}"
+
+bundle_sbom_generation_complete="${workdir}/bundle-sbom-generation-complete"
+create_valid_bundle "${bundle_sbom_generation_complete}"
+printf '%s\n' "SBOM generation is complete." >>"${bundle_sbom_generation_complete}/BUNDLE-MANIFEST.md"
+assert_fails_with "unsupported completeness, approval, or readiness claim" --bundle-dir "${bundle_sbom_generation_complete}"
 
 bundle_migration_implementation="${workdir}/bundle-migration-implementation"
 create_valid_bundle "${bundle_migration_implementation}"
