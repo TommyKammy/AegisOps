@@ -357,6 +357,16 @@ create_valid_bundle "${invalid_bundle_timestamp}"
 perl -0pi -e 's/^bundle creation timestamp:.*$/bundle creation timestamp: 2026-99-99T99:99:99Z/m' "${invalid_bundle_timestamp}/BUNDLE-MANIFEST.md"
 assert_fails_with "Invalid offline install bundle creation timestamp" --bundle-dir "${invalid_bundle_timestamp}"
 
+documented_manifest_labels="${workdir}/documented-manifest-labels"
+create_valid_bundle "${documented_manifest_labels}"
+perl -0pi -e 's/^environment assumption:/reviewed environment assumption:/m; s/^verifier output:/verifier output reference:/m' "${documented_manifest_labels}/BUNDLE-MANIFEST.md"
+assert_passes --bundle-dir "${documented_manifest_labels}"
+
+duplicate_manifest_label_alias="${workdir}/duplicate-manifest-label-alias"
+create_valid_bundle "${duplicate_manifest_label_alias}"
+printf '%s\n' "reviewed environment assumption: offline-beta-design-partner" >>"${duplicate_manifest_label_alias}/BUNDLE-MANIFEST.md"
+assert_fails_with "Duplicate offline install bundle metadata field: environment assumption" --bundle-dir "${duplicate_manifest_label_alias}"
+
 missing_approval_record="${workdir}/missing-approval-record"
 create_valid_bundle "${missing_approval_record}"
 perl -0pi -e 's/^approval record:.*\n//m' "${missing_approval_record}/BUNDLE-MANIFEST.md"
@@ -471,6 +481,42 @@ doctor_only_install_command="${workdir}/doctor-only-install-command"
 create_valid_bundle "${doctor_only_install_command}"
 perl -0pi -e 's/aegisops up/aegisops doctor/g' "${doctor_only_install_command}/install/README.md"
 assert_fails_with "Missing offline install bundle artifact content in install/README.md: concrete install command" --bundle-dir "${doctor_only_install_command}"
+
+multiline_install_command="${workdir}/multiline-install-command"
+create_valid_bundle "${multiline_install_command}"
+cat >"${multiline_install_command}/install/README.md" <<'EOF_INSTALL'
+# Offline Install Entry
+
+Run the offline install entrypoint command from the release bundle root:
+
+```sh
+aegisops up \
+  --profile smb-single-node \
+  --runtime-env <runtime-env-file>
+```
+
+Selected profile: smb-single-node.
+Dependency assumptions and manual prerequisites are documented.
+EOF_INSTALL
+assert_passes --bundle-dir "${multiline_install_command}"
+
+negated_multiline_install_command="${workdir}/negated-multiline-install-command"
+create_valid_bundle "${negated_multiline_install_command}"
+cat >"${negated_multiline_install_command}/install/README.md" <<'EOF_INSTALL'
+# Offline Install Entry
+
+Do not run this offline install entrypoint command; it is shown only as a placeholder for a later release:
+
+```sh
+aegisops up \
+  --profile smb-single-node \
+  --runtime-env <runtime-env-file>
+```
+
+Selected profile: smb-single-node.
+Dependency assumptions and manual prerequisites are documented.
+EOF_INSTALL
+assert_fails_with "negated install command" --bundle-dir "${negated_multiline_install_command}"
 
 negated_install_readme="${workdir}/negated-install-readme"
 create_valid_bundle "${negated_install_readme}"

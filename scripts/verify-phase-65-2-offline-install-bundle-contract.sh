@@ -120,6 +120,33 @@ manifest_label_count() {
   ' "${label}" "${file}"
 }
 
+manifest_label_count_any() {
+  local file="$1"
+  shift
+
+  local label count total
+  total=0
+  for label in "$@"; do
+    count="$(manifest_label_count "${file}" "${label}")"
+    total=$((total + count))
+  done
+  printf '%s\n' "${total}"
+}
+
+manifest_value_any() {
+  local file="$1"
+  shift
+
+  local label value
+  for label in "$@"; do
+    value="$(manifest_value "${file}" "${label}")"
+    if [[ -n "${value}" ]]; then
+      printf '%s' "${value}"
+      return
+    fi
+  done
+}
+
 is_placeholder_value() {
   local value="$1"
   local normalized_value
@@ -142,6 +169,28 @@ require_manifest_value() {
   value="$(manifest_value "${manifest}" "${label}")"
   if is_placeholder_value "${value}"; then
     echo "Missing offline install bundle metadata value: ${label}" >&2
+    exit 1
+  fi
+
+  printf '%s' "${value}"
+}
+
+require_manifest_value_any() {
+  local manifest="$1"
+  local description="$2"
+  shift 2
+
+  local count value
+
+  count="$(manifest_label_count_any "${manifest}" "$@")"
+  if [[ "${count}" -gt 1 ]]; then
+    echo "Duplicate offline install bundle metadata field: ${description}" >&2
+    exit 1
+  fi
+
+  value="$(manifest_value_any "${manifest}" "$@")"
+  if is_placeholder_value "${value}"; then
+    echo "Missing offline install bundle metadata value: ${description}" >&2
     exit 1
   fi
 
@@ -241,6 +290,20 @@ require_bundle_file_pattern() {
   fi
 }
 
+require_bundle_file_text_pattern() {
+  local bundle_root="$1"
+  local relative_path="$2"
+  local pattern="$3"
+  local description="$4"
+
+  if ! visible_markdown_text "${bundle_root}/${relative_path}" |
+    perl -0pe 's/\\[[:space:]]*\n/ /g; s/[[:space:]]+/ /g' |
+    grep -Eiq -- "${pattern}"; then
+    echo "Missing offline install bundle artifact content in ${relative_path}: ${description}" >&2
+    exit 1
+  fi
+}
+
 reject_bundle_file_pattern() {
   local bundle_root="$1"
   local relative_path="$2"
@@ -248,6 +311,20 @@ reject_bundle_file_pattern() {
   local description="$4"
 
   if grep -Eiq -- "${pattern}" < <(visible_markdown_text "${bundle_root}/${relative_path}"); then
+    echo "Forbidden offline install bundle artifact content in ${relative_path}: ${description}" >&2
+    exit 1
+  fi
+}
+
+reject_bundle_file_text_pattern() {
+  local bundle_root="$1"
+  local relative_path="$2"
+  local pattern="$3"
+  local description="$4"
+
+  if visible_markdown_text "${bundle_root}/${relative_path}" |
+    perl -0pe 's/\\[[:space:]]*\n/ /g; s/[[:space:]]+/ /g' |
+    grep -Eiq -- "${pattern}"; then
     echo "Forbidden offline install bundle artifact content in ${relative_path}: ${description}" >&2
     exit 1
   fi
@@ -864,10 +941,10 @@ if [[ -n "${bundle_dir}" ]]; then
   bundle_owner="$(require_manifest_value "${bundle_manifest}" "bundle owner")"
   per_artifact_owner="$(require_manifest_value "${bundle_manifest}" "per-artifact owner")"
   bundle_creation_timestamp="$(require_manifest_value "${bundle_manifest}" "bundle creation timestamp")"
-  environment_assumption="$(require_manifest_value "${bundle_manifest}" "environment assumption")"
+  environment_assumption="$(require_manifest_value_any "${bundle_manifest}" "environment assumption" "environment assumption" "reviewed environment assumption")"
   required_artifact_manifest_path="$(require_manifest_value "${bundle_manifest}" "required artifact manifest path")"
   exclusion_review="$(require_manifest_value "${bundle_manifest}" "exclusion review")"
-  verifier_output="$(require_manifest_value "${bundle_manifest}" "verifier output")"
+  verifier_output="$(require_manifest_value_any "${bundle_manifest}" "verifier output" "verifier output" "verifier output reference")"
   approval_record="$(require_manifest_value "${bundle_manifest}" "approval record")"
 
   if [[ "${contract_identifier}" != "phase-65-offline-install-bundle-contract-v1" ]]; then
@@ -927,11 +1004,11 @@ if [[ -n "${bundle_dir}" ]]; then
 
   reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])((does|do|is|are)[ -]+not|cannot|can not|no|missing|absent|without|omits?|unavailable)([^[:alnum:]_-]|$)[^.?!;\n]*(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)' "negated install guidance"
   reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)[^.?!;\n]*((is|are)[ -]+not[[:space:]-]+(provided|documented|selected|available|included|specified|defined)|cannot|can not|missing|absent|omitted|unavailable|not[[:space:]-]+provided|not[[:space:]-]+documented|not[[:space:]-]+selected)' "negated install guidance"
-  reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])((do|does|must|should)[ -]+not|cannot|can not)[^.?!;]*aegisops[[:space:]]+up' "negated install command"
+  reject_bundle_file_text_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])((do|does|must|should)[ -]+not|cannot|can not)[^.?!]*aegisops[[:space:]]+up' "negated install command"
   reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])(curl|wget)[^`'"'"'\n;|&]*https?://|(^|[^[:alnum:]_-])(fetch|download|retrieve|pull|install)[^.?!;\n]*https?://|https?://[^[:space:]`'"'"'"]*(updates?|downloads?|dependency|artifact)[^[:space:]`'"'"'"]*|https?://[^[:space:]`'"'"'"]*[.](tgz|tar[.]gz|zip|deb|rpm|pkg|dmg|exe|msi)([^[:alnum:]]|$)' "hosted download command"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'offline[[:space:]-]+install' "offline install entry guidance"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command)' "install entry command"
-  require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'aegisops[[:space:]]+up[^`\n]*(--profile[[:space:]]+smb-single-node[^`\n]*--runtime-env[[:space:]]+<runtime-env-file>|--runtime-env[[:space:]]+<runtime-env-file>[^`\n]*--profile[[:space:]]+smb-single-node)' "concrete install command"
+  require_bundle_file_text_pattern "${bundle_dir}" "install/README.md" 'aegisops[[:space:]]+up[^`]*(--profile[[:space:]]+smb-single-node[^`]*--runtime-env[[:space:]]+<runtime-env-file>|--runtime-env[[:space:]]+<runtime-env-file>[^`]*--profile[[:space:]]+smb-single-node)' "concrete install command"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(selected[[:space:]-]+profile|profile)' "selected profile"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)' "dependency assumptions and manual prerequisites"
   require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" 'docs/deployment/env-secrets-certs-contract[.]md' "secret-source contract citation"
