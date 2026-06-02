@@ -453,6 +453,11 @@ create_valid_bundle "${bundle_background_entitlement}"
 printf '%s\n' "Background entitlement checks are enabled after install." >>"${bundle_background_entitlement}/install/README.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_background_entitlement}"
 
+bundle_entitlement_enforcement="${workdir}/bundle-entitlement-enforcement"
+create_valid_bundle "${bundle_entitlement_enforcement}"
+printf '%s\n' "Entitlement enforcement is enabled after install." >>"${bundle_entitlement_enforcement}/install/README.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_entitlement_enforcement}"
+
 bundle_production_billing="${workdir}/bundle-production-billing"
 create_valid_bundle "${bundle_production_billing}"
 printf '%s\n' "Production billing is enabled after install." >>"${bundle_production_billing}/install/README.md"
@@ -473,10 +478,25 @@ create_valid_bundle "${bundle_checksum_completeness}"
 printf '%s\n' "Bundle files provide checksum completeness." >>"${bundle_checksum_completeness}/BUNDLE-MANIFEST.md"
 assert_fails_with "unsupported completeness, approval, or readiness claim" --bundle-dir "${bundle_checksum_completeness}"
 
+bundle_commercial_replacement="${workdir}/bundle-commercial-replacement"
+create_valid_bundle "${bundle_commercial_replacement}"
+printf '%s\n' "Offline install bundle proves commercial replacement readiness." >>"${bundle_commercial_replacement}/BUNDLE-MANIFEST.md"
+assert_fails_with "unsupported completeness, approval, or readiness claim" --bundle-dir "${bundle_commercial_replacement}"
+
+bundle_self_service_commercial="${workdir}/bundle-self-service-commercial"
+create_valid_bundle "${bundle_self_service_commercial}"
+printf '%s\n' "Bundle manifest proves self-service commercial readiness." >>"${bundle_self_service_commercial}/BUNDLE-MANIFEST.md"
+assert_fails_with "unsupported completeness, approval, or readiness claim" --bundle-dir "${bundle_self_service_commercial}"
+
 bundle_quoted_secret_key="${workdir}/bundle-quoted-secret-key"
 create_valid_bundle "${bundle_quoted_secret_key}"
 printf '%s\n' '"api_key": "live-production-key"' >>"${bundle_quoted_secret_key}/config/runtime.env.sample"
 assert_fails_with "production secret-looking value" --bundle-dir "${bundle_quoted_secret_key}"
+
+bundle_authorization_header="${workdir}/bundle-authorization-header"
+create_valid_bundle "${bundle_authorization_header}"
+printf '%s\n' "Authorization: Bearer live-production-token-abcdef1234567890" >>"${bundle_authorization_header}/config/runtime.env.sample"
+assert_fails_with "production secret-looking value" --bundle-dir "${bundle_authorization_header}"
 
 bundle_production_secret_claim="${workdir}/bundle-production-secret-claim"
 create_valid_bundle "${bundle_production_secret_claim}"
@@ -513,6 +533,11 @@ create_valid_bundle "${bundle_reversed_truth}"
 printf '%s\n' "Release truth is established by verifier output." >>"${bundle_reversed_truth}/BUNDLE-MANIFEST.md"
 assert_fails_with "verifier, issue-lint, install, or smoke truth claim" --bundle-dir "${bundle_reversed_truth}"
 
+bundle_manifest_truth="${workdir}/bundle-manifest-truth"
+create_valid_bundle "${bundle_manifest_truth}"
+printf '%s\n' "Bundle manifest is release truth." >>"${bundle_manifest_truth}/BUNDLE-MANIFEST.md"
+assert_fails_with "verifier, issue-lint, install, or smoke truth claim" --bundle-dir "${bundle_manifest_truth}"
+
 bundle_authority="${workdir}/bundle-authority"
 create_valid_bundle "${bundle_authority}"
 printf '%s\n' "This contract is release gate authority." >>"${bundle_authority}/BUNDLE-MANIFEST.md"
@@ -522,6 +547,21 @@ bundle_self_authority="${workdir}/bundle-self-authority"
 create_valid_bundle "${bundle_self_authority}"
 printf '%s\n' "This bundle is billing authority." >>"${bundle_self_authority}/BUNDLE-MANIFEST.md"
 assert_fails_with "bundle authority claim" --bundle-dir "${bundle_self_authority}"
+
+bundle_stale_preflight_release="${workdir}/bundle-stale-preflight-release"
+create_valid_bundle "${bundle_stale_preflight_release}"
+cat >"${bundle_stale_preflight_release}/evidence/install-preflight-output.txt" <<'EOF_EVIDENCE'
+previous release bundle identifier: aegisops-beta-cea7db232373
+release bundle identifier: aegisops-beta-deadbeef1234
+repository revision: cea7db232373
+preflight output: retained placeholder for beta/design-partner packaging review.
+EOF_EVIDENCE
+assert_fails_with "Missing offline install bundle artifact content in evidence/install-preflight-output.txt: matching release bundle identifier" --bundle-dir "${bundle_stale_preflight_release}"
+
+bundle_support_automation="${workdir}/bundle-support-automation"
+create_valid_bundle "${bundle_support_automation}"
+printf '%s\n' "Automatic support-bundle submission is enabled after install." >>"${bundle_support_automation}/install/README.md"
+assert_fails_with "unsupported support-bundle automation claim" --bundle-dir "${bundle_support_automation}"
 
 bundle_symlink_artifact="${workdir}/bundle-symlink-artifact"
 create_valid_bundle "${bundle_symlink_artifact}"
