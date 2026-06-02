@@ -126,6 +126,18 @@ require_bundle_file_pattern() {
   fi
 }
 
+reject_bundle_file_pattern() {
+  local bundle_root="$1"
+  local relative_path="$2"
+  local pattern="$3"
+  local description="$4"
+
+  if grep -Eiq -- "${pattern}" < <(visible_markdown_text "${bundle_root}/${relative_path}"); then
+    echo "Forbidden offline install bundle artifact content in ${relative_path}: ${description}" >&2
+    exit 1
+  fi
+}
+
 escape_extended_regex() {
   local value="$1"
 
@@ -182,7 +194,7 @@ scan_forbidden_text() {
       tr '[:upper:]' '[:lower:]' |
       sed -E \
         -e 's/[[:space:]]+/ /g' \
-        -e 's/,[[:space:]]+(and|but)[[:space:]]+((hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|production installer|production entitlement enforcement|commercial billing)[^,.?!;]*(is|are)[^,.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered))/. \2/g'
+        -e 's/,[[:space:]]+(and|but)[[:space:]]+((hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|production installer|production entitlement enforcement|commercial billing|sbom|checksum|signing|licensing|migration|support|design-partner evidence|release notes?)[^,.?!;]*(is|are)[^,.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered|accepted))/. \2/g'
   )"
   claim_scan_text="$(
     printf '%s' "${normalized_text}" |
@@ -278,13 +290,23 @@ scan_forbidden_text() {
     exit 1
   fi
 
-  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output)[^.?!;]*(prove|proves|satisfy|satisfies|pass|passes|claim|claims|approve|approves|accept|accepts|create|creates|establish|establishes|infer|infers)[^.?!;]*(beta|rc|ga)[[:space:]-]+(pass|readiness|gate|gates|gate acceptance)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output|docs|release notes?|operator-facing summaries|downstream receipts)[^.?!;]*(prove|proves|satisfy|satisfies|pass|passes|claim|claims|approve|approves|accept|accepts|create|creates|establish|establishes|infer|infers)[^.?!;]*(beta|rc|ga)[[:space:]-]+(pass|readiness|gate|gates|gate acceptance)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
     exit 1
   fi
 
-  if grep -Eiq -- '(beta|rc|ga)[[:space:]-]+(pass|readiness|gate|gates|gate acceptance)[^.?!;]*(is|are|becomes|become)[^.?!;]*(proven|satisfied|passed|approved|accepted|created|established)[^.?!;]*(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(beta|rc|ga)[[:space:]-]+(pass|readiness|gate|gates|gate acceptance)[^.?!;]*(is|are|becomes|become)[^.?!;]*(proven|satisfied|passed|approved|accepted|created|established)[^.?!;]*(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output|docs|release notes?|operator-facing summaries|downstream receipts)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output|docs|release notes?|operator-facing summaries|downstream receipts)[^.?!;]*(prove|proves|satisfy|satisfies|pass|passes|claim|claims|approve|approves|accept|accepts|create|creates|establish|establishes|infer|infers|provide|provides|deliver|delivers|include|includes)[^.?!;]*((sbom|checksum|signing)[[:space:]-]+completeness|licensing[[:space:]-]+approval|migration[[:space:]-]+readiness|support[[:space:]-]+readiness|design-partner[[:space:]-]+evidence[[:space:]-]+completeness)' <<<"${claim_scan_text}"; then
+    echo "Forbidden ${description}: unsupported completeness, approval, or readiness claim detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '((sbom|checksum|signing)[[:space:]-]+completeness|licensing[[:space:]-]+approval|migration[[:space:]-]+readiness|support[[:space:]-]+readiness|design-partner[[:space:]-]+evidence[[:space:]-]+completeness)[^.?!;]*(is|are|becomes|become)[^.?!;]*(proven|satisfied|passed|approved|accepted|created|established|provided|delivered|included)[^.?!;]*(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|install output|smoke output|verifier output|issue-lint output|docs|release notes?|operator-facing summaries|downstream receipts)' <<<"${claim_scan_text}"; then
+    echo "Forbidden ${description}: unsupported completeness, approval, or readiness claim detected" >&2
     exit 1
   fi
 
@@ -295,6 +317,16 @@ scan_forbidden_text() {
 
   if grep -Eiq -- '(readiness|release|gate|workflow|limitation|install|smoke)[[:space:]-]+truth[^.?!;]*(is|are|becomes|become|comes from|depends on|is satisfied by|are satisfied by|is proven by|are proven by|established by|created by)[^.?!;]*(verifier output|issue-lint output|install output|smoke output|bundle files|manifest entries)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: verifier, issue-lint, install, or smoke truth claim detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|this contract)[^.?!;]*(is|are|acts as|serve as|serves as|becomes|become|provides|establishes|creates)[^.?!;]*(workflow|support|runtime[[:space:]-]+execution|release[[:space:]-]+gate|beta[[:space:]-]+gate|rc[[:space:]-]+gate|ga[[:space:]-]+gate|entitlement|billing)[[:space:]-]+authority' <<<"${claim_scan_text}"; then
+    echo "Forbidden ${description}: bundle authority claim detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(workflow|support|runtime[[:space:]-]+execution|release[[:space:]-]+gate|beta[[:space:]-]+gate|rc[[:space:]-]+gate|ga[[:space:]-]+gate|entitlement|billing)[[:space:]-]+authority[^.?!;]*(is|are|becomes|become|comes from|depends on|is satisfied by|are satisfied by|is proven by|are proven by|established by|created by)[^.?!;]*(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|this contract)' <<<"${claim_scan_text}"; then
+    echo "Forbidden ${description}: bundle authority claim detected" >&2
     exit 1
   fi
 }
@@ -554,6 +586,8 @@ if [[ -n "${bundle_dir}" ]]; then
   escaped_release_bundle_identifier="$(escape_extended_regex "${release_bundle_identifier}")"
   escaped_repository_revision="$(escape_extended_regex "${repository_revision}")"
 
+  reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])((does|do|is|are)[ -]+not|cannot|can not|no|missing|absent|without|omits?|unavailable)([^[:alnum:]_-]|$)[^.?!;\n]*(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)' "negated install guidance"
+  reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)[^.?!;\n]*((is|are)[ -]+not|cannot|can not|missing|absent|omitted|unavailable|not[[:space:]-]+provided|not[[:space:]-]+documented|not[[:space:]-]+selected)' "negated install guidance"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'offline[[:space:]-]+install' "offline install entry guidance"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command)' "install entry command"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(selected[[:space:]-]+profile|profile)' "selected profile"

@@ -234,6 +234,11 @@ create_valid_repo "${production_installer_complete_repo}"
 printf '%s\n' "Production installer is complete for this bundle." >>"${production_installer_complete_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --repo-root "${production_installer_complete_repo}"
 
+sbom_completeness_repo="${workdir}/sbom-completeness"
+create_valid_repo "${sbom_completeness_repo}"
+printf '%s\n' "Offline install bundle proves SBOM completeness." >>"${sbom_completeness_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "unsupported completeness, approval, or readiness claim" --repo-root "${sbom_completeness_repo}"
+
 rc_claim_repo="${workdir}/rc-claim"
 create_valid_repo "${rc_claim_repo}"
 printf '%s\n' "Offline install bundle proves RC readiness." >>"${rc_claim_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
@@ -318,6 +323,17 @@ invalid_install_readme="${workdir}/invalid-install-readme"
 create_valid_bundle "${invalid_install_readme}"
 printf '%s\n' "# Offline Install Entry" "Run it." >"${invalid_install_readme}/install/README.md"
 assert_fails_with "Missing offline install bundle artifact content in install/README.md" --bundle-dir "${invalid_install_readme}"
+
+negated_install_readme="${workdir}/negated-install-readme"
+create_valid_bundle "${negated_install_readme}"
+cat >"${negated_install_readme}/install/README.md" <<'EOF_INSTALL'
+# Offline Install Entry
+
+No offline install entrypoint is provided.
+Selected profile is not documented.
+Dependency assumptions and manual prerequisites are unavailable.
+EOF_INSTALL
+assert_fails_with "negated install guidance" --bundle-dir "${negated_install_readme}"
 
 invalid_runtime_sample="${workdir}/invalid-runtime-sample"
 create_valid_bundle "${invalid_runtime_sample}"
@@ -452,6 +468,11 @@ create_valid_bundle "${bundle_production_installer}"
 printf '%s\n' "This bundle provides production installer completeness." >>"${bundle_production_installer}/BUNDLE-MANIFEST.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_production_installer}"
 
+bundle_checksum_completeness="${workdir}/bundle-checksum-completeness"
+create_valid_bundle "${bundle_checksum_completeness}"
+printf '%s\n' "Bundle files provide checksum completeness." >>"${bundle_checksum_completeness}/BUNDLE-MANIFEST.md"
+assert_fails_with "unsupported completeness, approval, or readiness claim" --bundle-dir "${bundle_checksum_completeness}"
+
 bundle_quoted_secret_key="${workdir}/bundle-quoted-secret-key"
 create_valid_bundle "${bundle_quoted_secret_key}"
 printf '%s\n' '"api_key": "live-production-key"' >>"${bundle_quoted_secret_key}/config/runtime.env.sample"
@@ -472,6 +493,11 @@ create_valid_bundle "${bundle_files_readiness_claim}"
 printf '%s\n' "Bundle files prove RC gate acceptance." >>"${bundle_files_readiness_claim}/BUNDLE-MANIFEST.md"
 assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_files_readiness_claim}"
 
+bundle_release_notes_readiness_claim="${workdir}/bundle-release-notes-readiness-claim"
+create_valid_bundle "${bundle_release_notes_readiness_claim}"
+printf '%s\n' "Release notes satisfy RC gate acceptance." >>"${bundle_release_notes_readiness_claim}/BUNDLE-MANIFEST.md"
+assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_release_notes_readiness_claim}"
+
 bundle_reversed_ga_claim="${workdir}/bundle-reversed-ga-claim"
 create_valid_bundle "${bundle_reversed_ga_claim}"
 printf '%s\n' "GA readiness is proven by bundle manifest." >>"${bundle_reversed_ga_claim}/BUNDLE-MANIFEST.md"
@@ -486,6 +512,11 @@ bundle_reversed_truth="${workdir}/bundle-reversed-truth"
 create_valid_bundle "${bundle_reversed_truth}"
 printf '%s\n' "Release truth is established by verifier output." >>"${bundle_reversed_truth}/BUNDLE-MANIFEST.md"
 assert_fails_with "verifier, issue-lint, install, or smoke truth claim" --bundle-dir "${bundle_reversed_truth}"
+
+bundle_authority="${workdir}/bundle-authority"
+create_valid_bundle "${bundle_authority}"
+printf '%s\n' "This contract is release gate authority." >>"${bundle_authority}/BUNDLE-MANIFEST.md"
+assert_fails_with "bundle authority claim" --bundle-dir "${bundle_authority}"
 
 bundle_symlink_artifact="${workdir}/bundle-symlink-artifact"
 create_valid_bundle "${bundle_symlink_artifact}"
