@@ -35,7 +35,17 @@ if [[ -n "${bundle_dir}" ]]; then
   while [[ "${bundle_dir}" != "/" && "${bundle_dir}" == */ ]]; do
     bundle_dir="${bundle_dir%/}"
   done
+  if [[ ! -d "${bundle_dir}" ]]; then
+    echo "Missing offline install bundle directory: ${bundle_dir}" >&2
+    exit 1
+  fi
+  if [[ -L "${bundle_dir}" ]]; then
+    echo "Invalid offline install bundle artifact: symlink is not allowed: ${bundle_dir}" >&2
+    exit 1
+  fi
+  bundle_dir="$(cd "${bundle_dir}" && pwd -P)"
 fi
+repo_root="$(cd "${repo_root}" && pwd -P)"
 
 doc_path="docs/phase-65-2-offline-install-bundle-contract.md"
 absolute_doc_path="${repo_root}/${doc_path}"
@@ -85,7 +95,7 @@ manifest_value() {
     $text =~ s/<!--.*?-->//gs;
     my $in_fence = 0;
     for my $line (split /\n/, $text) {
-      if ($line =~ /^\s*```/) {
+      if ($line =~ /^\s*(?:```|~~~)/) {
         $in_fence = !$in_fence;
         next;
       }
@@ -109,7 +119,7 @@ manifest_label_count() {
     my $count = 0;
     my $in_fence = 0;
     for my $line (split /\n/, $text) {
-      if ($line =~ /^\s*```/) {
+      if ($line =~ /^\s*(?:```|~~~)/) {
         $in_fence = !$in_fence;
         next;
       }
@@ -436,6 +446,22 @@ markdown_section_text() {
   '
 }
 
+reject_mixed_negated_positive_claim() {
+  local description="$1"
+  local normalized_text="$2"
+
+  local negated_boundary positive_claim_terms positive_verbs positive_states
+  negated_boundary='((does|do|must|can|is|are)[ -]+not|cannot|can not|unsupported|excludes)[^.?!;]*(;| and | but | yet | however | though | although )'
+  positive_claim_terms='(customer-private|customer private|customer-confidential|customer confidential)[[:space:]-]+(data|payload|record|records)|production[[:space:]-]+secrets?|production[[:space:]-]+secret[[:space:]-]+material|customer[[:space:]-]+specific[[:space:]-]+(secret[[:space:]-]+provisioning|secrets?|secret[[:space:]-]+material|credentials?)|hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?([[:space:]-]+readiness)?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|background entitlement checks?|production installer([[:space:]-]+(behavior|completeness))?|(production[[:space:]-]+)?entitlement enforcement|billing|production billing|commercial billing|release[[:space:]-]+channel([[:space:]-]+(behavior|services?|updates?|readiness))?|automatic[[:space:]-]+support[[:space:]-]+bundle[[:space:]-]+submission|support[[:space:]-]+bundle[[:space:]-]+(automation|submission)|(beta|rc|ga)[[:space:]-]+(pass|proof|readiness|gate|gates|gate acceptance)|(readiness|release|gate|workflow|limitation|install|smoke)[[:space:]-]+truth|(sbom|checksum|signing)[[:space:]-]+(completeness|generation)|licensing[[:space:]-]+(approval|conclusions?)|migration[[:space:]-]+(readiness|guide[[:space:]-]+implementation|implementation)|support[[:space:]-]+readiness|(self-service[[:space:]-]+commercial|commercial[[:space:]-]+replacement)[[:space:]-]+readiness|design-partner[[:space:]-]+evidence[[:space:]-]+completeness'
+  positive_verbs='(is|are|becomes|become|provides|provide|includes|include|contains|support|supports|enables|enable|delivers|deliver|proves|prove|satisfies|satisfy|passes|pass|implements|implement|approves|approve|accepts|accept|establishes|establish)'
+  positive_states='(enabled|implemented|included|available|ready|required|assumed|approved|complete|completed|supported|provided|satisfied|proven|delivered|accepted|done)'
+
+  if grep -Eiq -- "${negated_boundary}[^.?!;]*(${positive_claim_terms})[^.?!;]*${positive_verbs}[^.?!;]*${positive_states}|${negated_boundary}[^.?!;]*${positive_verbs}[[:space:]-]+(${positive_claim_terms})" <<<"${normalized_text}"; then
+    echo "Forbidden ${description}: positive claim after negated boundary detected" >&2
+    exit 1
+  fi
+}
+
 scan_forbidden_text() {
   local description="$1"
   shift
@@ -456,6 +482,7 @@ scan_forbidden_text() {
         -e 's/[^.?!;]*((does|do|must|can|is|are)[ -]+not|cannot|can not)[^.?!;]*(claim|claims|prove|proves|satisfy|satisfies|ready|readiness|truth|authority|gate|gates|hosted|silent|production)[^.?!;]*[.?!;]/ /g' \
         -e 's/[^.?!;]*(unsupported|excludes|manual)[^.?!;]*(hosted|silent|production|entitlement|billing|rc|ga|readiness)[^.?!;]*[.?!;]/ /g'
   )"
+  reject_mixed_negated_positive_claim "${description}" "${normalized_text}"
 
   if ! printf '%s' "${decoded_text}" | perl -Mstrict -Mwarnings -0ne '
     my @candidates = ($_);
@@ -464,6 +491,9 @@ scan_forbidden_text() {
 
     for my $text (@candidates) {
       if ($text =~ m{\bfile://+(?:[A-Za-z]:[\\\/]+)?(?:Users|home)[\\\/]+[^\\\/\s]+(?:[\\\/][^\s]*)?}i || $text =~ m{\bfile://+(?:root)(?:[\\\/][^\s]*)?}i) {
+        exit 1;
+      }
+      if ($text =~ m{\bfile://+(?:etc|var|opt|srv|mnt|Volumes|usr/local)(?:[\\\/][^\s]*)?}i) {
         exit 1;
       }
 
@@ -484,6 +514,13 @@ scan_forbidden_text() {
 
       my $local_workspace_re = qr{(?:/tmp|/private/tmp|/workspace|/workspaces)(?:/[^\\s]*)?};
       while ($text =~ /$local_workspace_re/g) {
+        my $start = $-[0];
+        next if $start > 0 && substr($text, $start - 1, 1) =~ /[A-Za-z0-9_.\/\\-]/;
+        exit 1;
+      }
+
+      my $system_absolute_re = qr{(?:/(?:etc|var|opt|srv|mnt|Volumes)(?:/[^\s]*)?|/usr/local(?:/[^\s]*)?)};
+      while ($text =~ /$system_absolute_re/ig) {
         my $start = $-[0];
         next if $start > 0 && substr($text, $start - 1, 1) =~ /[A-Za-z0-9_.\/\\-]/;
         exit 1;
@@ -673,6 +710,9 @@ scan_forbidden_material_text() {
       if ($text =~ m{\bfile://+(?:[A-Za-z]:[\\\/]+)?(?:Users|home)[\\\/]+[^\\\/\s]+(?:[\\\/][^\s]*)?}i || $text =~ m{\bfile://+(?:root)(?:[\\\/][^\s]*)?}i) {
         exit 1;
       }
+      if ($text =~ m{\bfile://+(?:etc|var|opt|srv|mnt|Volumes|usr/local)(?:[\\\/][^\s]*)?}i) {
+        exit 1;
+      }
 
       if ($text =~ /(^|[^A-Za-z0-9_.\/\\-])([A-Za-z]:[\\\/]+Users[\\\/]+[^\\\/\s]+(?:[\\\/][^\s]*)?)/i) {
         exit 1;
@@ -691,6 +731,13 @@ scan_forbidden_material_text() {
 
       my $local_workspace_re = qr{(?:/tmp|/private/tmp|/workspace|/workspaces)(?:/[^\\s]*)?};
       while ($text =~ /$local_workspace_re/g) {
+        my $start = $-[0];
+        next if $start > 0 && substr($text, $start - 1, 1) =~ /[A-Za-z0-9_.\/\\-]/;
+        exit 1;
+      }
+
+      my $system_absolute_re = qr{(?:/(?:etc|var|opt|srv|mnt|Volumes)(?:/[^\s]*)?|/usr/local(?:/[^\s]*)?)};
+      while ($text =~ /$system_absolute_re/ig) {
         my $start = $-[0];
         next if $start > 0 && substr($text, $start - 1, 1) =~ /[A-Za-z0-9_.\/\\-]/;
         exit 1;
@@ -753,6 +800,7 @@ scan_forbidden_inherited_doc_claim_text() {
           -e 's/[^.?!;]*((does|do|must|can|is|are)[ -]+not|cannot|can not)[^.?!;]*(claim|claims|prove|proves|satisfy|satisfies|ready|readiness|truth|authority|gate|gates|hosted|silent|production)[^.?!;]*[.?!;]/ /g' \
           -e 's/[^.?!;]*(unsupported|excludes|manual)[^.?!;]*(hosted|silent|production|entitlement|billing|rc|ga|readiness)[^.?!;]*[.?!;]/ /g'
     )"
+    reject_mixed_negated_positive_claim "${description}" "${normalized_text}"
 
     if grep -Eiq -- 'https?://[^[:space:]`'"'"'"]*(updates?|downloads?|dependency|artifact)[^[:space:]`'"'"'"]*|https?://[^[:space:]`'"'"'"]*[.](tgz|tar[.]gz|zip|deb|rpm|pkg|dmg|exe|msi)([^[:alnum:]]|$)' <<<"${decoded_text}"; then
       echo "Forbidden ${description}: hosted download command detected" >&2
@@ -770,6 +818,11 @@ scan_forbidden_inherited_doc_claim_text() {
     fi
 
     if grep -Eiq -- '(beta|rc|ga)[[:space:]-]+(pass|proof|readiness|gate|gates|gate acceptance)[^.?!;]*(is|are|becomes|become)[^.?!;]*(proven|satisfied|passed|approved|accepted|created|established|provided|delivered|included)[^.?!;]*(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
+      exit 1
+    fi
+
+    if grep -Eiq -- '(^|[^[:alnum:]_-])(beta|rc|ga|release)[[:space:]-]+(pass|proof|readiness|gate|gates|gate acceptance)[^.?!;]*(is|are|becomes|become)[^.?!;]*(complete|completed|ready|proven|satisfied|passed|approved|accepted|created|established|provided|delivered|included|available|done)([^[:alnum:]_-]|$)' <<<"${claim_scan_text}"; then
       echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
       exit 1
     fi

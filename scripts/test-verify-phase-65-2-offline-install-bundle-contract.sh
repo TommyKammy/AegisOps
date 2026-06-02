@@ -214,6 +214,16 @@ file_url_home_path="file://${local_home_path}"
 printf '%s\n' "Do not use ${file_url_home_path} in publishable guidance." >>"${file_url_local_path_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "workstation-local absolute path" --repo-root "${file_url_local_path_repo}"
 
+system_absolute_path_repo="${workdir}/system-absolute-path"
+create_valid_repo "${system_absolute_path_repo}"
+printf '%s\n' "Do not use /etc/aegisops/runtime.env in publishable guidance." >>"${system_absolute_path_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "workstation-local absolute path" --repo-root "${system_absolute_path_repo}"
+
+file_url_system_path_repo="${workdir}/file-url-system-path"
+create_valid_repo "${file_url_system_path_repo}"
+printf '%s\n' "Do not use file:///etc/aegisops/runtime.env in publishable guidance." >>"${file_url_system_path_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "workstation-local absolute path" --repo-root "${file_url_system_path_repo}"
+
 root_path_repo="${workdir}/root-path"
 create_valid_repo "${root_path_repo}"
 root_home_path="/""root/private/aegisops"
@@ -246,6 +256,11 @@ hosted_update_readiness_repo="${workdir}/hosted-update-readiness"
 create_valid_repo "${hosted_update_readiness_repo}"
 printf '%s\n' "Hosted update service readiness is complete for this bundle." >>"${hosted_update_readiness_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --repo-root "${hosted_update_readiness_repo}"
+
+mixed_negated_positive_claim_repo="${workdir}/mixed-negated-positive-claim"
+create_valid_repo "${mixed_negated_positive_claim_repo}"
+printf '%s\n' "This contract does not claim hosted update service readiness, but silent auto-upgrade is enabled after install." >>"${mixed_negated_positive_claim_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --repo-root "${mixed_negated_positive_claim_repo}"
 
 release_channel_repo="${workdir}/release-channel"
 create_valid_repo "${release_channel_repo}"
@@ -306,6 +321,11 @@ valid_bundle="${workdir}/valid-bundle"
 create_valid_bundle "${valid_bundle}"
 assert_passes --bundle-dir "${valid_bundle}"
 assert_passes --bundle-dir "${valid_bundle}/"
+assert_passes --bundle-dir "${valid_bundle}/."
+
+bundle_dir_symlink="${workdir}/bundle-dir-symlink"
+ln -s "${valid_bundle}" "${bundle_dir_symlink}"
+assert_fails_with "symlink is not allowed" --bundle-dir "${bundle_dir_symlink}"
 
 valid_not_optional_install_readme="${workdir}/valid-not-optional-install-readme"
 create_valid_bundle "${valid_not_optional_install_readme}"
@@ -426,6 +446,11 @@ fenced_manifest_metadata="${workdir}/fenced-manifest-metadata"
 create_valid_bundle "${fenced_manifest_metadata}"
 perl -0pi -e 's/\A/```\n/; s/\z/\n```\n/' "${fenced_manifest_metadata}/BUNDLE-MANIFEST.md"
 assert_fails_with "Missing offline install bundle metadata value: contract identifier" --bundle-dir "${fenced_manifest_metadata}"
+
+tilde_fenced_manifest_metadata="${workdir}/tilde-fenced-manifest-metadata"
+create_valid_bundle "${tilde_fenced_manifest_metadata}"
+perl -0pi -e 's/\A/~~~\n/; s/\z/\n~~~\n/' "${tilde_fenced_manifest_metadata}/BUNDLE-MANIFEST.md"
+assert_fails_with "Missing offline install bundle metadata value: contract identifier" --bundle-dir "${tilde_fenced_manifest_metadata}"
 
 blank_bundle_owner="${workdir}/blank-bundle-owner"
 create_valid_bundle "${blank_bundle_owner}"
@@ -693,6 +718,36 @@ replace_default_bundle_revision "forbidden-doc-claim-v1" \
 printf '%s\n' "Offline install bundle proves GA readiness." >>"${forbidden_inherited_doc_claim_bundle}/docs/runbook.md"
 assert_fails_with "inferred Beta/RC/GA readiness claim" --repo-root "${forbidden_inherited_doc_claim_repo}" --bundle-dir "${forbidden_inherited_doc_claim_bundle}"
 
+forbidden_inherited_doc_direct_readiness_repo="${workdir}/forbidden-inherited-doc-direct-readiness-repo"
+create_valid_repo "${forbidden_inherited_doc_direct_readiness_repo}"
+printf '%s\n' "RC readiness is complete." >>"${forbidden_inherited_doc_direct_readiness_repo}/docs/runbook.md"
+git -C "${forbidden_inherited_doc_direct_readiness_repo}" init -q
+git -C "${forbidden_inherited_doc_direct_readiness_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" add README.md docs
+git -C "${forbidden_inherited_doc_direct_readiness_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" commit -q -m "Create forbidden inherited direct readiness fixture"
+git -C "${forbidden_inherited_doc_direct_readiness_repo}" tag "forbidden-doc-direct-readiness-v1"
+forbidden_inherited_doc_direct_readiness_bundle="${workdir}/forbidden-inherited-doc-direct-readiness-bundle"
+create_valid_bundle "${forbidden_inherited_doc_direct_readiness_bundle}"
+replace_default_bundle_revision "forbidden-doc-direct-readiness-v1" \
+  "${forbidden_inherited_doc_direct_readiness_bundle}/BUNDLE-MANIFEST.md" \
+  "${forbidden_inherited_doc_direct_readiness_bundle}/evidence/install-preflight-output.txt"
+printf '%s\n' "RC readiness is complete." >>"${forbidden_inherited_doc_direct_readiness_bundle}/docs/runbook.md"
+assert_fails_with "inferred Beta/RC/GA readiness claim" --repo-root "${forbidden_inherited_doc_direct_readiness_repo}" --bundle-dir "${forbidden_inherited_doc_direct_readiness_bundle}"
+
+forbidden_inherited_doc_mixed_readiness_repo="${workdir}/forbidden-inherited-doc-mixed-readiness-repo"
+create_valid_repo "${forbidden_inherited_doc_mixed_readiness_repo}"
+printf '%s\n' "This runbook does not claim RC readiness, but GA readiness is proven by release notes." >>"${forbidden_inherited_doc_mixed_readiness_repo}/docs/runbook.md"
+git -C "${forbidden_inherited_doc_mixed_readiness_repo}" init -q
+git -C "${forbidden_inherited_doc_mixed_readiness_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" add README.md docs
+git -C "${forbidden_inherited_doc_mixed_readiness_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" commit -q -m "Create forbidden inherited mixed readiness fixture"
+git -C "${forbidden_inherited_doc_mixed_readiness_repo}" tag "forbidden-doc-mixed-readiness-v1"
+forbidden_inherited_doc_mixed_readiness_bundle="${workdir}/forbidden-inherited-doc-mixed-readiness-bundle"
+create_valid_bundle "${forbidden_inherited_doc_mixed_readiness_bundle}"
+replace_default_bundle_revision "forbidden-doc-mixed-readiness-v1" \
+  "${forbidden_inherited_doc_mixed_readiness_bundle}/BUNDLE-MANIFEST.md" \
+  "${forbidden_inherited_doc_mixed_readiness_bundle}/evidence/install-preflight-output.txt"
+printf '%s\n' "This runbook does not claim RC readiness, but GA readiness is proven by release notes." >>"${forbidden_inherited_doc_mixed_readiness_bundle}/docs/runbook.md"
+assert_fails_with "inferred Beta/RC/GA readiness claim" --repo-root "${forbidden_inherited_doc_mixed_readiness_repo}" --bundle-dir "${forbidden_inherited_doc_mixed_readiness_bundle}"
+
 forbidden_inherited_doc_truth_claim_repo="${workdir}/forbidden-inherited-doc-truth-claim-repo"
 create_valid_repo "${forbidden_inherited_doc_truth_claim_repo}"
 printf '%s\n' "Readiness truth is satisfied by issue-lint output." >>"${forbidden_inherited_doc_truth_claim_repo}/docs/runbook.md"
@@ -767,6 +822,16 @@ bundle_file_url_local_path="${workdir}/bundle-file-url-local-path"
 create_valid_bundle "${bundle_file_url_local_path}"
 printf '%s\n' "operator path: ${file_url_home_path}" >>"${bundle_file_url_local_path}/install/README.md"
 assert_fails_with "workstation-local absolute path" --bundle-dir "${bundle_file_url_local_path}"
+
+bundle_system_absolute_path="${workdir}/bundle-system-absolute-path"
+create_valid_bundle "${bundle_system_absolute_path}"
+printf '%s\n' 'operator path: /var/lib/aegisops/runtime.env' >>"${bundle_system_absolute_path}/install/README.md"
+assert_fails_with "workstation-local absolute path" --bundle-dir "${bundle_system_absolute_path}"
+
+bundle_file_url_system_path="${workdir}/bundle-file-url-system-path"
+create_valid_bundle "${bundle_file_url_system_path}"
+printf '%s\n' 'operator path: file:///etc/aegisops/runtime.env' >>"${bundle_file_url_system_path}/BUNDLE-MANIFEST.md"
+assert_fails_with "workstation-local absolute path" --bundle-dir "${bundle_file_url_system_path}"
 
 bundle_workspace_path="${workdir}/bundle-workspace-path"
 create_valid_bundle "${bundle_workspace_path}"
@@ -1022,6 +1087,11 @@ bundle_negated_clause_ga_claim="${workdir}/bundle-negated-clause-ga-claim"
 create_valid_bundle "${bundle_negated_clause_ga_claim}"
 printf '%s\n' "This bundle does not claim RC readiness, but GA readiness is proven by bundle manifest." >>"${bundle_negated_clause_ga_claim}/BUNDLE-MANIFEST.md"
 assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_negated_clause_ga_claim}"
+
+bundle_negated_clause_truth_claim="${workdir}/bundle-negated-clause-truth-claim"
+create_valid_bundle "${bundle_negated_clause_truth_claim}"
+printf '%s\n' "Verifier output is not readiness truth, but it is release truth." >>"${bundle_negated_clause_truth_claim}/BUNDLE-MANIFEST.md"
+assert_fails_with "positive claim after negated boundary" --bundle-dir "${bundle_negated_clause_truth_claim}"
 
 bundle_reversed_truth="${workdir}/bundle-reversed-truth"
 create_valid_bundle "${bundle_reversed_truth}"
