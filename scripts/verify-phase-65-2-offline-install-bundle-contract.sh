@@ -312,7 +312,7 @@ scan_forbidden_text() {
       tr '[:upper:]' '[:lower:]' |
       sed -E \
         -e 's/[[:space:]]+/ /g' \
-        -e 's/([,;][[:space:]]*)?(and|but)[[:space:]]+((hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?([[:space:]-]+readiness)?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|production installer|production entitlement enforcement|commercial billing|automatic[[:space:]-]+support-bundle[[:space:]-]+submission|support-bundle[[:space:]-]+(automation|submission)|sbom|checksum|signing|licensing|migration|support|design-partner evidence|release notes?)[^,.?!;]*(is|are)[^,.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered|accepted))/. \3/g'
+        -e 's/([,;][[:space:]]*)?(and|but)[[:space:]]+((hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?([[:space:]-]+readiness)?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|production installer|production entitlement enforcement|commercial billing|automatic[[:space:]-]+support-bundle[[:space:]-]+submission|support-bundle[[:space:]-]+(automation|submission)|sbom|checksum|signing|licensing|migration|support|design-partner evidence|release notes?|(beta|rc|ga)[[:space:]-]+(pass|proof|readiness|gate|gates|gate acceptance))[^,.?!;]*(is|are)[^,.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered|accepted))/. \3/g'
   )"
   claim_scan_text="$(
     printf '%s' "${normalized_text}" |
@@ -394,22 +394,22 @@ scan_forbidden_text() {
   fi
 
   if ! printf '%s' "${decoded_text}" | perl -0ne '
-    my $text = $_;
-    my $offset = 0;
-    for my $sentence (split /(?<=[.?!;\n])\s*/, $text) {
-      my $claim = lc $sentence;
-      my $start = index($text, $sentence, $offset);
-      $start = $offset if $start < 0;
-      $offset = $start + length($sentence);
-      my $context_start = $start > 1200 ? $start - 1200 : 0;
-      my $context = lc substr($text, $context_start, $start - $context_start);
-      next unless $claim =~ /(?:placeholder|sample|fake|todo)/;
-      next unless $claim =~ /(?:secret|credential|password|token|api[ -]?key)/;
-      next unless $claim =~ /(?:(?:are|is|count as|counts as|may be|can be|remain|stays|accepted as|allowed as)[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential)|(?:are|is)[^.?!;\n]*treated as[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential))/;
-      next if $claim =~ /(must reject|must not|cannot|can not|do not|does not|invalid|must fail|must block|not be)/;
-      next if $context =~ /(must reject|must fail closed when|validation must fail closed when|must fail when):?[^#]*$/s;
-      exit 1;
-    }
+      my $text = $_;
+      my $offset = 0;
+      for my $sentence (split /(?<=[.?!;\n])\s*/, $text) {
+        my $claim = lc $sentence;
+        my $start = index($text, $sentence, $offset);
+        $start = $offset if $start < 0;
+        $offset = $start + length($sentence);
+        my $context_start = $start > 1200 ? $start - 1200 : 0;
+        my $context = lc substr($text, $context_start, $start - $context_start);
+        next unless $claim =~ /(?:placeholder|sample|fake|todo)/;
+        next unless $claim =~ /(?:secret|credential|password|token|api[ -]?key)/;
+        next unless $claim =~ /(?:(?:are|is|count as|counts as|may be|can be|remain|stays|accepted as|allowed as)[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential)|(?:are|is)[^.?!;\n]*treated as[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential))/;
+        next if $claim =~ /(must reject|must not|cannot|can not|do not|does not|invalid|must fail|must block|not be)/;
+        next if $context =~ /(must reject|must fail closed when|validation must fail closed when|must fail when):?[^#]*$/s;
+        exit 1;
+      }
   '; then
     echo "Forbidden ${description}: placeholder credentials accepted as valid auth detected" >&2
     exit 1
@@ -430,6 +430,11 @@ scan_forbidden_text() {
     exit 1
   fi
 
+  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(supports|provides|includes|contains|enables|delivers|packages|bundles)[^.?!;]*(production[[:space:]-]+secrets?|production[[:space:]-]+secret[[:space:]-]+material)' <<<"${claim_scan_text}"; then
+    echo "Forbidden ${description}: production secret material claim detected" >&2
+    exit 1
+  fi
+
   if grep -Eiq -- '(customer[[:space:]-]+specific[[:space:]-]+(secret[[:space:]-]+provisioning|secrets?|secret[[:space:]-]+material|credentials?))[^.?!;]*((is|are)[[:space:]-]+)?(supported|included|packaged|present|bundled|provided|available|required|assumed|approved|complete|enabled)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: customer-specific secret provisioning claim detected" >&2
     exit 1
@@ -445,7 +450,7 @@ scan_forbidden_text() {
       exit 1
     fi
 
-  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(provides|delivers|establishes|proves|satisfies|includes|contains)[^.?!;]*(production installer|production installer completeness|hosted update services?([[:space:]-]+readiness)?|network update services?|silent auto-upgrade|silent auto upgrade|background entitlement checks?|(production[[:space:]-]+)?entitlement enforcement|production billing|commercial billing|release[[:space:]-]+channel([[:space:]-]+(behavior|services?|updates?|readiness))?)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(provides|delivers|establishes|proves|satisfies|includes|contains)[^.?!;]*(production installer|production installer completeness|hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?([[:space:]-]+readiness)?|network update services?|silent auto-upgrade|silent auto upgrade|background entitlement checks?|(production[[:space:]-]+)?entitlement enforcement|production billing|commercial billing|release[[:space:]-]+channel([[:space:]-]+(behavior|services?|updates?|readiness))?)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: hosted, silent update, production installer, entitlement, or billing claim detected" >&2
     exit 1
   fi
@@ -481,6 +486,11 @@ scan_forbidden_text() {
   fi
 
   if grep -Eiq -- '(automatic[[:space:]-]+support-bundle[[:space:]-]+submission|support-bundle[[:space:]-]+(automation|submission))[^.?!;]*(is|are)[^.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|delivered)' <<<"${claim_scan_text}"; then
+    echo "Forbidden ${description}: unsupported support-bundle automation claim detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files)[^.?!;]*(supports|provides|includes|contains|enables|delivers)[^.?!;]*(automatic[[:space:]-]+support-bundle[[:space:]-]+submission|support-bundle[[:space:]-]+(automation|submission))' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: unsupported support-bundle automation claim detected" >&2
     exit 1
   fi
@@ -574,6 +584,40 @@ scan_forbidden_material_text() {
     echo "Forbidden ${description}: production secret material detected" >&2
     exit 1
   fi
+}
+
+scan_forbidden_inherited_doc_claim_text() {
+  local description="$1"
+  shift
+
+  local inherited_doc decoded_text normalized_text claim_scan_text
+  for inherited_doc in "$@"; do
+    decoded_text="$(perl -0pe 's/%([0-9A-Fa-f]{2})/chr(hex($1))/eg' "${inherited_doc}")"
+    normalized_text="$(
+      printf '%s' "${decoded_text}" |
+        tr '\n' ' ' |
+        tr '[:upper:]' '[:lower:]' |
+        sed -E \
+          -e 's/[[:space:]]+/ /g' \
+          -e 's/([,;][[:space:]]*)?(and|but)[[:space:]]+(((beta|rc|ga)[[:space:]-]+(pass|proof|readiness|gate|gates|gate acceptance))[^,.?!;]*(is|are)[^,.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered|accepted))/. \3/g'
+    )"
+    claim_scan_text="$(
+      printf '%s' "${normalized_text}" |
+        sed -E \
+          -e 's/[^.?!;]*((does|do|must|can|is|are)[ -]+not|cannot|can not)[^.?!;]*(claim|claims|prove|proves|satisfy|satisfies|ready|readiness|truth|authority|gate|gates|hosted|silent|production)[^.?!;]*[.?!;]/ /g' \
+          -e 's/[^.?!;]*(unsupported|excludes|manual)[^.?!;]*(hosted|silent|production|entitlement|billing|rc|ga|readiness)[^.?!;]*[.?!;]/ /g'
+    )"
+
+    if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries)[^.?!;]*(prove|proves|satisfy|satisfies|pass|passes|claim|claims|approve|approves|accept|accepts|create|creates|establish|establishes|infer|infers|provide|provides|deliver|delivers|include|includes)[^.?!;]*(beta|rc|ga)[[:space:]-]+(pass|proof|readiness|gate|gates|gate acceptance)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
+      exit 1
+    fi
+
+    if grep -Eiq -- '(beta|rc|ga)[[:space:]-]+(pass|proof|readiness|gate|gates|gate acceptance)[^.?!;]*(is|are|becomes|become)[^.?!;]*(proven|satisfied|passed|approved|accepted|created|established|provided|delivered|included)[^.?!;]*(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries)' <<<"${claim_scan_text}"; then
+      echo "Forbidden ${description}: inferred Beta/RC/GA readiness claim detected" >&2
+      exit 1
+    fi
+  done
 }
 
 require_file "${absolute_doc_path}" "Phase 65.2 offline install bundle contract"
@@ -899,6 +943,7 @@ if [[ -n "${bundle_dir}" ]]; then
     bundle_scan_files+=("${bundle_scan_file}")
   done < <(find "${bundle_dir}" -type f -print0)
   scan_forbidden_text "offline install bundle content" "${bundle_scan_files[@]}"
+  scan_forbidden_inherited_doc_claim_text "offline install bundle inherited document content" "${bundle_doc_scan_files[@]}"
   scan_forbidden_material_text "offline install bundle inherited document content" "${bundle_doc_scan_files[@]}"
 fi
 

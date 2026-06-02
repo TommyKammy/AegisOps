@@ -574,6 +574,21 @@ replace_default_bundle_revision "forbidden-doc-v1" \
 printf '%s\n' "production secret material: alpha bravo charlie delta" >>"${forbidden_inherited_doc_bundle}/docs/runbook.md"
 assert_fails_with "production secret material" --repo-root "${forbidden_inherited_doc_repo}" --bundle-dir "${forbidden_inherited_doc_bundle}"
 
+forbidden_inherited_doc_claim_repo="${workdir}/forbidden-inherited-doc-claim-repo"
+create_valid_repo "${forbidden_inherited_doc_claim_repo}"
+printf '%s\n' "Offline install bundle proves GA readiness." >>"${forbidden_inherited_doc_claim_repo}/docs/runbook.md"
+git -C "${forbidden_inherited_doc_claim_repo}" init -q
+git -C "${forbidden_inherited_doc_claim_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" add README.md docs
+git -C "${forbidden_inherited_doc_claim_repo}" -c user.name="AegisOps Test" -c user.email="aegisops-test@example.invalid" commit -q -m "Create forbidden inherited doc claim fixture"
+git -C "${forbidden_inherited_doc_claim_repo}" tag "forbidden-doc-claim-v1"
+forbidden_inherited_doc_claim_bundle="${workdir}/forbidden-inherited-doc-claim-bundle"
+create_valid_bundle "${forbidden_inherited_doc_claim_bundle}"
+replace_default_bundle_revision "forbidden-doc-claim-v1" \
+  "${forbidden_inherited_doc_claim_bundle}/BUNDLE-MANIFEST.md" \
+  "${forbidden_inherited_doc_claim_bundle}/evidence/install-preflight-output.txt"
+printf '%s\n' "Offline install bundle proves GA readiness." >>"${forbidden_inherited_doc_claim_bundle}/docs/runbook.md"
+assert_fails_with "inferred Beta/RC/GA readiness claim" --repo-root "${forbidden_inherited_doc_claim_repo}" --bundle-dir "${forbidden_inherited_doc_claim_bundle}"
+
 missing_bundled_secrets_contract="${workdir}/missing-bundled-secrets-contract"
 create_valid_bundle "${missing_bundled_secrets_contract}"
 rm "${missing_bundled_secrets_contract}/docs/deployment/env-secrets-certs-contract.md"
@@ -643,6 +658,11 @@ bundle_hidden_downloads="${workdir}/bundle-hidden-downloads"
 create_valid_bundle "${bundle_hidden_downloads}"
 printf '%s\n' "Hidden hosted downloads are required during install." >>"${bundle_hidden_downloads}/install/README.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_hidden_downloads}"
+
+bundle_reversed_hidden_downloads="${workdir}/bundle-reversed-hidden-downloads"
+create_valid_bundle "${bundle_reversed_hidden_downloads}"
+printf '%s\n' "This bundle includes hidden hosted downloads." >>"${bundle_reversed_hidden_downloads}/BUNDLE-MANIFEST.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_reversed_hidden_downloads}"
 
 bundle_silent_update="${workdir}/bundle-silent-update"
 create_valid_bundle "${bundle_silent_update}"
@@ -759,6 +779,11 @@ create_valid_bundle "${bundle_production_secret_claim}"
 printf '%s\n' "Production secrets are included in this bundle." >>"${bundle_production_secret_claim}/BUNDLE-MANIFEST.md"
 assert_fails_with "production secret material claim" --bundle-dir "${bundle_production_secret_claim}"
 
+bundle_reversed_production_secret_claim="${workdir}/bundle-reversed-production-secret-claim"
+create_valid_bundle "${bundle_reversed_production_secret_claim}"
+printf '%s\n' "This bundle includes production secret material." >>"${bundle_reversed_production_secret_claim}/BUNDLE-MANIFEST.md"
+assert_fails_with "production secret material claim" --bundle-dir "${bundle_reversed_production_secret_claim}"
+
 bundle_production_secret_label="${workdir}/bundle-production-secret-label"
 create_valid_bundle "${bundle_production_secret_label}"
 printf '%s\n' "production secret material: alpha bravo charlie delta" >>"${bundle_production_secret_label}/config/runtime.env.sample"
@@ -799,6 +824,11 @@ create_valid_bundle "${bundle_reversed_files_readiness_claim}"
 printf '%s\n' "RC readiness is proven by bundle files." >>"${bundle_reversed_files_readiness_claim}/BUNDLE-MANIFEST.md"
 assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_reversed_files_readiness_claim}"
 
+bundle_negated_clause_ga_claim="${workdir}/bundle-negated-clause-ga-claim"
+create_valid_bundle "${bundle_negated_clause_ga_claim}"
+printf '%s\n' "This bundle does not claim RC readiness, but GA readiness is proven by bundle manifest." >>"${bundle_negated_clause_ga_claim}/BUNDLE-MANIFEST.md"
+assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_negated_clause_ga_claim}"
+
 bundle_reversed_truth="${workdir}/bundle-reversed-truth"
 create_valid_bundle "${bundle_reversed_truth}"
 printf '%s\n' "Release truth is established by verifier output." >>"${bundle_reversed_truth}/BUNDLE-MANIFEST.md"
@@ -838,6 +868,11 @@ bundle_support_automation="${workdir}/bundle-support-automation"
 create_valid_bundle "${bundle_support_automation}"
 printf '%s\n' "Automatic support-bundle submission is enabled after install." >>"${bundle_support_automation}/install/README.md"
 assert_fails_with "unsupported support-bundle automation claim" --bundle-dir "${bundle_support_automation}"
+
+bundle_reversed_support_automation="${workdir}/bundle-reversed-support-automation"
+create_valid_bundle "${bundle_reversed_support_automation}"
+printf '%s\n' "This bundle supports automatic support-bundle submission." >>"${bundle_reversed_support_automation}/BUNDLE-MANIFEST.md"
+assert_fails_with "unsupported support-bundle automation claim" --bundle-dir "${bundle_reversed_support_automation}"
 
 bundle_negated_clause_support_automation="${workdir}/bundle-negated-clause-support-automation"
 create_valid_bundle "${bundle_negated_clause_support_automation}"
