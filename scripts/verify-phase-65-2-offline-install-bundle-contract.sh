@@ -239,10 +239,26 @@ reject_bundle_file_pattern() {
   fi
 }
 
-escape_extended_regex() {
-  local value="$1"
+require_bundle_file_metadata_value() {
+  local bundle_root="$1"
+  local relative_path="$2"
+  local label="$3"
+  local expected_value="$4"
+  local description="$5"
+  local file count value
 
-  printf '%s' "${value}" | sed -E 's/[][(){}.^$*+?|\\]/\\&/g'
+  file="${bundle_root}/${relative_path}"
+  count="$(manifest_label_count "${file}" "${label}")"
+  if [[ "${count}" -ne 1 ]]; then
+    echo "Invalid offline install bundle artifact metadata field in ${relative_path}: ${label}" >&2
+    exit 1
+  fi
+
+  value="$(manifest_value "${file}" "${label}")"
+  if [[ "${value}" != "${expected_value}" ]]; then
+    echo "Missing offline install bundle artifact content in ${relative_path}: ${description}" >&2
+    exit 1
+  fi
 }
 
 require_bundle_doc_matches_repo_revision() {
@@ -329,6 +345,13 @@ scan_forbidden_text() {
         next if substr($text, $start, length($mac_home_prefix)) eq $mac_home_prefix && substr($text, 0, $start) =~ /(?:^|[^A-Za-z0-9_])[A-Za-z]:$/;
         exit 1;
       }
+
+      my $local_workspace_re = qr{(?:/tmp|/private/tmp|/workspace|/workspaces)(?:/[^\\s]*)?};
+      while ($text =~ /$local_workspace_re/g) {
+        my $start = $-[0];
+        next if $start > 0 && substr($text, $start - 1, 1) =~ /[A-Za-z0-9_.\/\\-]/;
+        exit 1;
+      }
     }
   '; then
     echo "Forbidden ${description}: workstation-local absolute path detected" >&2
@@ -342,7 +365,7 @@ scan_forbidden_text() {
       exit 1 if $text =~ m{\b[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]+:(?!<[^>]+>@)[^/\s@]{8,}@}i;
 
       for my $line (split /\n/, $text) {
-      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|[A-Za-z0-9_-]*(?:password|secret[_-]?key|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
+      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|[A-Za-z0-9_-]*(?:password|private[_-]?key|secret[_-]?key|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
         my $value = $3;
         $value =~ s/^["'\'']//;
         $value =~ s/["'\'']$//;
@@ -352,6 +375,11 @@ scan_forbidden_text() {
     }
   '; then
     echo "Forbidden ${description}: production secret-looking value detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(^|[^[:alnum:]_-])(curl|wget)[^`'"'"'\n;|&]*https?://|https?://[^[:space:]`'"'"'"]*(updates?|downloads?|dependency|artifact)[^[:space:]`'"'"'"]*' <<<"${decoded_text}"; then
+    echo "Forbidden ${description}: hosted download command detected" >&2
     exit 1
   fi
 
@@ -388,6 +416,11 @@ scan_forbidden_text() {
   fi
 
   if grep -Eiq -- '(customer-private|customer private|customer-confidential|customer confidential)[[:space:]-]+(data|payload|record|records)[[:space:]-]+((is|are)[[:space:]-]+)?(included|packaged|present|bundled|provided|required|assumed)' <<<"${claim_scan_text}"; then
+    echo "Forbidden ${description}: customer-private data claim detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(supports|provides|includes|contains|enables|delivers|packages|bundles)[^.?!;]*(customer-private|customer private|customer-confidential|customer confidential)[[:space:]-]+(data|payload|record|records)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: customer-private data claim detected" >&2
     exit 1
   fi
@@ -499,6 +532,13 @@ scan_forbidden_material_text() {
         next if substr($text, $start, length($mac_home_prefix)) eq $mac_home_prefix && substr($text, 0, $start) =~ /(?:^|[^A-Za-z0-9_])[A-Za-z]:$/;
         exit 1;
       }
+
+      my $local_workspace_re = qr{(?:/tmp|/private/tmp|/workspace|/workspaces)(?:/[^\\s]*)?};
+      while ($text =~ /$local_workspace_re/g) {
+        my $start = $-[0];
+        next if $start > 0 && substr($text, $start - 1, 1) =~ /[A-Za-z0-9_.\/\\-]/;
+        exit 1;
+      }
     }
   '; then
     echo "Forbidden ${description}: workstation-local absolute path detected" >&2
@@ -512,7 +552,7 @@ scan_forbidden_material_text() {
       exit 1 if $text =~ m{\b[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]+:(?!<[^>]+>@)[^/\s@]{8,}@}i;
 
       for my $line (split /\n/, $text) {
-      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|[A-Za-z0-9_-]*(?:password|secret[_-]?key|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
+      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|[A-Za-z0-9_-]*(?:password|private[_-]?key|secret[_-]?key|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
         my $value = $3;
         $value =~ s/^["'\'']//;
         $value =~ s/["'\'']$//;
@@ -792,9 +832,6 @@ if [[ -n "${bundle_dir}" ]]; then
   reject_negative_manifest_value "exclusion review" "${exclusion_review}"
   reject_negative_manifest_value "approval record" "${approval_record}"
 
-  escaped_release_bundle_identifier="$(escape_extended_regex "${release_bundle_identifier}")"
-  escaped_repository_revision="$(escape_extended_regex "${repository_revision}")"
-
   reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])((does|do|is|are)[ -]+not|cannot|can not|no|missing|absent|without|omits?|unavailable)([^[:alnum:]_-]|$)[^.?!;\n]*(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)' "negated install guidance"
   reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)[^.?!;\n]*((is|are)[ -]+not|cannot|can not|missing|absent|omitted|unavailable|not[[:space:]-]+provided|not[[:space:]-]+documented|not[[:space:]-]+selected)' "negated install guidance"
   reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(^|[^[:alnum:]_-])((do|does|must|should)[ -]+not|cannot|can not)[^.?!;]*aegisops[[:space:]]+up' "negated install command"
@@ -808,8 +845,8 @@ if [[ -n "${bundle_dir}" ]]; then
   require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_PROFILE[[:space:]]*=[[:space:]]*smb-single-node([[:space:]]|$)' "selected profile runtime configuration key"
   require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_RUNTIME_ENV[[:space:]]*=[[:space:]]*<runtime-env-file>([[:space:]]|$)' "placeholder runtime env key"
   require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_SECRET_SOURCE_DOC[[:space:]]*=[[:space:]]*docs/deployment/env-secrets-certs-contract[.]md([[:space:]]|$)' "secret-source contract key"
-  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "^[[:space:]]*release bundle identifier:[[:space:]]*${escaped_release_bundle_identifier}[[:space:]]*$" "matching release bundle identifier"
-  require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "^[[:space:]]*repository revision:[[:space:]]*${escaped_repository_revision}[[:space:]]*$" "matching repository revision"
+  require_bundle_file_metadata_value "${bundle_dir}" "evidence/install-preflight-output.txt" "release bundle identifier" "${release_bundle_identifier}" "matching release bundle identifier"
+  require_bundle_file_metadata_value "${bundle_dir}" "evidence/install-preflight-output.txt" "repository revision" "${repository_revision}" "matching repository revision"
 
   bundled_repo_docs=(
     "docs/phase-65-2-offline-install-bundle-contract.md"
