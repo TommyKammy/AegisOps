@@ -352,6 +352,51 @@ require_bundle_file_metadata_value() {
   fi
 }
 
+validate_runtime_sample_placeholder_values() {
+  local bundle_root="$1"
+  local runtime_sample="${bundle_root}/config/runtime.env.sample"
+  local runtime_line runtime_key runtime_value
+
+  while IFS= read -r runtime_line || [[ -n "${runtime_line}" ]]; do
+    runtime_line="${runtime_line#"${runtime_line%%[![:space:]]*}"}"
+    runtime_line="${runtime_line%"${runtime_line##*[![:space:]]}"}"
+
+    [[ -z "${runtime_line}" || "${runtime_line}" == \#* ]] && continue
+
+    if [[ "${runtime_line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+      runtime_key="${BASH_REMATCH[1]}"
+      runtime_value="${BASH_REMATCH[2]}"
+      runtime_value="${runtime_value%%#*}"
+      runtime_value="${runtime_value#"${runtime_value%%[![:space:]]*}"}"
+      runtime_value="${runtime_value%"${runtime_value##*[![:space:]]}"}"
+      runtime_value="${runtime_value%\"}"
+      runtime_value="${runtime_value#\"}"
+      runtime_value="${runtime_value%\'}"
+      runtime_value="${runtime_value#\'}"
+
+      case "${runtime_key}" in
+        AEGISOPS_PROFILE)
+          [[ "${runtime_value}" == "smb-single-node" ]] && continue
+          ;;
+        AEGISOPS_RUNTIME_ENV)
+          [[ "${runtime_value}" == "<runtime-env-file>" ]] && continue
+          ;;
+        AEGISOPS_SECRET_SOURCE_DOC)
+          [[ "${runtime_value}" == "docs/deployment/env-secrets-certs-contract.md" ]] && continue
+          ;;
+        *)
+          if is_placeholder_value "${runtime_value}"; then
+            continue
+          fi
+          ;;
+      esac
+
+      echo "Forbidden offline install bundle artifact content in config/runtime.env.sample: non-placeholder runtime sample value" >&2
+      exit 1
+    fi
+  done <"${runtime_sample}"
+}
+
 require_bundle_doc_matches_repo_revision() {
   local bundle_root="$1"
   local relative_path="$2"
@@ -474,6 +519,11 @@ scan_forbidden_text() {
     exit 1
   fi
 
+  if grep -Eiq -- '(^|[^[:alnum:]_-])(docker|podman|nerdctl|ctr)[[:space:]]+pull[[:space:]]+[A-Za-z0-9._-]+[.][A-Za-z0-9._-]+/|(^|[^[:alnum:]_-])(npm|pnpm|yarn|pip|pipx|gem|cargo|go)[[:space:]]+(install|get)[[:space:]]+[^.?!;\n]*[A-Za-z0-9._-]+[.][A-Za-z0-9._-]+/' <<<"${decoded_text}"; then
+    echo "Forbidden ${description}: hosted download command detected" >&2
+    exit 1
+  fi
+
   if grep -Eiq -- '(customer-private|customer private|customer-confidential|customer confidential)[[:space:]-]+(data|payload|record|records)[[:space:]]*[:=]' <<<"${decoded_text}"; then
     echo "Forbidden ${description}: customer-private data detected" >&2
     exit 1
@@ -496,7 +546,7 @@ scan_forbidden_text() {
         my $context = lc substr($text, $context_start, $start - $context_start);
         next unless $claim =~ /(?:placeholder|sample|fake|todo)/;
         next unless $claim =~ /(?:secret|credential|password|token|api[ -]?key)/;
-        next unless $claim =~ /(?:(?:are|is|count as|counts as|may be|can be|remain|stays|accepted as|allowed as)[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential)|(?:are|is)[^.?!;\n]*treated as[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential))/;
+        next unless $claim =~ /(?:(?:are|is|count as|counts as|may be|can be|remain|stays|accepted as|allowed as)[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential|log[ -]?in|login)|(?:are|is)[^.?!;\n]*treated as[^.?!;\n]*(?:valid|trusted|accepted|production|auth|authenticated|credential)|(?:may be|can be|are|is|remain|stays)[^.?!;\n]*(?:used|provided|entered)[^.?!;\n]*(?:to[ -]+)?(?:log[ -]?in|login|authenticate|auth)|(?:log[ -]?in|login|authenticate|auth)[^.?!;\n]*(?:with|using)[^.?!;\n]*(?:placeholder|sample|fake|todo))/;
         next if $claim =~ /(must reject|must not|cannot|can not|do not|does not|invalid|must fail|must block|not be)/;
         next if $context =~ /(must reject|must fail closed when|validation must fail closed when|must fail when):?[^#]*$/s;
         exit 1;
@@ -705,6 +755,11 @@ scan_forbidden_inherited_doc_claim_text() {
     )"
 
     if grep -Eiq -- 'https?://[^[:space:]`'"'"'"]*(updates?|downloads?|dependency|artifact)[^[:space:]`'"'"'"]*|https?://[^[:space:]`'"'"'"]*[.](tgz|tar[.]gz|zip|deb|rpm|pkg|dmg|exe|msi)([^[:alnum:]]|$)' <<<"${decoded_text}"; then
+      echo "Forbidden ${description}: hosted download command detected" >&2
+      exit 1
+    fi
+
+    if grep -Eiq -- '(^|[^[:alnum:]_-])(docker|podman|nerdctl|ctr)[[:space:]]+pull[[:space:]]+[A-Za-z0-9._-]+[.][A-Za-z0-9._-]+/|(^|[^[:alnum:]_-])(npm|pnpm|yarn|pip|pipx|gem|cargo|go)[[:space:]]+(install|get)[[:space:]]+[^.?!;\n]*[A-Za-z0-9._-]+[.][A-Za-z0-9._-]+/' <<<"${decoded_text}"; then
       echo "Forbidden ${description}: hosted download command detected" >&2
       exit 1
     fi
@@ -1071,6 +1126,7 @@ if [[ -n "${bundle_dir}" ]]; then
   scan_forbidden_text "offline install bundle content" "${bundle_scan_files[@]}"
   scan_forbidden_inherited_doc_claim_text "offline install bundle inherited document content" "${bundle_doc_scan_files[@]}"
   scan_forbidden_material_text "offline install bundle inherited document content" "${bundle_doc_scan_files[@]}"
+  validate_runtime_sample_placeholder_values "${bundle_dir}"
 fi
 
 echo "Phase 65.2 offline install bundle contract is present and fail-closed."

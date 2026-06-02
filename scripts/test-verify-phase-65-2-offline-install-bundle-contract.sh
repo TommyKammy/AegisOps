@@ -262,6 +262,11 @@ create_valid_repo "${placeholder_credential_treated_repo}"
 printf '%s\n' "Placeholder credentials are treated as valid auth for beta install." >>"${placeholder_credential_treated_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "placeholder credentials accepted as valid auth" --repo-root "${placeholder_credential_treated_repo}"
 
+placeholder_login_repo="${workdir}/placeholder-login"
+create_valid_repo "${placeholder_login_repo}"
+printf '%s\n' "Sample credentials may be used to log in during the beta install." >>"${placeholder_login_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "placeholder credentials accepted as valid auth" --repo-root "${placeholder_login_repo}"
+
 production_installer_repo="${workdir}/production-installer"
 create_valid_repo "${production_installer_repo}"
 printf '%s\n' "This bundle provides production installer completeness." >>"${production_installer_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
@@ -311,6 +316,11 @@ placeholder_secret_sample_bundle="${workdir}/placeholder-secret-sample-bundle"
 create_valid_bundle "${placeholder_secret_sample_bundle}"
 printf '%s\n' "DB_PASSWORD=<db-password>" "API_KEY=placeholder" >>"${placeholder_secret_sample_bundle}/config/runtime.env.sample"
 assert_passes --bundle-dir "${placeholder_secret_sample_bundle}"
+
+runtime_sample_concrete_value_bundle="${workdir}/runtime-sample-concrete-value-bundle"
+create_valid_bundle "${runtime_sample_concrete_value_bundle}"
+printf '%s\n' "DATABASE_HOST=prod-db.internal" >>"${runtime_sample_concrete_value_bundle}/config/runtime.env.sample"
+assert_fails_with "non-placeholder runtime sample value" --bundle-dir "${runtime_sample_concrete_value_bundle}"
 
 dotted_revision_bundle="${workdir}/dotted-revision-bundle"
 create_valid_bundle "${dotted_revision_bundle}"
@@ -544,6 +554,11 @@ hosted_download_install_command="${workdir}/hosted-download-install-command"
 create_valid_bundle "${hosted_download_install_command}"
 printf '%s\n' 'Fetch dependency: `curl https://updates.example.com/aegisops/dependency.tgz`.' >>"${hosted_download_install_command}/install/README.md"
 assert_fails_with "hosted download command" --bundle-dir "${hosted_download_install_command}"
+
+registry_pull_install_command="${workdir}/registry-pull-install-command"
+create_valid_bundle "${registry_pull_install_command}"
+printf '%s\n' 'Fetch dependency: `docker pull ghcr.io/example/aegisops:latest`.' >>"${registry_pull_install_command}/install/README.md"
+assert_fails_with "hosted download command" --bundle-dir "${registry_pull_install_command}"
 
 unclassified_https_download="${workdir}/unclassified-https-download"
 create_valid_bundle "${unclassified_https_download}"
@@ -837,6 +852,11 @@ bundle_unclassified_https_download="${workdir}/bundle-unclassified-https-downloa
 create_valid_bundle "${bundle_unclassified_https_download}"
 printf '%s\n' "Fetch the dependency tarball from https://cdn.example.com/aegisops.tgz" >>"${bundle_unclassified_https_download}/evidence/install-preflight-output.txt"
 assert_fails_with "hosted download command" --bundle-dir "${bundle_unclassified_https_download}"
+
+bundle_registry_pull="${workdir}/bundle-registry-pull"
+create_valid_bundle "${bundle_registry_pull}"
+printf '%s\n' 'Fetch dependency: `docker pull ghcr.io/example/aegisops:latest`.' >>"${bundle_registry_pull}/evidence/install-preflight-output.txt"
+assert_fails_with "hosted download command" --bundle-dir "${bundle_registry_pull}"
 
 bundle_background_entitlement="${workdir}/bundle-background-entitlement"
 create_valid_bundle "${bundle_background_entitlement}"
