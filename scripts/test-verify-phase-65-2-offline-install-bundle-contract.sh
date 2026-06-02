@@ -154,6 +154,11 @@ create_valid_repo "${missing_required_file_row_repo}"
 remove_doc_text "${missing_required_file_row_repo}" '| `config/runtime.env.sample` | Platform maintainers | Placeholder-only runtime configuration keys and secret-source instructions that cite `docs/deployment/env-secrets-certs-contract.md`. | Reject the bundle because runtime configuration custody is not inspectable. |'
 assert_fails_with "Missing Phase 65.2 required bundle file row" --repo-root "${missing_required_file_row_repo}"
 
+corrupt_inventory_repo="${workdir}/corrupt-inventory"
+create_valid_repo "${corrupt_inventory_repo}"
+printf '%s\n' "x" >"${corrupt_inventory_repo}/docs/phase-65-1-release-bundle-inventory.md"
+assert_fails_with "Missing inherited baseline contract term in docs/phase-65-1-release-bundle-inventory.md" --repo-root "${corrupt_inventory_repo}"
+
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"
 local_home_path="/""Users/example/aegisops"

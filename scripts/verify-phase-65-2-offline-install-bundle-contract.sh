@@ -244,6 +244,29 @@ require_file "${clean_host_smoke_path}" "clean-host smoke skeleton"
 require_file "${env_contract_path}" "env secrets certs contract"
 require_file "${runbook_path}" "runbook"
 
+baseline_contract_terms=(
+  "${phase65_inventory_path}|The inventory identifier is \`phase-65-release-bundle-inventory-v1\`.|Phase 65.1 inventory identifier"
+  "${phase65_inventory_path}|The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct, and Phase 66 remains RC while Phase 67 remains GA.|Phase 65.1 gate boundary carry-forward"
+  "${phase51_gate_path}|# Phase 51.3 Pilot, Beta, RC, and GA Gate Contract|Phase 51.3 gate contract heading"
+  "${phase51_gate_path}|Phase 66 is RC and must not be described as GA.|Phase 51.3 RC boundary"
+  "${phase51_gate_path}|Phase 67 is GA and must not be materialized until the GA gate evidence exists.|Phase 51.3 GA boundary"
+  "${first_user_stack_path}|# Phase 52.9 First-User Stack Overview|first-user stack heading"
+  "${first_user_stack_path}|First-user docs are operator guidance only.|first-user operator guidance boundary"
+  "${host_preflight_path}|# Phase 52.6 Host Preflight Contract|host preflight heading"
+  "${host_preflight_path}|The host preflight contract gives later setup commands one fail-closed checklist for host prerequisites before the executable first-user stack is started.|host preflight purpose"
+  "${clean_host_smoke_path}|# Phase 52.8 Clean-Host Smoke Skeleton|clean-host smoke heading"
+  "${clean_host_smoke_path}|Each mocked or skipped step must include the command, the missing prerequisite, the later closing phase, and a safe next action.|clean-host false-success boundary"
+  "${env_contract_path}|# Phase 52.5 Env, Secrets, and Cert Generation Contract|env secrets certs heading"
+  "${env_contract_path}|AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, limitation, release, gate, and closeout truth.|env secrets certs authority boundary"
+  "${runbook_path}|# AegisOps Runbook|runbook heading"
+  "${runbook_path}|This runbook defines the reviewed operator procedure for the current AegisOps startup and shutdown path.|runbook reviewed procedure boundary"
+)
+
+for baseline_contract_term in "${baseline_contract_terms[@]}"; do
+  IFS='|' read -r baseline_contract_path baseline_contract_phrase baseline_contract_description <<<"${baseline_contract_term}"
+  require_phrase "${baseline_contract_path}" "${baseline_contract_phrase}" "inherited baseline contract term in ${baseline_contract_path#"${repo_root}/"}: ${baseline_contract_description}"
+done
+
 require_phrase "${readme_path}" "- [Phase 65.2 offline install bundle contract](docs/phase-65-2-offline-install-bundle-contract.md)" "README canonical cross-phase boundary bullet"
 
 required_phrases=()
