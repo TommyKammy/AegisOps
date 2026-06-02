@@ -93,7 +93,7 @@ EOF_MANIFEST
   cat >"${target}/install/README.md" <<'EOF_INSTALL'
 # Offline Install Entry
 
-Run the reviewed offline install entrypoint from the release bundle root after host preflight passes.
+Run the offline install command `aegisops up --profile smb-single-node --runtime-env <runtime-env-file>` from the release bundle root after host preflight passes.
 Use the selected profile `smb-single-node`, keep dependency assumptions explicit, complete manual prerequisites, and retain output under <evidence-dir>.
 EOF_INSTALL
 
@@ -239,6 +239,11 @@ create_valid_repo "${production_installer_complete_repo}"
 printf '%s\n' "Production installer is complete for this bundle." >>"${production_installer_complete_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --repo-root "${production_installer_complete_repo}"
 
+customer_specific_secret_provisioning_repo="${workdir}/customer-specific-secret-provisioning"
+create_valid_repo "${customer_specific_secret_provisioning_repo}"
+printf '%s\n' "Customer-specific secret provisioning is supported by this bundle." >>"${customer_specific_secret_provisioning_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "customer-specific secret provisioning claim" --repo-root "${customer_specific_secret_provisioning_repo}"
+
 sbom_completeness_repo="${workdir}/sbom-completeness"
 create_valid_repo "${sbom_completeness_repo}"
 printf '%s\n' "Offline install bundle proves SBOM completeness." >>"${sbom_completeness_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
@@ -289,6 +294,11 @@ create_valid_bundle "${missing_bundle_metadata}"
 perl -0pi -e 's/^bundle creation timestamp:.*\n//m' "${missing_bundle_metadata}/BUNDLE-MANIFEST.md"
 assert_fails_with "Missing offline install bundle metadata value: bundle creation timestamp" --bundle-dir "${missing_bundle_metadata}"
 
+invalid_bundle_timestamp="${workdir}/invalid-bundle-timestamp"
+create_valid_bundle "${invalid_bundle_timestamp}"
+perl -0pi -e 's/^bundle creation timestamp:.*$/bundle creation timestamp: 2026-99-99T99:99:99Z/m' "${invalid_bundle_timestamp}/BUNDLE-MANIFEST.md"
+assert_fails_with "Invalid offline install bundle creation timestamp" --bundle-dir "${invalid_bundle_timestamp}"
+
 missing_approval_record="${workdir}/missing-approval-record"
 create_valid_bundle "${missing_approval_record}"
 perl -0pi -e 's/^approval record:.*\n//m' "${missing_approval_record}/BUNDLE-MANIFEST.md"
@@ -329,6 +339,17 @@ create_valid_bundle "${invalid_install_readme}"
 printf '%s\n' "# Offline Install Entry" "Run it." >"${invalid_install_readme}/install/README.md"
 assert_fails_with "Missing offline install bundle artifact content in install/README.md" --bundle-dir "${invalid_install_readme}"
 
+placeholder_install_command="${workdir}/placeholder-install-command"
+create_valid_bundle "${placeholder_install_command}"
+cat >"${placeholder_install_command}/install/README.md" <<'EOF_INSTALL'
+# Offline Install Entry
+
+Offline install entrypoint: run the documented command.
+Selected profile: smb-single-node.
+Dependency assumptions and manual prerequisites are documented.
+EOF_INSTALL
+assert_fails_with "Missing offline install bundle artifact content in install/README.md: concrete install command" --bundle-dir "${placeholder_install_command}"
+
 negated_install_readme="${workdir}/negated-install-readme"
 create_valid_bundle "${negated_install_readme}"
 cat >"${negated_install_readme}/install/README.md" <<'EOF_INSTALL'
@@ -344,6 +365,13 @@ invalid_runtime_sample="${workdir}/invalid-runtime-sample"
 create_valid_bundle "${invalid_runtime_sample}"
 perl -0pi -e 's/^AEGISOPS_SECRET_SOURCE_DOC=.*\n//m' "${invalid_runtime_sample}/config/runtime.env.sample"
 assert_fails_with "Missing offline install bundle artifact content in config/runtime.env.sample" --bundle-dir "${invalid_runtime_sample}"
+
+runtime_sample_doc_only="${workdir}/runtime-sample-doc-only"
+create_valid_bundle "${runtime_sample_doc_only}"
+cat >"${runtime_sample_doc_only}/config/runtime.env.sample" <<'EOF_ENV'
+AEGISOPS_SECRET_SOURCE_DOC=docs/deployment/env-secrets-certs-contract.md
+EOF_ENV
+assert_fails_with "Missing offline install bundle artifact content in config/runtime.env.sample: runtime configuration key" --bundle-dir "${runtime_sample_doc_only}"
 
 hidden_install_readme_content="${workdir}/hidden-install-readme-content"
 create_valid_bundle "${hidden_install_readme_content}"
@@ -522,6 +550,11 @@ bundle_production_secret_claim="${workdir}/bundle-production-secret-claim"
 create_valid_bundle "${bundle_production_secret_claim}"
 printf '%s\n' "Production secrets are included in this bundle." >>"${bundle_production_secret_claim}/BUNDLE-MANIFEST.md"
 assert_fails_with "production secret material claim" --bundle-dir "${bundle_production_secret_claim}"
+
+bundle_customer_specific_secret_provisioning="${workdir}/bundle-customer-specific-secret-provisioning"
+create_valid_bundle "${bundle_customer_specific_secret_provisioning}"
+printf '%s\n' "Customer-specific secret provisioning is supported by this bundle." >>"${bundle_customer_specific_secret_provisioning}/BUNDLE-MANIFEST.md"
+assert_fails_with "customer-specific secret provisioning claim" --bundle-dir "${bundle_customer_specific_secret_provisioning}"
 
 bundle_ga_claim="${workdir}/bundle-ga-claim"
 create_valid_bundle "${bundle_ga_claim}"

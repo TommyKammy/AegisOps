@@ -114,6 +114,27 @@ require_manifest_value() {
   printf '%s' "${value}"
 }
 
+validate_utc_timestamp() {
+  local timestamp="$1"
+
+  python3 - "${timestamp}" <<'PY'
+import datetime
+import sys
+
+value = sys.argv[1]
+for timestamp_format in ("%Y-%m-%dT%H:%MZ", "%Y-%m-%dT%H:%M:%SZ"):
+    try:
+        parsed = datetime.datetime.strptime(value, timestamp_format)
+    except ValueError:
+        continue
+
+    if parsed.strftime(timestamp_format) == value:
+        sys.exit(0)
+
+sys.exit(1)
+PY
+}
+
 require_bundle_file_pattern() {
   local bundle_root="$1"
   local relative_path="$2"
@@ -277,6 +298,16 @@ scan_forbidden_text() {
 
   if grep -Eiq -- '(production[[:space:]-]+secrets?|production[[:space:]-]+secret[[:space:]-]+material)[[:space:]-]+((is|are)[[:space:]-]+)?(included|packaged|present|bundled|provided|available|required|assumed|approved|supported)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: production secret material claim detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(customer[[:space:]-]+specific[[:space:]-]+(secret[[:space:]-]+provisioning|secrets?|secret[[:space:]-]+material|credentials?))[^.?!;]*((is|are)[[:space:]-]+)?(supported|included|packaged|present|bundled|provided|available|required|assumed|approved|complete|enabled)' <<<"${claim_scan_text}"; then
+    echo "Forbidden ${description}: customer-specific secret provisioning claim detected" >&2
+    exit 1
+  fi
+
+  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|this bundle)[^.?!;]*(supports|provides|includes|contains|enables|delivers)[^.?!;]*customer[[:space:]-]+specific[[:space:]-]+(secret[[:space:]-]+provisioning|secrets?|secret[[:space:]-]+material|credentials?)' <<<"${claim_scan_text}"; then
+    echo "Forbidden ${description}: customer-specific secret provisioning claim detected" >&2
     exit 1
   fi
 
@@ -563,7 +594,7 @@ if [[ -n "${bundle_dir}" ]]; then
     exit 1
   fi
 
-  if [[ ! "${bundle_creation_timestamp}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?Z$ ]]; then
+  if [[ ! "${bundle_creation_timestamp}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?Z$ ]] || ! validate_utc_timestamp "${bundle_creation_timestamp}"; then
     echo "Invalid offline install bundle creation timestamp: ${bundle_creation_timestamp}" >&2
     exit 1
   fi
@@ -595,9 +626,13 @@ if [[ -n "${bundle_dir}" ]]; then
   reject_bundle_file_pattern "${bundle_dir}" "install/README.md" '(offline[[:space:]-]+install|entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command|selected[[:space:]-]+profile|profile|dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)[^.?!;\n]*((is|are)[ -]+not|cannot|can not|missing|absent|omitted|unavailable|not[[:space:]-]+provided|not[[:space:]-]+documented|not[[:space:]-]+selected)' "negated install guidance"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'offline[[:space:]-]+install' "offline install entry guidance"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(entrypoint|entry[[:space:]-]+command|install[[:space:]-]+command)' "install entry command"
+  require_bundle_file_pattern "${bundle_dir}" "install/README.md" 'aegisops[[:space:]]+(init|up|doctor)[^`\n]*(--profile[[:space:]]+smb-single-node[^`\n]*--runtime-env[[:space:]]+<runtime-env-file>|--runtime-env[[:space:]]+<runtime-env-file>[^`\n]*--profile[[:space:]]+smb-single-node)' "concrete install command"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(selected[[:space:]-]+profile|profile)' "selected profile"
   require_bundle_file_pattern "${bundle_dir}" "install/README.md" '(dependency[[:space:]-]+assumptions?|manual[[:space:]-]+prerequisites?|prerequisites?)' "dependency assumptions and manual prerequisites"
   require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" 'docs/deployment/env-secrets-certs-contract[.]md' "secret-source contract citation"
+  require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_PROFILE[[:space:]]*=' "runtime configuration key"
+  require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_RUNTIME_ENV[[:space:]]*=' "runtime configuration key"
+  require_bundle_file_pattern "${bundle_dir}" "config/runtime.env.sample" '^[[:space:]]*AEGISOPS_SECRET_SOURCE_DOC[[:space:]]*=[[:space:]]*docs/deployment/env-secrets-certs-contract[.]md([[:space:]]|$)' "secret-source contract key"
   require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "^[[:space:]]*release bundle identifier:[[:space:]]*${escaped_release_bundle_identifier}([[:space:]]|\$)" "matching release bundle identifier"
   require_bundle_file_pattern "${bundle_dir}" "evidence/install-preflight-output.txt" "^[[:space:]]*repository revision:[[:space:]]*${escaped_repository_revision}([[:space:]]|\$)" "matching repository revision"
 
