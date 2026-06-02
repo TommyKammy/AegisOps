@@ -303,6 +303,24 @@ create_valid_bundle "${invalid_runtime_sample}"
 perl -0pi -e 's/^AEGISOPS_SECRET_SOURCE_DOC=.*\n//m' "${invalid_runtime_sample}/config/runtime.env.sample"
 assert_fails_with "Missing offline install bundle artifact content in config/runtime.env.sample" --bundle-dir "${invalid_runtime_sample}"
 
+hidden_install_readme_content="${workdir}/hidden-install-readme-content"
+create_valid_bundle "${hidden_install_readme_content}"
+cat >"${hidden_install_readme_content}/install/README.md" <<'EOF_INSTALL'
+# Offline Install Entry
+
+Run it.
+<!-- entrypoint selected profile dependency assumptions manual prerequisites -->
+EOF_INSTALL
+assert_fails_with "Missing offline install bundle artifact content in install/README.md" --bundle-dir "${hidden_install_readme_content}"
+
+hidden_runtime_sample_content="${workdir}/hidden-runtime-sample-content"
+create_valid_bundle "${hidden_runtime_sample_content}"
+cat >"${hidden_runtime_sample_content}/config/runtime.env.sample" <<'EOF_ENV'
+AEGISOPS_PROFILE=smb-single-node
+<!-- docs/deployment/env-secrets-certs-contract.md -->
+EOF_ENV
+assert_fails_with "Missing offline install bundle artifact content in config/runtime.env.sample" --bundle-dir "${hidden_runtime_sample_content}"
+
 invalid_preflight_revision="${workdir}/invalid-preflight-revision"
 create_valid_bundle "${invalid_preflight_revision}"
 perl -0pi -e 's/^repository revision:.*$/repository revision: deadbeef1234/m' "${invalid_preflight_revision}/evidence/install-preflight-output.txt"
@@ -373,6 +391,11 @@ create_valid_bundle "${bundle_background_entitlement}"
 printf '%s\n' "Background entitlement checks are enabled after install." >>"${bundle_background_entitlement}/install/README.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_background_entitlement}"
 
+bundle_production_billing="${workdir}/bundle-production-billing"
+create_valid_bundle "${bundle_production_billing}"
+printf '%s\n' "Production billing is enabled after install." >>"${bundle_production_billing}/install/README.md"
+assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_production_billing}"
+
 bundle_mixed_silent_update="${workdir}/bundle-mixed-silent-update"
 create_valid_bundle "${bundle_mixed_silent_update}"
 printf '%s\n' "Unsupported hosted update services are documented, and silent auto-upgrade is enabled after install." >>"${bundle_mixed_silent_update}/install/README.md"
@@ -383,15 +406,35 @@ create_valid_bundle "${bundle_production_installer}"
 printf '%s\n' "This bundle provides production installer completeness." >>"${bundle_production_installer}/BUNDLE-MANIFEST.md"
 assert_fails_with "hosted, silent update, production installer, entitlement, or billing claim" --bundle-dir "${bundle_production_installer}"
 
+bundle_quoted_secret_key="${workdir}/bundle-quoted-secret-key"
+create_valid_bundle "${bundle_quoted_secret_key}"
+printf '%s\n' '"api_key": "live-production-key"' >>"${bundle_quoted_secret_key}/config/runtime.env.sample"
+assert_fails_with "production secret-looking value" --bundle-dir "${bundle_quoted_secret_key}"
+
+bundle_production_secret_claim="${workdir}/bundle-production-secret-claim"
+create_valid_bundle "${bundle_production_secret_claim}"
+printf '%s\n' "Production secrets are included in this bundle." >>"${bundle_production_secret_claim}/BUNDLE-MANIFEST.md"
+assert_fails_with "production secret material claim" --bundle-dir "${bundle_production_secret_claim}"
+
 bundle_ga_claim="${workdir}/bundle-ga-claim"
 create_valid_bundle "${bundle_ga_claim}"
 printf '%s\n' "Bundle manifest proves GA readiness." >>"${bundle_ga_claim}/BUNDLE-MANIFEST.md"
 assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_ga_claim}"
 
+bundle_files_readiness_claim="${workdir}/bundle-files-readiness-claim"
+create_valid_bundle "${bundle_files_readiness_claim}"
+printf '%s\n' "Bundle files prove RC gate acceptance." >>"${bundle_files_readiness_claim}/BUNDLE-MANIFEST.md"
+assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_files_readiness_claim}"
+
 bundle_reversed_ga_claim="${workdir}/bundle-reversed-ga-claim"
 create_valid_bundle "${bundle_reversed_ga_claim}"
 printf '%s\n' "GA readiness is proven by bundle manifest." >>"${bundle_reversed_ga_claim}/BUNDLE-MANIFEST.md"
 assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_reversed_ga_claim}"
+
+bundle_reversed_files_readiness_claim="${workdir}/bundle-reversed-files-readiness-claim"
+create_valid_bundle "${bundle_reversed_files_readiness_claim}"
+printf '%s\n' "RC readiness is proven by bundle files." >>"${bundle_reversed_files_readiness_claim}/BUNDLE-MANIFEST.md"
+assert_fails_with "inferred Beta/RC/GA readiness claim" --bundle-dir "${bundle_reversed_files_readiness_claim}"
 
 bundle_reversed_truth="${workdir}/bundle-reversed-truth"
 create_valid_bundle "${bundle_reversed_truth}"
