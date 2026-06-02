@@ -513,6 +513,11 @@ create_valid_bundle "${bundle_inline_comment_secret}"
 printf '%s\n' "AEGISOPS_PROFILE=smb-single-node # API_KEY=live-production-key" >>"${bundle_inline_comment_secret}/config/runtime.env.sample"
 assert_fails_with "production secret-looking value" --bundle-dir "${bundle_inline_comment_secret}"
 
+bundle_secret_key="${workdir}/bundle-secret-key"
+create_valid_bundle "${bundle_secret_key}"
+printf '%s\n' "SECRET_KEY=live-production-key-abcdef1234567890" >>"${bundle_secret_key}/config/runtime.env.sample"
+assert_fails_with "production secret-looking value" --bundle-dir "${bundle_secret_key}"
+
 bundle_production_secret_claim="${workdir}/bundle-production-secret-claim"
 create_valid_bundle "${bundle_production_secret_claim}"
 printf '%s\n' "Production secrets are included in this bundle." >>"${bundle_production_secret_claim}/BUNDLE-MANIFEST.md"
@@ -577,6 +582,11 @@ bundle_support_automation="${workdir}/bundle-support-automation"
 create_valid_bundle "${bundle_support_automation}"
 printf '%s\n' "Automatic support-bundle submission is enabled after install." >>"${bundle_support_automation}/install/README.md"
 assert_fails_with "unsupported support-bundle automation claim" --bundle-dir "${bundle_support_automation}"
+
+bundle_negated_clause_support_automation="${workdir}/bundle-negated-clause-support-automation"
+create_valid_bundle "${bundle_negated_clause_support_automation}"
+printf '%s\n' "This bundle does not claim support readiness, but automatic support-bundle submission is enabled after install." >>"${bundle_negated_clause_support_automation}/BUNDLE-MANIFEST.md"
+assert_fails_with "unsupported support-bundle automation claim" --bundle-dir "${bundle_negated_clause_support_automation}"
 
 bundle_symlink_artifact="${workdir}/bundle-symlink-artifact"
 create_valid_bundle "${bundle_symlink_artifact}"

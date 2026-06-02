@@ -194,7 +194,7 @@ scan_forbidden_text() {
       tr '[:upper:]' '[:lower:]' |
       sed -E \
         -e 's/[[:space:]]+/ /g' \
-        -e 's/([,;][[:space:]]*)?(and|but)[[:space:]]+((hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?([[:space:]-]+readiness)?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|production installer|production entitlement enforcement|commercial billing|sbom|checksum|signing|licensing|migration|support|design-partner evidence|release notes?)[^,.?!;]*(is|are)[^,.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered|accepted))/. \3/g'
+        -e 's/([,;][[:space:]]*)?(and|but)[[:space:]]+((hidden hosted dependenc(y|ies)|hidden hosted downloads?|hosted update services?([[:space:]-]+readiness)?|network update services?|silent update|silent auto-upgrade|silent auto upgrade|production installer|production entitlement enforcement|commercial billing|automatic[[:space:]-]+support-bundle[[:space:]-]+submission|support-bundle[[:space:]-]+(automation|submission)|sbom|checksum|signing|licensing|migration|support|design-partner evidence|release notes?)[^,.?!;]*(is|are)[^,.?!;]*(enabled|implemented|included|available|ready|required|assumed|approved|complete|supported|provided|satisfied|proven|delivered|accepted))/. \3/g'
   )"
   claim_scan_text="$(
     printf '%s' "${normalized_text}" |
@@ -235,7 +235,7 @@ scan_forbidden_text() {
     exit 1 if $text =~ /\bauthorization\s*:\s*(?:bearer|basic)\s+(?!<[^>]+>)[A-Za-z0-9_+\.\/=-]{12,}/i;
 
     for my $line (split /\n/, $text) {
-      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|[A-Za-z0-9_-]*(?:password|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
+      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?((?:secret|token|credential)|[A-Za-z0-9_-]*(?:password|secret[_-]?key|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential|aws_secret_access_key)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
         my $value = $3;
         $value =~ s/^["'\'']//;
         $value =~ s/["'\'']$//;
