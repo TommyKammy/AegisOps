@@ -518,6 +518,11 @@ create_valid_bundle "${bundle_authority}"
 printf '%s\n' "This contract is release gate authority." >>"${bundle_authority}/BUNDLE-MANIFEST.md"
 assert_fails_with "bundle authority claim" --bundle-dir "${bundle_authority}"
 
+bundle_self_authority="${workdir}/bundle-self-authority"
+create_valid_bundle "${bundle_self_authority}"
+printf '%s\n' "This bundle is billing authority." >>"${bundle_self_authority}/BUNDLE-MANIFEST.md"
+assert_fails_with "bundle authority claim" --bundle-dir "${bundle_self_authority}"
+
 bundle_symlink_artifact="${workdir}/bundle-symlink-artifact"
 create_valid_bundle "${bundle_symlink_artifact}"
 mv "${bundle_symlink_artifact}/install/README.md" "${workdir}/external-install-readme.md"

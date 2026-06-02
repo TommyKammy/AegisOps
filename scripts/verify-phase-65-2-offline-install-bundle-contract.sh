@@ -320,12 +320,12 @@ scan_forbidden_text() {
     exit 1
   fi
 
-  if grep -Eiq -- '(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|this contract)[^.?!;]*(is|are|acts as|serve as|serves as|becomes|become|provides|establishes|creates)[^.?!;]*(workflow|support|runtime[[:space:]-]+execution|release[[:space:]-]+gate|beta[[:space:]-]+gate|rc[[:space:]-]+gate|ga[[:space:]-]+gate|entitlement|billing)[[:space:]-]+authority' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|this contract)[^.?!;]*(is|are|acts as|serve as|serves as|becomes|become|provides|establishes|creates)[^.?!;]*(workflow|support|runtime[[:space:]-]+execution|release[[:space:]-]+gate|beta[[:space:]-]+gate|rc[[:space:]-]+gate|ga[[:space:]-]+gate|entitlement|billing)[[:space:]-]+authority' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: bundle authority claim detected" >&2
     exit 1
   fi
 
-  if grep -Eiq -- '(workflow|support|runtime[[:space:]-]+execution|release[[:space:]-]+gate|beta[[:space:]-]+gate|rc[[:space:]-]+gate|ga[[:space:]-]+gate|entitlement|billing)[[:space:]-]+authority[^.?!;]*(is|are|becomes|become|comes from|depends on|is satisfied by|are satisfied by|is proven by|are proven by|established by|created by)[^.?!;]*(offline install bundle|offline bundle|bundle manifest|bundle files|manifest entries|this contract)' <<<"${claim_scan_text}"; then
+  if grep -Eiq -- '(workflow|support|runtime[[:space:]-]+execution|release[[:space:]-]+gate|beta[[:space:]-]+gate|rc[[:space:]-]+gate|ga[[:space:]-]+gate|entitlement|billing)[[:space:]-]+authority[^.?!;]*(is|are|becomes|become|comes from|depends on|is satisfied by|are satisfied by|is proven by|are proven by|established by|created by)[^.?!;]*(offline install bundle|offline bundle|this bundle|bundle manifest|bundle files|manifest entries|this contract)' <<<"${claim_scan_text}"; then
     echo "Forbidden ${description}: bundle authority claim detected" >&2
     exit 1
   fi
