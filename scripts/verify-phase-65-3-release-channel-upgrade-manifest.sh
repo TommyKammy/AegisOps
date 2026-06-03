@@ -410,9 +410,13 @@ validate_compatibility_cases() {
     die "Missing Phase 65.3 upgrade manifest content: compatibility cases\n" if @cases < 2;
 
     my @required = qw(case_identifier source_version target_version compatibility_posture compatibility_reason upgrade_action rollback_expectation required_checks known_limitation_references phase58_upgrade_plan_reference phase51_gate_boundary_reference);
+    my %allowed = map { $_ => 1 } @required;
     my %seen_posture;
     for my $case (@cases) {
       my $id = $case->{case_identifier} // "<unknown>";
+      for my $field (keys %{$case}) {
+        die "Invalid Phase 65.3 upgrade manifest compatibility case field: $id.$field\n" unless $allowed{$field};
+      }
       for my $field (@required) {
         die "Missing Phase 65.3 upgrade manifest compatibility case field: $id.$field\n" if bad($case->{$field});
         die "Invalid Phase 65.3 upgrade manifest compatibility case field: $id.$field\n" if invalid_semantic_value($field, $case->{$field});
@@ -512,6 +516,9 @@ scan_forbidden_text() {
       if ($sentence =~ /(?:silent[ -]+auto[ -]+upgrade|silent[ -]+update)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|proceeds|runs|executes)\b/) {
         exit 1;
       }
+      if ($sentence =~ /auto[ -]+upgrade[^.?!;]*(?:runs?|executes?|proceeds|starts?|occurs|happens?)[^.?!;]*silently\b/) {
+        exit 1;
+      }
       if ($sentence =~ /automatic[ -]+(?:migration|rollback)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|proceeds|runs|executes)\b/) {
         exit 1;
       }
@@ -530,7 +537,7 @@ scan_forbidden_text() {
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
       $sentence =~ s/(?:does not|do not|must not|cannot|can not|is not|are not|must reject|forbidden|non-claims|false|manual or unsupported).*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
-      if ($sentence =~ /(?:hosted|network)[ -]+update[ -]+service[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available)\b/) {
+      if ($sentence =~ /(?:hosted|network)[ -]+(?:update[ -]+service|updates?)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available)\b/) {
         exit 1;
       }
     }
@@ -560,7 +567,7 @@ scan_forbidden_text() {
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
       $sentence =~ s/(?:does not|do not|must not|cannot|can not|is not|are not|must reject|forbidden|non-claims|false).*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
-      if ($sentence =~ /(?:metadata|manifest|verifier(?: output)?|issue-lint(?: output)?)[^.?!;]*(?:is|becomes|satisfies|proves|serves as)[^.?!;]*(?:release|upgrade|rollback|readiness|gate|workflow)[ -]+truth/) {
+      if ($sentence =~ /(?:metadata|manifest|verifier(?: output)?|issue-lint(?: output)?)[^.?!;]*(?:is|becomes|satisfies|proves|serves as)[^.?!;]*(?:install|release|upgrade|rollback|readiness|gate|workflow|support|entitlement|billing|commercial|runtime execution)[ -]+truth/) {
         exit 1;
       }
     }
@@ -573,6 +580,9 @@ scan_forbidden_text() {
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
       $sentence =~ s/(?:does not|do not|must not|cannot|can not|is not|are not|must reject|forbidden|non-claims|false|manual or unsupported).*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
       if ($sentence =~ /production[ -]+rollout[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied|provided)\b/) {
+        exit 1;
+      }
+      if ($sentence =~ /rollout[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied|provided)[^.?!;]*production\b/) {
         exit 1;
       }
       if ($sentence =~ /(?:entitlement[ -]+enforcement|billing|self-service commercial readiness|commercial replacement readiness)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied|provided)\b/) {
@@ -593,10 +603,10 @@ scan_forbidden_text() {
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
       $sentence =~ s/(?:does not|do not|must not|cannot|can not|is not|are not|must reject|forbidden|non-claims|false).*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
-      if ($sentence =~ /(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:proves|prove|approves|approve|accepts|accept|satisfies|satisfy|enables|enable|implements|implement)[^.?!;]*(?:live upgrade success|rollback success|substrate mutation|workflow closure|action reconciliation|reconciliation|runtime execution)/) {
+      if ($sentence =~ /(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:proves|prove|approves|approve|accepts|accept|satisfies|satisfy|enables|enable|implements|implement)[^.?!;]*(?:live upgrade success|rollback success|substrate mutation|workflow closure|action reconciliation|reconciliation|runtime execution|install truth|release readiness|support authority|entitlement authority|billing authority|install authority|production rollout|release authority)/) {
         exit 1;
       }
-      if ($sentence =~ /(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:is|are|becomes|become|serves as)[^.?!;]*(?:runtime execution|workflow|upgrade|rollback|readiness|gate)[ -]+authority/) {
+      if ($sentence =~ /(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:is|are|becomes|become|serves as)[^.?!;]*(?:install|runtime execution|workflow|upgrade|rollback|readiness|gate|release|support|entitlement|billing|commercial)[ -]+authority/) {
         exit 1;
       }
     }
