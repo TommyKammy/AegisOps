@@ -44,7 +44,7 @@ yaml_scalar() {
     my $key = shift @ARGV;
     my $text = <>;
     for my $line (split /\n/, $text) {
-      if ($line =~ /^\Q$key\E:\s*(.*?)\s*$/) {
+      if ($line =~ /^\s*\Q$key\E:\s*(.*?)\s*$/) {
         print "$1\n";
         last;
       }
@@ -72,6 +72,18 @@ require_yaml_scalar() {
   printf '%s' "${value}"
 }
 
+require_yaml_scalar_equals() {
+  local key="$1"
+  local expected="$2"
+  local actual
+
+  actual="$(yaml_scalar "${absolute_manifest_path}" "${key}")"
+  if [[ "${actual}" != "${expected}" ]]; then
+    echo "Invalid Phase 65.3 upgrade manifest value: ${key}" >&2
+    exit 1
+  fi
+}
+
 require_manifest_pattern() {
   local pattern="$1"
   local description="$2"
@@ -80,6 +92,99 @@ require_manifest_pattern() {
     echo "Missing Phase 65.3 upgrade manifest content: ${description}" >&2
     exit 1
   fi
+}
+
+reject_mixed_negated_positive_claim() {
+  local description="$1"
+  local normalized_text="$2"
+
+  local negated_boundary positive_claim_terms positive_verbs positive_states
+  negated_boundary='((does|do|must|can|is|are)[ -]+not|cannot|can not|unsupported|excludes)[^.?!;]*(;[[:space:]]*| and | but | yet | however | though | although )'
+  positive_claim_terms='silent[ -]+auto[ -]+upgrade|silent[ -]+update|automatic[ -]+(migration|rollback)|hosted[ -]+update[ -]+service|network[ -]+update[ -]+service|production[ -]+entitlement enforcement|billing|commercial replacement readiness|(phase[ -]+66[ -]+)?rc[ -]+(readiness|pass|proof|gate|gates|gate acceptance)|(phase[ -]+67[ -]+)?ga[ -]+(readiness|pass|proof|gate|gates|gate acceptance)|(release-channel metadata|upgrade manifest|manifest|metadata|verifier output|issue-lint output)[^.?!;]*(release|upgrade|rollback|readiness|gate|workflow)[ -]+truth'
+  positive_verbs='(is|are|becomes|become|provides|provide|includes|include|contains|support|supports|enables|enable|delivers|deliver|proves|prove|satisfies|satisfy|passes|pass|implements|implement|approves|approve|accepts|accept|establishes|establish)'
+  positive_states='(enabled|implemented|included|available|ready|required|assumed|approved|complete|completed|supported|provided|satisfied|proven|delivered|accepted|done)'
+
+  if grep -Eiq -- "${negated_boundary}[^.?!;]*(${positive_claim_terms})[^.?!;]*(${positive_verbs}|${positive_states})|${negated_boundary}[^.?!;]*${positive_verbs}[[:space:]-]+(${positive_claim_terms})" <<<"${normalized_text}"; then
+    echo "Forbidden ${description}: positive claim after negated boundary detected" >&2
+    exit 1
+  fi
+}
+
+validate_compatibility_cases() {
+  perl -Mstrict -Mwarnings -0 -e '
+    my $text = <>;
+    my @cases;
+    my $current;
+    my $in_cases = 0;
+
+    sub finish_case {
+      my ($case) = @_;
+      push @cases, $case if defined $case;
+    }
+
+    for my $line (split /\n/, $text) {
+      if ($line =~ /^compatibility_cases:\s*$/) {
+        $in_cases = 1;
+        next;
+      }
+      next unless $in_cases;
+      last if $line =~ /^[^[:space:]]/ && $line !~ /^compatibility_cases:/;
+
+      if ($line =~ /^  -\s+([A-Za-z0-9_]+):\s*(.*?)\s*$/) {
+        finish_case($current);
+        $current = {};
+        $current->{$1} = $2;
+        next;
+      }
+      if (defined $current && $line =~ /^    (required_checks|known_limitation_references):\s*$/) {
+        my $list = $1;
+        $current->{$list} = "__list__";
+        next;
+      }
+      if (defined $current && $line =~ /^    ([A-Za-z0-9_]+):\s*(.*?)\s*$/) {
+        $current->{$1} = $2;
+        next;
+      }
+    }
+    finish_case($current);
+
+    sub bad {
+      my ($value) = @_;
+      return 1 if !defined $value;
+      $value =~ s/^\s+|\s+$//g;
+      return 1 if $value eq "";
+      return 1 if $value =~ /^(todo|tbd|none|n\/a|na|sample|example|placeholder|unknown|missing|absent|latest|head|main|master)$/i;
+      return 0;
+    }
+
+    die "Missing Phase 65.3 upgrade manifest content: compatibility cases\n" if @cases < 2;
+
+    my @required = qw(case_identifier source_version target_version compatibility_posture compatibility_reason upgrade_action rollback_expectation required_checks known_limitation_references phase58_upgrade_plan_reference phase51_gate_boundary_reference);
+    my %seen_posture;
+    for my $case (@cases) {
+      my $id = $case->{case_identifier} // "<unknown>";
+      for my $field (@required) {
+        die "Missing Phase 65.3 upgrade manifest compatibility case field: $id.$field\n" if bad($case->{$field});
+      }
+
+      my $posture = $case->{compatibility_posture};
+      die "Invalid Phase 65.3 upgrade manifest compatibility posture: $id\n" unless $posture =~ /^(compatible|incompatible)$/;
+      $seen_posture{$posture} = 1;
+
+      if ($posture eq "compatible" && $case->{upgrade_action} ne "manual-upgrade-review") {
+        die "Invalid Phase 65.3 upgrade manifest compatible upgrade action: $id\n";
+      }
+      if ($posture eq "incompatible" && $case->{upgrade_action} ne "blocked-pending-reviewed-migration") {
+        die "Invalid Phase 65.3 upgrade manifest incompatible upgrade action: $id\n";
+      }
+    }
+
+    die "Missing Phase 65.3 upgrade manifest content: compatible version posture case\n" unless $seen_posture{compatible};
+    die "Missing Phase 65.3 upgrade manifest content: incompatible version posture case\n" unless $seen_posture{incompatible};
+  ' "${absolute_manifest_path}" || {
+    local status=$?
+    return "${status}"
+  }
 }
 
 scan_forbidden_text() {
@@ -130,6 +235,8 @@ scan_forbidden_text() {
     echo "Forbidden ${description}: customer-private data detected" >&2
     exit 1
   fi
+
+  reject_mixed_negated_positive_claim "${description}" "${normalized_text}"
 
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
@@ -245,11 +352,13 @@ required_manifest_values=(
   "inventory_identifier|phase-65-release-bundle-inventory-v1"
   "offline_bundle_contract_identifier|phase-65-offline-install-bundle-contract-v1"
   "release_channel|beta-design-partner"
+  "channel_scope|beta/design-partner packaging review only; not RC, GA, production rollout, entitlement, billing, support readiness, or commercial replacement readiness."
   "release_bundle_identifier|aegisops-beta-<repository-revision>"
   "repository_revision|<repository-revision>"
   "inventory_reference|docs/phase-65-1-release-bundle-inventory.md"
   "offline_bundle_reference|docs/phase-65-2-offline-install-bundle-contract.md"
   "verifier_output_reference|bash scripts/verify-phase-65-3-release-channel-upgrade-manifest.sh"
+  "approval_record|issue #1380"
 )
 
 for entry in "${required_manifest_values[@]}"; do
@@ -267,6 +376,15 @@ if [[ "${release_notes_reference}" != docs/* ]]; then
   echo "Invalid Phase 65.3 upgrade manifest release notes reference" >&2
   exit 1
 fi
+require_file "${repo_root}/${release_notes_reference}" "Phase 65.3 release notes reference"
+
+require_yaml_scalar_equals "silent_auto_upgrade" "false"
+require_yaml_scalar_equals "hosted_update_service" "false"
+require_yaml_scalar_equals "automatic_migration" "false"
+require_yaml_scalar_equals "automatic_rollback" "false"
+require_yaml_scalar_equals "rc_readiness" "false"
+require_yaml_scalar_equals "ga_readiness" "false"
+require_yaml_scalar_equals "commercial_replacement_readiness" "false"
 
 authority_boundary="$(require_yaml_scalar "authority_boundary")"
 if [[ "${authority_boundary}" != *"subordinate packaging and planning evidence only"* || "${authority_boundary}" != *"Phase 51.3 gate contract"* ]]; then
@@ -285,6 +403,7 @@ require_manifest_pattern 'phase58_upgrade_plan_reference:[[:space:]]*docs/phase-
 require_manifest_pattern 'phase51_gate_boundary_reference:[[:space:]]*docs/phase-51-3-pilot-beta-rc-ga-gate-contract[.]md' "Phase 51 gate boundary reference"
 require_manifest_pattern 'upgrade_action:[[:space:]]*manual-upgrade-review' "compatible manual upgrade review action"
 require_manifest_pattern 'upgrade_action:[[:space:]]*blocked-pending-reviewed-migration' "incompatible blocked migration action"
+validate_compatibility_cases
 
 scan_forbidden_text "Phase 65.3 release channel and upgrade manifest guidance" "${absolute_doc_path}" "${absolute_manifest_path}" "${readme_path}"
 

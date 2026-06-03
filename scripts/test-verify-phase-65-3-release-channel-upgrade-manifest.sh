@@ -27,6 +27,7 @@ create_valid_repo() {
   mkdir -p "${target}"
   copy_repo_path "${target}" "README.md"
   copy_repo_path "${target}" "docs/phase-65-3-release-channel-upgrade-manifest-contract.md"
+  copy_repo_path "${target}" "docs/release/phase-65-beta-release-notes.md"
   copy_repo_path "${target}" "docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 }
 
@@ -92,10 +93,35 @@ create_valid_repo "${missing_doc_source_repo}"
 remove_doc_text "${missing_doc_source_repo}" "- missing source version;"
 assert_fails_with "${missing_doc_source_repo}" "Missing required Phase 65.3 contract term"
 
+missing_release_notes_repo="${workdir}/missing-release-notes"
+create_valid_repo "${missing_release_notes_repo}"
+rm "${missing_release_notes_repo}/docs/release/phase-65-beta-release-notes.md"
+assert_fails_with "${missing_release_notes_repo}" "Missing Phase 65.3 release notes reference"
+
+missing_channel_scope_repo="${workdir}/missing-channel-scope"
+create_valid_repo "${missing_channel_scope_repo}"
+perl -0pi -e 's/^channel_scope:.*\n//m' "${missing_channel_scope_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${missing_channel_scope_repo}" "Missing Phase 65.3 upgrade manifest value: channel_scope"
+
+missing_approval_record_repo="${workdir}/missing-approval-record"
+create_valid_repo "${missing_approval_record_repo}"
+perl -0pi -e 's/^approval_record:.*\n//m' "${missing_approval_record_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${missing_approval_record_repo}" "Missing Phase 65.3 upgrade manifest value: approval_record"
+
+true_non_claim_repo="${workdir}/true-non-claim"
+create_valid_repo "${true_non_claim_repo}"
+perl -0pi -e 's/^  silent_auto_upgrade: false$/  silent_auto_upgrade: true/m' "${true_non_claim_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${true_non_claim_repo}" "Invalid Phase 65.3 upgrade manifest value: silent_auto_upgrade"
+
 missing_source_repo="${workdir}/missing-source-version"
 create_valid_repo "${missing_source_repo}"
 perl -0pi -e 's/^[[:space:]]*source_version:.*\n//mg' "${missing_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${missing_source_repo}" "Missing Phase 65.3 upgrade manifest content: source version"
+
+missing_one_case_source_repo="${workdir}/missing-one-case-source-version"
+create_valid_repo "${missing_one_case_source_repo}"
+perl -0pi -e 's/^    source_version: aegisops-0\.4\.0-reviewed\n//m' "${missing_one_case_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${missing_one_case_source_repo}" "Missing Phase 65.3 upgrade manifest compatibility case field: compatible-reviewed-source.source_version"
 
 missing_target_repo="${workdir}/missing-target-version"
 create_valid_repo "${missing_target_repo}"
@@ -131,6 +157,11 @@ silent_upgrade_repo="${workdir}/silent-upgrade"
 create_valid_repo "${silent_upgrade_repo}"
 printf '%s\n' "Silent auto-upgrade is enabled for compatible versions." >>"${silent_upgrade_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${silent_upgrade_repo}" "silent auto-upgrade or automatic migration claim"
+
+mixed_silent_upgrade_repo="${workdir}/mixed-silent-upgrade"
+create_valid_repo "${mixed_silent_upgrade_repo}"
+printf '%s\n' "This manifest does not claim silent auto-upgrade, but silent auto-upgrade is enabled for compatible versions." >>"${mixed_silent_upgrade_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${mixed_silent_upgrade_repo}" "positive claim after negated boundary detected"
 
 hosted_update_repo="${workdir}/hosted-update"
 create_valid_repo "${hosted_update_repo}"
