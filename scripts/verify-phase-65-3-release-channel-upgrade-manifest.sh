@@ -86,6 +86,19 @@ require_yaml_scalar_equals() {
   fi
 }
 
+require_yaml_scalar_equals_once() {
+  local key="$1"
+  local expected="$2"
+  local actual count
+
+  actual="$(yaml_scalar "${absolute_manifest_path}" "${key}")"
+  count="$(grep -Ec "^[[:space:]]*${key}:[[:space:]]*" "${absolute_manifest_path}")"
+  if [[ "${count}" != "1" || "${actual}" != "${expected}" ]]; then
+    echo "Invalid Phase 65.3 upgrade manifest value: ${key}" >&2
+    exit 1
+  fi
+}
+
 require_manifest_pattern() {
   local pattern="$1"
   local description="$2"
@@ -128,7 +141,7 @@ reject_mixed_negated_positive_claim() {
   local normalized_text="$2"
 
   if ! printf '%s' "${normalized_text}" | perl -0ne '
-    my $positive_terms = qr{silent[ -]+auto[ -]+upgrade|silent[ -]+update|automatic[ -]+(?:migration|rollback)|hosted[ -]+update[ -]+service|network[ -]+update[ -]+service|production[ -]+entitlement enforcement|billing|commercial replacement readiness|(?:phase[ -]+66[ -]+)?rc[ -]+(?:readiness|pass|proof|gate|gates|gate acceptance)|(?:phase[ -]+67[ -]+)?ga[ -]+(?:readiness|pass|proof|gate|gates|gate acceptance)|(?:release-channel metadata|upgrade manifest|manifest|metadata|verifier output|issue-lint output)[^.?!;]*(?:release|upgrade|rollback|readiness|gate|workflow)[ -]+truth}i;
+    my $positive_terms = qr{silent[ -]+auto[ -]+upgrade|silent[ -]+update|automatic[ -]+(?:migration|rollback)|hosted[ -]+update[ -]+service|network[ -]+update[ -]+service|production[ -]+rollout|production[ -]+entitlement enforcement|billing|commercial replacement readiness|(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate|gates|gate acceptance)|(?:release-channel metadata|upgrade manifest|manifest|metadata|verifier output|issue-lint output)[^.?!;]*(?:release|upgrade|rollback|readiness|gate|workflow)[ -]+truth}i;
     my $positive_state = qr{is|are|becomes|become|provides|provide|includes|include|contains|support|supports|enables|enable|delivers|deliver|proves|prove|satisfies|satisfy|passes|pass|implements|implement|approves|approve|accepts|accept|establishes|establish|enabled|implemented|included|available|ready|required|assumed|approved|complete|completed|supported|provided|satisfied|proven|delivered|accepted|done|allowed|proceeds|runs|executes}i;
     my $negated = qr{(?:does|do|must|can|is|are)[ -]+not|cannot|can not|unsupported|excludes|manual or unsupported|false}i;
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
@@ -214,6 +227,18 @@ validate_compatibility_cases() {
       return 0;
     }
 
+    sub invalid_semantic_value {
+      my ($field, $value) = @_;
+      return 1 if bad($value);
+      my $normalized = lc $value;
+      $normalized =~ s/_/ /g;
+      $normalized =~ s/[[:space:]-]+/ /g;
+      return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\b(?:rc|ga)\b/;
+      return 1 if $field eq "rollback_expectation" && $normalized =~ /\bautomatic rollback\b/;
+      return 1 if $field eq "rollback_expectation" && $normalized =~ /\bbroad operator discretion\b/;
+      return 0;
+    }
+
     die "Missing Phase 65.3 upgrade manifest content: compatibility cases\n" if @cases < 2;
 
     my @required = qw(case_identifier source_version target_version compatibility_posture compatibility_reason upgrade_action rollback_expectation required_checks known_limitation_references phase58_upgrade_plan_reference phase51_gate_boundary_reference);
@@ -222,6 +247,7 @@ validate_compatibility_cases() {
       my $id = $case->{case_identifier} // "<unknown>";
       for my $field (@required) {
         die "Missing Phase 65.3 upgrade manifest compatibility case field: $id.$field\n" if bad($case->{$field});
+        die "Invalid Phase 65.3 upgrade manifest compatibility case field: $id.$field\n" if invalid_semantic_value($field, $case->{$field});
       }
 
       my $posture = $case->{compatibility_posture};
@@ -333,10 +359,10 @@ scan_forbidden_text() {
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
       $sentence =~ s/(?:does not|do not|must not|cannot|can not|must reject|forbidden|non-claims|false|manual or unsupported|phase 66 remains rc|phase 67 remains ga)[^.?!;]*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
-      if ($sentence =~ /(?:(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate acceptance|gates?)[^.?!;]*(?:proven|complete|satisfied|accepted|passed|ready)\b/) {
+      if ($sentence =~ /(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate acceptance|gates?)[^.?!;]*(?:proven|complete|satisfied|accepted|passed|ready)\b/) {
         exit 1;
       }
-      if ($sentence =~ /(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:proves|satisfies|passes|accepts)[^.?!;]*(?:rc|ga)[ -]+(?:readiness|gates?|pass|proof)/) {
+      if ($sentence =~ /(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:proves|satisfies|passes|accepts)[^.?!;]*(?:pilot|beta|rc|ga)[ -]+(?:readiness|gates?|pass|proof|gate acceptance)/) {
         exit 1;
       }
     }
@@ -360,6 +386,9 @@ scan_forbidden_text() {
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
       $sentence =~ s/(?:does not|do not|must not|cannot|can not|must reject|forbidden|non-claims|false|manual or unsupported)[^.?!;]*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
+      if ($sentence =~ /production[ -]+rollout[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied)\b/) {
+        exit 1;
+      }
       if ($sentence =~ /(?:production[ -]+entitlement enforcement|billing|commercial replacement readiness)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied)\b/) {
         exit 1;
       }
@@ -443,19 +472,24 @@ fi
 validate_repository_revision "${repository_revision}"
 
 release_notes_reference="$(require_yaml_scalar "release_notes_reference")"
-if [[ "${release_notes_reference}" != docs/* ]]; then
+if [[ "${release_notes_reference}" != docs/release/*release-notes*.md ]]; then
   echo "Invalid Phase 65.3 upgrade manifest release notes reference" >&2
   exit 1
 fi
 require_file "${repo_root}/${release_notes_reference}" "Phase 65.3 release notes reference"
+require_file "${repo_root}/docs/phase-65-1-release-bundle-inventory.md" "Phase 65.1 release bundle inventory reference"
+require_file "${repo_root}/docs/phase-65-2-offline-install-bundle-contract.md" "Phase 65.2 offline install bundle contract reference"
+require_file "${repo_root}/docs/phase-58-5-upgrade-rollback-plan-contract.md" "Phase 58.5 upgrade and rollback evidence reference"
+require_file "${repo_root}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "Phase 51.3 gate boundary reference"
+require_file "${repo_root}/docs/phase-64-5-phase66-limitation-handoff.md" "Phase 64.5 limitation handoff reference"
 
-require_yaml_scalar_equals "silent_auto_upgrade" "false"
-require_yaml_scalar_equals "hosted_update_service" "false"
-require_yaml_scalar_equals "automatic_migration" "false"
-require_yaml_scalar_equals "automatic_rollback" "false"
-require_yaml_scalar_equals "rc_readiness" "false"
-require_yaml_scalar_equals "ga_readiness" "false"
-require_yaml_scalar_equals "commercial_replacement_readiness" "false"
+require_yaml_scalar_equals_once "silent_auto_upgrade" "false"
+require_yaml_scalar_equals_once "hosted_update_service" "false"
+require_yaml_scalar_equals_once "automatic_migration" "false"
+require_yaml_scalar_equals_once "automatic_rollback" "false"
+require_yaml_scalar_equals_once "rc_readiness" "false"
+require_yaml_scalar_equals_once "ga_readiness" "false"
+require_yaml_scalar_equals_once "commercial_replacement_readiness" "false"
 
 authority_boundary="$(require_yaml_scalar "authority_boundary")"
 if [[ "${authority_boundary}" != *"subordinate packaging and planning evidence only"* || "${authority_boundary}" != *"Phase 51.3 gate contract"* ]]; then
