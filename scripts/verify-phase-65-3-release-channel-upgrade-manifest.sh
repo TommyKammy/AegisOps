@@ -376,24 +376,29 @@ validate_compatibility_cases() {
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\b(?:floating|branch only|branch)\b/;
       return 1 if $field eq "rollback_expectation" && $normalized =~ /\bautomatic rollback\b/;
       return 1 if $field eq "rollback_expectation" && $normalized =~ /\bbroad operator discretion\b/;
-      return 1 if $field eq "rollback_expectation" && $value !~ /\brollback_owner=[^;]+/;
-      return 1 if $field eq "rollback_expectation" && $value !~ /\brollback_trigger=[^;]+/;
-      return 1 if $field eq "rollback_expectation" && $value !~ /\brollback_target=[^;]+/;
-      return 1 if $field eq "rollback_expectation" && $value !~ /\brollback_evidence_reference=docs\/phase-58-5-upgrade-rollback-plan-contract\.md\b/;
-      return 1 if $field eq "compatibility_reason" && $normalized =~ /\b(?:same as previous|same as above|same as compatible|same as incompatible|see previous|see above|previous case|sibling|derived from sibling)\b/;
-      return 1 if $field eq "compatibility_reason" && $normalized =~ /^(?:compatible|incompatible|reviewed|valid|ok|okay|approved|supported|blocked|manual)$/;
-      return 0;
+	      if ($field eq "rollback_expectation") {
+	        for my $subfield (qw(rollback_owner rollback_trigger rollback_target)) {
+	          return 1 if $value !~ /\b\Q$subfield\E=([^;]+)/;
+	          return 1 if bad($1);
+	        }
+	        return 1 if $value !~ /\brollback_evidence_reference=docs\/phase-58-5-upgrade-rollback-plan-contract\.md\b/;
+	      }
+	      return 1 if $field eq "compatibility_reason" && $normalized =~ /\b(?:same as previous|same as above|same as compatible|same as incompatible|see previous|see above|previous case|sibling|derived from sibling)\b/;
+	      return 1 if $field eq "compatibility_reason" && $normalized =~ /^(?:compatible|incompatible|reviewed|valid|ok|okay|approved|supported|blocked|manual)$/;
+	      return 0;
     }
 
     sub has_forbidden_required_check {
       my ($value) = @_;
       return 1 if bad($value);
       for my $item (split /\n/, $value) {
-        $item =~ s/^\s+|\s+$//g;
-        next if $item eq "";
-        return 1 if $item =~ /(?:production|commercial|readiness|entitlement|billing|support|migration|pilot|beta|rc|ga|gate|issue-lint|truth)/i;
-      }
-      return 0;
+	        $item =~ s/^\s+|\s+$//g;
+	        next if $item eq "";
+	        return 1 if $item =~ /(?:^|[[:space:]])(?:\/|\.\/|\.\.\/|[A-Za-z]:[\\\/]|file:\/\/)/i;
+	        return 1 if $item =~ /\\/;
+	        return 1 if $item =~ /(?:production|commercial|readiness|entitlement|billing|support|migration|pilot|beta|rc|ga|gate|issue-lint|truth)/i;
+	      }
+	      return 0;
     }
 
     sub has_forbidden_limitation_reference {
@@ -467,16 +472,18 @@ scan_forbidden_text() {
     my $linux_home = "home";
     my $root_home = "root";
     my $file_home_re = qr{\bfile://+(?:[A-Za-z]:[\\\/]+)?(?:\Q$mac_home\E|\Q$linux_home\E|\Q$root_home\E)[\\\/]+}i;
-    my $windows_home_re = qr{(^|[^A-Za-z0-9_.\/\\-])([A-Za-z]:[\\\/]+\Q$mac_home\E[\\\/]+[^\\\/\s]+)}i;
-    my $unix_home_re = qr{(^|[^A-Za-z0-9_.\/\\-])\Q$slash\E(?:\Q$mac_home\E|\Q$linux_home\E)\Q$slash\E[^/\s]+(?:/[^\s]*)?};
-    my $root_home_re = qr{(^|[^A-Za-z0-9_.\/\\-])\Q$slash\E\Q$root_home\E\Q$slash\E[^\s]*};
-    exit 1 if $text =~ $file_home_re;
-    exit 1 if $text =~ $windows_home_re;
-    exit 1 if $text =~ $unix_home_re;
-    exit 1 if $text =~ $root_home_re;
-  '; then
-    echo "Forbidden ${description}: workstation-local absolute path detected" >&2
-    exit 1
+	    my $windows_home_re = qr{(^|[^A-Za-z0-9_.\/\\-])([A-Za-z]:[\\\/]+\Q$mac_home\E[\\\/]+[^\\\/\s]+)}i;
+	    my $unix_home_re = qr{(^|[^A-Za-z0-9_.\/\\-])\Q$slash\E(?:\Q$mac_home\E|\Q$linux_home\E)\Q$slash\E[^/\s]+(?:/[^\s]*)?};
+	    my $root_home_re = qr{(^|[^A-Za-z0-9_.\/\\-])\Q$slash\E\Q$root_home\E\Q$slash\E[^\s]*};
+	    my $non_home_absolute_re = qr{(^|[^A-Za-z0-9_.:\/\\-])\Q$slash\E(?:tmp|var|etc|opt|usr|mnt|Volumes|Applications|Library)(?:\Q$slash\E[^\s,;)>\]]*)?}i;
+	    exit 1 if $text =~ $file_home_re;
+	    exit 1 if $text =~ $windows_home_re;
+	    exit 1 if $text =~ $unix_home_re;
+	    exit 1 if $text =~ $root_home_re;
+	    exit 1 if $text =~ $non_home_absolute_re;
+	  '; then
+	    echo "Forbidden ${description}: workstation-local absolute path detected" >&2
+	    exit 1
   fi
 
   if ! printf '%s' "${decoded_text}" | perl -Mstrict -Mwarnings -0ne '
@@ -490,10 +497,10 @@ scan_forbidden_text() {
         next if $value =~ /\A(<[^>]+>|todo|tbd|none|n\/a|na|placeholder|sample|example|false)\z/i;
         exit 1;
       }
-      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?([A-Za-z0-9_-]*(?:password|private[_-]?key|secret(?:[_-]?key)?|api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|client[_-]?secret|credential)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
-        my $value = $3;
-        $value =~ s/^["'\'']//;
-        $value =~ s/["'\'']$//;
+	      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?([A-Za-z0-9_-]*(?:token|password|private[_-]?key|secret(?:[_-]?key)?|api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|client[_-]?secret|credential)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
+	        my $value = $3;
+	        $value =~ s/^["'\'']//;
+	        $value =~ s/["'\'']$//;
         next if $value =~ /\A(<[^>]+>|todo|tbd|none|n\/a|na|placeholder|sample|example|false)\z/i;
         exit 1;
       }
@@ -503,9 +510,9 @@ scan_forbidden_text() {
     exit 1
   fi
 
-  if grep -Eiq -- '(customer-private|customer private|customer-confidential|customer confidential)[[:space:]-]+(data|payload|record|records)([[:space:]]*[:=]|\b[[:space:]]+(includes?|contains?|has|with|is|are)\b)' <<<"${decoded_text}"; then
-    echo "Forbidden ${description}: customer-private data detected" >&2
-    exit 1
+	  if grep -Eiq -- '(customer-private|customer private|customer_private|customer-confidential|customer confidential|customer_confidential)[[:space:]_-]+(data|payload|record|records)([[:space:]]*[:=]|\b[[:space:]]+(includes?|contains?|has|with|is|are)\b)' <<<"${decoded_text}"; then
+	    echo "Forbidden ${description}: customer-private data detected" >&2
+	    exit 1
   fi
 
   reject_mixed_negated_positive_claim "${description}" "${normalized_text}"
@@ -719,6 +726,10 @@ require_non_claim_false_once "commercial_replacement_readiness"
 authority_boundary="$(require_yaml_scalar "authority_boundary")"
 if [[ "${authority_boundary}" != *"subordinate packaging and planning evidence only"* || "${authority_boundary}" != *"Phase 51.3 gate contract"* ]]; then
   echo "Missing Phase 65.3 upgrade manifest authority boundary" >&2
+  exit 1
+fi
+if grep -Eiq -- '(^|[[:space:]])(not|never|cannot|can not|is not|are not)[^.;]*subordinate packaging and planning evidence only' <<<"${authority_boundary}"; then
+  echo "Invalid Phase 65.3 upgrade manifest authority boundary" >&2
   exit 1
 fi
 
