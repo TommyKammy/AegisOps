@@ -342,6 +342,7 @@ validate_compatibility_cases() {
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\b(?:rc|ga)\b/;
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\bbeta only\b/;
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\binferred\b/;
+      return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\blatest\b/;
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /^(?:develop|development|trunk)$/;
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\b(?:floating|branch only|branch)\b/;
       return 1 if $field eq "rollback_expectation" && $normalized =~ /\bautomatic rollback\b/;
@@ -359,6 +360,17 @@ validate_compatibility_cases() {
         $item =~ s/^\s+|\s+$//g;
         next if $item eq "";
         return 1 if $item =~ /(?:production|commercial|readiness|entitlement|billing|support|migration|pilot|beta|rc|ga|gate|issue-lint|truth)/i;
+      }
+      return 0;
+    }
+
+    sub has_forbidden_limitation_reference {
+      my ($value) = @_;
+      return 1 if bad($value);
+      for my $item (split /\n/, $value) {
+        $item =~ s/^\s+|\s+$//g;
+        next if $item eq "";
+        return 1 unless $item eq "docs/phase-64-5-phase66-limitation-handoff.md";
       }
       return 0;
     }
@@ -386,6 +398,7 @@ validate_compatibility_cases() {
       die "Missing Phase 65.3 upgrade manifest required check reference: $id.phase65_3_verifier\n" unless has_list_item($case->{required_checks}, qr{^bash scripts/verify-phase-65-3-release-channel-upgrade-manifest\.sh$});
       die "Invalid Phase 65.3 upgrade manifest required check reference: $id.required_checks\n" if has_forbidden_required_check($case->{required_checks});
       die "Missing Phase 65.3 upgrade manifest limitation reference: $id.known_limitation_references\n" unless has_list_item($case->{known_limitation_references}, qr{^docs/phase-64-5-phase66-limitation-handoff\.md$});
+      die "Invalid Phase 65.3 upgrade manifest limitation reference: $id.known_limitation_references\n" if has_forbidden_limitation_reference($case->{known_limitation_references});
 
       if ($posture eq "compatible" && $case->{upgrade_action} ne "manual-upgrade-review") {
         die "Invalid Phase 65.3 upgrade manifest compatible upgrade action: $id\n";
@@ -485,6 +498,9 @@ scan_forbidden_text() {
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
       $sentence =~ s/(?:does not|do not|must not|cannot|can not|is not|are not|must reject|forbidden|non-claims|false|manual or unsupported|phase 66 remains rc|phase 67 remains ga).*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
       if ($sentence =~ /(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate acceptance|gates?)[^.?!;]*(?:proven|complete|satisfied|accepted|passed|ready)\b/) {
+        exit 1;
+      }
+      if ($sentence =~ /(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[[:space:]-]+(?:is|are|becomes|become)[[:space:]-]+(?:ready|accepted|passed|complete|satisfied)\b/) {
         exit 1;
       }
       if ($sentence =~ /(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:proves|satisfies|passes|accepts)[^.?!;]*(?:pilot|beta|rc|ga)[ -]+(?:readiness|gates?|pass|proof|gate acceptance)/) {
