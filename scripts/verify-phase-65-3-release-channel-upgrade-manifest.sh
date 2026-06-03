@@ -53,6 +53,29 @@ yaml_scalar() {
   ' "${key}" "${file}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
 }
 
+yaml_top_level_scalar() {
+  local file="$1"
+  local key="$2"
+
+  perl -Mstrict -Mwarnings -0 -e '
+    my $key = shift @ARGV;
+    my $text = <>;
+    for my $line (split /\n/, $text) {
+      if ($line =~ /^\Q$key\E:\s*(.*?)\s*$/) {
+        print "$1\n";
+        last;
+      }
+    }
+  ' "${key}" "${file}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
+}
+
+yaml_top_level_scalar_count() {
+  local file="$1"
+  local key="$2"
+
+  grep -Ec "^${key}:[[:space:]]*" "${file}" || true
+}
+
 is_placeholder_or_missing() {
   local value="$1"
   local normalized
@@ -64,11 +87,16 @@ is_placeholder_or_missing() {
 
 require_yaml_scalar() {
   local key="$1"
-  local value
+  local value count
 
-  value="$(yaml_scalar "${absolute_manifest_path}" "${key}")"
+  value="$(yaml_top_level_scalar "${absolute_manifest_path}" "${key}")"
+  count="$(yaml_top_level_scalar_count "${absolute_manifest_path}" "${key}")"
   if is_placeholder_or_missing "${value}"; then
     echo "Missing Phase 65.3 upgrade manifest value: ${key}" >&2
+    exit 1
+  fi
+  if [[ "${count}" != "1" ]]; then
+    echo "Invalid Phase 65.3 upgrade manifest value: ${key}" >&2
     exit 1
   fi
   printf '%s' "${value}"
@@ -93,6 +121,23 @@ require_yaml_scalar_equals_once() {
 
   actual="$(yaml_scalar "${absolute_manifest_path}" "${key}")"
   count="$(grep -Ec "^[[:space:]]*${key}:[[:space:]]*" "${absolute_manifest_path}")"
+  if [[ "${count}" != "1" || "${actual}" != "${expected}" ]]; then
+    echo "Invalid Phase 65.3 upgrade manifest value: ${key}" >&2
+    exit 1
+  fi
+}
+
+require_top_level_yaml_scalar_equals_once() {
+  local key="$1"
+  local expected="$2"
+  local actual count
+
+  actual="$(yaml_top_level_scalar "${absolute_manifest_path}" "${key}")"
+  count="$(yaml_top_level_scalar_count "${absolute_manifest_path}" "${key}")"
+  if [[ "${count}" == "0" ]]; then
+    echo "Missing Phase 65.3 upgrade manifest value: ${key}" >&2
+    exit 1
+  fi
   if [[ "${count}" != "1" || "${actual}" != "${expected}" ]]; then
     echo "Invalid Phase 65.3 upgrade manifest value: ${key}" >&2
     exit 1
@@ -234,6 +279,8 @@ validate_compatibility_cases() {
       $normalized =~ s/_/ /g;
       $normalized =~ s/[[:space:]-]+/ /g;
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\b(?:rc|ga)\b/;
+      return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\bbeta only\b/;
+      return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\binferred\b/;
       return 1 if $field eq "rollback_expectation" && $normalized =~ /\bautomatic rollback\b/;
       return 1 if $field eq "rollback_expectation" && $normalized =~ /\bbroad operator discretion\b/;
       return 0;
@@ -309,7 +356,7 @@ scan_forbidden_text() {
     my $text = $_;
     exit 1 if $text =~ /(AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})/i;
     for my $line (split /\n/, $text) {
-      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?([A-Za-z0-9_-]*(?:password|private[_-]?key|secret(?:[_-]?key)?|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|credential)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
+      while ($line =~ /(^|[^[:alnum:]_-])["'\'']?([A-Za-z0-9_-]*(?:password|private[_-]?key|secret(?:[_-]?key)?|api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|client[_-]?secret|credential)[A-Za-z0-9_-]*)["'\'']?[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/ig) {
         my $value = $3;
         $value =~ s/^["'\'']//;
         $value =~ s/["'\'']$//;
@@ -322,7 +369,7 @@ scan_forbidden_text() {
     exit 1
   fi
 
-  if grep -Eiq -- '(customer-private|customer private|customer-confidential|customer confidential)[[:space:]-]+(data|payload|record|records)[[:space:]]*[:=]' <<<"${decoded_text}"; then
+  if grep -Eiq -- '(customer-private|customer private|customer-confidential|customer confidential)[[:space:]-]+(data|payload|record|records)([[:space:]]*[:=]|\b[[:space:]]+(includes?|contains?|has|with|is|are)\b)' <<<"${decoded_text}"; then
     echo "Forbidden ${description}: customer-private data detected" >&2
     exit 1
   fi
@@ -392,6 +439,9 @@ scan_forbidden_text() {
       if ($sentence =~ /(?:production[ -]+entitlement enforcement|billing|commercial replacement readiness)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied)\b/) {
         exit 1;
       }
+      if ($sentence =~ /(?:support|migration)[ -]+readiness[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied)\b/) {
+        exit 1;
+      }
     }
   '; then
     echo "Forbidden ${description}: entitlement, billing, or commercial readiness claim" >&2
@@ -456,11 +506,7 @@ required_manifest_values=(
 for entry in "${required_manifest_values[@]}"; do
   key="${entry%%|*}"
   expected="${entry#*|}"
-  actual="$(yaml_scalar "${absolute_manifest_path}" "${key}")"
-  if [[ "${actual}" != "${expected}" ]]; then
-    echo "Missing Phase 65.3 upgrade manifest value: ${key}" >&2
-    exit 1
-  fi
+  require_top_level_yaml_scalar_equals_once "${key}" "${expected}"
 done
 
 release_bundle_identifier="$(require_yaml_scalar "release_bundle_identifier")"
