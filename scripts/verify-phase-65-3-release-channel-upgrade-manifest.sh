@@ -156,7 +156,7 @@ require_manifest_pattern() {
 
 validate_repository_revision() {
   local revision="$1"
-  local normalized_revision resolved_revision normalized_resolved_revision
+  local normalized_revision resolved_revision normalized_resolved_revision current_revision
 
   normalized_revision="$(printf '%s' "${revision}" | tr '[:upper:]' '[:lower:]')"
   if [[ "${normalized_revision}" =~ ^(head|main|master|trunk|develop|development|latest)$ ]]; then
@@ -168,12 +168,23 @@ validate_repository_revision() {
     resolved_revision="$(git -C "${revision_repo_root}" rev-parse --verify --quiet "${revision}^{commit}" || true)"
     normalized_resolved_revision="$(printf '%s' "${resolved_revision}" | tr '[:upper:]' '[:lower:]')"
     if [[ -n "${resolved_revision}" && "${normalized_resolved_revision}" == "${normalized_revision}"* ]]; then
+      current_revision="$(git -C "${revision_repo_root}" rev-parse --verify --quiet HEAD^{commit} || true)"
+      if [[ -z "${current_revision}" ]] || ! git -C "${revision_repo_root}" merge-base --is-ancestor "${resolved_revision}" "${current_revision}"; then
+        echo "Invalid Phase 65.3 upgrade manifest repository revision: ${revision} is not reachable from repository head" >&2
+        exit 1
+      fi
       return
     fi
   fi
 
   if git -C "${revision_repo_root}" show-ref --verify --quiet "refs/tags/${revision}" &&
     git -C "${revision_repo_root}" rev-parse --verify --quiet "refs/tags/${revision}^{commit}" >/dev/null; then
+    resolved_revision="$(git -C "${revision_repo_root}" rev-parse --verify --quiet "refs/tags/${revision}^{commit}" || true)"
+    current_revision="$(git -C "${revision_repo_root}" rev-parse --verify --quiet HEAD^{commit} || true)"
+    if [[ -z "${resolved_revision}" || -z "${current_revision}" ]] || ! git -C "${revision_repo_root}" merge-base --is-ancestor "${resolved_revision}" "${current_revision}"; then
+      echo "Invalid Phase 65.3 upgrade manifest repository revision: ${revision} is not reachable from repository head" >&2
+      exit 1
+    fi
     return
   fi
 
@@ -283,6 +294,8 @@ validate_compatibility_cases() {
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\binferred\b/;
       return 1 if $field eq "rollback_expectation" && $normalized =~ /\bautomatic rollback\b/;
       return 1 if $field eq "rollback_expectation" && $normalized =~ /\bbroad operator discretion\b/;
+      return 1 if $field eq "rollback_expectation" && $value !~ /\brollback_evidence_reference=docs\/phase-58-5-upgrade-rollback-plan-contract\.md\b/;
+      return 1 if $field eq "compatibility_reason" && $normalized =~ /\b(?:same as previous|same as above|same as compatible|same as incompatible|see previous|see above|previous case|sibling|derived from sibling)\b/;
       return 0;
     }
 
@@ -528,6 +541,9 @@ require_file "${repo_root}/docs/phase-65-2-offline-install-bundle-contract.md" "
 require_file "${repo_root}/docs/phase-58-5-upgrade-rollback-plan-contract.md" "Phase 58.5 upgrade and rollback evidence reference"
 require_file "${repo_root}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "Phase 51.3 gate boundary reference"
 require_file "${repo_root}/docs/phase-64-5-phase66-limitation-handoff.md" "Phase 64.5 limitation handoff reference"
+require_file "${repo_root}/scripts/verify-phase-58-5-upgrade-rollback-plan-contract.sh" "Phase 58.5 upgrade and rollback verifier script reference"
+require_file "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "publishable path hygiene verifier script reference"
+require_file "${repo_root}/scripts/verify-phase-65-3-release-channel-upgrade-manifest.sh" "Phase 65.3 release channel and upgrade manifest verifier script reference"
 
 require_yaml_scalar_equals_once "silent_auto_upgrade" "false"
 require_yaml_scalar_equals_once "hosted_update_service" "false"

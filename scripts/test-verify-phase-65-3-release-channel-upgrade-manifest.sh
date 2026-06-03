@@ -34,6 +34,9 @@ create_valid_repo() {
   copy_repo_path "${target}" "docs/phase-64-5-phase66-limitation-handoff.md"
   copy_repo_path "${target}" "docs/release/phase-65-beta-release-notes.md"
   copy_repo_path "${target}" "docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+  copy_repo_path "${target}" "scripts/verify-phase-58-5-upgrade-rollback-plan-contract.sh"
+  copy_repo_path "${target}" "scripts/verify-publishable-path-hygiene.sh"
+  copy_repo_path "${target}" "scripts/verify-phase-65-3-release-channel-upgrade-manifest.sh"
 }
 
 assert_passes() {
@@ -51,7 +54,15 @@ assert_fails_with() {
   local target="$1"
   local expected="$2"
 
-  if PHASE_65_3_REVISION_REPO_ROOT="${repo_root}" bash "${verifier}" "${target}" >"${fail_stdout}" 2>"${fail_stderr}"; then
+  assert_fails_with_revision_repo "${target}" "${expected}" "${repo_root}"
+}
+
+assert_fails_with_revision_repo() {
+  local target="$1"
+  local expected="$2"
+  local revision_root="$3"
+
+  if PHASE_65_3_REVISION_REPO_ROOT="${revision_root}" bash "${verifier}" "${target}" >"${fail_stdout}" 2>"${fail_stderr}"; then
     echo "Expected verifier to fail for ${target}" >&2
     cat "${fail_stdout}" >&2
     exit 1
@@ -71,6 +82,26 @@ remove_doc_text() {
 
   TEXT="${text}" perl -0pi -e 's/\Q$ENV{TEXT}\E//g' \
     "${target}/docs/phase-65-3-release-channel-upgrade-manifest-contract.md"
+}
+
+create_revision_repo_with_unreachable_commit() {
+  local target="$1"
+  local initial_branch
+
+  git init -q "${target}"
+  git -C "${target}" config user.email "phase-65-3-test@example.invalid"
+  git -C "${target}" config user.name "Phase 65.3 Test"
+  printf '%s\n' "current package head" >"${target}/package-head.txt"
+  git -C "${target}" add package-head.txt
+  git -C "${target}" commit -q -m "current package head"
+  initial_branch="$(git -C "${target}" symbolic-ref --short HEAD)"
+  git -C "${target}" checkout -q --orphan unreachable-source
+  git -C "${target}" rm -q -rf .
+  printf '%s\n' "unreachable source revision" >"${target}/source.txt"
+  git -C "${target}" add source.txt
+  git -C "${target}" commit -q -m "unreachable source revision"
+  git -C "${target}" rev-parse HEAD
+  git -C "${target}" checkout -q "${initial_branch}"
 }
 
 valid_repo="${workdir}/valid"
@@ -122,6 +153,21 @@ missing_offline_bundle_reference_repo="${workdir}/missing-offline-bundle-referen
 create_valid_repo "${missing_offline_bundle_reference_repo}"
 rm "${missing_offline_bundle_reference_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
 assert_fails_with "${missing_offline_bundle_reference_repo}" "Missing Phase 65.2 offline install bundle contract reference"
+
+missing_phase58_check_script_repo="${workdir}/missing-phase58-check-script"
+create_valid_repo "${missing_phase58_check_script_repo}"
+rm "${missing_phase58_check_script_repo}/scripts/verify-phase-58-5-upgrade-rollback-plan-contract.sh"
+assert_fails_with "${missing_phase58_check_script_repo}" "Missing Phase 58.5 upgrade and rollback verifier script reference"
+
+missing_path_hygiene_check_script_repo="${workdir}/missing-path-hygiene-check-script"
+create_valid_repo "${missing_path_hygiene_check_script_repo}"
+rm "${missing_path_hygiene_check_script_repo}/scripts/verify-publishable-path-hygiene.sh"
+assert_fails_with "${missing_path_hygiene_check_script_repo}" "Missing publishable path hygiene verifier script reference"
+
+missing_phase65_check_script_repo="${workdir}/missing-phase65-check-script"
+create_valid_repo "${missing_phase65_check_script_repo}"
+rm "${missing_phase65_check_script_repo}/scripts/verify-phase-65-3-release-channel-upgrade-manifest.sh"
+assert_fails_with "${missing_phase65_check_script_repo}" "Missing Phase 65.3 release channel and upgrade manifest verifier script reference"
 
 missing_channel_scope_repo="${workdir}/missing-channel-scope"
 create_valid_repo "${missing_channel_scope_repo}"
@@ -181,6 +227,13 @@ create_valid_repo "${unresolved_revision_repo}"
 perl -0pi -e 's/^release_bundle_identifier:.*$/release_bundle_identifier: aegisops-beta-deadbeef1234/m; s/^repository_revision:.*$/repository_revision: deadbeef1234/m; s/^    target_version:.*$/    target_version: aegisops-beta-deadbeef1234/mg' "${unresolved_revision_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${unresolved_revision_repo}" "Invalid Phase 65.3 upgrade manifest repository revision"
 
+unreachable_revision_git_repo="${workdir}/revision-repo"
+unreachable_revision="$(create_revision_repo_with_unreachable_commit "${unreachable_revision_git_repo}")"
+unreachable_revision_repo="${workdir}/unreachable-revision"
+create_valid_repo "${unreachable_revision_repo}"
+perl -0pi -e "s/^release_bundle_identifier:.*\$/release_bundle_identifier: aegisops-beta-${unreachable_revision}/m; s/^repository_revision:.*\$/repository_revision: ${unreachable_revision}/m; s/^    target_version:.*\$/    target_version: aegisops-beta-${unreachable_revision}/mg" "${unreachable_revision_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with_revision_repo "${unreachable_revision_repo}" "is not reachable from repository head" "${unreachable_revision_git_repo}"
+
 missing_source_repo="${workdir}/missing-source-version"
 create_valid_repo "${missing_source_repo}"
 perl -0pi -e 's/^[[:space:]]*source_version:.*\n//mg' "${missing_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
@@ -235,6 +288,16 @@ automatic_rollback_repo="${workdir}/automatic-rollback"
 create_valid_repo "${automatic_rollback_repo}"
 perl -0pi -e 's/^    rollback_expectation: rollback_owner=aegisops-release-owner; rollback_trigger=failed required checks or release-gate rejection; rollback_target=last-reviewed-release-bundle; rollback_evidence_reference=docs\/phase-58-5-upgrade-rollback-plan-contract.md$/    rollback_expectation: automatic rollback/m' "${automatic_rollback_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${automatic_rollback_repo}" "Invalid Phase 65.3 upgrade manifest compatibility case field: compatible-reviewed-source.rollback_expectation"
+
+missing_rollback_evidence_repo="${workdir}/missing-rollback-evidence"
+create_valid_repo "${missing_rollback_evidence_repo}"
+perl -0pi -e 's/; rollback_evidence_reference=docs\/phase-58-5-upgrade-rollback-plan-contract.md//g' "${missing_rollback_evidence_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${missing_rollback_evidence_repo}" "Invalid Phase 65.3 upgrade manifest compatibility case field: compatible-reviewed-source.rollback_expectation"
+
+sibling_reason_repo="${workdir}/sibling-derived-reason"
+create_valid_repo "${sibling_reason_repo}"
+perl -0pi -e 's/^    compatibility_reason:.*$/    compatibility_reason: same as previous/mg' "${sibling_reason_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${sibling_reason_repo}" "Invalid Phase 65.3 upgrade manifest compatibility case field: compatible-reviewed-source.compatibility_reason"
 
 missing_required_checks_repo="${workdir}/missing-required-checks"
 create_valid_repo "${missing_required_checks_repo}"
