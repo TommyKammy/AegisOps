@@ -517,10 +517,20 @@ create_valid_repo "${support_readiness_repo}"
 printf '%s\n' "Support readiness is complete." >>"${support_readiness_repo}/docs/phase-65-3-release-channel-upgrade-manifest-contract.md"
 assert_fails_with "${support_readiness_repo}" "entitlement, billing, or commercial readiness claim"
 
+support_ready_repo="${workdir}/support-ready"
+create_valid_repo "${support_ready_repo}"
+printf '%s\n' "Support is ready." >>"${support_ready_repo}/docs/release/phase-65-beta-release-notes.md"
+assert_fails_with "${support_ready_repo}" "entitlement, billing, or commercial readiness claim"
+
 migration_readiness_repo="${workdir}/migration-readiness"
 create_valid_repo "${migration_readiness_repo}"
 printf '%s\n' "Migration readiness is complete." >>"${migration_readiness_repo}/docs/phase-65-3-release-channel-upgrade-manifest-contract.md"
 assert_fails_with "${migration_readiness_repo}" "entitlement, billing, or commercial readiness claim"
+
+migration_ready_repo="${workdir}/migration-ready"
+create_valid_repo "${migration_ready_repo}"
+printf '%s\n' "Migration is ready." >>"${migration_ready_repo}/docs/release/phase-65-beta-release-notes.md"
+assert_fails_with "${migration_ready_repo}" "entitlement, billing, or commercial readiness claim"
 
 self_service_commercial_repo="${workdir}/self-service-commercial"
 create_valid_repo "${self_service_commercial_repo}"

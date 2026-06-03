@@ -598,6 +598,9 @@ scan_forbidden_text() {
       if ($sentence =~ /(?:support|migration)[ -]+readiness[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied)\b/) {
         exit 1;
       }
+      if ($sentence =~ /(?:support|migration)[ -]+(?:is|are|becomes|become)[ -]+(?:ready|accepted|passed|complete|satisfied)\b/) {
+        exit 1;
+      }
       if ($sentence =~ /design-partner evidence completeness[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied)\b/) {
         exit 1;
       }
