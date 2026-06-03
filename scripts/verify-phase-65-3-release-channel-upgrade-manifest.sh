@@ -144,6 +144,38 @@ require_top_level_yaml_scalar_equals_once() {
   fi
 }
 
+validate_top_level_manifest_keys() {
+  perl -Mstrict -Mwarnings -0 -e '
+    my $text = <>;
+    my %allowed = map { $_ => 1 } qw(
+      contract_identifier
+      inventory_identifier
+      offline_bundle_contract_identifier
+      release_channel
+      channel_scope
+      release_bundle_identifier
+      repository_revision
+      release_notes_reference
+      inventory_reference
+      offline_bundle_reference
+      authority_boundary
+      verifier_output_reference
+      approval_record
+      non_claims
+      compatibility_cases
+    );
+
+    for my $line (split /\n/, $text) {
+      next unless $line =~ /^([A-Za-z0-9_]+):/;
+      my $key = $1;
+      die "Invalid Phase 65.3 upgrade manifest top-level field: $key\n" unless $allowed{$key};
+    }
+  ' "${absolute_manifest_path}" || {
+    local status=$?
+    return "${status}"
+  }
+}
+
 require_non_claim_false_once() {
   local key="$1"
 
@@ -477,12 +509,14 @@ scan_forbidden_text() {
     my $mac_home = "Users";
     my $linux_home = "home";
     my $root_home = "root";
-    my $file_home_re = qr{\bfile://+(?:[A-Za-z]:[\\\/]+)?(?:\Q$mac_home\E|\Q$linux_home\E|\Q$root_home\E)[\\\/]+}i;
+	    my $file_home_re = qr{\bfile://+(?:[A-Za-z]:[\\\/]+)?(?:\Q$mac_home\E|\Q$linux_home\E|\Q$root_home\E)[\\\/]+}i;
+	    my $windows_absolute_re = qr{(^|[^A-Za-z0-9_.\/\\-])([A-Za-z]:[\\\/]+[^\\\/\s,;)>\]]+)}i;
 	    my $windows_home_re = qr{(^|[^A-Za-z0-9_.\/\\-])([A-Za-z]:[\\\/]+\Q$mac_home\E[\\\/]+[^\\\/\s]+)}i;
 	    my $unix_home_re = qr{(^|[^A-Za-z0-9_.\/\\-])\Q$slash\E(?:\Q$mac_home\E|\Q$linux_home\E)\Q$slash\E[^/\s]+(?:/[^\s]*)?};
 	    my $root_home_re = qr{(^|[^A-Za-z0-9_.\/\\-])\Q$slash\E\Q$root_home\E\Q$slash\E[^\s]*};
 	    my $non_home_absolute_re = qr{(^|[^A-Za-z0-9_.:\/\\-])\Q$slash\E(?:tmp|var|etc|opt|usr|mnt|Volumes|Applications|Library)(?:\Q$slash\E[^\s,;)>\]]*)?}i;
 	    exit 1 if $text =~ $file_home_re;
+	    exit 1 if $text =~ $windows_absolute_re;
 	    exit 1 if $text =~ $windows_home_re;
 	    exit 1 if $text =~ $unix_home_re;
 	    exit 1 if $text =~ $root_home_re;
@@ -610,7 +644,7 @@ scan_forbidden_text() {
       if ($sentence =~ /(?:support|migration)[ -]+(?:is|are|becomes|become)[ -]+(?:ready|accepted|passed|complete|satisfied)\b/) {
         exit 1;
       }
-      if ($sentence =~ /design-partner evidence completeness[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied)\b/) {
+      if ($sentence =~ /design-partner evidence(?: completeness)?[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied)\b/) {
         exit 1;
       }
     }
@@ -694,6 +728,7 @@ for entry in "${required_manifest_values[@]}"; do
   expected="${entry#*|}"
   require_top_level_yaml_scalar_equals_once "${key}" "${expected}"
 done
+validate_top_level_manifest_keys
 
 release_bundle_identifier="$(require_yaml_scalar "release_bundle_identifier")"
 repository_revision="$(require_yaml_scalar "repository_revision")"
