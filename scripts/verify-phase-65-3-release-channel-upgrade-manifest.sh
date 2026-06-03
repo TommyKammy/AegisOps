@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 repo_root="$(cd "${repo_root}" && pwd -P)"
+revision_repo_root="${PHASE_65_3_REVISION_REPO_ROOT:-${repo_root}}"
 
 doc_path="docs/phase-65-3-release-channel-upgrade-manifest-contract.md"
 manifest_path="docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
@@ -57,6 +58,7 @@ is_placeholder_or_missing() {
   local normalized
 
   normalized="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+  [[ "${normalized}" =~ \<[^[:space:]]+\> ]] && return 0
   [[ -z "${normalized}" || "${normalized}" =~ ^(todo|tbd|none|n/a|na|sample|example|placeholder|unknown|missing|absent|latest|head|main|master)$ ]]
 }
 
@@ -94,28 +96,63 @@ require_manifest_pattern() {
   fi
 }
 
+validate_repository_revision() {
+  local revision="$1"
+  local normalized_revision resolved_revision normalized_resolved_revision
+
+  normalized_revision="$(printf '%s' "${revision}" | tr '[:upper:]' '[:lower:]')"
+  if [[ "${normalized_revision}" =~ ^(head|main|master|trunk|develop|development|latest)$ ]]; then
+    echo "Invalid Phase 65.3 upgrade manifest repository revision: ${revision} is mutable" >&2
+    exit 1
+  fi
+
+  if [[ "${revision}" =~ ^[0-9A-Fa-f]{7,40}$ ]]; then
+    resolved_revision="$(git -C "${revision_repo_root}" rev-parse --verify --quiet "${revision}^{commit}" || true)"
+    normalized_resolved_revision="$(printf '%s' "${resolved_revision}" | tr '[:upper:]' '[:lower:]')"
+    if [[ -n "${resolved_revision}" && "${normalized_resolved_revision}" == "${normalized_revision}"* ]]; then
+      return
+    fi
+  fi
+
+  if git -C "${revision_repo_root}" show-ref --verify --quiet "refs/tags/${revision}" &&
+    git -C "${revision_repo_root}" rev-parse --verify --quiet "refs/tags/${revision}^{commit}" >/dev/null; then
+    return
+  fi
+
+  echo "Invalid Phase 65.3 upgrade manifest repository revision: ${revision} does not resolve in repository" >&2
+  exit 1
+}
+
 reject_mixed_negated_positive_claim() {
   local description="$1"
   local normalized_text="$2"
 
-  local negated_boundary positive_claim_terms positive_verbs positive_states
-  negated_boundary='((does|do|must|can|is|are)[ -]+not|cannot|can not|unsupported|excludes)[^.?!;]*(;[[:space:]]*| and | but | yet | however | though | although )'
-  positive_claim_terms='silent[ -]+auto[ -]+upgrade|silent[ -]+update|automatic[ -]+(migration|rollback)|hosted[ -]+update[ -]+service|network[ -]+update[ -]+service|production[ -]+entitlement enforcement|billing|commercial replacement readiness|(phase[ -]+66[ -]+)?rc[ -]+(readiness|pass|proof|gate|gates|gate acceptance)|(phase[ -]+67[ -]+)?ga[ -]+(readiness|pass|proof|gate|gates|gate acceptance)|(release-channel metadata|upgrade manifest|manifest|metadata|verifier output|issue-lint output)[^.?!;]*(release|upgrade|rollback|readiness|gate|workflow)[ -]+truth'
-  positive_verbs='(is|are|becomes|become|provides|provide|includes|include|contains|support|supports|enables|enable|delivers|deliver|proves|prove|satisfies|satisfy|passes|pass|implements|implement|approves|approve|accepts|accept|establishes|establish)'
-  positive_states='(enabled|implemented|included|available|ready|required|assumed|approved|complete|completed|supported|provided|satisfied|proven|delivered|accepted|done)'
-
-  if grep -Eiq -- "${negated_boundary}[^.?!;]*(${positive_claim_terms})[^.?!;]*(${positive_verbs}|${positive_states})|${negated_boundary}[^.?!;]*${positive_verbs}[[:space:]-]+(${positive_claim_terms})" <<<"${normalized_text}"; then
+  if ! printf '%s' "${normalized_text}" | perl -0ne '
+    my $positive_terms = qr{silent[ -]+auto[ -]+upgrade|silent[ -]+update|automatic[ -]+(?:migration|rollback)|hosted[ -]+update[ -]+service|network[ -]+update[ -]+service|production[ -]+entitlement enforcement|billing|commercial replacement readiness|(?:phase[ -]+66[ -]+)?rc[ -]+(?:readiness|pass|proof|gate|gates|gate acceptance)|(?:phase[ -]+67[ -]+)?ga[ -]+(?:readiness|pass|proof|gate|gates|gate acceptance)|(?:release-channel metadata|upgrade manifest|manifest|metadata|verifier output|issue-lint output)[^.?!;]*(?:release|upgrade|rollback|readiness|gate|workflow)[ -]+truth}i;
+    my $positive_state = qr{is|are|becomes|become|provides|provide|includes|include|contains|support|supports|enables|enable|delivers|deliver|proves|prove|satisfies|satisfy|passes|pass|implements|implement|approves|approve|accepts|accept|establishes|establish|enabled|implemented|included|available|ready|required|assumed|approved|complete|completed|supported|provided|satisfied|proven|delivered|accepted|done|allowed|proceeds|runs|executes}i;
+    my $negated = qr{(?:does|do|must|can|is|are)[ -]+not|cannot|can not|unsupported|excludes|manual or unsupported|false}i;
+    for my $sentence (split /(?<=[.?!;])\s*/, $_) {
+      while ($sentence =~ /$negated\b.*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;)(.*)/ig) {
+        my $tail = $1;
+        exit 1 if $tail =~ /$positive_terms[^.?!;]*$positive_state|$positive_state[[:space:]-]+$positive_terms/i;
+      }
+    }
+  '; then
     echo "Forbidden ${description}: positive claim after negated boundary detected" >&2
     exit 1
   fi
 }
 
 validate_compatibility_cases() {
+  local expected_target_version="$1"
+
   perl -Mstrict -Mwarnings -0 -e '
+    my $expected_target_version = shift @ARGV;
     my $text = <>;
     my @cases;
     my $current;
     my $in_cases = 0;
+    my $active_list;
 
     sub finish_case {
       my ($case) = @_;
@@ -133,15 +170,24 @@ validate_compatibility_cases() {
       if ($line =~ /^  -\s+([A-Za-z0-9_]+):\s*(.*?)\s*$/) {
         finish_case($current);
         $current = {};
+        $active_list = undef;
         $current->{$1} = $2;
         next;
       }
       if (defined $current && $line =~ /^    (required_checks|known_limitation_references):\s*$/) {
         my $list = $1;
-        $current->{$list} = "__list__";
+        $current->{$list} = "";
+        $active_list = $list;
+        next;
+      }
+      if (defined $current && defined $active_list && $line =~ /^      -\s*(.*?)\s*$/) {
+        my $value = $1;
+        $value =~ s/^\s+|\s+$//g;
+        $current->{$active_list} .= "\n$value";
         next;
       }
       if (defined $current && $line =~ /^    ([A-Za-z0-9_]+):\s*(.*?)\s*$/) {
+        $active_list = undef;
         $current->{$1} = $2;
         next;
       }
@@ -153,7 +199,18 @@ validate_compatibility_cases() {
       return 1 if !defined $value;
       $value =~ s/^\s+|\s+$//g;
       return 1 if $value eq "";
+      return 1 if $value =~ /<[^>]+>/;
       return 1 if $value =~ /^(todo|tbd|none|n\/a|na|sample|example|placeholder|unknown|missing|absent|latest|head|main|master)$/i;
+      return 0;
+    }
+
+    sub has_list_item {
+      my ($value, $pattern) = @_;
+      return 0 if bad($value);
+      for my $item (split /\n/, $value) {
+        $item =~ s/^\s+|\s+$//g;
+        return 1 if $item =~ $pattern;
+      }
       return 0;
     }
 
@@ -171,6 +228,14 @@ validate_compatibility_cases() {
       die "Invalid Phase 65.3 upgrade manifest compatibility posture: $id\n" unless $posture =~ /^(compatible|incompatible)$/;
       $seen_posture{$posture} = 1;
 
+      die "Invalid Phase 65.3 upgrade manifest target version: $id\n" unless $case->{target_version} eq $expected_target_version;
+      die "Invalid Phase 65.3 upgrade manifest Phase 58 reference: $id\n" unless $case->{phase58_upgrade_plan_reference} eq "docs/phase-58-5-upgrade-rollback-plan-contract.md";
+      die "Invalid Phase 65.3 upgrade manifest Phase 51 reference: $id\n" unless $case->{phase51_gate_boundary_reference} eq "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md";
+      die "Missing Phase 65.3 upgrade manifest required check reference: $id.phase58_upgrade_plan_reference\n" unless has_list_item($case->{required_checks}, qr{^bash scripts/verify-phase-58-5-upgrade-rollback-plan-contract\.sh$});
+      die "Missing Phase 65.3 upgrade manifest required check reference: $id.publishable_path_hygiene\n" unless has_list_item($case->{required_checks}, qr{^bash scripts/verify-publishable-path-hygiene\.sh$});
+      die "Missing Phase 65.3 upgrade manifest required check reference: $id.phase65_3_verifier\n" unless has_list_item($case->{required_checks}, qr{^bash scripts/verify-phase-65-3-release-channel-upgrade-manifest\.sh$});
+      die "Missing Phase 65.3 upgrade manifest limitation reference: $id.known_limitation_references\n" unless has_list_item($case->{known_limitation_references}, qr{^docs/phase-64-5-phase66-limitation-handoff\.md$});
+
       if ($posture eq "compatible" && $case->{upgrade_action} ne "manual-upgrade-review") {
         die "Invalid Phase 65.3 upgrade manifest compatible upgrade action: $id\n";
       }
@@ -181,7 +246,7 @@ validate_compatibility_cases() {
 
     die "Missing Phase 65.3 upgrade manifest content: compatible version posture case\n" unless $seen_posture{compatible};
     die "Missing Phase 65.3 upgrade manifest content: incompatible version posture case\n" unless $seen_posture{incompatible};
-  ' "${absolute_manifest_path}" || {
+  ' "${expected_target_version}" "${absolute_manifest_path}" || {
     local status=$?
     return "${status}"
   }
@@ -240,7 +305,7 @@ scan_forbidden_text() {
 
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
-      next if $sentence =~ /(?:does not|do not|must not|cannot|can not|must reject|forbidden|non-claims|false|manual or unsupported)/;
+      $sentence =~ s/(?:does not|do not|must not|cannot|can not|must reject|forbidden|non-claims|false|manual or unsupported)[^.?!;]*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
       if ($sentence =~ /(?:silent[ -]+auto[ -]+upgrade|silent[ -]+update)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|proceeds|runs|executes)\b/) {
         exit 1;
       }
@@ -255,7 +320,7 @@ scan_forbidden_text() {
 
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
-      next if $sentence =~ /(?:does not|do not|must not|cannot|can not|must reject|forbidden|non-claims|false|manual or unsupported)/;
+      $sentence =~ s/(?:does not|do not|must not|cannot|can not|must reject|forbidden|non-claims|false|manual or unsupported)[^.?!;]*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
       if ($sentence =~ /(?:hosted|network)[ -]+update[ -]+service[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available)\b/) {
         exit 1;
       }
@@ -267,7 +332,7 @@ scan_forbidden_text() {
 
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
-      next if $sentence =~ /(?:does not|do not|must not|cannot|can not|must reject|forbidden|non-claims|false|manual or unsupported|phase 66 remains rc|phase 67 remains ga)/;
+      $sentence =~ s/(?:does not|do not|must not|cannot|can not|must reject|forbidden|non-claims|false|manual or unsupported|phase 66 remains rc|phase 67 remains ga)[^.?!;]*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
       if ($sentence =~ /(?:(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate acceptance|gates?)[^.?!;]*(?:proven|complete|satisfied|accepted|passed|ready)\b/) {
         exit 1;
       }
@@ -282,7 +347,7 @@ scan_forbidden_text() {
 
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
-      next if $sentence =~ /(?:does not|do not|must not|cannot|can not|must reject|forbidden|non-claims|false)/;
+      $sentence =~ s/(?:does not|do not|must not|cannot|can not|must reject|forbidden|non-claims|false)[^.?!;]*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
       if ($sentence =~ /(?:metadata|manifest|verifier output|issue-lint output)[^.?!;]*(?:is|becomes|satisfies|proves|serves as)[^.?!;]*(?:release|upgrade|rollback|readiness|gate|workflow)[ -]+truth/) {
         exit 1;
       }
@@ -294,7 +359,7 @@ scan_forbidden_text() {
 
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
-      next if $sentence =~ /(?:does not|do not|must not|cannot|can not|must reject|forbidden|non-claims|false|manual or unsupported)/;
+      $sentence =~ s/(?:does not|do not|must not|cannot|can not|must reject|forbidden|non-claims|false|manual or unsupported)[^.?!;]*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
       if ($sentence =~ /(?:production[ -]+entitlement enforcement|billing|commercial replacement readiness)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied)\b/) {
         exit 1;
       }
@@ -353,8 +418,6 @@ required_manifest_values=(
   "offline_bundle_contract_identifier|phase-65-offline-install-bundle-contract-v1"
   "release_channel|beta-design-partner"
   "channel_scope|beta/design-partner packaging review only; not RC, GA, production rollout, entitlement, billing, support readiness, or commercial replacement readiness."
-  "release_bundle_identifier|aegisops-beta-<repository-revision>"
-  "repository_revision|<repository-revision>"
   "inventory_reference|docs/phase-65-1-release-bundle-inventory.md"
   "offline_bundle_reference|docs/phase-65-2-offline-install-bundle-contract.md"
   "verifier_output_reference|bash scripts/verify-phase-65-3-release-channel-upgrade-manifest.sh"
@@ -370,6 +433,14 @@ for entry in "${required_manifest_values[@]}"; do
     exit 1
   fi
 done
+
+release_bundle_identifier="$(require_yaml_scalar "release_bundle_identifier")"
+repository_revision="$(require_yaml_scalar "repository_revision")"
+if [[ "${release_bundle_identifier}" != "aegisops-beta-${repository_revision}" ]]; then
+  echo "Invalid Phase 65.3 upgrade manifest release binding: ${release_bundle_identifier} does not match repository revision ${repository_revision}" >&2
+  exit 1
+fi
+validate_repository_revision "${repository_revision}"
 
 release_notes_reference="$(require_yaml_scalar "release_notes_reference")"
 if [[ "${release_notes_reference}" != docs/* ]]; then
@@ -392,19 +463,8 @@ if [[ "${authority_boundary}" != *"subordinate packaging and planning evidence o
   exit 1
 fi
 
-require_manifest_pattern 'compatibility_posture:[[:space:]]*compatible' "compatible version posture case"
-require_manifest_pattern 'compatibility_posture:[[:space:]]*incompatible' "incompatible version posture case"
-require_manifest_pattern 'source_version:[[:space:]]*[^[:space:]]' "source version"
-require_manifest_pattern 'target_version:[[:space:]]*[^[:space:]]' "target version"
-require_manifest_pattern 'rollback_expectation:[[:space:]]*[^[:space:]]' "rollback expectation"
-require_manifest_pattern 'required_checks:' "required checks"
-require_manifest_pattern 'known_limitation_references:' "known limitation references"
-require_manifest_pattern 'phase58_upgrade_plan_reference:[[:space:]]*docs/phase-58-5-upgrade-rollback-plan-contract[.]md' "Phase 58 upgrade plan reference"
-require_manifest_pattern 'phase51_gate_boundary_reference:[[:space:]]*docs/phase-51-3-pilot-beta-rc-ga-gate-contract[.]md' "Phase 51 gate boundary reference"
-require_manifest_pattern 'upgrade_action:[[:space:]]*manual-upgrade-review' "compatible manual upgrade review action"
-require_manifest_pattern 'upgrade_action:[[:space:]]*blocked-pending-reviewed-migration' "incompatible blocked migration action"
-validate_compatibility_cases
+validate_compatibility_cases "${release_bundle_identifier}"
 
-scan_forbidden_text "Phase 65.3 release channel and upgrade manifest guidance" "${absolute_doc_path}" "${absolute_manifest_path}" "${readme_path}"
+scan_forbidden_text "Phase 65.3 release channel and upgrade manifest guidance" "${absolute_doc_path}" "${absolute_manifest_path}" "${repo_root}/${release_notes_reference}" "${readme_path}"
 
 echo "Phase 65.3 release channel metadata and upgrade manifest are present and fail-closed."
