@@ -193,6 +193,27 @@ require_manifest_pattern() {
   fi
 }
 
+reject_unsafe_repo_relative_reference() {
+  local reference="$1"
+  local description="$2"
+
+  if [[ -z "${reference}" ||
+    "${reference}" = /* ||
+    "${reference}" == *"\\"* ||
+    "${reference}" == *"//"* ||
+    "${reference}" == "." ||
+    "${reference}" == ".." ||
+    "${reference}" == ./* ||
+    "${reference}" == ../* ||
+    "${reference}" == */./* ||
+    "${reference}" == */../* ||
+    "${reference}" == */. ||
+    "${reference}" == */.. ]]; then
+    echo "Invalid Phase 65.3 upgrade manifest ${description}" >&2
+    exit 1
+  fi
+}
+
 validate_repository_revision() {
   local revision="$1"
   local normalized_revision resolved_revision normalized_resolved_revision current_revision
@@ -627,7 +648,11 @@ fi
 validate_repository_revision "${repository_revision}"
 
 release_notes_reference="$(require_yaml_scalar "release_notes_reference")"
-if [[ "${release_notes_reference}" != docs/release/*release-notes*.md ]]; then
+reject_unsafe_repo_relative_reference "${release_notes_reference}" "release notes reference"
+release_notes_name="${release_notes_reference#docs/release/}"
+if [[ "${release_notes_reference}" != docs/release/* ||
+  "${release_notes_name}" == */* ||
+  "${release_notes_name}" != *release-notes*.md ]]; then
   echo "Invalid Phase 65.3 upgrade manifest release notes reference" >&2
   exit 1
 fi

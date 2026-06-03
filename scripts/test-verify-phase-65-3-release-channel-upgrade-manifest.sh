@@ -139,6 +139,12 @@ create_valid_repo "${wrong_release_notes_repo}"
 perl -0pi -e 's#^release_notes_reference:.*$#release_notes_reference: docs/phase-65-3-release-channel-upgrade-manifest-contract.md#m' "${wrong_release_notes_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${wrong_release_notes_repo}" "Invalid Phase 65.3 upgrade manifest release notes reference"
 
+traversal_release_notes_repo="${workdir}/traversal-release-notes-reference"
+create_valid_repo "${traversal_release_notes_repo}"
+printf '%s\n' "# Fake Release Notes" >"${traversal_release_notes_repo}/scripts/fake-release-notes.md"
+perl -0pi -e 's#^release_notes_reference:.*$#release_notes_reference: docs/release/../../scripts/fake-release-notes.md#m' "${traversal_release_notes_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${traversal_release_notes_repo}" "Invalid Phase 65.3 upgrade manifest release notes reference"
+
 readiness_release_notes_repo="${workdir}/readiness-release-notes-reference"
 create_valid_repo "${readiness_release_notes_repo}"
 printf '%s\n' "# Production Readiness Release Notes" >"${readiness_release_notes_repo}/docs/release/production-readiness-release-notes.md"
