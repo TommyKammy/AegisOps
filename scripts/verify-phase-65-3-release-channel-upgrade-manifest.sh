@@ -215,6 +215,50 @@ require_non_claim_false_once() {
   }
 }
 
+validate_non_claims_block() {
+  perl -Mstrict -Mwarnings -0 -e '
+    my $text = <>;
+    my %allowed = map { $_ => 1 } qw(
+      silent_auto_upgrade
+      hosted_update_service
+      automatic_migration
+      automatic_rollback
+      rc_readiness
+      ga_readiness
+      commercial_replacement_readiness
+    );
+    my $in_non_claims = 0;
+    my $seen_block = 0;
+
+    for my $line (split /\n/, $text) {
+      if ($line =~ /^non_claims:\s*$/) {
+        $in_non_claims = 1;
+        $seen_block++;
+        next;
+      }
+      if ($line =~ /^[^[:space:]]/ && $line !~ /^non_claims:/) {
+        $in_non_claims = 0;
+      }
+      next unless $in_non_claims;
+      next if $line =~ /^\s*$/;
+      if ($line =~ /^  ([A-Za-z0-9_]+):\s*(.*?)\s*$/) {
+        my ($key, $value) = ($1, $2);
+        $value =~ s/^\s+|\s+$//g;
+        die "Invalid Phase 65.3 upgrade manifest value: $key\n" unless $allowed{$key};
+        die "Invalid Phase 65.3 upgrade manifest value: $key\n" unless $value eq "false";
+        next;
+      }
+      die "Invalid Phase 65.3 upgrade manifest value: non_claims\n";
+    }
+
+    die "Missing Phase 65.3 upgrade manifest value: non_claims\n" if $seen_block == 0;
+    die "Invalid Phase 65.3 upgrade manifest value: non_claims\n" if $seen_block != 1;
+  ' "${absolute_manifest_path}" || {
+    local status=$?
+    return "${status}"
+  }
+}
+
 require_manifest_pattern() {
   local pattern="$1"
   local description="$2"
@@ -289,7 +333,7 @@ reject_mixed_negated_positive_claim() {
   local normalized_text="$2"
 
   if ! printf '%s' "${normalized_text}" | perl -0ne '
-    my $positive_terms = qr{silent[ -]+auto[ -]+upgrade|silent[ -]+update|automatic[ -]+(?:migration|rollback)|hosted[ -]+update[ -]+service|network[ -]+update[ -]+service|production[ -]+rollout|(?:production[ -]+)?entitlement enforcement|billing|(?:self-service commercial|commercial replacement)[ -]+readiness|design-partner evidence completeness|(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate|gates|gate acceptance)|(?:release-channel metadata|upgrade manifest|manifest|metadata|verifier(?: output)?|issue-lint(?: output)?)[^.?!;]*(?:release|upgrade|rollback|readiness|gate|workflow)[ -]+truth|(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:live upgrade success|rollback success|substrate mutation|workflow closure|reconciliation)}i;
+    my $positive_terms = qr{silent[ -]+auto[ -]+upgrade|silent[ -]+update|automatic[ -]+(?:migration|rollback)|hosted[ -]+update[ -]+service|network[ -]+update[ -]+service|production[ -]+rollout|(?:production[ -]+)?entitlement enforcement|billing|(?:self[ -]+service[ -]+commercial|commercial replacement)[ -]+readiness|design-partner evidence completeness|(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate|gates|gate acceptance)|(?:release-channel metadata|upgrade manifest|manifest|metadata|verifier(?: output)?|issue-lint(?: output)?)[^.?!;]*(?:release|upgrade|rollback|readiness|gate|workflow)[ -]+truth|(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:live upgrade success|rollback success|substrate mutation|workflow closure|reconciliation)}i;
     my $positive_state = qr{\b(?:is|are|becomes|become|provides|provide|includes|include|contains|support|supports|enables|enable|delivers|deliver|proves|prove|satisfies|satisfy|passes|pass|implements|implement|approves|approve|accepts|accept|establishes|establish|enabled|implemented|included|available|ready|required|assumed|approved|complete|completed|supported|provided|satisfied|proven|delivered|accepted|done|allowed|proceeds|runs|executes)\b}i;
     my $negated = qr{(?:does|do|must|can|is|are)[ -]+not|cannot|can not|unsupported|excludes|manual or unsupported|false}i;
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
@@ -378,6 +422,7 @@ validate_compatibility_cases() {
       return 1 if !defined $value;
       $value =~ s/^\s+|\s+$//g;
       return 1 if $value eq "";
+      return 1 if $value =~ /^[|>]/;
       return 1 if $value =~ /<[^>]+>/;
       return 1 if $value =~ /^(todo|tbd|none|n\/a|na|sample|example|placeholder|unknown|missing|absent|latest|head|main|master)$/i;
       return 0;
@@ -426,6 +471,7 @@ validate_compatibility_cases() {
       for my $item (split /\n/, $value) {
 	        $item =~ s/^\s+|\s+$//g;
 	        next if $item eq "";
+	        return 1 if $item =~ /\b[A-Za-z][A-Za-z0-9+.-]*:\/\//;
 	        return 1 if $item =~ /(?:^|[[:space:]])(?:\/|\.\/|\.\.\/|[A-Za-z]:[\\\/]|file:\/\/)/i;
 	        return 1 if $item =~ /\\/;
 	        return 1 if $item =~ /(?:production|commercial|readiness|entitlement|billing|support|migration|pilot|beta|rc|ga|gate|issue-lint|truth)/i;
@@ -500,7 +546,7 @@ scan_forbidden_text() {
   shift
 
   local decoded_text normalized_text
-  decoded_text="$(perl -0pe 's/%([0-9A-Fa-f]{2})/chr(hex($1))/eg; s{\\/}{/}g' "$@")"
+  decoded_text="$(perl -0pe 's/%([0-9A-Fa-f]{2})/chr(hex($1))/eg; s/&#x([0-9A-Fa-f]+);/chr(hex($1))/eg; s/&#([0-9]+);/chr($1)/eg; s/&amp;/&/ig; s/&lt;/</ig; s/&gt;/>/ig; s/&quot;/"/ig; s/&#39;/'\''/ig; s/&apos;/'\''/ig; s{\\/}{/}g' "$@")"
   normalized_text="$(printf '%s' "${decoded_text}" | tr '\n' ' ' | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+/ /g')"
 
   if ! printf '%s' "${decoded_text}" | perl -Mstrict -Mwarnings -0ne '
@@ -632,7 +678,7 @@ scan_forbidden_text() {
       if ($sentence =~ /rollout[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied|provided)[^.?!;]*production\b/) {
         exit 1;
       }
-      if ($sentence =~ /(?:entitlement[ -]+enforcement|billing|self-service commercial readiness|commercial replacement readiness)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied|provided)\b/) {
+      if ($sentence =~ /(?:entitlement[ -]+enforcement|billing|self[ -]+service[ -]+commercial[ -]+readiness|commercial replacement readiness)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied|provided)\b/) {
         exit 1;
       }
       if ($sentence =~ /production[ -]+entitlements?[^.?!;]*(?:enforced|enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied|provided)\b/) {
@@ -769,6 +815,7 @@ require_non_claim_false_once "automatic_rollback"
 require_non_claim_false_once "rc_readiness"
 require_non_claim_false_once "ga_readiness"
 require_non_claim_false_once "commercial_replacement_readiness"
+validate_non_claims_block
 
 authority_boundary="$(require_yaml_scalar "authority_boundary")"
 if [[ "${authority_boundary}" != *"subordinate packaging and planning evidence only"* || "${authority_boundary}" != *"Phase 51.3 gate contract"* ]]; then

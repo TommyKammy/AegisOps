@@ -232,6 +232,11 @@ create_valid_repo "${missing_non_claims_block_repo}"
 perl -0pi -e 's/^non_claims:\n(?:  [a-z_]+: false\n)+//m' "${missing_non_claims_block_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${missing_non_claims_block_repo}" "Missing Phase 65.3 upgrade manifest value: non_claims"
 
+extra_true_non_claim_repo="${workdir}/extra-true-non-claim"
+create_valid_repo "${extra_true_non_claim_repo}"
+perl -0pi -e 's/^non_claims:\n/non_claims:\n  production_rollout_readiness: true\n/m' "${extra_true_non_claim_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${extra_true_non_claim_repo}" "Invalid Phase 65.3 upgrade manifest value: production_rollout_readiness"
+
 for non_claim_key in \
   hosted_update_service \
   automatic_migration \
@@ -322,6 +327,11 @@ create_valid_repo "${rc_suffix_source_repo}"
 perl -0pi -e 's/^    source_version: aegisops-0\.4\.0-reviewed$/    source_version: aegisops-1.0.0-rc1/m' "${rc_suffix_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${rc_suffix_source_repo}" "Invalid Phase 65.3 upgrade manifest compatibility case field: compatible-reviewed-source.source_version"
 
+block_scalar_source_repo="${workdir}/block-scalar-source-version"
+create_valid_repo "${block_scalar_source_repo}"
+perl -0pi -e 's/^    source_version: aegisops-0\.4\.0-reviewed$/    source_version: |\n      aegisops-0.4.0-reviewed/m; s/^    compatibility_reason: Source version aegisops-0\.4\.0-reviewed/    compatibility_reason: Source version |/m' "${block_scalar_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${block_scalar_source_repo}" "Missing Phase 65.3 upgrade manifest compatibility case field: compatible-reviewed-source.source_version"
+
 missing_target_repo="${workdir}/missing-target-version"
 create_valid_repo "${missing_target_repo}"
 perl -0pi -e 's/^[[:space:]]*target_version:.*\n//mg' "${missing_target_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
@@ -406,6 +416,11 @@ absolute_required_checks_repo="${workdir}/absolute-required-checks"
 create_valid_repo "${absolute_required_checks_repo}"
 perl -0pi -e 's#^    required_checks:\n#    required_checks:\n      - bash /tmp/extra-check.sh\n#m' "${absolute_required_checks_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${absolute_required_checks_repo}" "Invalid Phase 65.3 upgrade manifest required check reference: compatible-reviewed-source.required_checks"
+
+external_required_checks_repo="${workdir}/external-required-checks"
+create_valid_repo "${external_required_checks_repo}"
+perl -0pi -e 's#^    required_checks:\n#    required_checks:\n      - bash https://example.invalid/extra-check.sh\n#m' "${external_required_checks_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${external_required_checks_repo}" "Invalid Phase 65.3 upgrade manifest required check reference: compatible-reviewed-source.required_checks"
 
 missing_limitations_repo="${workdir}/missing-limitations"
 create_valid_repo "${missing_limitations_repo}"
@@ -562,10 +577,20 @@ create_valid_repo "${self_service_commercial_repo}"
 printf '%s\n' "Self-service commercial readiness is complete." >>"${self_service_commercial_repo}/docs/release/phase-65-beta-release-notes.md"
 assert_fails_with "${self_service_commercial_repo}" "entitlement, billing, or commercial readiness claim"
 
+self_service_commercial_space_repo="${workdir}/self-service-commercial-space"
+create_valid_repo "${self_service_commercial_space_repo}"
+printf '%s\n' "Self service commercial readiness is complete." >>"${self_service_commercial_space_repo}/docs/release/phase-65-beta-release-notes.md"
+assert_fails_with "${self_service_commercial_space_repo}" "entitlement, billing, or commercial readiness claim"
+
 billing_provided_repo="${workdir}/billing-provided"
 create_valid_repo "${billing_provided_repo}"
 printf '%s\n' "Billing is provided." >>"${billing_provided_repo}/docs/release/phase-65-beta-release-notes.md"
 assert_fails_with "${billing_provided_repo}" "entitlement, billing, or commercial readiness claim"
+
+html_entity_billing_repo="${workdir}/html-entity-billing"
+create_valid_repo "${html_entity_billing_repo}"
+printf '%s\n' "Billing is avail&#97;ble." >>"${html_entity_billing_repo}/docs/release/phase-65-beta-release-notes.md"
+assert_fails_with "${html_entity_billing_repo}" "entitlement, billing, or commercial readiness claim"
 
 design_partner_completeness_repo="${workdir}/design-partner-completeness"
 create_valid_repo "${design_partner_completeness_repo}"
