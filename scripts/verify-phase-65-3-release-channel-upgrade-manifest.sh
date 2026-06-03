@@ -296,6 +296,13 @@ validate_compatibility_cases() {
       push @cases, $case if defined $case;
     }
 
+    sub record_field {
+      my ($case, $field, $value) = @_;
+      my $id = $case->{case_identifier} // "<unknown>";
+      die "Invalid Phase 65.3 upgrade manifest compatibility case field: $id.$field\n" if exists $case->{$field};
+      $case->{$field} = $value;
+    }
+
     for my $line (split /\n/, $text) {
       if ($line =~ /^compatibility_cases:\s*(.*?)\s*$/) {
         $compatibility_case_block_count++;
@@ -309,12 +316,12 @@ validate_compatibility_cases() {
         finish_case($current);
         $current = {};
         $active_list = undef;
-        $current->{$1} = $2;
+        record_field($current, $1, $2);
         next;
       }
       if (defined $current && $line =~ /^    (required_checks|known_limitation_references):\s*$/) {
         my $list = $1;
-        $current->{$list} = "";
+        record_field($current, $list, "");
         $active_list = $list;
         next;
       }
@@ -326,7 +333,7 @@ validate_compatibility_cases() {
       }
       if (defined $current && $line =~ /^    ([A-Za-z0-9_]+):\s*(.*?)\s*$/) {
         $active_list = undef;
-        $current->{$1} = $2;
+        record_field($current, $1, $2);
         next;
       }
     }
@@ -670,13 +677,14 @@ validate_repository_revision "${repository_revision}"
 release_notes_reference="$(require_yaml_scalar "release_notes_reference")"
 reject_unsafe_repo_relative_reference "${release_notes_reference}" "release notes reference"
 release_notes_name="${release_notes_reference#docs/release/}"
+release_notes_reference_lc="$(printf '%s' "${release_notes_reference}" | tr '[:upper:]' '[:lower:]')"
 if [[ "${release_notes_reference}" != docs/release/* ||
   "${release_notes_name}" == */* ||
   "${release_notes_name}" != *release-notes*.md ]]; then
   echo "Invalid Phase 65.3 upgrade manifest release notes reference" >&2
   exit 1
 fi
-if [[ "${release_notes_reference}" == *readiness* ]]; then
+if [[ "${release_notes_reference_lc}" == *readiness* ]]; then
   echo "Invalid Phase 65.3 upgrade manifest release notes reference" >&2
   exit 1
 fi

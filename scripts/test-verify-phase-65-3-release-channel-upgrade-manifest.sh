@@ -151,6 +151,12 @@ printf '%s\n' "# Production Readiness Release Notes" >"${readiness_release_notes
 perl -0pi -e 's#^release_notes_reference:.*$#release_notes_reference: docs/release/production-readiness-release-notes.md#m' "${readiness_release_notes_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${readiness_release_notes_repo}" "Invalid Phase 65.3 upgrade manifest release notes reference"
 
+mixed_case_readiness_release_notes_repo="${workdir}/mixed-case-readiness-release-notes-reference"
+create_valid_repo "${mixed_case_readiness_release_notes_repo}"
+printf '%s\n' "# Production Readiness Release Notes" >"${mixed_case_readiness_release_notes_repo}/docs/release/production-Readiness-release-notes.md"
+perl -0pi -e 's#^release_notes_reference:.*$#release_notes_reference: docs/release/production-Readiness-release-notes.md#m' "${mixed_case_readiness_release_notes_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${mixed_case_readiness_release_notes_repo}" "Invalid Phase 65.3 upgrade manifest release notes reference"
+
 forbidden_release_notes_repo="${workdir}/forbidden-release-notes"
 create_valid_repo "${forbidden_release_notes_repo}"
 printf '%s\n' "Hosted update service readiness is complete." >>"${forbidden_release_notes_repo}/docs/release/phase-65-beta-release-notes.md"
@@ -276,6 +282,11 @@ create_valid_repo "${rc_source_repo}"
 perl -0pi -e 's/^    source_version: aegisops-0\.4\.0-reviewed$/    source_version: aegisops-rc-1-reviewed/m' "${rc_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${rc_source_repo}" "Invalid Phase 65.3 upgrade manifest compatibility case field: compatible-reviewed-source.source_version"
 
+duplicate_source_repo="${workdir}/duplicate-source-version"
+create_valid_repo "${duplicate_source_repo}"
+perl -0pi -e 's/^  - case_identifier: compatible-reviewed-source$/  - case_identifier: compatible-reviewed-source\n    source_version: beta-only/m' "${duplicate_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${duplicate_source_repo}" "Invalid Phase 65.3 upgrade manifest compatibility case field: compatible-reviewed-source.source_version"
+
 beta_only_source_repo="${workdir}/beta-only-source-version"
 create_valid_repo "${beta_only_source_repo}"
 perl -0pi -e 's/^    source_version: aegisops-0\.4\.0-reviewed$/    source_version: beta-only/m' "${beta_only_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
@@ -360,6 +371,11 @@ readiness_required_checks_repo="${workdir}/readiness-required-checks"
 create_valid_repo "${readiness_required_checks_repo}"
 perl -0pi -e 's/^    required_checks:\n/    required_checks:\n      - bash scripts\/verify-production-readiness.sh\n/mg' "${readiness_required_checks_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${readiness_required_checks_repo}" "Invalid Phase 65.3 upgrade manifest required check reference: compatible-reviewed-source.required_checks"
+
+duplicate_required_checks_repo="${workdir}/duplicate-required-checks"
+create_valid_repo "${duplicate_required_checks_repo}"
+perl -0pi -e 's/^    required_checks:\n/    required_checks:\n      - bash scripts\/verify-production-readiness.sh\n    required_checks:\n/m' "${duplicate_required_checks_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${duplicate_required_checks_repo}" "Invalid Phase 65.3 upgrade manifest compatibility case field: compatible-reviewed-source.required_checks"
 
 missing_limitations_repo="${workdir}/missing-limitations"
 create_valid_repo "${missing_limitations_repo}"
