@@ -372,7 +372,7 @@ validate_compatibility_cases() {
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\bbeta only\b/;
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\binferred\b/;
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\blatest\b/;
-      return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /^(?:develop|development|trunk)$/;
+      return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\b(?:head|main|master|trunk|develop|development)\b/;
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\b(?:floating|branch only|branch)\b/;
       return 1 if $field eq "rollback_expectation" && $normalized =~ /\bautomatic rollback\b/;
       return 1 if $field eq "rollback_expectation" && $normalized =~ /\bbroad operator discretion\b/;
@@ -432,6 +432,12 @@ validate_compatibility_cases() {
       $seen_posture{$posture} = 1;
 
       die "Invalid Phase 65.3 upgrade manifest target version: $id\n" unless $case->{target_version} eq $expected_target_version;
+      die "Invalid Phase 65.3 upgrade manifest compatibility case field: $id.source_version\n" if $case->{source_version} eq $case->{target_version};
+      my $reason = lc $case->{compatibility_reason};
+      my $source_version = lc $case->{source_version};
+      my $target_version = lc $case->{target_version};
+      die "Invalid Phase 65.3 upgrade manifest compatibility case field: $id.compatibility_reason\n"
+        if index($reason, $source_version) < 0 || index($reason, $target_version) < 0;
       die "Invalid Phase 65.3 upgrade manifest Phase 58 reference: $id\n" unless $case->{phase58_upgrade_plan_reference} eq "docs/phase-58-5-upgrade-rollback-plan-contract.md";
       die "Invalid Phase 65.3 upgrade manifest Phase 51 reference: $id\n" unless $case->{phase51_gate_boundary_reference} eq "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md";
       die "Missing Phase 65.3 upgrade manifest required check reference: $id.phase58_upgrade_plan_reference\n" unless has_list_item($case->{required_checks}, qr{^bash scripts/verify-phase-58-5-upgrade-rollback-plan-contract\.sh$});
@@ -593,6 +599,9 @@ scan_forbidden_text() {
         exit 1;
       }
       if ($sentence =~ /(?:entitlement[ -]+enforcement|billing|self-service commercial readiness|commercial replacement readiness)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied|provided)\b/) {
+        exit 1;
+      }
+      if ($sentence =~ /production[ -]+entitlements?[^.?!;]*(?:enforced|enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied|provided)\b/) {
         exit 1;
       }
       if ($sentence =~ /(?:support|migration)[ -]+readiness[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied)\b/) {
