@@ -143,10 +143,28 @@ create_valid_repo "${nested_channel_repo}"
 perl -0pi -e 's/^release_channel:.*\n//m; s/^non_claims:\n/non_claims:\n  release_channel: beta-design-partner\n/m' "${nested_channel_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${nested_channel_repo}" "Missing Phase 65.3 upgrade manifest value: release_channel"
 
+nested_channel_scope_repo="${workdir}/nested-channel-scope"
+create_valid_repo "${nested_channel_scope_repo}"
+perl -0pi -e 's/^channel_scope:.*\n//m; s/^non_claims:\n/non_claims:\n  channel_scope: beta\/design-partner packaging review only; not RC, GA, production rollout, entitlement, billing, support readiness, or commercial replacement readiness.\n/m' "${nested_channel_scope_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${nested_channel_scope_repo}" "Missing Phase 65.3 upgrade manifest value: channel_scope"
+
 true_non_claim_repo="${workdir}/true-non-claim"
 create_valid_repo "${true_non_claim_repo}"
 perl -0pi -e 's/^  silent_auto_upgrade: false$/  silent_auto_upgrade: true/m' "${true_non_claim_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${true_non_claim_repo}" "Invalid Phase 65.3 upgrade manifest value: silent_auto_upgrade"
+
+for non_claim_key in \
+  hosted_update_service \
+  automatic_migration \
+  automatic_rollback \
+  rc_readiness \
+  ga_readiness \
+  commercial_replacement_readiness; do
+  true_non_claim_repo="${workdir}/true-non-claim-${non_claim_key}"
+  create_valid_repo "${true_non_claim_repo}"
+  perl -0pi -e "s/^  ${non_claim_key}: false$/  ${non_claim_key}: true/m" "${true_non_claim_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+  assert_fails_with "${true_non_claim_repo}" "Invalid Phase 65.3 upgrade manifest value: ${non_claim_key}"
+done
 
 duplicate_non_claim_repo="${workdir}/duplicate-non-claim"
 create_valid_repo "${duplicate_non_claim_repo}"
@@ -173,6 +191,11 @@ create_valid_repo "${missing_one_case_source_repo}"
 perl -0pi -e 's/^    source_version: aegisops-0\.4\.0-reviewed\n//m' "${missing_one_case_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${missing_one_case_source_repo}" "Missing Phase 65.3 upgrade manifest compatibility case field: compatible-reviewed-source.source_version"
 
+missing_incompatible_source_repo="${workdir}/missing-incompatible-source-version"
+create_valid_repo "${missing_incompatible_source_repo}"
+perl -0pi -e 's/^    source_version: aegisops-unreviewed-prior-release\n//m' "${missing_incompatible_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${missing_incompatible_source_repo}" "Missing Phase 65.3 upgrade manifest compatibility case field: incompatible-unreviewed-source.source_version"
+
 rc_source_repo="${workdir}/rc-source-version"
 create_valid_repo "${rc_source_repo}"
 perl -0pi -e 's/^    source_version: aegisops-0\.4\.0-reviewed$/    source_version: aegisops-rc-1-reviewed/m' "${rc_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
@@ -182,6 +205,11 @@ beta_only_source_repo="${workdir}/beta-only-source-version"
 create_valid_repo "${beta_only_source_repo}"
 perl -0pi -e 's/^    source_version: aegisops-0\.4\.0-reviewed$/    source_version: beta-only/m' "${beta_only_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${beta_only_source_repo}" "Invalid Phase 65.3 upgrade manifest compatibility case field: compatible-reviewed-source.source_version"
+
+inferred_source_repo="${workdir}/inferred-source-version"
+create_valid_repo "${inferred_source_repo}"
+perl -0pi -e 's/^    source_version: aegisops-0\.4\.0-reviewed$/    source_version: inferred/m' "${inferred_source_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${inferred_source_repo}" "Invalid Phase 65.3 upgrade manifest compatibility case field: compatible-reviewed-source.source_version"
 
 missing_target_repo="${workdir}/missing-target-version"
 create_valid_repo "${missing_target_repo}"
@@ -232,6 +260,16 @@ external_phase58_reference_repo="${workdir}/external-phase58-reference"
 create_valid_repo "${external_phase58_reference_repo}"
 perl -0pi -e 's#^    phase58_upgrade_plan_reference:.*$#    phase58_upgrade_plan_reference: https://example.invalid/phase-58-ticket#m' "${external_phase58_reference_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${external_phase58_reference_repo}" "Invalid Phase 65.3 upgrade manifest Phase 58 reference: compatible-reviewed-source"
+
+external_incompatible_phase58_reference_repo="${workdir}/external-incompatible-phase58-reference"
+create_valid_repo "${external_incompatible_phase58_reference_repo}"
+perl -0pi -e 's#^    phase58_upgrade_plan_reference:.*$#++$seen == 2 ? "    phase58_upgrade_plan_reference: https://example.invalid/phase-58-ticket" : $&#egm' "${external_incompatible_phase58_reference_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${external_incompatible_phase58_reference_repo}" "Invalid Phase 65.3 upgrade manifest Phase 58 reference: incompatible-unreviewed-source"
+
+external_phase51_reference_repo="${workdir}/external-phase51-reference"
+create_valid_repo "${external_phase51_reference_repo}"
+perl -0pi -e 's#^    phase51_gate_boundary_reference:.*$#    phase51_gate_boundary_reference: https://example.invalid/phase-51-ticket#m' "${external_phase51_reference_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${external_phase51_reference_repo}" "Invalid Phase 65.3 upgrade manifest Phase 51 reference: compatible-reviewed-source"
 
 silent_upgrade_repo="${workdir}/silent-upgrade"
 create_valid_repo "${silent_upgrade_repo}"
