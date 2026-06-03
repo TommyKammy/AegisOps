@@ -3,8 +3,8 @@ inventory_identifier: phase-65-release-bundle-inventory-v1
 offline_bundle_contract_identifier: phase-65-offline-install-bundle-contract-v1
 release_channel: beta-design-partner
 channel_scope: beta/design-partner packaging review only; not RC, GA, production rollout, entitlement, billing, support readiness, or commercial replacement readiness.
-release_bundle_identifier: aegisops-beta-bf3bcb8fc14c25affbe3b6b9b9fc89ca493e94e8
-repository_revision: bf3bcb8fc14c25affbe3b6b9b9fc89ca493e94e8
+release_bundle_identifier: aegisops-beta-d3c20773a0dd75baa55a844512f7646f324229a6
+repository_revision: d3c20773a0dd75baa55a844512f7646f324229a6
 release_notes_reference: docs/release/phase-65-beta-release-notes.md
 inventory_reference: docs/phase-65-1-release-bundle-inventory.md
 offline_bundle_reference: docs/phase-65-2-offline-install-bundle-contract.md
@@ -22,9 +22,9 @@ non_claims:
 compatibility_cases:
   - case_identifier: compatible-reviewed-source
     source_version: aegisops-0.4.0-reviewed
-    target_version: aegisops-beta-bf3bcb8fc14c25affbe3b6b9b9fc89ca493e94e8
+    target_version: aegisops-beta-d3c20773a0dd75baa55a844512f7646f324229a6
     compatibility_posture: compatible
-    compatibility_reason: Source version aegisops-0.4.0-reviewed has matching profile, runtime-config, upgrade-plan, and rollback evidence references for target version aegisops-beta-bf3bcb8fc14c25affbe3b6b9b9fc89ca493e94e8 in beta/design-partner packaging review.
+    compatibility_reason: Source version aegisops-0.4.0-reviewed has matching profile, runtime-config, upgrade-plan, and rollback evidence references for target version aegisops-beta-d3c20773a0dd75baa55a844512f7646f324229a6 in beta/design-partner packaging review.
     upgrade_action: manual-upgrade-review
     rollback_expectation: rollback_owner=aegisops-release-owner; rollback_trigger=failed required checks or release-gate rejection; rollback_target=last-reviewed-release-bundle; rollback_evidence_reference=docs/phase-58-5-upgrade-rollback-plan-contract.md
     required_checks:
@@ -37,9 +37,9 @@ compatibility_cases:
     phase51_gate_boundary_reference: docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md
   - case_identifier: incompatible-unreviewed-source
     source_version: aegisops-unreviewed-prior-release
-    target_version: aegisops-beta-bf3bcb8fc14c25affbe3b6b9b9fc89ca493e94e8
+    target_version: aegisops-beta-d3c20773a0dd75baa55a844512f7646f324229a6
     compatibility_posture: incompatible
-    compatibility_reason: Source version aegisops-unreviewed-prior-release lacks reviewed Phase 58.5 upgrade and rollback evidence for target version aegisops-beta-bf3bcb8fc14c25affbe3b6b9b9fc89ca493e94e8.
+    compatibility_reason: Source version aegisops-unreviewed-prior-release lacks reviewed Phase 58.5 upgrade and rollback evidence for target version aegisops-beta-d3c20773a0dd75baa55a844512f7646f324229a6.
     upgrade_action: blocked-pending-reviewed-migration
     rollback_expectation: rollback_owner=aegisops-release-owner; rollback_trigger=incompatible source version before upgrade consumption; rollback_target=source environment unchanged; rollback_evidence_reference=docs/phase-58-5-upgrade-rollback-plan-contract.md
     required_checks:

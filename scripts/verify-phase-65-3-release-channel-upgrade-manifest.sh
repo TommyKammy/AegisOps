@@ -333,8 +333,8 @@ reject_mixed_negated_positive_claim() {
   local normalized_text="$2"
 
   if ! printf '%s' "${normalized_text}" | perl -0ne '
-    my $positive_terms = qr{silent[ -]+auto[ -]+upgrade|silent[ -]+update|automatic[ -]+(?:migration|rollback)|hosted[ -]+update[ -]+service|network[ -]+update[ -]+service|production[ -]+rollout|(?:production[ -]+)?entitlement enforcement|billing|(?:self[ -]+service[ -]+commercial|commercial replacement)[ -]+readiness|design-partner evidence completeness|(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate|gates|gate acceptance)|(?:release-channel metadata|upgrade manifest|manifest|metadata|verifier(?: output)?|issue-lint(?: output)?)[^.?!;]*(?:release|upgrade|rollback|readiness|gate|workflow)[ -]+truth|(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:live upgrade success|rollback success|substrate mutation|workflow closure|reconciliation)}i;
-    my $positive_state = qr{\b(?:is|are|becomes|become|provides|provide|includes|include|contains|support|supports|enables|enable|delivers|deliver|proves|prove|satisfies|satisfy|passes|pass|implements|implement|approves|approve|accepts|accept|establishes|establish|enabled|implemented|included|available|ready|required|assumed|approved|complete|completed|supported|provided|satisfied|proven|delivered|accepted|done|allowed|proceeds|runs|executes)\b}i;
+    my $positive_terms = qr{silent[ -]+auto[ -]+upgrade|silent[ -]+update|auto(?:matic)?[ -]+(?:migration|rollback)|hosted[ -]+update[ -]+service|network[ -]+update[ -]+service|production[ -]+rollout|(?:production[ -]+)?entitlement enforcement|billing|(?:self[ -]+service[ -]+commercial|commercial replacement)[ -]+readiness|design-partner evidence completeness|(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate|gates|gate acceptance)|(?:release-channel metadata|upgrade manifest|manifest|metadata|verifier(?: output)?|issue-lint(?: output)?)[^.?!;]*(?:release|upgrade|rollback|readiness|gate|workflow)[ -]+truth|(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:live upgrade success|rollback success|substrate mutation|workflow closure|reconciliation)}i;
+    my $positive_state = qr{\b(?:is|are|becomes|become|provides|provide|includes|include|contains|support|supports|enables|enable|delivers|deliver|proves|prove|satisfies|satisfy|passes|pass|implements|implement|approves|approve|accepts|accept|establishes|establish|enabled|implemented|included|available|live|ready|required|assumed|approved|complete|completed|supported|provided|satisfied|proven|delivered|accepted|done|allowed|proceeds|runs|executes)\b}i;
     my $negated = qr{(?:does|do|must|can|is|are)[ -]+not|cannot|can not|unsupported|excludes|manual or unsupported|false}i;
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
       while ($sentence =~ /$negated\b.*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;)(.*)/ig) {
@@ -449,6 +449,7 @@ validate_compatibility_cases() {
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\bbeta only\b/;
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\binferred\b/;
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\blatest\b/;
+      return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /(?:^|[^a-z0-9])(?:todo|tbd|sample|example|placeholder|unknown|missing|absent|none|na|n\/a)(?:[^a-z0-9]|$)/;
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\b(?:head|main|master|trunk|develop|development)\b/;
       return 1 if $field =~ /^(source_version|target_version)$/ && $normalized =~ /\b(?:floating|branch only|branch)\b/;
       return 1 if $field eq "rollback_expectation" && $normalized =~ /\bautomatic rollback\b/;
@@ -612,7 +613,7 @@ scan_forbidden_text() {
       if ($sentence =~ /auto[ -]+upgrade[^.?!;]*(?:runs?|executes?|proceeds|starts?|occurs|happens?)[^.?!;]*silently\b/) {
         exit 1;
       }
-      if ($sentence =~ /automatic[ -]+(?:migration|rollback)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|proceeds|runs|executes)\b/) {
+      if ($sentence =~ /auto(?:matic)?[ -]+(?:migration|rollback)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|proceeds|runs|executes)\b/) {
         exit 1;
       }
       if ($sentence =~ /(?:migration|rollback)[^.?!;]*(?:runs?|happens?|executes?|proceeds|starts?|occurs)[^.?!;]*(?:automatically|automatic)\b/) {
@@ -678,10 +679,10 @@ scan_forbidden_text() {
       if ($sentence =~ /rollout[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied|provided)[^.?!;]*production\b/) {
         exit 1;
       }
-      if ($sentence =~ /(?:entitlement[ -]+enforcement|billing|self[ -]+service[ -]+commercial[ -]+readiness|commercial replacement readiness)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied|provided)\b/) {
+      if ($sentence =~ /(?:entitlement[ -]+enforcement|billing|self[ -]+service[ -]+commercial[ -]+readiness|commercial replacement readiness)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|live|satisfied|provided)\b/) {
         exit 1;
       }
-      if ($sentence =~ /production[ -]+entitlements?[^.?!;]*(?:enforced|enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied|provided)\b/) {
+      if ($sentence =~ /production[ -]+entitlements?[^.?!;]*(?:enforced|enabled|implemented|ready|supported|allowed|proven|complete|available|live|satisfied|provided)\b/) {
         exit 1;
       }
       if ($sentence =~ /(?:support|migration)[ -]+readiness[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available|satisfied)\b/) {
