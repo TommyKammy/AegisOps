@@ -199,6 +199,16 @@ create_valid_repo "${true_non_claim_repo}"
 perl -0pi -e 's/^  silent_auto_upgrade: false$/  silent_auto_upgrade: true/m' "${true_non_claim_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${true_non_claim_repo}" "Invalid Phase 65.3 upgrade manifest value: silent_auto_upgrade"
 
+top_level_non_claim_repo="${workdir}/top-level-non-claim"
+create_valid_repo "${top_level_non_claim_repo}"
+perl -0pi -e 's/^  silent_auto_upgrade: false\n//m; s/^non_claims:\n/non_claims:\n/m; s/^compatibility_cases:\n/silent_auto_upgrade: false\ncompatibility_cases:\n/m' "${top_level_non_claim_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${top_level_non_claim_repo}" "Invalid Phase 65.3 upgrade manifest value: silent_auto_upgrade"
+
+missing_non_claims_block_repo="${workdir}/missing-non-claims-block"
+create_valid_repo "${missing_non_claims_block_repo}"
+perl -0pi -e 's/^non_claims:\n(?:  [a-z_]+: false\n)+//m' "${missing_non_claims_block_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${missing_non_claims_block_repo}" "Missing Phase 65.3 upgrade manifest value: non_claims"
+
 for non_claim_key in \
   hosted_update_service \
   automatic_migration \
@@ -343,6 +353,11 @@ mixed_silent_upgrade_repo="${workdir}/mixed-silent-upgrade"
 create_valid_repo "${mixed_silent_upgrade_repo}"
 printf '%s\n' "This contract does not claim hosted update service readiness and silent auto-upgrade is enabled after install." >>"${mixed_silent_upgrade_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${mixed_silent_upgrade_repo}" "positive claim after negated boundary detected"
+
+comma_mixed_silent_upgrade_repo="${workdir}/comma-mixed-silent-upgrade"
+create_valid_repo "${comma_mixed_silent_upgrade_repo}"
+printf '%s\n' "This contract does not claim hosted update service readiness, silent auto-upgrade is enabled after install." >>"${comma_mixed_silent_upgrade_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${comma_mixed_silent_upgrade_repo}" "positive claim after negated boundary detected"
 
 hosted_update_repo="${workdir}/hosted-update"
 create_valid_repo "${hosted_update_repo}"

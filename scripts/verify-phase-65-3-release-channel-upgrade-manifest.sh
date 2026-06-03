@@ -144,6 +144,45 @@ require_top_level_yaml_scalar_equals_once() {
   fi
 }
 
+require_non_claim_false_once() {
+  local key="$1"
+
+  perl -Mstrict -Mwarnings -0 -e '
+    my $key = shift @ARGV;
+    my $text = <>;
+    my $in_non_claims = 0;
+    my $non_claims_count = 0;
+    my $count = 0;
+    my $value = "";
+
+    for my $line (split /\n/, $text) {
+      if ($line =~ /^non_claims:\s*$/) {
+        $in_non_claims = 1;
+        $non_claims_count++;
+        next;
+      }
+      if ($line =~ /^[^[:space:]]/ && $line !~ /^non_claims:/) {
+        $in_non_claims = 0;
+      }
+      if ($in_non_claims && $line =~ /^  \Q$key\E:\s*(.*?)\s*$/) {
+        $count++;
+        $value = $1;
+        $value =~ s/^\s+|\s+$//g;
+      }
+      if (!$in_non_claims && $line =~ /^\s*\Q$key\E:\s*/) {
+        die "Invalid Phase 65.3 upgrade manifest value: $key\n";
+      }
+    }
+
+    die "Missing Phase 65.3 upgrade manifest value: non_claims\n" if $non_claims_count == 0;
+    die "Invalid Phase 65.3 upgrade manifest value: non_claims\n" if $non_claims_count != 1;
+    die "Invalid Phase 65.3 upgrade manifest value: $key\n" if $count != 1 || $value ne "false";
+  ' "${key}" "${absolute_manifest_path}" || {
+    local status=$?
+    return "${status}"
+  }
+}
+
 require_manifest_pattern() {
   local pattern="$1"
   local description="$2"
@@ -198,12 +237,19 @@ reject_mixed_negated_positive_claim() {
 
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     my $positive_terms = qr{silent[ -]+auto[ -]+upgrade|silent[ -]+update|automatic[ -]+(?:migration|rollback)|hosted[ -]+update[ -]+service|network[ -]+update[ -]+service|production[ -]+rollout|production[ -]+entitlement enforcement|billing|commercial replacement readiness|(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate|gates|gate acceptance)|(?:release-channel metadata|upgrade manifest|manifest|metadata|verifier output|issue-lint output)[^.?!;]*(?:release|upgrade|rollback|readiness|gate|workflow)[ -]+truth}i;
-    my $positive_state = qr{is|are|becomes|become|provides|provide|includes|include|contains|support|supports|enables|enable|delivers|deliver|proves|prove|satisfies|satisfy|passes|pass|implements|implement|approves|approve|accepts|accept|establishes|establish|enabled|implemented|included|available|ready|required|assumed|approved|complete|completed|supported|provided|satisfied|proven|delivered|accepted|done|allowed|proceeds|runs|executes}i;
+    my $positive_state = qr{\b(?:is|are|becomes|become|provides|provide|includes|include|contains|support|supports|enables|enable|delivers|deliver|proves|prove|satisfies|satisfy|passes|pass|implements|implement|approves|approve|accepts|accept|establishes|establish|enabled|implemented|included|available|ready|required|assumed|approved|complete|completed|supported|provided|satisfied|proven|delivered|accepted|done|allowed|proceeds|runs|executes)\b}i;
     my $negated = qr{(?:does|do|must|can|is|are)[ -]+not|cannot|can not|unsupported|excludes|manual or unsupported|false}i;
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
       while ($sentence =~ /$negated\b.*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;)(.*)/ig) {
         my $tail = $1;
         exit 1 if $tail =~ /$positive_terms[^.?!;]*$positive_state|$positive_state[[:space:]-]+$positive_terms/i;
+      }
+      if ($sentence =~ /$negated\b(.*)$/i) {
+        my @clauses = split /,/, $1;
+        shift @clauses;
+        for my $clause (@clauses) {
+          exit 1 if $clause =~ /$positive_terms[^,.;?!]*$positive_state|$positive_state[[:space:]-]+$positive_terms/i;
+        }
       }
     }
   '; then
@@ -545,13 +591,13 @@ require_file "${repo_root}/scripts/verify-phase-58-5-upgrade-rollback-plan-contr
 require_file "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "publishable path hygiene verifier script reference"
 require_file "${repo_root}/scripts/verify-phase-65-3-release-channel-upgrade-manifest.sh" "Phase 65.3 release channel and upgrade manifest verifier script reference"
 
-require_yaml_scalar_equals_once "silent_auto_upgrade" "false"
-require_yaml_scalar_equals_once "hosted_update_service" "false"
-require_yaml_scalar_equals_once "automatic_migration" "false"
-require_yaml_scalar_equals_once "automatic_rollback" "false"
-require_yaml_scalar_equals_once "rc_readiness" "false"
-require_yaml_scalar_equals_once "ga_readiness" "false"
-require_yaml_scalar_equals_once "commercial_replacement_readiness" "false"
+require_non_claim_false_once "silent_auto_upgrade"
+require_non_claim_false_once "hosted_update_service"
+require_non_claim_false_once "automatic_migration"
+require_non_claim_false_once "automatic_rollback"
+require_non_claim_false_once "rc_readiness"
+require_non_claim_false_once "ga_readiness"
+require_non_claim_false_once "commercial_replacement_readiness"
 
 authority_boundary="$(require_yaml_scalar "authority_boundary")"
 if [[ "${authority_boundary}" != *"subordinate packaging and planning evidence only"* || "${authority_boundary}" != *"Phase 51.3 gate contract"* ]]; then
