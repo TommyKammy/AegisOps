@@ -166,7 +166,7 @@ validate_top_level_manifest_keys() {
     );
 
     for my $line (split /\n/, $text) {
-      next unless $line =~ /^([A-Za-z0-9_]+):/;
+      next unless $line =~ /^([A-Za-z0-9_-]+):/;
       my $key = $1;
       die "Invalid Phase 65.3 upgrade manifest top-level field: $key\n" unless $allowed{$key};
     }
@@ -278,22 +278,27 @@ require_manifest_pattern() {
 reject_unsafe_repo_relative_reference() {
   local reference="$1"
   local description="$2"
+  local decoded_reference
 
-  if [[ -z "${reference}" ||
-    "${reference}" = /* ||
-    "${reference}" == *"\\"* ||
-    "${reference}" == *"//"* ||
-    "${reference}" == "." ||
-    "${reference}" == ".." ||
-    "${reference}" == ./* ||
-    "${reference}" == ../* ||
-    "${reference}" == */./* ||
-    "${reference}" == */../* ||
-    "${reference}" == */. ||
-    "${reference}" == */.. ]]; then
-    echo "Invalid Phase 65.3 upgrade manifest ${description}" >&2
-    exit 1
-  fi
+  decoded_reference="$(printf '%s' "${reference}" | perl -pe 's/%([0-9A-Fa-f]{2})/chr(hex($1))/eg; s/&#x([0-9A-Fa-f]+);/chr(hex($1))/eg; s/&#([0-9]+);/chr($1)/eg; s/&amp;/&/ig; s/&lt;/</ig; s/&gt;/>/ig; s/&quot;/"/ig; s/&#39;/'\''/ig; s/&apos;/'\''/ig; s{\\/}{/}g')"
+
+  for reference_candidate in "${reference}" "${decoded_reference}"; do
+    if [[ -z "${reference_candidate}" ||
+      "${reference_candidate}" = /* ||
+      "${reference_candidate}" == *"\\"* ||
+      "${reference_candidate}" == *"//"* ||
+      "${reference_candidate}" == "." ||
+      "${reference_candidate}" == ".." ||
+      "${reference_candidate}" == ./* ||
+      "${reference_candidate}" == ../* ||
+      "${reference_candidate}" == */./* ||
+      "${reference_candidate}" == */../* ||
+      "${reference_candidate}" == */. ||
+      "${reference_candidate}" == */.. ]]; then
+      echo "Invalid Phase 65.3 upgrade manifest ${description}" >&2
+      exit 1
+    fi
+  done
 }
 
 validate_repository_revision() {
@@ -478,11 +483,15 @@ validate_compatibility_cases() {
       for my $item (split /\n/, $value) {
 	        $item =~ s/^\s+|\s+$//g;
 	        next if $item eq "";
-	        return 1 if $item =~ /\b[A-Za-z][A-Za-z0-9+.-]*:\/\//;
-	        return 1 if $item =~ /(?:^|[[:space:]])(?:\/|\.\/|\.\.\/|[A-Za-z]:[\\\/]|file:\/\/)/i;
-	        return 1 if $item =~ /\\/;
-	        return 1 if $item =~ /(?:;|&&|\|\||\||`|\$\(|[<>])/;
-	        return 1 if $item =~ /(?:production|commercial|readiness|entitlement|billing|support|migration|pilot|beta|rc|ga|gate|issue-lint|truth)/i;
+	        my $decoded_item = $item;
+	        $decoded_item =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/eg;
+	        for my $check ($item, $decoded_item) {
+	          return 1 if $check =~ /\b[A-Za-z][A-Za-z0-9+.-]*:\/\//;
+	          return 1 if $check =~ /(?:^|[[:space:]])(?:\/|\.\/|\.\.\/|[A-Za-z]:[\\\/]|file:\/\/)/i;
+	          return 1 if $check =~ /\\/;
+	          return 1 if $check =~ /(?:;|&&|\|\||\||`|\$|\$\(|[<>])/;
+	          return 1 if $check =~ /(?:production|commercial|readiness|entitlement|billing|support|migration|pilot|beta|rc|ga|gate|issue-lint|truth)/i;
+	        }
 	      }
 	      return 0;
     }
@@ -572,12 +581,14 @@ scan_forbidden_text() {
 	    my $unix_home_re = qr{(^|[^A-Za-z0-9_.\/\\-])\Q$slash\E(?:\Q$mac_home\E|\Q$linux_home\E)\Q$slash\E[^/\s]+(?:/[^\s]*)?};
 	    my $root_home_re = qr{(^|[^A-Za-z0-9_.\/\\-])\Q$slash\E\Q$root_home\E\Q$slash\E[^\s]*};
 	    my $non_home_absolute_re = qr{(^|[^A-Za-z0-9_.:\/\\-])\Q$slash\E(?:tmp|var|etc|opt|usr|mnt|Volumes|Applications|Library)(?:\Q$slash\E[^\s,;)>\]]*)?}i;
+	    my $unix_absolute_re = qr{(^|[^A-Za-z0-9_.:\/\\>\-])\Q$slash\E(?!\Q$slash\E)(?:[A-Za-z0-9._-]+)(?:\Q$slash\E[^\s,;)>\]]*)?};
 	    exit 1 if $text =~ $file_home_re;
 	    exit 1 if $text =~ $windows_absolute_re;
 	    exit 1 if $text =~ $windows_home_re;
 	    exit 1 if $text =~ $unix_home_re;
 	    exit 1 if $text =~ $root_home_re;
 	    exit 1 if $text =~ $non_home_absolute_re;
+	    exit 1 if $text =~ $unix_absolute_re;
 	  '; then
 	    echo "Forbidden ${description}: workstation-local absolute path detected" >&2
 	    exit 1

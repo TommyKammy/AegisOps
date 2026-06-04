@@ -145,6 +145,12 @@ printf '%s\n' "# Fake Release Notes" >"${traversal_release_notes_repo}/scripts/f
 perl -0pi -e 's#^release_notes_reference:.*$#release_notes_reference: docs/release/../../scripts/fake-release-notes.md#m' "${traversal_release_notes_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${traversal_release_notes_repo}" "Invalid Phase 65.3 upgrade manifest release notes reference"
 
+escaped_traversal_release_notes_repo="${workdir}/escaped-traversal-release-notes-reference"
+create_valid_repo "${escaped_traversal_release_notes_repo}"
+printf '%s\n' "# Fake Release Notes" >"${escaped_traversal_release_notes_repo}/scripts/fake-release-notes.md"
+perl -0pi -e 's#^release_notes_reference:.*$#release_notes_reference: docs/release/%2e%2e%2fscripts%2ffake-release-notes.md#m' "${escaped_traversal_release_notes_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${escaped_traversal_release_notes_repo}" "Invalid Phase 65.3 upgrade manifest release notes reference"
+
 readiness_release_notes_repo="${workdir}/readiness-release-notes-reference"
 create_valid_repo "${readiness_release_notes_repo}"
 printf '%s\n' "# Production Readiness Release Notes" >"${readiness_release_notes_repo}/docs/release/production-readiness-release-notes.md"
@@ -206,6 +212,11 @@ release_channel_override_repo="${workdir}/release-channel-override"
 create_valid_repo "${release_channel_override_repo}"
 printf '%s\n' "release_channel_override: production" >>"${release_channel_override_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${release_channel_override_repo}" "Invalid Phase 65.3 upgrade manifest top-level field: release_channel_override"
+
+hyphenated_release_channel_override_repo="${workdir}/hyphenated-release-channel-override"
+create_valid_repo "${hyphenated_release_channel_override_repo}"
+printf '%s\n' "release-channel: ga" >>"${hyphenated_release_channel_override_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${hyphenated_release_channel_override_repo}" "Invalid Phase 65.3 upgrade manifest top-level field: release-channel"
 
 nested_channel_repo="${workdir}/nested-release-channel"
 create_valid_repo "${nested_channel_repo}"
@@ -437,10 +448,20 @@ create_valid_repo "${external_required_checks_repo}"
 perl -0pi -e 's#^    required_checks:\n#    required_checks:\n      - bash https://example.invalid/extra-check.sh\n#m' "${external_required_checks_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${external_required_checks_repo}" "Invalid Phase 65.3 upgrade manifest required check reference: compatible-reviewed-source.required_checks"
 
+encoded_external_required_checks_repo="${workdir}/encoded-external-required-checks"
+create_valid_repo "${encoded_external_required_checks_repo}"
+perl -0pi -e 's#^    required_checks:\n#    required_checks:\n      - bash https%3a%2f%2fexample.invalid%2fextra-check.sh\n#m' "${encoded_external_required_checks_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${encoded_external_required_checks_repo}" "Invalid Phase 65.3 upgrade manifest required check reference: compatible-reviewed-source.required_checks"
+
 shell_operator_required_checks_repo="${workdir}/shell-operator-required-checks"
 create_valid_repo "${shell_operator_required_checks_repo}"
 perl -0pi -e 's#^    required_checks:\n#    required_checks:\n      - bash scripts/extra.sh; echo ok\n#m' "${shell_operator_required_checks_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
 assert_fails_with "${shell_operator_required_checks_repo}" "Invalid Phase 65.3 upgrade manifest required check reference: compatible-reviewed-source.required_checks"
+
+env_required_checks_repo="${workdir}/env-required-checks"
+create_valid_repo "${env_required_checks_repo}"
+perl -0pi -e 's#^    required_checks:\n#    required_checks:\n      - bash scripts/\\${UNREVIEWED_CHECK}.sh\n#m' "${env_required_checks_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+assert_fails_with "${env_required_checks_repo}" "Invalid Phase 65.3 upgrade manifest required check reference: compatible-reviewed-source.required_checks"
 
 missing_limitations_repo="${workdir}/missing-limitations"
 create_valid_repo "${missing_limitations_repo}"
@@ -727,6 +748,11 @@ non_home_path_repo="${workdir}/non-home-path"
 create_valid_repo "${non_home_path_repo}"
 printf '%s\n' "Retain evidence under /var/lib/aegisops." >>"${non_home_path_repo}/docs/release/phase-65-beta-release-notes.md"
 assert_fails_with "${non_home_path_repo}" "workstation-local absolute path"
+
+unix_absolute_path_repo="${workdir}/unix-absolute-path"
+create_valid_repo "${unix_absolute_path_repo}"
+printf '%s\n' "Retain evidence under /srv/aegisops/release." >>"${unix_absolute_path_repo}/docs/release/phase-65-beta-release-notes.md"
+assert_fails_with "${unix_absolute_path_repo}" "workstation-local absolute path"
 
 windows_drive_path_repo="${workdir}/windows-drive-path"
 create_valid_repo "${windows_drive_path_repo}"
