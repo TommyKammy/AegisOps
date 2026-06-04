@@ -28,6 +28,7 @@ Every Phase 65.3 release-channel and upgrade manifest record must include:
 - target version;
 - compatibility posture;
 - rollback expectation;
+- rollback evidence reference;
 - required checks;
 - known limitation references;
 - upgrade-plan evidence reference;
@@ -60,7 +61,8 @@ Release-channel and upgrade manifest records must use repo-relative paths, docum
 | `compatibility_posture` | One of `compatible` or `incompatible`. | Missing, placeholder, inferred, ambiguous, or convenience-summary posture fails. |
 | `compatibility_reason` | Explicit reason for the posture, tied to the reviewed source and target versions. | Missing, vague, placeholder, or sibling-record-derived reasons fail. |
 | `upgrade_action` | Reviewed operator action for the posture: `manual-upgrade-review` for compatible, `blocked-pending-reviewed-migration` for incompatible. | Missing action, silent auto-upgrade, hosted update, or automatic migration behavior fails. |
-| `rollback_expectation` | Reviewed rollback owner, trigger, target, and evidence reference expectation. | Missing, placeholder, automatic rollback, or broad operator discretion fails. |
+| `rollback_expectation` | Reviewed rollback owner, trigger, and target expectation. | Missing, placeholder, automatic rollback, broad operator discretion, or embedded evidence reference fails. |
+| `rollback_evidence_reference` | Repo-relative Phase 58.5 rollback evidence reference. | Missing, placeholder, external-only, ticket-only, or inferred evidence references fail. |
 | `required_checks` | Focused checks that must be retained before upgrade evidence is consumed. | Missing, placeholder, issue-lint-only, verifier-as-truth, or readiness-overclaim checks fail. |
 | `known_limitation_references` | Repo-relative known limitation references that remain subordinate to AegisOps records. | Missing, external-only, inferred, or commercial-readiness claims fail. |
 | `phase58_upgrade_plan_reference` | Repo-relative Phase 58.5 upgrade/rollback plan evidence reference. | Missing, placeholder, Wazuh-only, ticket-only, or inferred plan references fail. |

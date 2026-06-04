@@ -193,6 +193,9 @@ require_non_claim_false_once() {
         $non_claims_count++;
         next;
       }
+      if ($line =~ /^non_claims:\s*\S/) {
+        die "Invalid Phase 65.3 upgrade manifest value: non_claims\n";
+      }
       if ($line =~ /^[^[:space:]]/ && $line !~ /^non_claims:/) {
         $in_non_claims = 0;
       }
@@ -235,6 +238,9 @@ validate_non_claims_block() {
         $in_non_claims = 1;
         $seen_block++;
         next;
+      }
+      if ($line =~ /^non_claims:\s*\S/) {
+        die "Invalid Phase 65.3 upgrade manifest value: non_claims\n";
       }
       if ($line =~ /^[^[:space:]]/ && $line !~ /^non_claims:/) {
         $in_non_claims = 0;
@@ -388,7 +394,7 @@ validate_compatibility_cases() {
       next unless $in_cases;
       last if $line =~ /^[^[:space:]]/ && $line !~ /^compatibility_cases:/;
 
-      if ($line =~ /^  -\s+([A-Za-z0-9_]+):\s*(.*?)\s*$/) {
+      if ($line =~ /^  -\s+([A-Za-z0-9_-]+):\s*(.*?)\s*$/) {
         finish_case($current);
         $current = {};
         $active_list = undef;
@@ -407,7 +413,7 @@ validate_compatibility_cases() {
         $current->{$active_list} .= "\n$value";
         next;
       }
-      if (defined $current && $line =~ /^    ([A-Za-z0-9_]+):\s*(.*?)\s*$/) {
+      if (defined $current && $line =~ /^    ([A-Za-z0-9_-]+):\s*(.*?)\s*$/) {
         $active_list = undef;
         record_field($current, $1, $2);
         next;
@@ -459,7 +465,7 @@ validate_compatibility_cases() {
 	          return 1 if $value !~ /\b\Q$subfield\E=([^;]+)/;
 	          return 1 if bad($1);
 	        }
-	        return 1 if $value !~ /\brollback_evidence_reference=docs\/phase-58-5-upgrade-rollback-plan-contract\.md\b/;
+	        return 1 if $value =~ /\brollback_evidence_reference=/;
 	      }
 	      return 1 if $field eq "compatibility_reason" && $normalized =~ /\b(?:same as previous|same as above|same as compatible|same as incompatible|see previous|see above|previous case|sibling|derived from sibling)\b/;
 	      return 1 if $field eq "compatibility_reason" && $normalized =~ /^(?:compatible|incompatible|reviewed|valid|ok|okay|approved|supported|blocked|manual)$/;
@@ -475,6 +481,7 @@ validate_compatibility_cases() {
 	        return 1 if $item =~ /\b[A-Za-z][A-Za-z0-9+.-]*:\/\//;
 	        return 1 if $item =~ /(?:^|[[:space:]])(?:\/|\.\/|\.\.\/|[A-Za-z]:[\\\/]|file:\/\/)/i;
 	        return 1 if $item =~ /\\/;
+	        return 1 if $item =~ /(?:;|&&|\|\||\||`|\$\(|[<>])/;
 	        return 1 if $item =~ /(?:production|commercial|readiness|entitlement|billing|support|migration|pilot|beta|rc|ga|gate|issue-lint|truth)/i;
 	      }
 	      return 0;
@@ -493,8 +500,9 @@ validate_compatibility_cases() {
 
     die "Missing Phase 65.3 upgrade manifest content: compatibility cases\n" if @cases < 2;
 
-    my @required = qw(case_identifier source_version target_version compatibility_posture compatibility_reason upgrade_action rollback_expectation required_checks known_limitation_references phase58_upgrade_plan_reference phase51_gate_boundary_reference);
+    my @required = qw(case_identifier source_version target_version compatibility_posture compatibility_reason upgrade_action rollback_expectation rollback_evidence_reference required_checks known_limitation_references phase58_upgrade_plan_reference phase51_gate_boundary_reference);
     my %allowed = map { $_ => 1 } @required;
+    my %seen_case_identifier;
     my %seen_posture;
     for my $case (@cases) {
       my $id = $case->{case_identifier} // "<unknown>";
@@ -505,6 +513,7 @@ validate_compatibility_cases() {
         die "Missing Phase 65.3 upgrade manifest compatibility case field: $id.$field\n" if bad($case->{$field});
         die "Invalid Phase 65.3 upgrade manifest compatibility case field: $id.$field\n" if invalid_semantic_value($field, $case->{$field});
       }
+      die "Invalid Phase 65.3 upgrade manifest compatibility case field: $id.case_identifier\n" if $seen_case_identifier{$id}++;
 
       my $posture = $case->{compatibility_posture};
       die "Invalid Phase 65.3 upgrade manifest compatibility posture: $id\n" unless $posture =~ /^(compatible|incompatible)$/;
@@ -518,6 +527,7 @@ validate_compatibility_cases() {
       die "Invalid Phase 65.3 upgrade manifest compatibility case field: $id.compatibility_reason\n"
         if index($reason, $source_version) < 0 || index($reason, $target_version) < 0;
       die "Invalid Phase 65.3 upgrade manifest Phase 58 reference: $id\n" unless $case->{phase58_upgrade_plan_reference} eq "docs/phase-58-5-upgrade-rollback-plan-contract.md";
+      die "Invalid Phase 65.3 upgrade manifest rollback evidence reference: $id\n" unless $case->{rollback_evidence_reference} eq "docs/phase-58-5-upgrade-rollback-plan-contract.md";
       die "Invalid Phase 65.3 upgrade manifest Phase 51 reference: $id\n" unless $case->{phase51_gate_boundary_reference} eq "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md";
       die "Missing Phase 65.3 upgrade manifest required check reference: $id.phase58_upgrade_plan_reference\n" unless has_list_item($case->{required_checks}, qr{^bash scripts/verify-phase-58-5-upgrade-rollback-plan-contract\.sh$});
       die "Missing Phase 65.3 upgrade manifest required check reference: $id.publishable_path_hygiene\n" unless has_list_item($case->{required_checks}, qr{^bash scripts/verify-publishable-path-hygiene\.sh$});
@@ -591,13 +601,20 @@ scan_forbidden_text() {
         next if $value =~ /\A(<[^>]+>|todo|tbd|none|n\/a|na|placeholder|sample|example|false)\z/i;
         exit 1;
       }
+      if ($line =~ /\bproduction[[:space:]_-]+secret[[:space:]_-]+material[[:space:]]*[:=][[:space:]]*("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)/i) {
+        my $value = $1;
+        $value =~ s/^["'\'']//;
+        $value =~ s/["'\'']$//;
+        next if $value =~ /\A(<[^>]+>|todo|tbd|none|n\/a|na|placeholder|sample|example|false)\z/i;
+        exit 1;
+      }
     }
   '; then
     echo "Forbidden ${description}: production secret-looking value detected" >&2
     exit 1
   fi
 
-	  if grep -Eiq -- '(customer-private|customer private|customer_private|customer-confidential|customer confidential|customer_confidential)[[:space:]_-]+(data|payload|record|records)([[:space:]]*[:=]|\b[[:space:]]+(includes?|contains?|has|with|is|are)\b)' <<<"${decoded_text}"; then
+	  if grep -Eiq -- '(customer-private|customer private|customer_private|customer-confidential|customer confidential|customer_confidential)[[:space:]_-]+(data|payload|record|records)([[:space:]]*[:=]|\b[[:space:]]+(includes?|contains?|has|with|is|are)\b)|private[[:space:]_-]+customer[[:space:]_-]+(data|payload|record|records)([[:space:]]*[:=]|\b[[:space:]]+(includes?|contains?|has|with|is|are)\b)' <<<"${decoded_text}"; then
 	    echo "Forbidden ${description}: customer-private data detected" >&2
 	    exit 1
   fi
@@ -634,6 +651,9 @@ scan_forbidden_text() {
       if ($sentence =~ /(?:hosted|network)[ -]+(?:update[ -]+service|updates?)[^.?!;]*(?:enabled|implemented|ready|supported|allowed|proven|complete|available)\b/) {
         exit 1;
       }
+      if ($sentence =~ /update[ -]+service[^.?!;]*(?:is|are|becomes|become)[^.?!;]*(?:hosted|network|remote)\b/) {
+        exit 1;
+      }
     }
   '; then
     echo "Forbidden ${description}: hosted update-service claim" >&2
@@ -643,13 +663,16 @@ scan_forbidden_text() {
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
       $sentence =~ s/(?:does not|do not|must not|cannot|can not|is not|are not|must reject|forbidden|non-claims|false|manual or unsupported|phase 66 remains rc|phase 67 remains ga).*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
-      if ($sentence =~ /(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate acceptance|gates?)[^.?!;]*(?:proven|complete|satisfied|accepted|passed|ready|claimed)\b/) {
+      if ($sentence =~ /(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate acceptance|gates?)[^.?!;]*(?:proven|complete|satisfied|accepted|passed|ready|claimed|approved)\b/) {
         exit 1;
       }
       if ($sentence =~ /(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[[:space:]-]+(?:is|are|becomes|become)[[:space:]-]+(?:ready|accepted|passed|complete|satisfied)\b/) {
         exit 1;
       }
       if ($sentence =~ /(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:proves|satisfies|passes|accepts)[^.?!;]*(?:pilot|beta|rc|ga)[ -]+(?:readiness|gates?|pass|proof|gate acceptance)/) {
+        exit 1;
+      }
+      if ($sentence =~ /(?:issue-lint|issue lint)[^.?!;]*(?:proves|prove|satisfies|satisfy|establishes|establish)[^.?!;]*readiness/) {
         exit 1;
       }
     }
@@ -706,6 +729,9 @@ scan_forbidden_text() {
       if ($sentence =~ /(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:proves|prove|approves|approve|accepts|accept|satisfies|satisfy|enables|enable|implements|implement)[^.?!;]*(?:live upgrade success|rollback success|substrate mutation|workflow closure|action reconciliation|reconciliation|runtime execution|install truth|release readiness|support authority|entitlement authority|billing authority|install authority|production rollout|release authority)/) {
         exit 1;
       }
+      if ($sentence =~ /(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:closes|close|reconciles|reconcile)[^.?!;]*(?:workflows?|actions?|reconciliation)/) {
+        exit 1;
+      }
       if ($sentence =~ /(?:release-channel metadata|upgrade manifest|manifest|metadata)[^.?!;]*(?:is|are|becomes|become|serves as)[^.?!;]*(?:install|runtime execution|workflow|upgrade|rollback|readiness|gate|release|support|entitlement|billing|commercial)[ -]+authority/) {
         exit 1;
       }
@@ -737,7 +763,8 @@ required_doc_phrases=(
   "| \`source_version\` | Reviewed source package, profile, or repository version before upgrade review. | Missing, floating, latest, TODO, sample, beta-only, RC, GA, or inferred versions fail. |"
   "| \`target_version\` | Reviewed target package, profile, or repository version represented by the bundle. | Missing, floating, latest, TODO, sample, beta-only, RC, GA, or inferred versions fail. |"
   "| \`compatibility_posture\` | One of \`compatible\` or \`incompatible\`. | Missing, placeholder, inferred, ambiguous, or convenience-summary posture fails. |"
-  "| \`rollback_expectation\` | Reviewed rollback owner, trigger, target, and evidence reference expectation. | Missing, placeholder, automatic rollback, or broad operator discretion fails. |"
+  "| \`rollback_expectation\` | Reviewed rollback owner, trigger, and target expectation. | Missing, placeholder, automatic rollback, broad operator discretion, or embedded evidence reference fails. |"
+  "| \`rollback_evidence_reference\` | Repo-relative Phase 58.5 rollback evidence reference. | Missing, placeholder, external-only, ticket-only, or inferred evidence references fail. |"
   "The manifest must include at least one compatible version case and at least one incompatible version case."
   "The verifier must reject:"
   "- missing source version;"
