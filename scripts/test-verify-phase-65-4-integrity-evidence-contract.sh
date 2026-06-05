@@ -119,7 +119,7 @@ assert_fails_with "${missing_signature_repo}" "Missing Phase 65.4 integrity mani
 
 release_identifier_mismatch_repo="${workdir}/release-identifier-mismatch"
 create_valid_repo "${release_identifier_mismatch_repo}"
-perl -0pi -e 's/^release_bundle_identifier:.*/release_bundle_identifier: aegisops-beta-unreviewed-revision/m' "${release_identifier_mismatch_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+perl -0pi -e 's/^release_bundle_identifier:.*/release_bundle_identifier: aegisops-beta-deadbeef/m' "${release_identifier_mismatch_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
 assert_fails_with "${release_identifier_mismatch_repo}" "release_bundle_identifier must bind to repository_revision"
 
 reference_not_path_like_repo="${workdir}/reference-not-path-like"
@@ -134,7 +134,7 @@ assert_fails_with "${artifact_path_mismatch_repo}" "Invalid Phase 65.4 integrity
 
 sbom_scope_mismatch_repo="${workdir}/sbom-scope-mismatch"
 create_valid_repo "${sbom_scope_mismatch_repo}"
-perl -0pi -e 's#offline-install-bundle at repository revision [0-9a-f]{40}#offline-install-bundle at reviewed repository revision#m' "${sbom_scope_mismatch_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+perl -0pi -e 's#offline-install-bundle at repository revision [0-9a-f]{40} for beta/design-partner packaging review only#all artifacts for latest GA#m' "${sbom_scope_mismatch_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
 assert_fails_with "${sbom_scope_mismatch_repo}" "Invalid Phase 65.4 SBOM scope for offline-install-bundle"
 
 real_sha256_repo="${workdir}/real-sha256"
@@ -164,7 +164,7 @@ assert_fails_with "${verifier_truth_repo}" "verifier or issue-lint truth shortcu
 
 gate_acceptance_overclaim_repo="${workdir}/gate-acceptance-overclaim"
 create_valid_repo "${gate_acceptance_overclaim_repo}"
-printf '%s\n' "Phase 65.4 integrity evidence grants Beta gate acceptance." >>"${gate_acceptance_overclaim_repo}/docs/phase-65-4-integrity-evidence-contract.md"
+printf '%s\n' "Phase 65.4 integrity evidence satisfies Beta gate acceptance." >>"${gate_acceptance_overclaim_repo}/docs/phase-65-4-integrity-evidence-contract.md"
 assert_fails_with "${gate_acceptance_overclaim_repo}" "gate acceptance overclaim"
 
 workstation_path_repo="${workdir}/workstation-path"
