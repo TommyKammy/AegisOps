@@ -64,6 +64,10 @@ is_placeholder_or_missing() {
   local normalized
 
   normalized="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+  case "${normalized}" in
+    \"*\") normalized="${normalized:1:${#normalized}-2}" ;;
+    \'*\') normalized="${normalized:1:${#normalized}-2}" ;;
+  esac
   [[ -z "${normalized}" || "${normalized}" =~ ^(todo|tbd|none|n/a|na|sample|example|placeholder|unknown|missing|absent|latest|head|main|master)$ ]]
 }
 
@@ -96,6 +100,21 @@ require_top_level_present_once() {
   fi
   if [[ "${count}" != "1" ]]; then
     echo "Invalid Phase 65.4 integrity manifest value: ${key}" >&2
+    exit 1
+  fi
+}
+
+require_top_level_sequence_key_once() {
+  local key="$1"
+  local count
+
+  count="$(grep -Ec "^${key}:[[:space:]]*$" "${absolute_manifest_path}" || true)"
+  if [[ "${count}" == "0" ]]; then
+    echo "Missing Phase 65.4 integrity manifest ${key}" >&2
+    exit 1
+  fi
+  if [[ "${count}" != "1" ]]; then
+    echo "Invalid Phase 65.4 integrity manifest ${key}" >&2
     exit 1
   fi
 }
@@ -195,7 +214,7 @@ reject_unsafe_reference() {
   local macos_home_segment linux_home_segment root_home_segment
 
   lower_reference="$(printf '%s' "${reference}" | tr '[:upper:]' '[:lower:]')"
-  if [[ -z "${reference}" || "${reference}" =~ ^/ || "${reference}" =~ (^|/)\.\.(/|$) || "${lower_reference}" == *"%2e"* || "${lower_reference}" == *"%2f"* || "${reference}" == *"\\"* || "${lower_reference}" =~ ^https?:// ]]; then
+  if [[ -z "${reference}" || "${reference}" =~ ^/ || "${reference}" =~ (^|/)\.\.(/|$) || "${lower_reference}" == *"%2e"* || "${lower_reference}" == *"%2f"* || "${reference}" == *"\\"* || "${lower_reference}" =~ ^[a-z][a-z0-9+.-]*: ]]; then
     echo "Invalid Phase 65.4 integrity manifest ${description}: ${reference}" >&2
     exit 1
   fi
@@ -215,7 +234,25 @@ reject_unsafe_reference() {
 validate_artifacts() {
   perl -Mstrict -Mwarnings -0 -e '
     my $text = <>;
-    my @blocks = split /\n  - artifact_name:\s*/, $text;
+    my @artifact_lines;
+    my $artifact_key_count = 0;
+    my $in_artifacts = 0;
+    for my $line (split /\n/, $text) {
+      if ($line =~ /^artifacts:\s*$/) {
+        $artifact_key_count++;
+        $in_artifacts = 1;
+        next;
+      }
+      if ($in_artifacts && $line =~ /^[A-Za-z0-9_-]+:/) {
+        $in_artifacts = 0;
+      }
+      push @artifact_lines, $line if $in_artifacts;
+    }
+    die "Missing Phase 65.4 integrity manifest artifacts\n" if $artifact_key_count == 0;
+    die "Invalid Phase 65.4 integrity manifest artifacts\n" if $artifact_key_count != 1;
+
+    my $artifact_text = "\n" . join("\n", @artifact_lines);
+    my @blocks = split /\n  - artifact_name:\s*/, $artifact_text;
     shift @blocks;
     my %expected = (
       "offline-install-bundle" => "Install artifact set",
@@ -231,21 +268,53 @@ validate_artifacts() {
     );
     my %seen;
 
-    sub field {
-      my ($block, $name) = @_;
-      return $1 if $block =~ /^    \Q$name\E:\s*(.*?)\s*$/m;
-      return "";
+    my @required = qw(
+      artifact_class
+      inventory_reference
+      artifact_path
+      sbom_reference
+      sbom_format
+      sbom_scope
+      checksum_algorithm
+      checksum_reference
+      checksum_value
+      signature_reference
+      signing_posture
+      signing_identity
+    );
+    my %allowed_artifact_field = map { $_ => 1 } @required;
+
+    sub normalize_scalar {
+      my ($value) = @_;
+      $value =~ s/^\s+|\s+$//g;
+      if ($value =~ /^"(.*)"$/s || $value =~ /^'\''(.*)'\''$/s) {
+        $value = $1;
+      }
+      return $value;
+    }
+
+    sub artifact_fields {
+      my ($block, $artifact_name) = @_;
+      my %fields;
+      for my $line (split /\n/, $block) {
+        next unless $line =~ /^    ([A-Za-z0-9_]+):\s*(.*?)\s*$/;
+        my ($key, $value) = ($1, normalize_scalar($2));
+        die "Invalid Phase 65.4 integrity manifest artifact field for $artifact_name: $key\n" unless $allowed_artifact_field{$key};
+        die "Invalid Phase 65.4 integrity manifest duplicate artifact field for $artifact_name: $key\n" if exists $fields{$key};
+        $fields{$key} = $value;
+      }
+      return %fields;
     }
 
     sub top_level_field {
       my ($name) = @_;
-      return $1 if $text =~ /^\Q$name\E:\s*(.*?)\s*$/m;
+      return normalize_scalar($1) if $text =~ /^\Q$name\E:\s*(.*?)\s*$/m;
       return "";
     }
 
     sub require_path_like_artifact_reference {
-      my ($block, $name, $field_name, $description) = @_;
-      my $value = field($block, $field_name);
+      my ($fields, $name, $field_name, $description) = @_;
+      my $value = $fields->{$field_name} // "";
       die "Missing Phase 65.4 $description evidence for $name\n" unless $value =~ /\Q$name\E/;
       die "Invalid Phase 65.4 integrity manifest $field_name for $name\n" unless $value =~ m{/};
       die "Invalid Phase 65.4 integrity manifest $field_name for $name\n" unless $value =~ m{(^|/)[^/]*\Q$name\E[^/]*\.[^/]+$};
@@ -256,45 +325,32 @@ validate_artifacts() {
     die "Missing Phase 65.4 integrity manifest artifacts\n" unless @blocks;
     for my $block (@blocks) {
       my ($name) = $block =~ /^([^\n]+)\n/;
-      $name =~ s/^\s+|\s+$//g if defined $name;
+      $name = normalize_scalar($name) if defined $name;
       die "Missing Phase 65.4 integrity manifest artifact_name\n" unless defined $name && length $name;
       die "Invalid Phase 65.4 integrity manifest artifact name: $name\n" unless exists $expected{$name};
       die "Invalid Phase 65.4 integrity manifest duplicate artifact: $name\n" if $seen{$name}++;
+      my %fields = artifact_fields($block, $name);
 
-      my @required = qw(
-        artifact_class
-        inventory_reference
-        artifact_path
-        sbom_reference
-        sbom_format
-        sbom_scope
-        checksum_algorithm
-        checksum_reference
-        checksum_value
-        signature_reference
-        signing_posture
-        signing_identity
-      );
       for my $required (@required) {
-        my $value = field($block, $required);
+        my $value = $fields{$required} // "";
         die "Missing Phase 65.4 integrity manifest $required for $name\n" unless length $value;
         my $lower = lc $value;
         die "Missing Phase 65.4 integrity manifest $required for $name\n" if $lower =~ /^(todo|tbd|none|n\/a|na|sample|example|placeholder|unknown|missing|absent|latest|head|main|master)$/;
       }
 
-      die "Invalid Phase 65.4 integrity manifest artifact_class for $name\n" unless field($block, "artifact_class") eq $expected{$name};
-      die "Invalid Phase 65.4 integrity manifest inventory_reference for $name\n" unless field($block, "inventory_reference") eq "docs/phase-65-1-release-bundle-inventory.md";
-      die "Invalid Phase 65.4 integrity manifest artifact_path for $name\n" unless field($block, "artifact_path") eq $expected_path{$name};
-      require_path_like_artifact_reference($block, $name, "sbom_reference", "SBOM");
-      require_path_like_artifact_reference($block, $name, "checksum_reference", "checksum");
-      require_path_like_artifact_reference($block, $name, "signature_reference", "signature");
-      my $checksum_value = field($block, "checksum_value");
+      die "Invalid Phase 65.4 integrity manifest artifact_class for $name\n" unless $fields{"artifact_class"} eq $expected{$name};
+      die "Invalid Phase 65.4 integrity manifest inventory_reference for $name\n" unless $fields{"inventory_reference"} eq "docs/phase-65-1-release-bundle-inventory.md";
+      die "Invalid Phase 65.4 integrity manifest artifact_path for $name\n" unless $fields{"artifact_path"} eq $expected_path{$name};
+      require_path_like_artifact_reference(\%fields, $name, "sbom_reference", "SBOM");
+      require_path_like_artifact_reference(\%fields, $name, "checksum_reference", "checksum");
+      require_path_like_artifact_reference(\%fields, $name, "signature_reference", "signature");
+      my $checksum_value = $fields{"checksum_value"};
       die "Invalid Phase 65.4 artifact-name mismatch for $name\n" unless $checksum_value eq "<sha256:$name>" || $checksum_value =~ /^[0-9a-fA-F]{64}$/;
-      die "Invalid Phase 65.4 checksum algorithm for $name\n" unless field($block, "checksum_algorithm") eq "sha256";
-      die "Invalid Phase 65.4 signing posture for $name\n" unless field($block, "signing_posture") eq "beta-attestation-placeholder";
-      die "Invalid Phase 65.4 signing identity for $name\n" unless field($block, "signing_identity") eq "<beta-signing-identity>";
-      die "Invalid Phase 65.4 SBOM format for $name\n" unless field($block, "sbom_format") =~ /^(CycloneDX JSON|SPDX JSON)$/;
-      my $sbom_scope = field($block, "sbom_scope");
+      die "Invalid Phase 65.4 checksum algorithm for $name\n" unless $fields{"checksum_algorithm"} eq "sha256";
+      die "Invalid Phase 65.4 signing posture for $name\n" unless $fields{"signing_posture"} eq "beta-attestation-placeholder";
+      die "Invalid Phase 65.4 signing identity for $name\n" unless $fields{"signing_identity"} eq "<beta-signing-identity>";
+      die "Invalid Phase 65.4 SBOM format for $name\n" unless $fields{"sbom_format"} =~ /^(CycloneDX JSON|SPDX JSON)$/;
+      my $sbom_scope = $fields{"sbom_scope"};
       die "Invalid Phase 65.4 SBOM scope for $name\n" unless length $repository_revision && $sbom_scope =~ /\Q$name\E/ && $sbom_scope =~ /\Q$repository_revision\E/;
       die "Invalid Phase 65.4 SBOM scope for $name\n" unless lc($sbom_scope) =~ /beta\/design-partner packaging review only/;
       die "Invalid Phase 65.4 SBOM scope for $name\n" if lc($sbom_scope) =~ /\b(rc|ga|commercial|production|external distribution|entitlement)\b/;
@@ -413,6 +469,7 @@ require_release_identifier_binding
 require_top_level_present_once "integrity_evidence_owner"
 require_top_level_present_once "approval_record"
 require_top_level_present_once "authority_boundary"
+require_top_level_sequence_key_once "artifacts"
 validate_top_level_manifest_keys
 validate_non_claims_block
 validate_artifacts
