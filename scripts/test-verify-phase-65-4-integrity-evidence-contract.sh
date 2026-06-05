@@ -43,6 +43,11 @@ create_valid_repo() {
   git -C "${target}" config user.name "Phase 65.4 Test"
   git -C "${target}" add README.md docs scripts control-plane
   git -C "${target}" commit -q -m "fixture"
+  fixture_revision="$(git -C "${target}" rev-parse HEAD)"
+  FIXTURE_REVISION="${fixture_revision}" perl -0pi -e 's/[0-9a-f]{40}/$ENV{FIXTURE_REVISION}/g' \
+    "${target}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+  git -C "${target}" add docs/deployment/release/phase-65-4-integrity-evidence.yaml
+  git -C "${target}" commit -q -m "bind fixture revision"
 }
 
 assert_passes() {
@@ -122,6 +127,11 @@ create_valid_repo "${release_identifier_mismatch_repo}"
 perl -0pi -e 's/^release_bundle_identifier:.*/release_bundle_identifier: aegisops-beta-deadbeef/m' "${release_identifier_mismatch_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
 assert_fails_with "${release_identifier_mismatch_repo}" "release_bundle_identifier must bind to repository_revision"
 
+unresolved_revision_repo="${workdir}/unresolved-revision"
+create_valid_repo "${unresolved_revision_repo}"
+perl -0pi -e 's/[0-9a-f]{40}/deadbeef/g' "${unresolved_revision_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${unresolved_revision_repo}" "repository_revision must resolve to a Git commit or tag"
+
 reference_not_path_like_repo="${workdir}/reference-not-path-like"
 create_valid_repo "${reference_not_path_like_repo}"
 perl -0pi -e 's#<evidence-dir>/offline-install-bundle\.sbom\.cdx\.json#offline-install-bundle#m' "${reference_not_path_like_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
@@ -131,6 +141,11 @@ external_uri_reference_repo="${workdir}/external-uri-reference"
 create_valid_repo "${external_uri_reference_repo}"
 perl -0pi -e 's#<evidence-dir>/offline-install-bundle\.sbom\.cdx\.json#s3://bucket/offline-install-bundle.sbom.cdx.json#m' "${external_uri_reference_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
 assert_fails_with "${external_uri_reference_repo}" "Invalid Phase 65.4 integrity manifest artifact reference"
+
+quoted_external_uri_reference_repo="${workdir}/quoted-external-uri-reference"
+create_valid_repo "${quoted_external_uri_reference_repo}"
+perl -0pi -e 's#<evidence-dir>/offline-install-bundle\.sbom\.cdx\.json#"s3://bucket/offline-install-bundle.sbom.cdx.json"#m' "${quoted_external_uri_reference_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${quoted_external_uri_reference_repo}" "Invalid Phase 65.4 integrity manifest artifact reference"
 
 artifact_path_mismatch_repo="${workdir}/artifact-path-mismatch"
 create_valid_repo "${artifact_path_mismatch_repo}"
@@ -172,6 +187,11 @@ create_valid_repo "${unknown_artifact_field_repo}"
 perl -0pi -e 's#(    signing_identity: <beta-signing-identity>\n)#$1    production_signing_infrastructure: true\n#m' "${unknown_artifact_field_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
 assert_fails_with "${unknown_artifact_field_repo}" "Invalid Phase 65.4 integrity manifest artifact field for offline-install-bundle: production_signing_infrastructure"
 
+quoted_artifact_field_repo="${workdir}/quoted-artifact-field"
+create_valid_repo "${quoted_artifact_field_repo}"
+perl -0pi -e 's#(    signing_identity: <beta-signing-identity>\n)#$1    "production_signing_infrastructure": true\n#m' "${quoted_artifact_field_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${quoted_artifact_field_repo}" "Invalid Phase 65.4 integrity manifest artifact field for offline-install-bundle: production_signing_infrastructure"
+
 readiness_overclaim_repo="${workdir}/readiness-overclaim"
 create_valid_repo "${readiness_overclaim_repo}"
 printf '%s\n' "Phase 65.4 integrity evidence proves RC readiness." >>"${readiness_overclaim_repo}/docs/phase-65-4-integrity-evidence-contract.md"
@@ -193,6 +213,11 @@ workstation_checksum_path="/""Users/example/release-notes.sha256"
 WORKSTATION_CHECKSUM_PATH="${workstation_checksum_path}" perl -0pi -e 's#<evidence-dir>/release-notes\.sha256#$ENV{WORKSTATION_CHECKSUM_PATH}#m' "${workstation_path_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
 assert_fails_with "${workstation_path_repo}" "Invalid Phase 65.4 integrity manifest artifact reference"
 
+tilde_path_repo="${workdir}/tilde-path"
+create_valid_repo "${tilde_path_repo}"
+perl -0pi -e 's#<evidence-dir>/offline-install-bundle\.sbom\.cdx\.json#~/offline-install-bundle.sbom.cdx.json#m' "${tilde_path_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${tilde_path_repo}" "Invalid Phase 65.4 integrity manifest artifact reference"
+
 customer_private_reference_repo="${workdir}/customer-private-reference"
 create_valid_repo "${customer_private_reference_repo}"
 perl -0pi -e 's#<evidence-dir>/offline-install-bundle\.sbom\.cdx\.json#customer-private/offline-install-bundle.sbom.cdx.json#m' "${customer_private_reference_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
@@ -207,6 +232,11 @@ production_secret_repo="${workdir}/production-secret"
 create_valid_repo "${production_secret_repo}"
 printf '%s\n' "signing_secret: prod-secret-value" >>"${production_secret_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
 assert_fails_with "${production_secret_repo}" "Invalid Phase 65.4 integrity manifest top-level field: signing_secret"
+
+quoted_top_level_key_repo="${workdir}/quoted-top-level-key"
+create_valid_repo "${quoted_top_level_key_repo}"
+printf '%s\n' '"production-signing-infrastructure": true' >>"${quoted_top_level_key_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${quoted_top_level_key_repo}" "Invalid Phase 65.4 integrity manifest top-level field: production-signing-infrastructure"
 
 production_secret_doc_repo="${workdir}/production-secret-doc"
 create_valid_repo "${production_secret_doc_repo}"

@@ -59,15 +59,23 @@ yaml_top_level_scalar_count() {
   grep -Ec "^${key}:[[:space:]]*" "${file}" || true
 }
 
+normalize_yaml_scalar() {
+  local value="$1"
+
+  value="$(printf '%s' "${value}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+  if [[ "${#value}" -ge 2 ]]; then
+    case "${value:0:1}${value: -1}" in
+      \"\"|\'\') value="${value:1:${#value}-2}" ;;
+    esac
+  fi
+  printf '%s' "${value}"
+}
+
 is_placeholder_or_missing() {
   local value="$1"
   local normalized
 
-  normalized="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
-  case "${normalized}" in
-    \"*\") normalized="${normalized:1:${#normalized}-2}" ;;
-    \'*\') normalized="${normalized:1:${#normalized}-2}" ;;
-  esac
+  normalized="$(normalize_yaml_scalar "${value}" | tr '[:upper:]' '[:lower:]')"
   [[ -z "${normalized}" || "${normalized}" =~ ^(todo|tbd|none|n/a|na|sample|example|placeholder|unknown|missing|absent|latest|head|main|master)$ ]]
 }
 
@@ -76,7 +84,7 @@ require_top_level_equals_once() {
   local expected="$2"
   local actual count
 
-  actual="$(yaml_top_level_scalar "${absolute_manifest_path}" "${key}")"
+  actual="$(normalize_yaml_scalar "$(yaml_top_level_scalar "${absolute_manifest_path}" "${key}")")"
   count="$(yaml_top_level_scalar_count "${absolute_manifest_path}" "${key}")"
   if [[ "${count}" == "0" ]]; then
     echo "Missing Phase 65.4 integrity manifest value: ${key}" >&2
@@ -92,7 +100,7 @@ require_top_level_present_once() {
   local key="$1"
   local actual count
 
-  actual="$(yaml_top_level_scalar "${absolute_manifest_path}" "${key}")"
+  actual="$(normalize_yaml_scalar "$(yaml_top_level_scalar "${absolute_manifest_path}" "${key}")")"
   count="$(yaml_top_level_scalar_count "${absolute_manifest_path}" "${key}")"
   if [[ "${count}" == "0" || "$(is_placeholder_or_missing "${actual}"; echo $?)" == "0" ]]; then
     echo "Missing Phase 65.4 integrity manifest value: ${key}" >&2
@@ -119,11 +127,21 @@ require_top_level_sequence_key_once() {
   fi
 }
 
+require_repository_revision_resolves() {
+  local repository_revision
+
+  repository_revision="$(normalize_yaml_scalar "$(yaml_top_level_scalar "${absolute_manifest_path}" "repository_revision")")"
+  if ! git -C "${repo_root}" rev-parse --verify --quiet "${repository_revision}^{commit}" >/dev/null; then
+    echo "Invalid Phase 65.4 integrity manifest value: repository_revision must resolve to a Git commit or tag" >&2
+    exit 1
+  fi
+}
+
 require_release_identifier_binding() {
   local release_bundle_identifier repository_revision
 
-  release_bundle_identifier="$(yaml_top_level_scalar "${absolute_manifest_path}" "release_bundle_identifier")"
-  repository_revision="$(yaml_top_level_scalar "${absolute_manifest_path}" "repository_revision")"
+  release_bundle_identifier="$(normalize_yaml_scalar "$(yaml_top_level_scalar "${absolute_manifest_path}" "release_bundle_identifier")")"
+  repository_revision="$(normalize_yaml_scalar "$(yaml_top_level_scalar "${absolute_manifest_path}" "repository_revision")")"
   if [[ "${release_bundle_identifier}" != "aegisops-beta-${repository_revision}" ]]; then
     echo "Invalid Phase 65.4 integrity manifest value: release_bundle_identifier must bind to repository_revision" >&2
     exit 1
@@ -150,6 +168,13 @@ validate_top_level_manifest_keys() {
     );
 
     for my $line (split /\n/, $text) {
+      my $first = substr($line, 0, 1);
+      if ($first eq "\"" || $first eq chr(39)) {
+        my $quote = $first;
+        if ($line =~ /^\Q$quote\E([^:]+)\Q$quote\E\s*:/) {
+          die "Invalid Phase 65.4 integrity manifest top-level field: $1\n";
+        }
+      }
       next unless $line =~ /^([A-Za-z0-9_-]+):/;
       my $key = $1;
       die "Invalid Phase 65.4 integrity manifest top-level field: $key\n" unless $allowed{$key};
@@ -213,8 +238,9 @@ reject_unsafe_reference() {
   local lower_reference
   local macos_home_segment linux_home_segment root_home_segment
 
+  reference="$(normalize_yaml_scalar "${reference}")"
   lower_reference="$(printf '%s' "${reference}" | tr '[:upper:]' '[:lower:]')"
-  if [[ -z "${reference}" || "${reference}" =~ ^/ || "${reference}" =~ (^|/)\.\.(/|$) || "${lower_reference}" == *"%2e"* || "${lower_reference}" == *"%2f"* || "${reference}" == *"\\"* || "${lower_reference}" =~ ^[a-z][a-z0-9+.-]*: ]]; then
+  if [[ -z "${reference}" || "${reference}" =~ ^/ || "${reference}" =~ ^~ || "${reference}" =~ (^|/)\.\.(/|$) || "${lower_reference}" == *"%2e"* || "${lower_reference}" == *"%2f"* || "${reference}" == *"\\"* || "${lower_reference}" =~ ^[a-z][a-z0-9+.-]*: ]]; then
     echo "Invalid Phase 65.4 integrity manifest ${description}: ${reference}" >&2
     exit 1
   fi
@@ -297,6 +323,15 @@ validate_artifacts() {
       my ($block, $artifact_name) = @_;
       my %fields;
       for my $line (split /\n/, $block) {
+        my $field_line = $line;
+        next unless $field_line =~ s/^    //;
+        my $first = substr($field_line, 0, 1);
+        if ($first eq "\"" || $first eq chr(39)) {
+          my $quote = $first;
+          if ($field_line =~ /^\Q$quote\E([^:]+)\Q$quote\E\s*:/) {
+            die "Invalid Phase 65.4 integrity manifest artifact field for $artifact_name: $1\n";
+          }
+        }
         next unless $line =~ /^    ([A-Za-z0-9_]+):\s*(.*?)\s*$/;
         my ($key, $value) = ($1, normalize_scalar($2));
         die "Invalid Phase 65.4 integrity manifest artifact field for $artifact_name: $key\n" unless $allowed_artifact_field{$key};
@@ -465,6 +500,7 @@ require_top_level_equals_once "verifier_output_reference" "bash scripts/verify-p
 require_top_level_equals_once "accepted_signing_posture" "beta-attestation-placeholder"
 require_top_level_present_once "release_bundle_identifier"
 require_top_level_present_once "repository_revision"
+require_repository_revision_resolves
 require_release_identifier_binding
 require_top_level_present_once "integrity_evidence_owner"
 require_top_level_present_once "approval_record"
