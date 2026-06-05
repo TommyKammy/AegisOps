@@ -73,10 +73,11 @@ normalize_yaml_scalar() {
 
 is_placeholder_or_missing() {
   local value="$1"
-  local normalized
+  local normalized block_scalar_marker_regex
 
   normalized="$(normalize_yaml_scalar "${value}" | tr '[:upper:]' '[:lower:]')"
-  [[ -z "${normalized}" || "${normalized}" =~ ^(todo|tbd|none|n/a|na|sample|example|placeholder|unknown|missing|absent|latest|head|main|master)$ ]]
+  block_scalar_marker_regex='^[>|][+-]?$'
+  [[ -z "${normalized}" || "${normalized}" =~ ${block_scalar_marker_regex} || "${normalized}" =~ ^(todo|tbd|none|n/a|na|sample|example|placeholder|unknown|missing|absent|latest|head|main|master)$ ]]
 }
 
 require_top_level_equals_once() {
@@ -258,8 +259,9 @@ reject_unsafe_reference() {
 }
 
 validate_artifacts() {
-  perl -Mstrict -Mwarnings -0 -e '
+  REPO_ROOT="${repo_root}" perl -Mstrict -Mwarnings -0 -e '
     my $text = <>;
+    my $repo_root = $ENV{"REPO_ROOT"} // "";
     my @artifact_lines;
     my $artifact_key_count = 0;
     my $in_artifacts = 0;
@@ -348,11 +350,20 @@ validate_artifacts() {
     }
 
     sub require_path_like_artifact_reference {
-      my ($fields, $name, $field_name, $description) = @_;
+      my ($fields, $name, $field_name, $description, $kind_pattern) = @_;
       my $value = $fields->{$field_name} // "";
       die "Missing Phase 65.4 $description evidence for $name\n" unless $value =~ /\Q$name\E/;
       die "Invalid Phase 65.4 integrity manifest $field_name for $name\n" unless $value =~ m{/};
       die "Invalid Phase 65.4 integrity manifest $field_name for $name\n" unless $value =~ m{(^|/)[^/]*\Q$name\E[^/]*\.[^/]+$};
+      die "Invalid Phase 65.4 integrity manifest $field_name for $name\n" unless $value =~ $kind_pattern;
+    }
+
+    sub require_artifact_path_at_revision {
+      my ($name, $repository_revision, $artifact_path) = @_;
+      return if $artifact_path =~ /^</;
+      my $revision_path = $repository_revision . "^{commit}:" . $artifact_path;
+      my $status = system("git", "-C", $repo_root, "cat-file", "-e", $revision_path);
+      die "Invalid Phase 65.4 integrity manifest artifact_path must exist at repository_revision for $name\n" unless $status == 0;
     }
 
     my $repository_revision = top_level_field("repository_revision");
@@ -376,9 +387,10 @@ validate_artifacts() {
       die "Invalid Phase 65.4 integrity manifest artifact_class for $name\n" unless $fields{"artifact_class"} eq $expected{$name};
       die "Invalid Phase 65.4 integrity manifest inventory_reference for $name\n" unless $fields{"inventory_reference"} eq "docs/phase-65-1-release-bundle-inventory.md";
       die "Invalid Phase 65.4 integrity manifest artifact_path for $name\n" unless $fields{"artifact_path"} eq $expected_path{$name};
-      require_path_like_artifact_reference(\%fields, $name, "sbom_reference", "SBOM");
-      require_path_like_artifact_reference(\%fields, $name, "checksum_reference", "checksum");
-      require_path_like_artifact_reference(\%fields, $name, "signature_reference", "signature");
+      require_artifact_path_at_revision($name, $repository_revision, $fields{"artifact_path"});
+      require_path_like_artifact_reference(\%fields, $name, "sbom_reference", "SBOM", qr/\.(sbom\.)?(cdx|spdx)\.json$/);
+      require_path_like_artifact_reference(\%fields, $name, "checksum_reference", "checksum", qr/\.sha256$/);
+      require_path_like_artifact_reference(\%fields, $name, "signature_reference", "signature", qr/\.(sig|sigstore-placeholder\.txt|signature)$/);
       my $checksum_value = $fields{"checksum_value"};
       die "Invalid Phase 65.4 artifact-name mismatch for $name\n" unless $checksum_value eq "<sha256:$name>" || $checksum_value =~ /^[0-9a-fA-F]{64}$/;
       die "Invalid Phase 65.4 checksum algorithm for $name\n" unless $fields{"checksum_algorithm"} eq "sha256";
@@ -434,7 +446,7 @@ reject_forbidden_claims() {
     echo "Forbidden Phase 65.4 integrity evidence material in ${description}: production secret material" >&2
     exit 1
   fi
-  if grep -Eiq '(customer-private|customer private).{0,40}(included|packaged|embedded|allowed)' <<<"${text}"; then
+  if grep -Eiq '((customer-private|customer private).{0,40}(included|includes|packaged|embedded|allowed|contains?|containing|present|stored|retained|carries|holds)|(contains?|includes?|stores?|retains?|carries|holds).{0,40}(customer-private|customer private))' <<<"${text}"; then
     echo "Forbidden Phase 65.4 integrity evidence material in ${description}: customer-private data" >&2
     exit 1
   fi
