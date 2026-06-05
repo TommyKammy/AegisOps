@@ -117,6 +117,31 @@ create_valid_repo "${missing_signature_repo}"
 perl -0pi -e 's/^    signature_reference:.*\n//m' "${missing_signature_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
 assert_fails_with "${missing_signature_repo}" "Missing Phase 65.4 integrity manifest signature_reference for offline-install-bundle"
 
+release_identifier_mismatch_repo="${workdir}/release-identifier-mismatch"
+create_valid_repo "${release_identifier_mismatch_repo}"
+perl -0pi -e 's/^release_bundle_identifier:.*/release_bundle_identifier: aegisops-beta-unreviewed-revision/m' "${release_identifier_mismatch_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${release_identifier_mismatch_repo}" "release_bundle_identifier must bind to repository_revision"
+
+reference_not_path_like_repo="${workdir}/reference-not-path-like"
+create_valid_repo "${reference_not_path_like_repo}"
+perl -0pi -e 's#<evidence-dir>/offline-install-bundle\.sbom\.cdx\.json#offline-install-bundle#m' "${reference_not_path_like_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${reference_not_path_like_repo}" "Invalid Phase 65.4 integrity manifest sbom_reference for offline-install-bundle"
+
+artifact_path_mismatch_repo="${workdir}/artifact-path-mismatch"
+create_valid_repo "${artifact_path_mismatch_repo}"
+perl -0pi -e 's#docs/deployment/release/phase-65-3-upgrade-manifest\.yaml#docs/deployment/release/missing-upgrade-manifest.yaml#m' "${artifact_path_mismatch_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${artifact_path_mismatch_repo}" "Invalid Phase 65.4 integrity manifest artifact_path for release-channel-upgrade-manifest"
+
+sbom_scope_mismatch_repo="${workdir}/sbom-scope-mismatch"
+create_valid_repo "${sbom_scope_mismatch_repo}"
+perl -0pi -e 's#offline-install-bundle at repository revision [0-9a-f]{40}#offline-install-bundle at reviewed repository revision#m' "${sbom_scope_mismatch_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${sbom_scope_mismatch_repo}" "Invalid Phase 65.4 SBOM scope for offline-install-bundle"
+
+real_sha256_repo="${workdir}/real-sha256"
+create_valid_repo "${real_sha256_repo}"
+perl -0pi -e 's#<sha256:offline-install-bundle>#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#m' "${real_sha256_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_passes "${real_sha256_repo}"
+
 artifact_name_mismatch_repo="${workdir}/artifact-name-mismatch"
 create_valid_repo "${artifact_name_mismatch_repo}"
 perl -0pi -e 's#offline-install-bundle\.sha256#release-notes.sha256#m' "${artifact_name_mismatch_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
@@ -137,11 +162,21 @@ create_valid_repo "${verifier_truth_repo}"
 printf '%s\n' "The verifier output becomes readiness truth." >>"${verifier_truth_repo}/docs/phase-65-4-integrity-evidence-contract.md"
 assert_fails_with "${verifier_truth_repo}" "verifier or issue-lint truth shortcut"
 
+gate_acceptance_overclaim_repo="${workdir}/gate-acceptance-overclaim"
+create_valid_repo "${gate_acceptance_overclaim_repo}"
+printf '%s\n' "Phase 65.4 integrity evidence grants Beta gate acceptance." >>"${gate_acceptance_overclaim_repo}/docs/phase-65-4-integrity-evidence-contract.md"
+assert_fails_with "${gate_acceptance_overclaim_repo}" "gate acceptance overclaim"
+
 workstation_path_repo="${workdir}/workstation-path"
 create_valid_repo "${workstation_path_repo}"
 workstation_checksum_path="/""Users/example/release-notes.sha256"
 WORKSTATION_CHECKSUM_PATH="${workstation_checksum_path}" perl -0pi -e 's#<evidence-dir>/release-notes\.sha256#$ENV{WORKSTATION_CHECKSUM_PATH}#m' "${workstation_path_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
 assert_fails_with "${workstation_path_repo}" "Invalid Phase 65.4 integrity manifest artifact reference"
+
+customer_private_reference_repo="${workdir}/customer-private-reference"
+create_valid_repo "${customer_private_reference_repo}"
+perl -0pi -e 's#<evidence-dir>/offline-install-bundle\.sbom\.cdx\.json#customer-private/offline-install-bundle.sbom.cdx.json#m' "${customer_private_reference_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${customer_private_reference_repo}" "Invalid Phase 65.4 integrity manifest artifact reference"
 
 production_secret_repo="${workdir}/production-secret"
 create_valid_repo "${production_secret_repo}"

@@ -100,6 +100,17 @@ require_top_level_present_once() {
   fi
 }
 
+require_release_identifier_binding() {
+  local release_bundle_identifier repository_revision
+
+  release_bundle_identifier="$(yaml_top_level_scalar "${absolute_manifest_path}" "release_bundle_identifier")"
+  repository_revision="$(yaml_top_level_scalar "${absolute_manifest_path}" "repository_revision")"
+  if [[ "${release_bundle_identifier}" != "aegisops-beta-${repository_revision}" ]]; then
+    echo "Invalid Phase 65.4 integrity manifest value: release_bundle_identifier must bind to repository_revision" >&2
+    exit 1
+  fi
+}
+
 validate_top_level_manifest_keys() {
   perl -Mstrict -Mwarnings -0 -e '
     my $text = <>;
@@ -195,6 +206,10 @@ reject_unsafe_reference() {
     echo "Invalid Phase 65.4 integrity manifest ${description}: ${reference}" >&2
     exit 1
   fi
+  if [[ "${lower_reference}" =~ (^|/)customer-private(/|$) || "${lower_reference}" =~ (^|/)customer_private(/|$) ]]; then
+    echo "Invalid Phase 65.4 integrity manifest ${description}: ${reference}" >&2
+    exit 1
+  fi
 }
 
 validate_artifacts() {
@@ -208,6 +223,12 @@ validate_artifacts() {
       "release-notes" => "Release notes artifact set",
       "verification-output" => "Verification output artifact set",
     );
+    my %expected_path = (
+      "offline-install-bundle" => "<release-bundle-dir>/offline-install-bundle.tar",
+      "release-channel-upgrade-manifest" => "docs/deployment/release/phase-65-3-upgrade-manifest.yaml",
+      "release-notes" => "docs/release/phase-65-beta-release-notes.md",
+      "verification-output" => "<evidence-dir>/phase-65-verification-output.txt",
+    );
     my %seen;
 
     sub field {
@@ -215,6 +236,22 @@ validate_artifacts() {
       return $1 if $block =~ /^    \Q$name\E:\s*(.*?)\s*$/m;
       return "";
     }
+
+    sub top_level_field {
+      my ($name) = @_;
+      return $1 if $text =~ /^\Q$name\E:\s*(.*?)\s*$/m;
+      return "";
+    }
+
+    sub require_path_like_artifact_reference {
+      my ($block, $name, $field_name, $description) = @_;
+      my $value = field($block, $field_name);
+      die "Missing Phase 65.4 $description evidence for $name\n" unless $value =~ /\Q$name\E/;
+      die "Invalid Phase 65.4 integrity manifest $field_name for $name\n" unless $value =~ m{/};
+      die "Invalid Phase 65.4 integrity manifest $field_name for $name\n" unless $value =~ m{(^|/)[^/]*\Q$name\E[^/]*\.[^/]+$};
+    }
+
+    my $repository_revision = top_level_field("repository_revision");
 
     die "Missing Phase 65.4 integrity manifest artifacts\n" unless @blocks;
     for my $block (@blocks) {
@@ -247,14 +284,20 @@ validate_artifacts() {
 
       die "Invalid Phase 65.4 integrity manifest artifact_class for $name\n" unless field($block, "artifact_class") eq $expected{$name};
       die "Invalid Phase 65.4 integrity manifest inventory_reference for $name\n" unless field($block, "inventory_reference") eq "docs/phase-65-1-release-bundle-inventory.md";
-      die "Missing Phase 65.4 SBOM evidence for $name\n" unless field($block, "sbom_reference") =~ /\Q$name\E/;
-      die "Missing Phase 65.4 checksum evidence for $name\n" unless field($block, "checksum_reference") =~ /\Q$name\E/;
-      die "Missing Phase 65.4 signature evidence for $name\n" unless field($block, "signature_reference") =~ /\Q$name\E/;
-      die "Invalid Phase 65.4 artifact-name mismatch for $name\n" unless field($block, "checksum_value") eq "<sha256:$name>";
+      die "Invalid Phase 65.4 integrity manifest artifact_path for $name\n" unless field($block, "artifact_path") eq $expected_path{$name};
+      require_path_like_artifact_reference($block, $name, "sbom_reference", "SBOM");
+      require_path_like_artifact_reference($block, $name, "checksum_reference", "checksum");
+      require_path_like_artifact_reference($block, $name, "signature_reference", "signature");
+      my $checksum_value = field($block, "checksum_value");
+      die "Invalid Phase 65.4 artifact-name mismatch for $name\n" unless $checksum_value eq "<sha256:$name>" || $checksum_value =~ /^[0-9a-fA-F]{64}$/;
       die "Invalid Phase 65.4 checksum algorithm for $name\n" unless field($block, "checksum_algorithm") eq "sha256";
       die "Invalid Phase 65.4 signing posture for $name\n" unless field($block, "signing_posture") eq "beta-attestation-placeholder";
       die "Invalid Phase 65.4 signing identity for $name\n" unless field($block, "signing_identity") eq "<beta-signing-identity>";
       die "Invalid Phase 65.4 SBOM format for $name\n" unless field($block, "sbom_format") =~ /^(CycloneDX JSON|SPDX JSON)$/;
+      my $sbom_scope = field($block, "sbom_scope");
+      die "Invalid Phase 65.4 SBOM scope for $name\n" unless length $repository_revision && $sbom_scope =~ /\Q$name\E/ && $sbom_scope =~ /\Q$repository_revision\E/;
+      die "Invalid Phase 65.4 SBOM scope for $name\n" unless lc($sbom_scope) =~ /beta\/design-partner packaging review only/;
+      die "Invalid Phase 65.4 SBOM scope for $name\n" if lc($sbom_scope) =~ /\b(rc|ga|commercial|production|external distribution|entitlement)\b/;
     }
 
     for my $name (sort keys %expected) {
@@ -280,8 +323,16 @@ reject_forbidden_claims() {
     echo "Forbidden Phase 65.4 integrity evidence claim in ${description}: readiness or authority overclaim" >&2
     exit 1
   fi
+  if grep -Eiq '(AegisOps|Phase 65\.4|integrity evidence|SBOM|checksum|signature|signing).{0,80}(proves?|satisfies?|approves?|completes?|grants?|confirms?|establishes?|unblocks?|passes?|clears?|certifies?|authorizes?|records?|marks?).{0,60}(Pilot gate acceptance|Beta gate acceptance|RC gate acceptance|GA gate acceptance|Pilot gate approval|Beta gate approval|RC gate approval|GA gate approval|Pilot pass|Beta pass|RC pass|GA pass)' <<<"${text}"; then
+    echo "Forbidden Phase 65.4 integrity evidence claim in ${description}: gate acceptance overclaim" >&2
+    exit 1
+  fi
   if grep -Eiq '(AegisOps|Phase 65\.4|integrity evidence|SBOM|checksum|signature|signing).{0,80}(is|are).{0,15}(Beta ready|RC ready|GA ready|commercially ready|production signed|externally distributable|entitlement approved)' <<<"${text}"; then
     echo "Forbidden Phase 65.4 integrity evidence claim in ${description}: readiness or authority overclaim" >&2
+    exit 1
+  fi
+  if grep -Eiq '(AegisOps|Phase 65\.4|integrity evidence|SBOM|checksum|signature|signing).{0,80}(is|are).{0,30}(Pilot|Beta|RC|GA)[ -]*(gate[ -]*)?(accepted|approved|passed|ready|complete)' <<<"${text}"; then
+    echo "Forbidden Phase 65.4 integrity evidence claim in ${description}: gate acceptance overclaim" >&2
     exit 1
   fi
   if grep -Eiq '(verifier|issue-lint).{0,60}(is|are|becomes?|proves?|satisfies?|approves?).{0,40}(readiness truth|release truth|gate truth|RC readiness|GA readiness)' <<<"${text}"; then
@@ -358,6 +409,7 @@ require_top_level_equals_once "verifier_output_reference" "bash scripts/verify-p
 require_top_level_equals_once "accepted_signing_posture" "beta-attestation-placeholder"
 require_top_level_present_once "release_bundle_identifier"
 require_top_level_present_once "repository_revision"
+require_release_identifier_binding
 require_top_level_present_once "integrity_evidence_owner"
 require_top_level_present_once "approval_record"
 require_top_level_present_once "authority_boundary"
