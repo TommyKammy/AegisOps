@@ -139,7 +139,8 @@ assert_fails_with "${verifier_truth_repo}" "verifier or issue-lint truth shortcu
 
 workstation_path_repo="${workdir}/workstation-path"
 create_valid_repo "${workstation_path_repo}"
-perl -0pi -e 's#<evidence-dir>/release-notes\.sha256#/Users/example/release-notes.sha256#m' "${workstation_path_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+workstation_checksum_path="/""Users/example/release-notes.sha256"
+WORKSTATION_CHECKSUM_PATH="${workstation_checksum_path}" perl -0pi -e 's#<evidence-dir>/release-notes\.sha256#$ENV{WORKSTATION_CHECKSUM_PATH}#m' "${workstation_path_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
 assert_fails_with "${workstation_path_repo}" "Invalid Phase 65.4 integrity manifest artifact reference"
 
 production_secret_repo="${workdir}/production-secret"
