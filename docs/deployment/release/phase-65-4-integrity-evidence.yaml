@@ -1,0 +1,72 @@
+contract_identifier: phase-65-integrity-evidence-contract-v1
+inventory_identifier: phase-65-release-bundle-inventory-v1
+release_bundle_identifier: aegisops-beta-489a0e0aba154a018ad980df62de42377a971246
+repository_revision: 489a0e0aba154a018ad980df62de42377a971246
+integrity_evidence_owner: AegisOps maintainers
+inventory_reference: docs/phase-65-1-release-bundle-inventory.md
+phase51_gate_boundary_reference: docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md
+verifier_output_reference: bash scripts/verify-phase-65-4-integrity-evidence-contract.sh
+approval_record: issue #1383
+accepted_signing_posture: beta-attestation-placeholder
+authority_boundary: SBOM, checksum, and signing evidence are subordinate packaging evidence only; they cannot become release truth, gate truth, readiness truth, workflow truth, production signing approval, entitlement truth, or substitute evidence for the Phase 51.3 gate contract.
+non_claims:
+  beta_readiness: false
+  rc_readiness: false
+  ga_readiness: false
+  production_signing_infrastructure: false
+  external_distribution_approval: false
+  entitlement_enforcement: false
+  commercial_replacement_readiness: false
+artifacts:
+  - artifact_name: offline-install-bundle
+    artifact_class: Install artifact set
+    inventory_reference: docs/phase-65-1-release-bundle-inventory.md
+    artifact_path: <release-bundle-dir>/offline-install-bundle.tar
+    sbom_reference: <evidence-dir>/offline-install-bundle.sbom.cdx.json
+    sbom_format: CycloneDX JSON
+    sbom_scope: offline-install-bundle at repository revision 489a0e0aba154a018ad980df62de42377a971246 for beta/design-partner packaging review only
+    checksum_algorithm: sha256
+    checksum_reference: <evidence-dir>/offline-install-bundle.sha256
+    checksum_value: <sha256:offline-install-bundle>
+    signature_reference: <evidence-dir>/offline-install-bundle.sigstore-placeholder.txt
+    signing_posture: beta-attestation-placeholder
+    signing_identity: <beta-signing-identity>
+  - artifact_name: release-channel-upgrade-manifest
+    artifact_class: Upgrade and rollback guidance artifact set
+    inventory_reference: docs/phase-65-1-release-bundle-inventory.md
+    artifact_path: docs/deployment/release/phase-65-3-upgrade-manifest.yaml
+    sbom_reference: <evidence-dir>/release-channel-upgrade-manifest.sbom.cdx.json
+    sbom_format: CycloneDX JSON
+    sbom_scope: release-channel-upgrade-manifest at repository revision 489a0e0aba154a018ad980df62de42377a971246 for beta/design-partner packaging review only
+    checksum_algorithm: sha256
+    checksum_reference: <evidence-dir>/release-channel-upgrade-manifest.sha256
+    checksum_value: <sha256:release-channel-upgrade-manifest>
+    signature_reference: <evidence-dir>/release-channel-upgrade-manifest.sigstore-placeholder.txt
+    signing_posture: beta-attestation-placeholder
+    signing_identity: <beta-signing-identity>
+  - artifact_name: release-notes
+    artifact_class: Release notes artifact set
+    inventory_reference: docs/phase-65-1-release-bundle-inventory.md
+    artifact_path: docs/release/phase-65-beta-release-notes.md
+    sbom_reference: <evidence-dir>/release-notes.sbom.cdx.json
+    sbom_format: CycloneDX JSON
+    sbom_scope: release-notes at repository revision 489a0e0aba154a018ad980df62de42377a971246 for beta/design-partner packaging review only
+    checksum_algorithm: sha256
+    checksum_reference: <evidence-dir>/release-notes.sha256
+    checksum_value: <sha256:release-notes>
+    signature_reference: <evidence-dir>/release-notes.sigstore-placeholder.txt
+    signing_posture: beta-attestation-placeholder
+    signing_identity: <beta-signing-identity>
+  - artifact_name: verification-output
+    artifact_class: Verification output artifact set
+    inventory_reference: docs/phase-65-1-release-bundle-inventory.md
+    artifact_path: <evidence-dir>/phase-65-verification-output.txt
+    sbom_reference: <evidence-dir>/verification-output.sbom.cdx.json
+    sbom_format: CycloneDX JSON
+    sbom_scope: verification-output at repository revision 489a0e0aba154a018ad980df62de42377a971246 for beta/design-partner packaging review only
+    checksum_algorithm: sha256
+    checksum_reference: <evidence-dir>/verification-output.sha256
+    checksum_value: <sha256:verification-output>
+    signature_reference: <evidence-dir>/verification-output.sigstore-placeholder.txt
+    signing_posture: beta-attestation-placeholder
+    signing_identity: <beta-signing-identity>
