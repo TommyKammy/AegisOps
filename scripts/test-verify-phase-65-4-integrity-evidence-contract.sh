@@ -132,7 +132,12 @@ assert_fails_with "${release_identifier_mismatch_repo}" "release_bundle_identifi
 unresolved_revision_repo="${workdir}/unresolved-revision"
 create_valid_repo "${unresolved_revision_repo}"
 perl -0pi -e 's/[0-9a-f]{40}/deadbeef/g' "${unresolved_revision_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
-assert_fails_with "${unresolved_revision_repo}" "repository_revision must resolve to a Git commit or tag"
+assert_fails_with "${unresolved_revision_repo}" "repository_revision must be a 40-character commit SHA or reviewed Git tag"
+
+symbolic_revision_repo="${workdir}/symbolic-revision"
+create_valid_repo "${symbolic_revision_repo}"
+perl -0pi -e 's/[0-9a-f]{40}/@/g' "${symbolic_revision_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${symbolic_revision_repo}" "repository_revision must be a 40-character commit SHA or reviewed Git tag"
 
 artifact_absent_at_revision_repo="${workdir}/artifact-absent-at-revision"
 create_valid_repo "${artifact_absent_at_revision_repo}"
@@ -165,6 +170,11 @@ missing_artifacts_key_repo="${workdir}/missing-artifacts-key"
 create_valid_repo "${missing_artifacts_key_repo}"
 perl -0pi -e 's/^artifacts:\n//m' "${missing_artifacts_key_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
 assert_fails_with "${missing_artifacts_key_repo}" "Missing Phase 65.4 integrity manifest artifacts"
+
+malformed_artifact_list_repo="${workdir}/malformed-artifact-list"
+create_valid_repo "${malformed_artifact_list_repo}"
+perl -0pi -e 's#^artifacts:\n#artifacts:\n  - artifact_path: docs/release/phase-65-beta-release-notes.md\n#m' "${malformed_artifact_list_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${malformed_artifact_list_repo}" "Invalid Phase 65.4 integrity manifest artifacts"
 
 sbom_scope_mismatch_repo="${workdir}/sbom-scope-mismatch"
 create_valid_repo "${sbom_scope_mismatch_repo}"
@@ -261,6 +271,16 @@ quoted_top_level_key_repo="${workdir}/quoted-top-level-key"
 create_valid_repo "${quoted_top_level_key_repo}"
 printf '%s\n' '"production-signing-infrastructure": true' >>"${quoted_top_level_key_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
 assert_fails_with "${quoted_top_level_key_repo}" "Invalid Phase 65.4 integrity manifest top-level field: production-signing-infrastructure"
+
+explicit_mapping_top_level_key_repo="${workdir}/explicit-mapping-top-level-key"
+create_valid_repo "${explicit_mapping_top_level_key_repo}"
+printf '%s\n' '? production_signing_infrastructure' ': true' >>"${explicit_mapping_top_level_key_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${explicit_mapping_top_level_key_repo}" "Invalid Phase 65.4 integrity manifest top-level field: production_signing_infrastructure"
+
+explicit_mapping_artifact_field_repo="${workdir}/explicit-mapping-artifact-field"
+create_valid_repo "${explicit_mapping_artifact_field_repo}"
+perl -0pi -e 's#(    signing_identity: <beta-signing-identity>\n)#$1    ? production_signing_infrastructure\n    : true\n#m' "${explicit_mapping_artifact_field_repo}/docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+assert_fails_with "${explicit_mapping_artifact_field_repo}" "Invalid Phase 65.4 integrity manifest artifact field for offline-install-bundle: production_signing_infrastructure"
 
 production_secret_doc_repo="${workdir}/production-secret-doc"
 create_valid_repo "${production_secret_doc_repo}"

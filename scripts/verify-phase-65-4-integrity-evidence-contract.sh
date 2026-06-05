@@ -132,6 +132,13 @@ require_repository_revision_resolves() {
   local repository_revision
 
   repository_revision="$(normalize_yaml_scalar "$(yaml_top_level_scalar "${absolute_manifest_path}" "repository_revision")")"
+  if [[ ! "${repository_revision}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    if ! git -C "${repo_root}" check-ref-format --allow-onelevel "${repository_revision}" >/dev/null 2>&1 ||
+      ! git -C "${repo_root}" show-ref --verify --quiet "refs/tags/${repository_revision}"; then
+      echo "Invalid Phase 65.4 integrity manifest value: repository_revision must be a 40-character commit SHA or reviewed Git tag" >&2
+      exit 1
+    fi
+  fi
   if ! git -C "${repo_root}" rev-parse --verify --quiet "${repository_revision}^{commit}" >/dev/null; then
     echo "Invalid Phase 65.4 integrity manifest value: repository_revision must resolve to a Git commit or tag" >&2
     exit 1
@@ -169,6 +176,9 @@ validate_top_level_manifest_keys() {
     );
 
     for my $line (split /\n/, $text) {
+      if ($line =~ /^\?\s*([^[:space:]].*?)\s*$/ || $line =~ /^:\s*([^[:space:]].*?)\s*$/) {
+        die "Invalid Phase 65.4 integrity manifest top-level field: $1\n";
+      }
       my $first = substr($line, 0, 1);
       if ($first eq "\"" || $first eq chr(39)) {
         my $quote = $first;
@@ -280,6 +290,9 @@ validate_artifacts() {
     die "Invalid Phase 65.4 integrity manifest artifacts\n" if $artifact_key_count != 1;
 
     my $artifact_text = "\n" . join("\n", @artifact_lines);
+    for my $line (@artifact_lines) {
+      die "Invalid Phase 65.4 integrity manifest artifacts\n" if $line =~ /^  -\s/ && $line !~ /^  - artifact_name:\s*/;
+    }
     my @blocks = split /\n  - artifact_name:\s*/, $artifact_text;
     shift @blocks;
     my %expected = (
@@ -327,6 +340,9 @@ validate_artifacts() {
       for my $line (split /\n/, $block) {
         my $field_line = $line;
         next unless $field_line =~ s/^    //;
+        if ($field_line =~ /^\?\s*([^[:space:]].*?)\s*$/ || $field_line =~ /^:\s*([^[:space:]].*?)\s*$/) {
+          die "Invalid Phase 65.4 integrity manifest artifact field for $artifact_name: $1\n";
+        }
         my $first = substr($field_line, 0, 1);
         if ($first eq "\"" || $first eq chr(39)) {
           my $quote = $first;
