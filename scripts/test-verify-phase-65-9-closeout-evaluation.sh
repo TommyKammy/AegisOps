@@ -74,6 +74,10 @@ copy_valid_repo() {
     "docs/phase-65-4-integrity-evidence-contract.md" \
     "docs/phase-65-5-oss-licensing-redistribution-checklist.md" \
     "docs/phase-65-6-default-smb-documentation-pack.md" \
+    "docs/deployment/release/phase-65-3-upgrade-manifest.yaml" \
+    "docs/deployment/release/phase-65-4-integrity-evidence.yaml" \
+    "docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml" \
+    "docs/deployment/release/phase-65-6-default-smb-docs-pack.yaml" \
     "docs/migration/phase-65-7-standalone-wazuh-migration-guide.md" \
     "docs/migration/phase-65-7-standalone-shuffle-migration-guide.md" \
     "docs/migration/phase-65-7-manual-soc-ticket-workflow-migration-guide.md" \
@@ -113,6 +117,11 @@ missing_doc_repo="${workdir}/missing-doc"
 copy_valid_repo "${missing_doc_repo}"
 rm "${missing_doc_repo}/docs/phase-65-closeout-evaluation.md"
 assert_fails_with "${missing_doc_repo}" "Missing Phase 65 closeout evaluation"
+
+missing_structured_artifact_repo="${workdir}/missing-structured-artifact"
+copy_valid_repo "${missing_structured_artifact_repo}"
+rm "${missing_structured_artifact_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
+assert_fails_with "${missing_structured_artifact_repo}" "Missing Phase 65 closeout reference docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
 
 missing_readme_repo="${workdir}/missing-readme"
 copy_valid_repo "${missing_readme_repo}"
@@ -160,10 +169,20 @@ copy_valid_repo "${rc_ready_repo}"
 printf '%s\n' "Phase 65 proves readiness for RC." >>"${rc_ready_repo}/docs/phase-65-closeout-evaluation.md"
 assert_fails_with "${rc_ready_repo}" "Forbidden Phase 65 closeout evaluation claim matched"
 
+rc_ready_only_repo="${workdir}/rc-ready-only"
+copy_valid_repo "${rc_ready_only_repo}"
+printf '%s\n' "Phase 65 proves RC readiness only." >>"${rc_ready_only_repo}/docs/phase-65-closeout-evaluation.md"
+assert_fails_with "${rc_ready_only_repo}" "Forbidden Phase 65 closeout evaluation claim matched"
+
 ga_ready_repo="${workdir}/ga-ready"
 copy_valid_repo "${ga_ready_repo}"
 printf '%s\n' "Phase 65 proves GA readiness." >>"${ga_ready_repo}/docs/phase-65-closeout-evaluation.md"
 assert_fails_with "${ga_ready_repo}" "Forbidden Phase 65 closeout evaluation claim matched"
+
+ga_ready_without_repo="${workdir}/ga-ready-without"
+copy_valid_repo "${ga_ready_without_repo}"
+printf '%s\n' "Phase 65 proves GA readiness without external evidence." >>"${ga_ready_without_repo}/docs/phase-65-closeout-evaluation.md"
+assert_fails_with "${ga_ready_without_repo}" "Forbidden Phase 65 closeout evaluation claim matched"
 
 support_complete_repo="${workdir}/support-complete"
 copy_valid_repo "${support_complete_repo}"

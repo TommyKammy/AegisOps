@@ -1,7 +1,7 @@
 checklist_identifier: phase-65-oss-licensing-redistribution-checklist-v1
 inventory_identifier: phase-65-release-bundle-inventory-v1
-release_bundle_identifier: aegisops-beta-95ec0dd04e4fa51094a508d36fb645bc44e74389
-repository_revision: 95ec0dd04e4fa51094a508d36fb645bc44e74389
+release_bundle_identifier: aegisops-beta-486f35c86d7878f4891b99cdbf5b18081bb7331d
+repository_revision: 486f35c86d7878f4891b99cdbf5b18081bb7331d
 review_owner: AegisOps maintainers
 reviewed_date: 2026-06-07
 phase65_inventory_reference: docs/phase-65-1-release-bundle-inventory.md

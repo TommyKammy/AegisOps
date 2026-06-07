@@ -20,6 +20,10 @@ required_reference_paths=(
   "docs/phase-65-4-integrity-evidence-contract.md"
   "docs/phase-65-5-oss-licensing-redistribution-checklist.md"
   "docs/phase-65-6-default-smb-documentation-pack.md"
+  "docs/deployment/release/phase-65-3-upgrade-manifest.yaml"
+  "docs/deployment/release/phase-65-4-integrity-evidence.yaml"
+  "docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
+  "docs/deployment/release/phase-65-6-default-smb-docs-pack.yaml"
   "docs/migration/phase-65-7-standalone-wazuh-migration-guide.md"
   "docs/migration/phase-65-7-standalone-shuffle-migration-guide.md"
   "docs/migration/phase-65-7-manual-soc-ticket-workflow-migration-guide.md"
@@ -191,10 +195,6 @@ forbidden_patterns=(
 )
 
 while IFS= read -r line; do
-  line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
-  if [[ "${line_lower}" =~ (does[[:space:]]+not|must[[:space:]]+not|cannot|without|only|reject|not[[:space:]]+) ]]; then
-    continue
-  fi
   for pattern in "${forbidden_patterns[@]}"; do
     if grep -Eiq -- "${pattern}" <<<"${line}"; then
       echo "Forbidden Phase 65 closeout evaluation claim matched: ${pattern}" >&2
