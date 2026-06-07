@@ -31,6 +31,31 @@ required_reference_paths=(
   "docs/deployment/release/phase-65-8-design-partner-evidence-template.md"
 )
 
+required_verifier_scripts=(
+  "scripts/verify-phase-65-1-release-bundle-inventory.sh"
+  "scripts/test-verify-phase-65-1-release-bundle-inventory.sh"
+  "scripts/verify-phase-65-2-offline-install-bundle-contract.sh"
+  "scripts/test-verify-phase-65-2-offline-install-bundle-contract.sh"
+  "scripts/verify-phase-65-3-release-channel-upgrade-manifest.sh"
+  "scripts/test-verify-phase-65-3-release-channel-upgrade-manifest.sh"
+  "scripts/verify-phase-65-4-integrity-evidence-contract.sh"
+  "scripts/test-verify-phase-65-4-integrity-evidence-contract.sh"
+  "scripts/verify-phase-65-5-oss-licensing-redistribution-checklist.sh"
+  "scripts/test-verify-phase-65-5-oss-licensing-redistribution-checklist.sh"
+  "scripts/verify-phase-65-6-default-smb-docs-pack.sh"
+  "scripts/test-verify-phase-65-6-default-smb-docs-pack.sh"
+  "scripts/verify-phase-65-7-migration-guides.sh"
+  "scripts/test-verify-phase-65-7-migration-guides.sh"
+  "scripts/verify-phase-65-8-beta-evidence-templates.sh"
+  "scripts/test-verify-phase-65-8-beta-evidence-templates.sh"
+  "scripts/verify-phase-65-9-closeout-evaluation.sh"
+  "scripts/test-verify-phase-65-9-closeout-evaluation.sh"
+  "scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh"
+  "scripts/verify-phase-51-6-authority-boundary-negative-test-policy.sh"
+  "scripts/verify-maintainability-hotspots.sh"
+  "scripts/verify-publishable-path-hygiene.sh"
+)
+
 require_file() {
   local path="$1"
   local description="$2"
@@ -95,6 +120,9 @@ require_file "${absolute_doc_path}" "Phase 65 closeout evaluation"
 require_file "${readme_path}" "README for Phase 65 closeout link check"
 for reference_path in "${required_reference_paths[@]}"; do
   require_file "${repo_root}/${reference_path}" "Phase 65 closeout reference ${reference_path}"
+done
+for verifier_script in "${required_verifier_scripts[@]}"; do
+  require_file "${repo_root}/${verifier_script}" "Phase 65 verifier script ${verifier_script}"
 done
 
 require_phrase "${readme_path}" "- [Phase 65.9 closeout evaluation](docs/phase-65-closeout-evaluation.md) records the Commercial Packaging and Beta boundary outcomes, subordinate authority posture, verifier evidence, issue-lint evidence, accepted limitations, and bounded Phase 66 handoff without RC, GA, real design-partner success, or commercial replacement claims." "README canonical cross-phase boundary bullet"
@@ -214,6 +242,10 @@ fi
 
 while IFS= read -r line; do
   line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
+  if grep -Eiq -- '(includes|contains|embeds|carries)[^.[:cntrl:]]*(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|unredacted[[:space:]]+customer[[:space:]]+(ticket|alert|log|chat|payload|export|data)' <<<"${line}"; then
+    echo "Forbidden Phase 65 closeout evaluation: customer-private data detected" >&2
+    exit 1
+  fi
   if [[ "${line_lower}" =~ (reject|without|must[[:space:]]+reject|does[[:space:]]+not|cannot) ]]; then
     continue
   fi

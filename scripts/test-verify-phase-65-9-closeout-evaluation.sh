@@ -57,8 +57,6 @@ copy_valid_repo() {
   mkdir -p "${target}"
   copy_repo_path "${target}" "README.md"
   copy_repo_path "${target}" "docs/phase-65-closeout-evaluation.md"
-  copy_repo_path "${target}" "scripts/verify-phase-65-9-closeout-evaluation.sh"
-  copy_repo_path "${target}" "scripts/verify-publishable-path-hygiene.sh"
   copy_repo_path "${target}" "control-plane/aegisops/control_plane/publishable_paths.py"
   : >"${target}/control-plane/aegisops/__init__.py"
   : >"${target}/control-plane/aegisops/control_plane/__init__.py"
@@ -83,6 +81,32 @@ copy_valid_repo() {
     "docs/migration/phase-65-7-manual-soc-ticket-workflow-migration-guide.md" \
     "docs/deployment/release/phase-65-8-beta-known-limitations-template.md" \
     "docs/deployment/release/phase-65-8-design-partner-evidence-template.md"; do
+    copy_repo_path "${target}" "${path}"
+  done
+
+  for path in \
+    "scripts/verify-phase-65-1-release-bundle-inventory.sh" \
+    "scripts/test-verify-phase-65-1-release-bundle-inventory.sh" \
+    "scripts/verify-phase-65-2-offline-install-bundle-contract.sh" \
+    "scripts/test-verify-phase-65-2-offline-install-bundle-contract.sh" \
+    "scripts/verify-phase-65-3-release-channel-upgrade-manifest.sh" \
+    "scripts/test-verify-phase-65-3-release-channel-upgrade-manifest.sh" \
+    "scripts/verify-phase-65-4-integrity-evidence-contract.sh" \
+    "scripts/test-verify-phase-65-4-integrity-evidence-contract.sh" \
+    "scripts/verify-phase-65-5-oss-licensing-redistribution-checklist.sh" \
+    "scripts/test-verify-phase-65-5-oss-licensing-redistribution-checklist.sh" \
+    "scripts/verify-phase-65-6-default-smb-docs-pack.sh" \
+    "scripts/test-verify-phase-65-6-default-smb-docs-pack.sh" \
+    "scripts/verify-phase-65-7-migration-guides.sh" \
+    "scripts/test-verify-phase-65-7-migration-guides.sh" \
+    "scripts/verify-phase-65-8-beta-evidence-templates.sh" \
+    "scripts/test-verify-phase-65-8-beta-evidence-templates.sh" \
+    "scripts/verify-phase-65-9-closeout-evaluation.sh" \
+    "scripts/test-verify-phase-65-9-closeout-evaluation.sh" \
+    "scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh" \
+    "scripts/verify-phase-51-6-authority-boundary-negative-test-policy.sh" \
+    "scripts/verify-maintainability-hotspots.sh" \
+    "scripts/verify-publishable-path-hygiene.sh"; do
     copy_repo_path "${target}" "${path}"
   done
 
@@ -145,6 +169,11 @@ missing_verifier_repo="${workdir}/missing-verifier"
 copy_valid_repo "${missing_verifier_repo}"
 remove_doc_text "${missing_verifier_repo}" "- \`bash scripts/verify-phase-65-8-beta-evidence-templates.sh\`"
 assert_fails_with "${missing_verifier_repo}" "Missing Phase 65 verifier evidence line in Verifier Evidence section"
+
+missing_verifier_script_repo="${workdir}/missing-verifier-script"
+copy_valid_repo "${missing_verifier_script_repo}"
+rm "${missing_verifier_script_repo}/scripts/verify-phase-65-8-beta-evidence-templates.sh"
+assert_fails_with "${missing_verifier_script_repo}" "Missing Phase 65 verifier script scripts/verify-phase-65-8-beta-evidence-templates.sh"
 
 missing_issue_lint_repo="${workdir}/missing-issue-lint"
 copy_valid_repo "${missing_issue_lint_repo}"
@@ -213,6 +242,11 @@ customer_private_repo="${workdir}/customer-private"
 copy_valid_repo "${customer_private_repo}"
 printf '%s\n' "This closeout includes unredacted customer ticket data." >>"${customer_private_repo}/docs/phase-65-closeout-evaluation.md"
 assert_fails_with "${customer_private_repo}" "customer-private data detected"
+
+customer_private_without_repo="${workdir}/customer-private-without"
+copy_valid_repo "${customer_private_without_repo}"
+printf '%s\n' "This closeout includes unredacted customer ticket data without redaction." >>"${customer_private_without_repo}/docs/phase-65-closeout-evaluation.md"
+assert_fails_with "${customer_private_without_repo}" "customer-private data detected"
 
 path_repo="${workdir}/path"
 copy_valid_repo "${path_repo}"
