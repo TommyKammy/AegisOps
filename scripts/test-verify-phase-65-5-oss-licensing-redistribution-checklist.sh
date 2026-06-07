@@ -47,15 +47,16 @@ create_valid_repo() {
   git -C "${target}" init -q
   git -C "${target}" config user.email "phase-65-5-test@example.invalid"
   git -C "${target}" config user.name "Phase 65.5 Test"
-  fixture_revision="phase-65-5-fixture-v1"
+  git -C "${target}" add README.md docs scripts control-plane
+  git -C "${target}" commit -q -m "fixture"
+  fixture_revision="$(git -C "${target}" rev-parse HEAD)"
   FIXTURE_REVISION="${fixture_revision}" perl -0pi -e '
     s/^repository_revision:.*/repository_revision: $ENV{FIXTURE_REVISION}/m;
     s/^release_bundle_identifier:.*/release_bundle_identifier: aegisops-beta-$ENV{FIXTURE_REVISION}/m;
   ' \
     "${target}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
-  git -C "${target}" add README.md docs scripts control-plane
-  git -C "${target}" commit -q -m "fixture"
-  git -C "${target}" tag "${fixture_revision}" HEAD
+  git -C "${target}" add docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml
+  git -C "${target}" commit -q -m "bind fixture revision"
 }
 
 assert_passes() {
@@ -131,6 +132,11 @@ conclusion_overclaim_repo="${workdir}/conclusion-overclaim"
 create_valid_repo "${conclusion_overclaim_repo}"
 perl -0pi -e 's/^conclusion:.*/conclusion: Accepted as legal advice and production distribution approval for RC readiness./m' "${conclusion_overclaim_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
 assert_fails_with "${conclusion_overclaim_repo}" "Invalid Phase 65.5 licensing checklist value: conclusion"
+
+conclusion_entitlement_overclaim_repo="${workdir}/conclusion-entitlement-overclaim"
+create_valid_repo "${conclusion_entitlement_overclaim_repo}"
+perl -0pi -e 's#^conclusion:.*#conclusion: Accepted as OSS licensing and redistribution checklist evidence for Phase 65 beta/design-partner packaging review only and entitlement enforcement.#m' "${conclusion_entitlement_overclaim_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
+assert_fails_with "${conclusion_entitlement_overclaim_repo}" "conclusion overclaim"
 
 missing_blocker_repo="${workdir}/missing-blocker"
 create_valid_repo "${missing_blocker_repo}"

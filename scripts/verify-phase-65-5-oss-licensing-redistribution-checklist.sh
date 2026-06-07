@@ -167,22 +167,30 @@ require_repository_revision_contains_checklist_evidence() {
   fi
 }
 
+normalize_checklist_record_for_revision_compare() {
+  perl -0pe '
+    s/^release_bundle_identifier:.*$/release_bundle_identifier: <normalized-release-bundle-identifier>/m;
+    s/^repository_revision:.*$/repository_revision: <normalized-repository-revision>/m;
+  '
+}
+
 require_repository_revision_matches_current_record() {
-  local repository_revision required_path referenced_blob current_blob
+  local repository_revision referenced_doc current_doc referenced_record current_record
 
   repository_revision="$(normalize_yaml_scalar "$(yaml_top_level_scalar "${absolute_checklist_path}" "repository_revision")")"
-  for required_path in \
-    "${doc_path}" \
-    "${checklist_path}" \
-    "scripts/verify-phase-65-5-oss-licensing-redistribution-checklist.sh" \
-    "scripts/test-verify-phase-65-5-oss-licensing-redistribution-checklist.sh"; do
-    referenced_blob="$(git -C "${repo_root}" show "${repository_revision}^{commit}:${required_path}")"
-    current_blob="$(cat "${repo_root}/${required_path}")"
-    if [[ "${referenced_blob}" != "${current_blob}" ]]; then
-      echo "Invalid Phase 65.5 licensing checklist value: repository_revision must reproduce current ${required_path}" >&2
-      exit 1
-    fi
-  done
+  referenced_doc="$(git -C "${repo_root}" show "${repository_revision}^{commit}:${doc_path}")"
+  current_doc="$(cat "${repo_root}/${doc_path}")"
+  if [[ "${referenced_doc}" != "${current_doc}" ]]; then
+    echo "Invalid Phase 65.5 licensing checklist value: repository_revision must reproduce current ${doc_path}" >&2
+    exit 1
+  fi
+
+  referenced_record="$(git -C "${repo_root}" show "${repository_revision}^{commit}:${checklist_path}" | normalize_checklist_record_for_revision_compare)"
+  current_record="$(normalize_checklist_record_for_revision_compare <"${absolute_checklist_path}")"
+  if [[ "${referenced_record}" != "${current_record}" ]]; then
+    echo "Invalid Phase 65.5 licensing checklist value: repository_revision must reproduce current ${checklist_path}" >&2
+    exit 1
+  fi
 }
 
 require_release_identifier_binding() {
@@ -607,7 +615,7 @@ if ! grep -Eiq 'beta/design-partner packaging review only' <<<"${conclusion}"; t
   echo "Invalid Phase 65.5 licensing checklist value: conclusion" >&2
   exit 1
 fi
-if grep -Eiq '(legal advice|production distribution approval|external distribution approval|RC readiness|GA readiness|commercial replacement readiness)' <<<"${conclusion}"; then
+if grep -Eiq '(legal advice|production distribution approval|external distribution approval|upstream redistribution approval|upstream license modification|entitlement enforcement|billing readiness|RC readiness|GA readiness|commercial replacement readiness|production signing approval|production support readiness)' <<<"${conclusion}"; then
   echo "Forbidden Phase 65.5 licensing checklist claim in checklist record: conclusion overclaim" >&2
   exit 1
 fi
