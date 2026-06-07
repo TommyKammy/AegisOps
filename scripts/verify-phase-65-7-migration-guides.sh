@@ -63,6 +63,15 @@ forbidden_lines=(
   "issue-lint output is readiness truth."
 )
 
+forbidden_patterns=(
+  'phase[[:space:]]+65\.7[[:space:]]+(proves|proven|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc|release[- ]candidate|ga|general[- ]availability)[[:space:]]+(readiness|gate|acceptance)'
+  'phase[[:space:]]+65\.7[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc|release[- ]candidate|ga|general[- ]availability)[^.[:cntrl:]]*gate'
+  'aegisops[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(rc|release[- ]candidate|ga|general[- ]availability|commercially[[:space:]]+replacement)[[:space:]]+ready'
+  'migration[[:space:]]+guide[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc|release[- ]candidate|ga|general[- ]availability)[[:space:]]+(readiness|gate|acceptance)'
+  'verifier[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(readiness|release|gate)[[:space:]]+truth'
+  'issue-lint[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(readiness|release|gate)[[:space:]]+truth'
+)
+
 require_file() {
   local path="$1"
   local description="$2"
@@ -88,6 +97,17 @@ require_phrase() {
   fi
 }
 
+require_heading() {
+  local file="$1"
+  local heading="$2"
+  local description="$3"
+
+  if ! grep -Fxq -- "${heading}" < <(visible_text "${file}"); then
+    echo "Missing Phase 65.7 ${description}: ${heading}" >&2
+    exit 1
+  fi
+}
+
 reject_forbidden_lines() {
   local file="$1"
   local forbidden
@@ -100,6 +120,18 @@ reject_forbidden_lines() {
   done
 }
 
+reject_forbidden_patterns() {
+  local file="$1"
+  local pattern
+
+  for pattern in "${forbidden_patterns[@]}"; do
+    if grep -Eiq -- "${pattern}" < <(visible_text "${file}"); then
+      echo "Forbidden Phase 65.7 migration guide claim matched: ${pattern}" >&2
+      exit 1
+    fi
+  done
+}
+
 reject_publishable_hazards() {
   local file="$1"
 
@@ -107,7 +139,7 @@ reject_publishable_hazards() {
     echo "Forbidden Phase 65.7 migration guide production secret material: ${file#"${repo_root}/"}" >&2
     exit 1
   fi
-  if grep -Eiq '(includes|contains|embeds|carries)[[:space:]]+customer[-_]private|customer[-_]private[[:space:]]+(example|ticket|alert|log|chat|payload|export)|unredacted[[:space:]]+(customer|ticket|alert|log|chat|payload)[[:space:]]+(data|content|example)' < <(visible_text "${file}"); then
+  if grep -Eiq '(includes|contains|embeds|carries)[[:space:]]+customer[-_ ]private|customer[-_ ]private[[:space:]]+(example|ticket|alert|log|chat|payload|export)|unredacted[[:space:]]+(customer|ticket|alert|log|chat|payload)[[:space:]]+(data|content|example)' < <(visible_text "${file}"); then
     echo "Forbidden Phase 65.7 migration guide customer-private data: ${file#"${repo_root}/"}" >&2
     exit 1
   fi
@@ -162,7 +194,7 @@ validate_guide() {
   require_phrase "${absolute_path}" "${non_goal_phrase}" "${description} non-goal authority exclusion"
 
   for heading in "${required_headings[@]}"; do
-    require_phrase "${absolute_path}" "${heading}" "${description} required section"
+    require_heading "${absolute_path}" "${heading}" "${description} required section"
   done
 
   for phrase in "${required_common_phrases[@]}"; do
@@ -175,6 +207,7 @@ validate_guide() {
   fi
 
   reject_forbidden_lines "${absolute_path}"
+  reject_forbidden_patterns "${absolute_path}"
   reject_publishable_hazards "${absolute_path}"
   require_readme_link "${relative_path}"
 }
