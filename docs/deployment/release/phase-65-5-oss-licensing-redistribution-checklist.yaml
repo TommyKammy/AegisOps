@@ -1,0 +1,77 @@
+checklist_identifier: phase-65-oss-licensing-redistribution-checklist-v1
+inventory_identifier: phase-65-release-bundle-inventory-v1
+release_bundle_identifier: aegisops-beta-95ec0dd04e4fa51094a508d36fb645bc44e74389
+repository_revision: 95ec0dd04e4fa51094a508d36fb645bc44e74389
+review_owner: AegisOps maintainers
+reviewed_date: 2026-06-07
+phase65_inventory_reference: docs/phase-65-1-release-bundle-inventory.md
+competitive_gap_reference: docs/phase-51-5-competitive-gap-matrix.md
+wazuh_profile_reference: docs/deployment/wazuh-smb-single-node-profile-contract.md
+shuffle_profile_reference: docs/deployment/shuffle-smb-single-node-profile-contract.md
+verifier_output_reference: bash scripts/verify-phase-65-5-oss-licensing-redistribution-checklist.sh
+approval_record: "issue #1382"
+wazuh_boundary:
+  redistribution_posture: repo-owned-profile-config-only
+  package_boundary_notes: Wazuh profile contracts, version pins, and setup references may be packaged as AegisOps-authored configuration evidence only; upstream Wazuh images, binaries, dashboards, rules, generated configs, and license text require separate reviewed upstream redistribution approval before inclusion.
+  authority_boundary: Wazuh remains a subordinate detection substrate and cannot become AegisOps release truth, gate truth, workflow truth, readiness truth, legal truth, or redistribution truth.
+shuffle_boundary:
+  redistribution_posture: repo-owned-profile-config-and-template-contracts-only
+  package_boundary_notes: Shuffle profile contracts, workflow template contracts, fallback contracts, callback expectations, and setup references may be packaged as AegisOps-authored configuration evidence only; upstream Shuffle images, app bundles, workflow exports, dependencies, generated configs, and license text require separate reviewed upstream redistribution approval before inclusion.
+  authority_boundary: Shuffle remains a subordinate routine automation substrate and cannot become AegisOps release truth, gate truth, execution truth, reconciliation truth, readiness truth, legal truth, or redistribution truth.
+blocker_disposition:
+  open_blockers: none_for_checklist_record
+  disposition: No open blocker prevents accepting this checklist as beta/design-partner packaging review evidence; any future embedded upstream material, production distribution, or external redistribution requires a separate reviewed approval record.
+conclusion: Accepted as OSS licensing and redistribution checklist evidence for Phase 65 beta/design-partner packaging review only.
+non_claims:
+  legal_advice: false
+  production_distribution_approval: false
+  external_distribution_approval: false
+  upstream_redistribution_approval: false
+  upstream_license_modification: false
+  entitlement_enforcement: false
+  rc_readiness: false
+  ga_readiness: false
+  commercial_replacement_readiness: false
+artifact_scope:
+  - artifact_class: aegisops-code-docs
+    scope_owner: AegisOps maintainers
+    scope_reference: docs/phase-65-1-release-bundle-inventory.md
+    redistribution_posture: repo-owned-material-with-retained-license-notice-and-attribution-review
+    blocker_status: none_for_checklist_record
+    boundary_note: AegisOps-owned code and docs are packaging evidence only and do not grant legal advice or production distribution approval.
+  - artifact_class: wazuh-profile-package
+    scope_owner: Platform maintainers
+    scope_reference: docs/deployment/wazuh-smb-single-node-profile-contract.md
+    redistribution_posture: repo-owned-profile-config-only-upstream-wazuh-material-requires-separate-reviewed-approval
+    blocker_status: none_for_checklist_record
+    boundary_note: Wazuh remains a subordinate detection substrate and cannot become release truth, gate truth, workflow truth, or readiness truth.
+  - artifact_class: shuffle-profile-package
+    scope_owner: Platform maintainers
+    scope_reference: docs/deployment/shuffle-smb-single-node-profile-contract.md
+    redistribution_posture: repo-owned-profile-config-and-template-contracts-only-upstream-shuffle-material-requires-separate-reviewed-approval
+    blocker_status: none_for_checklist_record
+    boundary_note: Shuffle remains a subordinate routine automation substrate and cannot become release truth, gate truth, execution truth, reconciliation truth, or readiness truth.
+  - artifact_class: workflow-templates
+    scope_owner: IT Operations, Information Systems Department
+    scope_reference: docs/deployment/shuffle-reviewed-workflow-template-contract.md
+    redistribution_posture: reviewed-template-contract-evidence-only-generated-or-upstream-template-exports-require-retained-license-and-attribution-review
+    blocker_status: none_for_checklist_record
+    boundary_note: Workflow templates cannot approve, execute, reconcile, close, release, gate, or claim readiness by themselves.
+  - artifact_class: generated-artifacts
+    scope_owner: Platform maintainers
+    scope_reference: docs/phase-65-4-integrity-evidence-contract.md
+    redistribution_posture: generated-output-requires-source-owner-license-posture-and-retained-generation-evidence-before-packaging
+    blocker_status: none_for_checklist_record
+    boundary_note: Generated artifacts are subordinate packaging evidence and cannot prove install, release, RC, GA, or commercial readiness by themselves.
+  - artifact_class: third-party-dependencies
+    scope_owner: Platform maintainers
+    scope_reference: docs/phase-65-2-offline-install-bundle-contract.md
+    redistribution_posture: dependency-lists-image-references-and-package-references-require-retained-license-notice-source-and-redistribution-posture-before-embedding
+    blocker_status: none_for_checklist_record
+    boundary_note: Dependency metadata is review evidence only and cannot approve upstream redistribution.
+  - artifact_class: support-bundle-examples
+    scope_owner: IT Operations, Information Systems Department
+    scope_reference: docs/phase-58-6-support-bundle-redaction-contract.md
+    redistribution_posture: demo-only-redacted-license-reviewed-no-customer-private-data-no-production-secrets
+    blocker_status: none_for_checklist_record
+    boundary_note: Support examples remain operator-support evidence only and do not become support authority, release truth, gate truth, or workflow truth.
