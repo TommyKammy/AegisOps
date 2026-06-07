@@ -199,6 +199,11 @@ copy_valid_repo "${secret_repo}"
 printf '%s\n' "api_key = abc123" >>"${secret_repo}/docs/phase-65-closeout-evaluation.md"
 assert_fails_with "${secret_repo}" "production secret-looking value detected"
 
+bearer_secret_repo="${workdir}/bearer-secret"
+copy_valid_repo "${bearer_secret_repo}"
+printf '%s\n' "Authorization: Bearer actual-production-token" >>"${bearer_secret_repo}/docs/phase-65-closeout-evaluation.md"
+assert_fails_with "${bearer_secret_repo}" "production secret-looking value detected"
+
 customer_private_repo="${workdir}/customer-private"
 copy_valid_repo "${customer_private_repo}"
 printf '%s\n' "This closeout includes unredacted customer ticket data." >>"${customer_private_repo}/docs/phase-65-closeout-evaluation.md"
