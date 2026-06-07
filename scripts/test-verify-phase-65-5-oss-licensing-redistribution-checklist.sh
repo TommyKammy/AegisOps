@@ -47,13 +47,15 @@ create_valid_repo() {
   git -C "${target}" init -q
   git -C "${target}" config user.email "phase-65-5-test@example.invalid"
   git -C "${target}" config user.name "Phase 65.5 Test"
+  fixture_revision="phase-65-5-fixture-v1"
+  FIXTURE_REVISION="${fixture_revision}" perl -0pi -e '
+    s/^repository_revision:.*/repository_revision: $ENV{FIXTURE_REVISION}/m;
+    s/^release_bundle_identifier:.*/release_bundle_identifier: aegisops-beta-$ENV{FIXTURE_REVISION}/m;
+  ' \
+    "${target}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
   git -C "${target}" add README.md docs scripts control-plane
   git -C "${target}" commit -q -m "fixture"
-  fixture_revision="$(git -C "${target}" rev-parse HEAD)"
-  FIXTURE_REVISION="${fixture_revision}" perl -0pi -e 's/[0-9a-f]{40}/$ENV{FIXTURE_REVISION}/g' \
-    "${target}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
-  git -C "${target}" add docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml
-  git -C "${target}" commit -q -m "bind fixture revision"
+  git -C "${target}" tag "${fixture_revision}" HEAD
 }
 
 assert_passes() {
@@ -183,8 +185,18 @@ assert_fails_with "${release_identifier_mismatch_repo}" "release_bundle_identifi
 
 unresolved_revision_repo="${workdir}/unresolved-revision"
 create_valid_repo "${unresolved_revision_repo}"
-perl -0pi -e 's/[0-9a-f]{40}/deadbeef/g' "${unresolved_revision_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
+perl -0pi -e 's/^repository_revision:.*/repository_revision: deadbeef/m; s/^release_bundle_identifier:.*/release_bundle_identifier: aegisops-beta-deadbeef/m' "${unresolved_revision_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
 assert_fails_with "${unresolved_revision_repo}" "repository_revision must be a 40-character commit SHA or reviewed Git tag"
+
+revision_stale_record_repo="${workdir}/revision-stale-record"
+create_valid_repo "${revision_stale_record_repo}"
+stale_record_revision="$(git -C "${revision_stale_record_repo}" rev-parse HEAD)"
+printf '%s\n' "# stale after referenced revision" >>"${revision_stale_record_repo}/docs/phase-65-5-oss-licensing-redistribution-checklist.md"
+STALE_RECORD_REVISION="${stale_record_revision}" perl -0pi -e '
+  s/^repository_revision:.*/repository_revision: $ENV{STALE_RECORD_REVISION}/m;
+  s/^release_bundle_identifier:.*/release_bundle_identifier: aegisops-beta-$ENV{STALE_RECORD_REVISION}/m;
+' "${revision_stale_record_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
+assert_fails_with "${revision_stale_record_repo}" "repository_revision must reproduce current docs/phase-65-5-oss-licensing-redistribution-checklist.md"
 
 revision_missing_checklist_repo="${workdir}/revision-missing-checklist"
 create_valid_repo "${revision_missing_checklist_repo}"
@@ -192,12 +204,36 @@ empty_tree="$(git -C "${revision_missing_checklist_repo}" mktree </dev/null)"
 revision_missing_checklist="$(printf '%s\n' "missing checklist evidence" | git -C "${revision_missing_checklist_repo}" commit-tree "${empty_tree}")"
 REVISION_MISSING_CHECKLIST="${revision_missing_checklist}" perl -0pi -e 's/[0-9a-f]{40}/$ENV{REVISION_MISSING_CHECKLIST}/g' \
   "${revision_missing_checklist_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
+REVISION_MISSING_CHECKLIST="${revision_missing_checklist}" perl -0pi -e '
+  s/^repository_revision:.*/repository_revision: $ENV{REVISION_MISSING_CHECKLIST}/m;
+  s/^release_bundle_identifier:.*/release_bundle_identifier: aegisops-beta-$ENV{REVISION_MISSING_CHECKLIST}/m;
+' "${revision_missing_checklist_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
 assert_fails_with "${revision_missing_checklist_repo}" "repository_revision must contain README.md"
 
 non_claim_true_repo="${workdir}/non-claim-true"
 create_valid_repo "${non_claim_true_repo}"
 perl -0pi -e 's/^  legal_advice: false/  legal_advice: true/m' "${non_claim_true_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
 assert_fails_with "${non_claim_true_repo}" "Invalid Phase 65.5 licensing checklist value: legal_advice"
+
+unquoted_approval_repo="${workdir}/unquoted-approval"
+create_valid_repo "${unquoted_approval_repo}"
+perl -0pi -e 's/^approval_record:.*/approval_record: issue #1382/m' "${unquoted_approval_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
+assert_fails_with "${unquoted_approval_repo}" "approval_record must quote issue #1382"
+
+missing_scope_reference_repo="${workdir}/missing-scope-reference"
+create_valid_repo "${missing_scope_reference_repo}"
+rm "${missing_scope_reference_repo}/docs/phase-65-2-offline-install-bundle-contract.md"
+assert_fails_with "${missing_scope_reference_repo}" "Missing Phase 65.2 offline install bundle contract reference"
+
+duplicate_boundary_repo="${workdir}/duplicate-boundary"
+create_valid_repo "${duplicate_boundary_repo}"
+cat >>"${duplicate_boundary_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml" <<'EOF_DUPLICATE_BOUNDARY'
+wazuh_boundary:
+  redistribution_posture: todo
+  package_boundary_notes: todo
+  authority_boundary: todo
+EOF_DUPLICATE_BOUNDARY
+assert_fails_with "${duplicate_boundary_repo}" "duplicate top-level field: wazuh_boundary"
 
 legal_advice_claim_repo="${workdir}/legal-advice-claim"
 create_valid_repo "${legal_advice_claim_repo}"

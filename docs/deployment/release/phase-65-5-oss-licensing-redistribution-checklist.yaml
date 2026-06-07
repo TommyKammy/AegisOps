@@ -1,7 +1,7 @@
 checklist_identifier: phase-65-oss-licensing-redistribution-checklist-v1
 inventory_identifier: phase-65-release-bundle-inventory-v1
-release_bundle_identifier: aegisops-beta-38fb099a491936876c15ae1172e7bc16b3d7f322
-repository_revision: 38fb099a491936876c15ae1172e7bc16b3d7f322
+release_bundle_identifier: aegisops-beta-phase-65-5-oss-licensing-redistribution-checklist-v1
+repository_revision: phase-65-5-oss-licensing-redistribution-checklist-v1
 review_owner: AegisOps maintainers
 reviewed_date: 2026-06-07
 phase65_inventory_reference: docs/phase-65-1-release-bundle-inventory.md
@@ -9,7 +9,7 @@ competitive_gap_reference: docs/phase-51-5-competitive-gap-matrix.md
 wazuh_profile_reference: docs/deployment/wazuh-smb-single-node-profile-contract.md
 shuffle_profile_reference: docs/deployment/shuffle-smb-single-node-profile-contract.md
 verifier_output_reference: bash scripts/verify-phase-65-5-oss-licensing-redistribution-checklist.sh
-approval_record: issue #1382
+approval_record: "issue #1382"
 wazuh_boundary:
   redistribution_posture: repo-owned-profile-config-only
   package_boundary_notes: Wazuh profile contracts, version pins, and setup references may be packaged as AegisOps-authored configuration evidence only; upstream Wazuh images, binaries, dashboards, rules, generated configs, and license text require separate reviewed upstream redistribution approval before inclusion.

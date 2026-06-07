@@ -167,6 +167,24 @@ require_repository_revision_contains_checklist_evidence() {
   fi
 }
 
+require_repository_revision_matches_current_record() {
+  local repository_revision required_path referenced_blob current_blob
+
+  repository_revision="$(normalize_yaml_scalar "$(yaml_top_level_scalar "${absolute_checklist_path}" "repository_revision")")"
+  for required_path in \
+    "${doc_path}" \
+    "${checklist_path}" \
+    "scripts/verify-phase-65-5-oss-licensing-redistribution-checklist.sh" \
+    "scripts/test-verify-phase-65-5-oss-licensing-redistribution-checklist.sh"; do
+    referenced_blob="$(git -C "${repo_root}" show "${repository_revision}^{commit}:${required_path}")"
+    current_blob="$(cat "${repo_root}/${required_path}")"
+    if [[ "${referenced_blob}" != "${current_blob}" ]]; then
+      echo "Invalid Phase 65.5 licensing checklist value: repository_revision must reproduce current ${required_path}" >&2
+      exit 1
+    fi
+  done
+}
+
 require_release_identifier_binding() {
   local release_bundle_identifier repository_revision
 
@@ -174,6 +192,13 @@ require_release_identifier_binding() {
   repository_revision="$(normalize_yaml_scalar "$(yaml_top_level_scalar "${absolute_checklist_path}" "repository_revision")")"
   if [[ "${release_bundle_identifier}" != "aegisops-beta-${repository_revision}" ]]; then
     echo "Invalid Phase 65.5 licensing checklist value: release_bundle_identifier must bind to repository_revision" >&2
+    exit 1
+  fi
+}
+
+require_quoted_approval_record() {
+  if ! grep -Fxq 'approval_record: "issue #1382"' "${absolute_checklist_path}"; then
+    echo "Invalid Phase 65.5 licensing checklist value: approval_record must quote issue #1382" >&2
     exit 1
   fi
 }
@@ -201,6 +226,7 @@ validate_top_level_checklist_keys() {
       non_claims
       artifact_scope
     );
+    my %seen;
 
     for my $line (split /\n/, $text) {
       if ($line =~ /^(<<)\s*:/) {
@@ -219,6 +245,7 @@ validate_top_level_checklist_keys() {
       next unless $line =~ /^([A-Za-z0-9_-]+):/;
       my $key = $1;
       die "Invalid Phase 65.5 licensing checklist top-level field: $key\n" unless $allowed{$key};
+      die "Invalid Phase 65.5 licensing checklist duplicate top-level field: $key\n" if $seen{$key}++;
     }
   ' "${absolute_checklist_path}"
 }
@@ -485,9 +512,13 @@ require_file "${absolute_doc_path}" "Phase 65.5 OSS licensing and redistribution
 require_file "${absolute_checklist_path}" "Phase 65.5 OSS licensing and redistribution checklist record"
 require_file "${readme_path}" "README for Phase 65.5 checklist link check"
 require_file "${repo_root}/docs/phase-65-1-release-bundle-inventory.md" "Phase 65.1 release bundle inventory reference"
+require_file "${repo_root}/docs/phase-65-2-offline-install-bundle-contract.md" "Phase 65.2 offline install bundle contract reference"
+require_file "${repo_root}/docs/phase-65-4-integrity-evidence-contract.md" "Phase 65.4 integrity evidence contract reference"
 require_file "${repo_root}/docs/phase-51-5-competitive-gap-matrix.md" "Phase 51.5 competitive gap matrix reference"
+require_file "${repo_root}/docs/phase-58-6-support-bundle-redaction-contract.md" "Phase 58.6 support bundle redaction contract reference"
 require_file "${repo_root}/docs/deployment/wazuh-smb-single-node-profile-contract.md" "Wazuh profile contract reference"
 require_file "${repo_root}/docs/deployment/shuffle-smb-single-node-profile-contract.md" "Shuffle profile contract reference"
+require_file "${repo_root}/docs/deployment/shuffle-reviewed-workflow-template-contract.md" "Shuffle reviewed workflow template contract reference"
 
 require_phrase "${readme_path}" "- [Phase 65.5 OSS licensing and redistribution review checklist](docs/phase-65-5-oss-licensing-redistribution-checklist.md)" "README canonical cross-phase boundary bullet"
 
@@ -537,6 +568,7 @@ require_top_level_equals_once "wazuh_profile_reference" "docs/deployment/wazuh-s
 require_top_level_equals_once "shuffle_profile_reference" "docs/deployment/shuffle-smb-single-node-profile-contract.md"
 require_top_level_equals_once "verifier_output_reference" "bash scripts/verify-phase-65-5-oss-licensing-redistribution-checklist.sh"
 require_top_level_equals_once "approval_record" "issue #1382"
+require_quoted_approval_record
 require_top_level_present_once "conclusion"
 require_top_level_sequence_key_once "artifact_scope"
 
@@ -590,5 +622,7 @@ done < <(
 reject_forbidden_claims "${absolute_doc_path}" "${doc_path}"
 reject_forbidden_claims "${absolute_checklist_path}" "${checklist_path}"
 reject_forbidden_claims "${readme_path}" "README.md"
+
+require_repository_revision_matches_current_record
 
 echo "Phase 65.5 OSS licensing and redistribution checklist verification passed"
