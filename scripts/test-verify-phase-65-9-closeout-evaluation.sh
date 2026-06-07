@@ -174,6 +174,11 @@ copy_valid_repo "${rc_ready_only_repo}"
 printf '%s\n' "Phase 65 proves RC readiness only." >>"${rc_ready_only_repo}/docs/phase-65-closeout-evaluation.md"
 assert_fails_with "${rc_ready_only_repo}" "Forbidden Phase 65 closeout evaluation claim matched"
 
+rc_ready_wrapped_repo="${workdir}/rc-ready-wrapped"
+copy_valid_repo "${rc_ready_wrapped_repo}"
+printf '%s\n%s\n' "Phase 65 proves RC" "readiness." >>"${rc_ready_wrapped_repo}/docs/phase-65-closeout-evaluation.md"
+assert_fails_with "${rc_ready_wrapped_repo}" "Forbidden Phase 65 closeout evaluation claim matched"
+
 ga_ready_repo="${workdir}/ga-ready"
 copy_valid_repo "${ga_ready_repo}"
 printf '%s\n' "Phase 65 proves GA readiness." >>"${ga_ready_repo}/docs/phase-65-closeout-evaluation.md"

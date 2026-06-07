@@ -45,6 +45,10 @@ visible_text() {
   perl -0pe 's/<!--.*?-->//gs' "$@"
 }
 
+visible_paragraph_text() {
+  perl -0pe 's/<!--.*?-->//gs; s/\r\n?/\n/g; s/[ \t]*\n[ \t]*/ /g; s/[ \t]+/ /g' "$@"
+}
+
 require_phrase() {
   local file="$1"
   local phrase="$2"
@@ -194,14 +198,14 @@ forbidden_patterns=(
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(readiness|release|gate|workflow|support|limitation)[[:space:]]+truth'
 )
 
-while IFS= read -r line; do
+while IFS= read -r paragraph || [[ -n "${paragraph}" ]]; do
   for pattern in "${forbidden_patterns[@]}"; do
-    if grep -Eiq -- "${pattern}" <<<"${line}"; then
+    if grep -Eiq -- "${pattern}" <<<"${paragraph}"; then
       echo "Forbidden Phase 65 closeout evaluation claim matched: ${pattern}" >&2
       exit 1
     fi
   done
-done < <(visible_text "${absolute_doc_path}")
+done < <(visible_paragraph_text "${absolute_doc_path}")
 
 if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|(password|passwd|secret|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}' < <(visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 65 closeout evaluation: production secret-looking value detected" >&2
