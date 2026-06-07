@@ -77,7 +77,7 @@ is_placeholder_or_missing() {
 
   normalized="$(normalize_yaml_scalar "${value}" | tr '[:upper:]' '[:lower:]')"
   block_scalar_marker_regex='^[>|][+-]?$'
-  [[ -z "${normalized}" || "${normalized}" =~ ${block_scalar_marker_regex} || "${normalized}" =~ ^(todo|tbd|none|n/a|na|sample|example|placeholder|unknown|missing|absent|latest|head|main|master)$ ]]
+  [[ -z "${normalized}" || "${normalized}" =~ ${block_scalar_marker_regex} || "${normalized}" =~ ^(~|null|todo|tbd|none|n/a|na|sample|example|placeholder|unknown|missing|absent|latest|head|main|master)$ ]]
 }
 
 require_top_level_equals_once() {
@@ -176,6 +176,9 @@ validate_top_level_manifest_keys() {
     );
 
     for my $line (split /\n/, $text) {
+      if ($line =~ /^(<<)\s*:/) {
+        die "Invalid Phase 65.4 integrity manifest top-level field: $1\n";
+      }
       if ($line =~ /^\?\s*([^[:space:]].*?)\s*$/ || $line =~ /^:\s*([^[:space:]].*?)\s*$/) {
         die "Invalid Phase 65.4 integrity manifest top-level field: $1\n";
       }
@@ -251,7 +254,7 @@ reject_unsafe_reference() {
 
   reference="$(normalize_yaml_scalar "${reference}")"
   lower_reference="$(printf '%s' "${reference}" | tr '[:upper:]' '[:lower:]')"
-  if [[ -z "${reference}" || "${reference}" =~ ^/ || "${reference}" =~ ^~ || "${reference}" =~ (^|/)\.\.(/|$) || "${lower_reference}" == *"%2e"* || "${lower_reference}" == *"%2f"* || "${reference}" == *"\\"* || "${lower_reference}" =~ ^[a-z][a-z0-9+.-]*: ]]; then
+  if [[ -z "${reference}" || "${reference}" =~ ^[!\&] || "${reference}" =~ ^/ || "${reference}" =~ ^~ || "${reference}" =~ (^|/)\.\.(/|$) || "${lower_reference}" == *"%2e"* || "${lower_reference}" == *"%2f"* || "${reference}" == *"\\"* || "${lower_reference}" =~ ^[a-z][a-z0-9+.-]*: ]]; then
     echo "Invalid Phase 65.4 integrity manifest ${description}: ${reference}" >&2
     exit 1
   fi
@@ -344,13 +347,16 @@ validate_artifacts() {
           die "Invalid Phase 65.4 integrity manifest artifact field for $artifact_name: $1\n";
         }
         my $first = substr($field_line, 0, 1);
+        if ($field_line =~ /^(<<)\s*:/) {
+          die "Invalid Phase 65.4 integrity manifest artifact field for $artifact_name: $1\n";
+        }
         if ($first eq "\"" || $first eq chr(39)) {
           my $quote = $first;
           if ($field_line =~ /^\Q$quote\E([^:]+)\Q$quote\E\s*:/) {
             die "Invalid Phase 65.4 integrity manifest artifact field for $artifact_name: $1\n";
           }
         }
-        next unless $line =~ /^    ([A-Za-z0-9_]+):\s*(.*?)\s*$/;
+        next unless $line =~ /^    ([A-Za-z0-9_-]+):\s*(.*?)\s*$/;
         my ($key, $value) = ($1, normalize_scalar($2));
         die "Invalid Phase 65.4 integrity manifest artifact field for $artifact_name: $key\n" unless $allowed_artifact_field{$key};
         die "Invalid Phase 65.4 integrity manifest duplicate artifact field for $artifact_name: $key\n" if exists $fields{$key};
@@ -438,7 +444,7 @@ reject_forbidden_claims() {
   local text
 
   text="$(visible_text "${file}" | tr '\n' ' ')"
-  if grep -Eiq '(AegisOps|Phase 65\.4|integrity evidence|SBOM|checksum|signature|signing).{0,80}(proves?|satisfies?|approves?|completes?).{0,40}(Beta ready|Beta readiness|RC ready|RC readiness|GA ready|GA readiness|commercial replacement|production signing infrastructure|external distribution approved|entitlement enforcement)' <<<"${text}"; then
+  if grep -Eiq '(AegisOps|Phase 65\.4|integrity evidence|SBOM|checksum|signature|signing).{0,80}(proves?|satisfies?|approves?|completes?|grants?|confirms?|establishes?|unblocks?|passes?|clears?|certifies?|authorizes?|records?|marks?).{0,40}(Beta ready|Beta readiness|RC ready|RC readiness|GA ready|GA readiness|commercial replacement|production signing infrastructure|external distribution approved|entitlement enforcement)' <<<"${text}"; then
     echo "Forbidden Phase 65.4 integrity evidence claim in ${description}: readiness or authority overclaim" >&2
     exit 1
   fi
