@@ -145,6 +145,28 @@ require_repository_revision_resolves() {
   fi
 }
 
+require_repository_revision_contains_checklist_evidence() {
+  local repository_revision required_path
+
+  repository_revision="$(normalize_yaml_scalar "$(yaml_top_level_scalar "${absolute_checklist_path}" "repository_revision")")"
+  for required_path in \
+    "README.md" \
+    "${doc_path}" \
+    "${checklist_path}" \
+    "scripts/verify-phase-65-5-oss-licensing-redistribution-checklist.sh" \
+    "scripts/test-verify-phase-65-5-oss-licensing-redistribution-checklist.sh"; do
+    if ! git -C "${repo_root}" cat-file -e "${repository_revision}^{commit}:${required_path}" >/dev/null 2>&1; then
+      echo "Invalid Phase 65.5 licensing checklist value: repository_revision must contain ${required_path}" >&2
+      exit 1
+    fi
+  done
+
+  if ! git -C "${repo_root}" grep -F -- "Phase 65.5 OSS licensing and redistribution review checklist" "${repository_revision}^{commit}" -- README.md >/dev/null 2>&1; then
+    echo "Invalid Phase 65.5 licensing checklist value: repository_revision must contain the Phase 65.5 README link" >&2
+    exit 1
+  fi
+}
+
 require_release_identifier_binding() {
   local release_bundle_identifier repository_revision
 
@@ -525,6 +547,7 @@ if [[ ! "${reviewed_date}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
 fi
 
 require_repository_revision_resolves
+require_repository_revision_contains_checklist_evidence
 require_release_identifier_binding
 validate_top_level_checklist_keys
 validate_named_mapping "$(mapping_block "wazuh_boundary")" "redistribution_posture" "package_boundary_notes" "authority_boundary"

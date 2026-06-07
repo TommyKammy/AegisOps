@@ -38,6 +38,7 @@ create_valid_repo() {
   copy_repo_path "${target}" "docs/phase-58-6-support-bundle-redaction-contract.md"
   copy_repo_path "${target}" "docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
   copy_repo_path "${target}" "scripts/verify-phase-65-5-oss-licensing-redistribution-checklist.sh"
+  copy_repo_path "${target}" "scripts/test-verify-phase-65-5-oss-licensing-redistribution-checklist.sh"
   copy_repo_path "${target}" "scripts/verify-publishable-path-hygiene.sh"
   mkdir -p "${target}/control-plane/aegisops/control_plane"
   : >"${target}/control-plane/aegisops/__init__.py"
@@ -184,6 +185,14 @@ unresolved_revision_repo="${workdir}/unresolved-revision"
 create_valid_repo "${unresolved_revision_repo}"
 perl -0pi -e 's/[0-9a-f]{40}/deadbeef/g' "${unresolved_revision_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
 assert_fails_with "${unresolved_revision_repo}" "repository_revision must be a 40-character commit SHA or reviewed Git tag"
+
+revision_missing_checklist_repo="${workdir}/revision-missing-checklist"
+create_valid_repo "${revision_missing_checklist_repo}"
+empty_tree="$(git -C "${revision_missing_checklist_repo}" mktree </dev/null)"
+revision_missing_checklist="$(printf '%s\n' "missing checklist evidence" | git -C "${revision_missing_checklist_repo}" commit-tree "${empty_tree}")"
+REVISION_MISSING_CHECKLIST="${revision_missing_checklist}" perl -0pi -e 's/[0-9a-f]{40}/$ENV{REVISION_MISSING_CHECKLIST}/g' \
+  "${revision_missing_checklist_repo}/docs/deployment/release/phase-65-5-oss-licensing-redistribution-checklist.yaml"
+assert_fails_with "${revision_missing_checklist_repo}" "repository_revision must contain README.md"
 
 non_claim_true_repo="${workdir}/non-claim-true"
 create_valid_repo "${non_claim_true_repo}"
