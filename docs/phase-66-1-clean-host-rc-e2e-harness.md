@@ -1,7 +1,7 @@
 # Phase 66.1 Clean-Host RC E2E Harness
 
 - **Status**: Accepted as the Phase 66.1 clean-host RC E2E harness contract for release-candidate proof planning only.
-- **Date**: 2026-06-08
+- **Date**: 2026-06-08 Asia/Tokyo
 - **Owners**: AegisOps maintainers
 - **Related Baseline**: `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`, `docs/phase-51-6-authority-boundary-negative-test-policy.md`, `docs/phase-65-closeout-evaluation.md`, `docs/getting-started/first-user-journey.md`, `docs/getting-started/first-user-demo-report-export.md`
 - **Related Issues**: #1397, #1398
@@ -37,10 +37,10 @@ The harness must cover every step in this order.
 
 | Order | Required step | Evidence required | Failure boundary |
 | --- | --- | --- | --- |
-| 1 | `aegisops init --profile smb-single-node` | Command, profile, revision, generated placeholder summary, and preflight outcome. | Missing profile or unsafe prerequisite must fail closed. |
-| 2 | `aegisops up --with-wazuh --with-shuffle` | Component start result for AegisOps, Wazuh, Shuffle, and proxy-facing access path. | Mocked, skipped, or blocked components must stay explicit. |
-| 3 | `aegisops doctor` | Product health, Wazuh health, Shuffle health, queue readiness, evidence storage, and report export readiness. | Doctor output is readiness evidence only, not workflow truth. |
-| 4 | `aegisops seed-demo` | Demo seed identifier, demo-only labels, sample alert references, and reset posture. | Demo data cannot become production, gate, or workflow truth. |
+| 1 | `aegisops init --profile smb-single-node --runtime-env <runtime-env-file>` | Command, profile, revision, generated placeholder summary, and preflight outcome. | Missing profile or unsafe prerequisite must fail closed. |
+| 2 | `aegisops up --profile smb-single-node --runtime-env <runtime-env-file>` | Component start result for AegisOps, Wazuh, Shuffle, and proxy-facing access path. | Mocked, skipped, or blocked components must stay explicit. |
+| 3 | `aegisops doctor --profile smb-single-node --runtime-env <runtime-env-file>` | Product health, Wazuh health, Shuffle health, queue readiness, evidence storage, and report export readiness. | Doctor output is readiness evidence only, not workflow truth. |
+| 4 | `aegisops seed-demo --profile smb-single-node --demo-mode explicit` | Demo seed identifier, demo-only labels, sample alert references, and reset posture. | Demo data cannot become production, gate, or workflow truth. |
 | 5 | Login | Operator role, selected profile, visible demo or RC labels, and access result. | Browser state and session state remain subordinate context. |
 | 6 | Health review | Reviewed health records for AegisOps, Wazuh source health, Shuffle availability, AI posture, and supportability posture. | Dashboard status cannot replace AegisOps readiness records. |
 | 7 | Queue item | Queue item identifier, source, severity, identity or asset context, and demo or RC label. | Queue text cannot create an alert without AegisOps admission. |

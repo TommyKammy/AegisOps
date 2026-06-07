@@ -137,10 +137,10 @@ done
 
 journey_section="$(section_text "${absolute_doc_path}" "## 3. Required Journey Steps" "## 4. Evidence Packet Fields")"
 journey_steps=(
-  '`aegisops init --profile smb-single-node`'
-  '`aegisops up --with-wazuh --with-shuffle`'
-  '`aegisops doctor`'
-  '`aegisops seed-demo`'
+  '`aegisops init --profile smb-single-node --runtime-env <runtime-env-file>`'
+  '`aegisops up --profile smb-single-node --runtime-env <runtime-env-file>`'
+  '`aegisops doctor --profile smb-single-node --runtime-env <runtime-env-file>`'
+  '`aegisops seed-demo --profile smb-single-node --demo-mode explicit`'
   "Login"
   "Health review"
   "Queue item"
@@ -156,8 +156,14 @@ journey_steps=(
   "Next-step guidance"
 )
 
+remaining_journey_section="${journey_section}"
 for step in "${journey_steps[@]}"; do
   require_section_phrase "${journey_section}" "${step}" "Phase 66.1 required journey step"
+  if [[ "${remaining_journey_section}" != *"${step}"* ]]; then
+    echo "Missing ordered Phase 66.1 required journey step: ${step}" >&2
+    exit 1
+  fi
+  remaining_journey_section="${remaining_journey_section#*"${step}"}"
 done
 
 evidence_section="$(section_text "${absolute_doc_path}" "## 4. Evidence Packet Fields" "## 5. Authority Boundary")"
@@ -186,18 +192,27 @@ forbidden_patterns=(
   'ai[[:space:]]+(approves|executes|reconciles|closes|activates)[^.[:cntrl:]]*(action|case|detector|record)'
 )
 
-while IFS= read -r line || [[ -n "${line}" ]]; do
-  line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
-  if [[ "${line_lower}" =~ (does[[:space:]]+not|cannot|must[[:space:]]+reject|reject|out[[:space:]]+of[[:space:]]+scope|no[[:space:]]+) ]]; then
-    continue
-  fi
-  for pattern in "${forbidden_patterns[@]}"; do
-    if grep -Eiq -- "${pattern}" <<<"${line}"; then
-      echo "Forbidden Phase 66.1 clean-host RC E2E harness claim matched: ${pattern}" >&2
-      exit 1
-    fi
-  done
-done < <(visible_text "${absolute_doc_path}")
+scan_forbidden_claims() {
+  local file="$1"
+  local description="$2"
+  local line
+  local clause
+  local pattern
+
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    while IFS= read -r clause || [[ -n "${clause}" ]]; do
+      for pattern in "${forbidden_patterns[@]}"; do
+        if grep -Eiq -- "${pattern}" <<<"${clause}"; then
+          echo "Forbidden Phase 66.1 ${description} claim matched: ${pattern}" >&2
+          exit 1
+        fi
+      done
+    done < <(printf '%s\n' "${line}" | tr ';' '\n')
+  done < <(visible_text "${file}")
+}
+
+scan_forbidden_claims "${absolute_doc_path}" "clean-host RC E2E harness"
+scan_forbidden_claims "${readme_path}" "README"
 
 if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|(password|passwd|secret|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}' < <(visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.1 clean-host RC E2E harness: production secret-looking value detected" >&2

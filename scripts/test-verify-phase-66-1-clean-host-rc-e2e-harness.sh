@@ -139,6 +139,15 @@ copy_valid_repo "${missing_journey_step_repo}"
 remove_doc_text "${missing_journey_step_repo}" "Wazuh-origin signal inspection"
 assert_fails_with "${missing_journey_step_repo}" "Missing Phase 66.1 required journey step"
 
+out_of_order_journey_repo="${workdir}/out-of-order-journey"
+copy_valid_repo "${out_of_order_journey_repo}"
+report_export_row="| 16 | Report export | Export command, export artifact reference, schema version, redaction review, source record identifiers, and non-secret result. | Reports are derived surfaces and cannot replace source records. |"
+login_row="| 5 | Login | Operator role, selected profile, visible demo or RC labels, and access result. | Browser state and session state remain subordinate context. |"
+remove_doc_text "${out_of_order_journey_repo}" "${report_export_row}"
+LOGIN_ROW="${login_row}" REPORT_EXPORT_ROW="${report_export_row}" perl -0pi -e 's/\Q$ENV{LOGIN_ROW}\E/$ENV{REPORT_EXPORT_ROW}\n$ENV{LOGIN_ROW}/' \
+  "${out_of_order_journey_repo}/docs/phase-66-1-clean-host-rc-e2e-harness.md"
+assert_fails_with "${out_of_order_journey_repo}" "Missing ordered Phase 66.1 required journey step"
+
 missing_evidence_field_repo="${workdir}/missing-evidence-field"
 copy_valid_repo "${missing_evidence_field_repo}"
 remove_doc_text "${missing_evidence_field_repo}" \
@@ -160,6 +169,16 @@ ga_ready_repo="${workdir}/ga-ready"
 copy_valid_repo "${ga_ready_repo}"
 printf '%s\n' "Phase 66.1 proves GA readiness." >>"${ga_ready_repo}/docs/phase-66-1-clean-host-rc-e2e-harness.md"
 assert_fails_with "${ga_ready_repo}" "Forbidden Phase 66.1 clean-host RC E2E harness claim matched"
+
+negation_bypass_repo="${workdir}/negation-bypass"
+copy_valid_repo "${negation_bypass_repo}"
+printf '%s\n' "No operator review occurred; Phase 66.1 proves GA readiness." >>"${negation_bypass_repo}/docs/phase-66-1-clean-host-rc-e2e-harness.md"
+assert_fails_with "${negation_bypass_repo}" "Forbidden Phase 66.1 clean-host RC E2E harness claim matched"
+
+readme_overclaim_repo="${workdir}/readme-overclaim"
+copy_valid_repo "${readme_overclaim_repo}"
+printf '%s\n' "Phase 66.1 proves GA readiness." >>"${readme_overclaim_repo}/README.md"
+assert_fails_with "${readme_overclaim_repo}" "Forbidden Phase 66.1 README claim matched"
 
 commercial_ready_repo="${workdir}/commercial-ready"
 copy_valid_repo "${commercial_ready_repo}"
