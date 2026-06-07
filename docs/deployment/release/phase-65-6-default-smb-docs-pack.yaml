@@ -1,0 +1,70 @@
+docs_pack_identifier: phase-65-default-smb-docs-pack-v1
+inventory_identifier: phase-65-release-bundle-inventory-v1
+pack_owner: AegisOps maintainers
+reviewed_date: 2026-06-07
+beta_scope: beta-design-partner-documentation-packaging-review-only
+pack_contract_reference: docs/phase-65-6-default-smb-documentation-pack.md
+phase65_inventory_reference: docs/phase-65-1-release-bundle-inventory.md
+phase51_gate_boundary_reference: docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md
+support_bundle_boundary_reference: docs/phase-58-6-support-bundle-redaction-contract.md
+upgrade_rollback_boundary_reference: docs/phase-58-5-upgrade-rollback-plan-contract.md
+verifier_output_reference: bash scripts/verify-phase-65-6-default-smb-docs-pack.sh
+approval_record: "issue #1385"
+authority_boundary: Documentation pack entries are guidance and packaging evidence only; they cannot become workflow truth, support truth, release truth, gate truth, readiness truth, RC proof, GA proof, production support readiness, or commercial replacement readiness.
+non_claims:
+  first_user_rc_success: false
+  support_bundle_completion_for_rc: false
+  production_support_readiness: false
+  rc_readiness: false
+  ga_readiness: false
+  self_service_commercial_readiness: false
+  commercial_replacement_readiness: false
+topics:
+  - topic: installation
+    owner: Platform maintainers
+    primary_reference: docs/phase-65-2-offline-install-bundle-contract.md
+    supporting_reference: docs/deployment/first-user-stack.md
+    beta_scope: beta-design-partner-install-guidance-only
+    boundary_note: Installation docs do not prove clean-host success, RC readiness, GA readiness, or production installer completeness.
+  - topic: daily-operation
+    owner: IT Operations, Information Systems Department
+    primary_reference: docs/runbook.md
+    supporting_reference: docs/phase-19-thin-operator-surface-and-daily-analyst-workflow.md
+    beta_scope: beta-design-partner-daily-operations-guidance-only
+    boundary_note: Daily operation docs do not become workflow truth, support truth, release truth, or gate truth.
+  - topic: source-onboarding
+    owner: Platform maintainers
+    primary_reference: docs/source-onboarding-contract.md
+    supporting_reference: docs/phase-61-minimum-source-catalog-contract.md
+    beta_scope: beta-design-partner-source-onboarding-guidance-only
+    boundary_note: Source onboarding docs do not approve live source enrollment, parser deployment, credentials, detector activation, or production source readiness.
+  - topic: automation-catalog
+    owner: IT Operations, Information Systems Department
+    primary_reference: docs/phase-62-reviewed-automation-catalog-contract.md
+    supporting_reference: docs/phase-62-5-manual-fallback-contract.md
+    beta_scope: beta-design-partner-reviewed-automation-guidance-only
+    boundary_note: Automation docs do not approve direct Shuffle launch, execution truth, reconciliation truth, or protected-target mutation.
+  - topic: ai-usage
+    owner: AegisOps maintainers
+    primary_reference: docs/phase-59-3-ai-trace-lifecycle-contract.md
+    supporting_reference: docs/phase-59-4-ai-disabled-degraded-mode-contract.md
+    beta_scope: beta-design-partner-ai-advisory-guidance-only
+    boundary_note: AI usage docs do not grant AI approval, execution, reconciliation, case closure, release, gate, or readiness authority.
+  - topic: backup-and-restore
+    owner: Platform maintainers
+    primary_reference: docs/phase-58-3-backup-command-contract.md
+    supporting_reference: docs/phase-58-4-restore-dry-run-contract.md
+    beta_scope: beta-design-partner-backup-restore-guidance-only
+    boundary_note: Backup and restore docs do not prove live backup success, live restore success, RC readiness, or GA readiness.
+  - topic: support-bundle
+    owner: IT Operations, Information Systems Department
+    primary_reference: docs/phase-58-6-support-bundle-redaction-contract.md
+    supporting_reference: docs/deployment/operator-training-handoff-packet.md
+    beta_scope: beta-design-partner-redacted-support-guidance-only
+    boundary_note: Support bundle docs do not grant support operator authority, production support readiness, workflow truth, release truth, or gate truth.
+  - topic: upgrade-and-rollback
+    owner: Platform maintainers
+    primary_reference: docs/phase-58-5-upgrade-rollback-plan-contract.md
+    supporting_reference: docs/phase-65-3-release-channel-upgrade-manifest-contract.md
+    beta_scope: beta-design-partner-upgrade-rollback-planning-guidance-only
+    boundary_note: Upgrade and rollback docs do not run upgrades, run rollbacks, satisfy RC gates, satisfy GA gates, or prove release readiness.
