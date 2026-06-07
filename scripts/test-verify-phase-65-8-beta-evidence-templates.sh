@@ -104,10 +104,20 @@ create_valid_repo "${support_bundle_completion_repo}"
 printf '%s\n' "Support bundle evidence is complete for RC." >>"${support_bundle_completion_repo}/docs/deployment/release/phase-65-8-beta-known-limitations-template.md"
 assert_fails_with "${support_bundle_completion_repo}" "Forbidden Phase 65.8 template claim: Support bundle evidence is complete for RC."
 
+support_bundle_completion_short_repo="${workdir}/support-bundle-completion-short"
+create_valid_repo "${support_bundle_completion_short_repo}"
+printf '%s\n' "Support bundle evidence is complete." >>"${support_bundle_completion_short_repo}/docs/deployment/release/phase-65-8-beta-known-limitations-template.md"
+assert_fails_with "${support_bundle_completion_short_repo}" "Forbidden Phase 65.8 template claim matched:"
+
 rc_overclaim_repo="${workdir}/rc-overclaim"
 create_valid_repo "${rc_overclaim_repo}"
 printf '%s\n' "Phase 65.8 proves release-candidate readiness." >>"${rc_overclaim_repo}/docs/deployment/release/phase-65-8-beta-known-limitations-template.md"
 assert_fails_with "${rc_overclaim_repo}" "Forbidden Phase 65.8 template claim: Phase 65.8 proves release-candidate readiness."
+
+rc_reordered_overclaim_repo="${workdir}/rc-reordered-overclaim"
+create_valid_repo "${rc_reordered_overclaim_repo}"
+printf '%s\n' "Phase 65.8 proves readiness for RC." >>"${rc_reordered_overclaim_repo}/docs/deployment/release/phase-65-8-beta-known-limitations-template.md"
+assert_fails_with "${rc_reordered_overclaim_repo}" "Forbidden Phase 65.8 template claim matched:"
 
 ga_overclaim_repo="${workdir}/ga-overclaim"
 create_valid_repo "${ga_overclaim_repo}"
@@ -129,10 +139,25 @@ create_valid_repo "${customer_private_repo}"
 printf '%s\n' "The template includes customer private ticket data." >>"${customer_private_repo}/docs/deployment/release/phase-65-8-design-partner-evidence-template.md"
 assert_fails_with "${customer_private_repo}" "Forbidden Phase 65.8 template customer-private data"
 
+unredacted_customer_repo="${workdir}/unredacted-customer"
+create_valid_repo "${unredacted_customer_repo}"
+printf '%s\n' "The template includes unredacted customer ticket data." >>"${unredacted_customer_repo}/docs/deployment/release/phase-65-8-design-partner-evidence-template.md"
+assert_fails_with "${unredacted_customer_repo}" "Forbidden Phase 65.8 template customer-private data"
+
 secret_repo="${workdir}/secret"
 create_valid_repo "${secret_repo}"
 printf '%s\n' "api_key = abc123" >>"${secret_repo}/docs/deployment/release/phase-65-8-design-partner-evidence-template.md"
 assert_fails_with "${secret_repo}" "Forbidden Phase 65.8 template production secret material"
+
+backticked_secret_repo="${workdir}/backticked-secret"
+create_valid_repo "${backticked_secret_repo}"
+printf '%s\n' 'api_key = `abc123`' >>"${backticked_secret_repo}/docs/deployment/release/phase-65-8-design-partner-evidence-template.md"
+assert_fails_with "${backticked_secret_repo}" "Forbidden Phase 65.8 template production secret material"
+
+commented_date_repo="${workdir}/commented-date"
+create_valid_repo "${commented_date_repo}"
+perl -0pi -e 's/^- \*\*Date\*\*: 2026-06-07$/<!--\\n- **Date**: 2026-06-07\\n-->/m' "${commented_date_repo}/docs/deployment/release/phase-65-8-beta-known-limitations-template.md"
+assert_fails_with "${commented_date_repo}" "Missing or invalid Phase 65.8 beta known-limitations template date line"
 
 workstation_path_repo="${workdir}/workstation-path"
 create_valid_repo "${workstation_path_repo}"

@@ -70,8 +70,9 @@ forbidden_lines=(
 )
 
 forbidden_patterns=(
-  'support[- ]bundle[[:space:]]+(evidence[[:space:]]+)?(is|becomes|counts[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(complete|accepted|satisfied)[^.[:cntrl:]]*(rc|release[- ]candidate)'
+  'support[- ]bundle[[:space:]]+(evidence[[:space:]]+)?(is|becomes|counts[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(complete|accepted|satisfied)'
   'phase[[:space:]]+65\.8[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc|release[- ]candidate|ga|general[- ]availability)[^.[:cntrl:]]*(readiness|gate|acceptance)'
+  'phase[[:space:]]+65\.8[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(readiness|gate|acceptance)[^.[:cntrl:]]*(rc|release[- ]candidate|ga|general[- ]availability)'
   'beta[[:space:]]+evidence[[:space:]]+(is|becomes|counts[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(rc|release[- ]candidate)[^.[:cntrl:]]*proof'
   'design[- ]partner[[:space:]]+evidence[[:space:]]+(is|becomes|counts[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(ga|general[- ]availability)[^.[:cntrl:]]*proof'
   'aegisops[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*commercial(ly)?[[:space:]]+replacement[[:space:]]+ready'
@@ -136,11 +137,11 @@ reject_forbidden_content() {
 reject_publishable_hazards() {
   local file="$1"
 
-  if grep -Eiq '(password|passwd|secret|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*[^[:space:]`<>]+' < <(visible_text "${file}"); then
+  if grep -Eiq '(password|passwd|secret|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?' < <(visible_text "${file}"); then
     echo "Forbidden Phase 65.8 template production secret material: ${file#"${repo_root}/"}" >&2
     exit 1
   fi
-  if grep -Eiq '(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data)|customer[-_ ]private[[:space:]]+(example|ticket|alert|log|chat|payload|export)' < <(visible_text "${file}"); then
+  if grep -Eiq '(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_ ]private[[:space:]]+(example|ticket|alert|log|chat|payload|export)|unredacted[[:space:]]+customer[[:space:]]+(ticket|alert|log|chat|payload|export|data)' < <(visible_text "${file}"); then
     echo "Forbidden Phase 65.8 template customer-private data: ${file#"${repo_root}/"}" >&2
     exit 1
   fi
@@ -202,7 +203,7 @@ validate_template() {
     require_phrase "${absolute_path}" "${phrase}" "${description} required statement"
   done
 
-  if ! grep -Eq '^- \*\*Date\*\*: [0-9]{4}-[0-9]{2}-[0-9]{2}$' "${absolute_path}"; then
+  if ! grep -Eq '^- \*\*Date\*\*: [0-9]{4}-[0-9]{2}-[0-9]{2}$' < <(visible_text "${absolute_path}"); then
     echo "Missing or invalid Phase 65.8 ${description} date line (- **Date**: YYYY-MM-DD)." >&2
     exit 1
   fi
