@@ -159,7 +159,7 @@ require_section_phrase "${limitations_section}" "It does not prove broad Wazuh d
 
 subordinate_authority_subjects='(wazuh[[:space:]]+alerts?|wazuh[[:space:]]+manager[[:space:]]+state|wazuh[[:space:]]+dashboard[[:space:]]+state|wazuh[[:space:]]+alert[[:space:]]+status|wazuh[[:space:]]+indexer[[:space:]]+contents|wazuh[[:space:]]+source[[:space:]]+health|wazuh[[:space:]]+rule[[:space:]]+state|wazuh[[:space:]]+timestamps?|webhook[[:space:]-]+acknowledgements?|source[- ]health[[:space:]]+projection|generated[[:space:]-]+config(uration)?|tickets?|ai[[:space:]]+output|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+output|issue-lint[[:space:]]+output|downstream[[:space:]]+receipts?)'
 authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?)'
-authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|release|gate)'
+authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|release|gate|approval|action[[:space:]-]+requests?|execution[[:space:]-]+receipts?|reconciliation|audit|limitation|source[[:space:]-]+admission|closeout)'
 
 repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`[:space:],.;)]+|refs/remotes/[^`[:space:],.;)]+|remotes/[^`[:space:],.;)]+|origin/[^`[:space:],.;)]+|[^`[:space:],.;)]*branch)`?([[:space:].,;)]|$)'
 wazuh_profile_value_regex='(^|[[:space:]>*-])`?wazuh_profile`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
@@ -167,7 +167,8 @@ source_family_shortcut_regex='(^|[[:space:]>*-])`?source_family`?[[:space:]]*[:=
 case_linking_value_regex='(^|[[:space:]>*-])`?case_linking_posture`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
 
 forbidden_patterns=(
-  'phase[[:space:]]+66\.2[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|commercial[[:space:]]+replacement|source[- ]native|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
+  'phase[[:space:]]+66\.2[[:space:]]+(proves|satisfies|passes|accepts|grants)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|commercial[[:space:]]+replacement|source[- ]native|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
+  'phase[[:space:]]+66\.2[[:space:]]+confirms[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+(wazuh|siem)[^.[:cntrl:]]+(parity|coverage|readiness)|production[[:space:]]+(customer[[:space:]]+)?telemetry[[:space:]]+(import|coverage|readiness)|production[[:space:]]+monitoring[[:space:]]+(coverage|readiness)|commercial[[:space:]]+replacement[[:space:]]+readiness|source[- ]native[[:space:]]+truth|real[[:space:]]+design[- ]partner[[:space:]]+success|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.2[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc([[:space:][:punct:]]|$)|release[- ]candidate)'
   'phase[[:space:]]+66\.2[[:space:]]+proves[^.[:cntrl:]]*(rc[- ]?(gate|readiness|pass)|release[- ]candidate[- ]?(gate|readiness|pass))'
   '(phase[[:space:]]+66\.2|this[[:space:]]+proof|proof|aegisops)[[:space:]]+(is|becomes|serves[[:space:]]+as)[[:space:]]+(now[[:space:]]+|already[[:space:]]+|effectively[[:space:]]+)?ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate)'
@@ -212,7 +213,7 @@ if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*bearer[[:space:]]+[A-Za-z
   exit 1
 fi
 
-if grep -Eiq -- '(^|[[:space:]>*-])`?(sample_signal_id|source_health_reference|intake_binding_reference|admission_record_id|aegisops_alert_id|provenance_reference|limitation_references)`?[[:space:]]*[:=][[:space:]]*`?(missing|none|null|n/a|tbd|todo|unknown|not[[:space:]_-]*provided|not[[:space:]_-]*set)`?([[:space:].,;)]|$)' < <(visible_text "${absolute_doc_path}"); then
+if grep -Eiq -- '(^|[[:space:]>*-])`?(journey_run_id|repository_revision|sample_signal_id|source_health_reference|intake_binding_reference|admission_record_id|aegisops_alert_id|provenance_reference|limitation_references)`?[[:space:]]*[:=][[:space:]]*`?(missing|none|null|n/a|tbd|todo|unknown|not[[:space:]_-]*provided|not[[:space:]_-]*set)`?([[:space:].,;)]|$)' < <(visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: missing required evidence value detected" >&2
   exit 1
 fi

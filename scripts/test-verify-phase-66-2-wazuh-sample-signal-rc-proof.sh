@@ -332,10 +332,25 @@ copy_valid_repo "${production_telemetry_repo}"
 printf '%s\n' "This proof proves production customer telemetry import for this path." >>"${production_telemetry_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
 assert_fails_with "${production_telemetry_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
 
+production_monitoring_confirmation_repo="${workdir}/production-monitoring-confirmation"
+copy_valid_repo "${production_monitoring_confirmation_repo}"
+printf '%s\n' "Phase 66.2 confirms production monitoring coverage." >>"${production_monitoring_confirmation_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${production_monitoring_confirmation_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
+production_monitoring_limitation_repo="${workdir}/production-monitoring-limitation"
+copy_valid_repo "${production_monitoring_limitation_repo}"
+printf '%s\n' "Phase 66.2 confirms production monitoring remains out of scope." >>"${production_monitoring_limitation_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_passes "${production_monitoring_limitation_repo}"
+
 wazuh_state_authority_repo="${workdir}/wazuh-state-authority"
 copy_valid_repo "${wazuh_state_authority_repo}"
 printf '%s\n' "Wazuh dashboard state approves the release gate." >>"${wazuh_state_authority_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
 assert_fails_with "${wazuh_state_authority_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
+wazuh_action_request_authority_repo="${workdir}/wazuh-action-request-authority"
+copy_valid_repo "${wazuh_action_request_authority_repo}"
+printf '%s\n' "Wazuh alerts approve action requests." >>"${wazuh_action_request_authority_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${wazuh_action_request_authority_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
 
 wazuh_alert_status_authority_repo="${workdir}/wazuh-alert-status-authority"
 copy_valid_repo "${wazuh_alert_status_authority_repo}"
@@ -421,6 +436,16 @@ missing_sample_signal_id_repo="${workdir}/missing-sample-signal-id-value"
 copy_valid_repo "${missing_sample_signal_id_repo}"
 printf '%s\n' "sample_signal_id: missing" >>"${missing_sample_signal_id_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
 assert_fails_with "${missing_sample_signal_id_repo}" "missing required evidence value detected"
+
+missing_journey_run_id_repo="${workdir}/missing-journey-run-id-value"
+copy_valid_repo "${missing_journey_run_id_repo}"
+printf '%s\n' "journey_run_id: missing" >>"${missing_journey_run_id_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${missing_journey_run_id_repo}" "missing required evidence value detected"
+
+missing_repository_revision_repo="${workdir}/missing-repository-revision-value"
+copy_valid_repo "${missing_repository_revision_repo}"
+printf '%s\n' "repository_revision: missing" >>"${missing_repository_revision_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${missing_repository_revision_repo}" "missing required evidence value detected"
 
 missing_admission_record_repo="${workdir}/missing-admission-record-value"
 copy_valid_repo "${missing_admission_record_repo}"
