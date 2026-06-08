@@ -156,29 +156,26 @@ require_section_phrase "${limitations_section}" "It does not prove broad Wazuh d
 
 forbidden_patterns=(
   'phase[[:space:]]+66\.2[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(ga|general[- ]availability|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|commercial[[:space:]]+replacement|source[- ]native)'
+  'phase[[:space:]]+66\.2[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc|release[- ]candidate)'
+  'phase[[:space:]]+66\.2[[:space:]]+proves[^.[:cntrl:]]*(rc|release[- ]candidate)[- ]?(gate|readiness|pass)'
   'wazuh[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
+  'wazuh[[:space:]]+(alerts|signals|events|samples)[[:space:]]+(are|become|becomes|serve[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
   'wazuh[[:space:]]+(promotes|closes|mutates|approves|executes|reconciles|releases|gates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
   'aegisops[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(ga|general[- ]availability|commercial[[:space:]]+replacement|broad[[:space:]]+siem)'
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(readiness|release|gate|workflow|source)[[:space:]]+truth'
+  '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source|rc|ga)'
 )
+
+forbidden_regex="$(IFS='|'; printf '%s' "${forbidden_patterns[*]}")"
 
 scan_forbidden_claims() {
   local file="$1"
   local description="$2"
-  local line
-  local clause
-  local pattern
 
-  while IFS= read -r line || [[ -n "${line}" ]]; do
-    while IFS= read -r clause || [[ -n "${clause}" ]]; do
-      for pattern in "${forbidden_patterns[@]}"; do
-        if grep -Eiq -- "${pattern}" <<<"${clause}"; then
-          echo "Forbidden Phase 66.2 ${description} claim matched: ${pattern}" >&2
-          exit 1
-        fi
-      done
-    done < <(printf '%s\n' "${line}" | tr ';' '\n')
-  done < <(visible_text "${file}")
+  if grep -Eiq -- "${forbidden_regex}" < <(visible_text "${file}"); then
+    echo "Forbidden Phase 66.2 ${description} claim matched" >&2
+    exit 1
+  fi
 }
 
 scan_forbidden_claims "${absolute_doc_path}" "Wazuh sample signal RC proof"
@@ -190,10 +187,6 @@ if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*bearer[[:space:]]+[A-Za-z
 fi
 
 while IFS= read -r line; do
-  line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
-  if [[ "${line_lower}" =~ (reject|without|must[[:space:]]+reject|does[[:space:]]+not|cannot|no[[:space:]]+) ]]; then
-    continue
-  fi
   if grep -Eiq -- '(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_ ]private[[:space:]]+(example|ticket|alert|log|chat|payload|export)|unredacted[[:space:]]+customer[[:space:]]+(ticket|alert|log|chat|payload|export|data)' <<<"${line}"; then
     echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: customer-private data detected" >&2
     exit 1
