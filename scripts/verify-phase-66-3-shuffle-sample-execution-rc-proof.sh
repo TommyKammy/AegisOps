@@ -171,8 +171,9 @@ repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:spa
 repository_revision_assignment_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
 shuffle_profile_value_regex='(^|[[:space:]>*-])`?shuffle_profile`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
 reviewed_template_value_regex='(^|[[:space:]>*-])`?reviewed_template_id`?[[:space:]]*[:=][^.[:cntrl:]]*(unreviewed|draft|sample|placeholder|todo|deprecated)'
-direct_launch_value_regex='(^|[[:space:]>*-])`?(direct_shuffle_launch|launch_shuffle_directly|ad_hoc_shuffle_launch|approval_bypass|execution_bypass)`?[[:space:]]*[:=][[:space:]]*`?(true|allowed|yes|enabled)'
+direct_launch_value_regex='(^|[[:space:]>*-])`?(direct_shuffle_launch|launch_shuffle_directly|ad_hoc_shuffle_launch|approval_bypass|execution_bypass)`?[[:space:]]*[:=][[:space:]]*`?(true|allowed|yes|enabled|approved|accepted|valid)'
 callback_binding_shortcut_regex='(^|[[:space:]>*-])`?callback_binding_reference`?[[:space:]]*[:=][^.[:cntrl:]]*(raw[[:space:]_-]*forwarded[[:space:]_-]*headers?|inferred[[:space:]_-]*callback[[:space:]_-]*identity)'
+execution_receipt_shortcut_value_regex='(^|[[:space:]>*-])`?execution_receipt_id`?[[:space:]]*[:=][[:space:]]*`?(callback[[:space:]_-]*payload|shuffle[[:space:]_-]*workflow[[:space:]_-]*success)'
 customer_private_prohibition_regex='(must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include)[^.[:cntrl:]]*customer[-_ ]private'
 
 forbidden_patterns=(
@@ -182,17 +183,17 @@ forbidden_patterns=(
   'phase[[:space:]]+66\.3[[:space:]]+proves[^.[:cntrl:]]*(rc[- ]?(gate|readiness|pass)|release[- ]candidate[- ]?(gate|readiness|pass))'
   '(phase[[:space:]]+66\.3|this[[:space:]]+proof|proof|aegisops)[[:space:]]+(is|becomes|serves[[:space:]]+as)[[:space:]]+(now[[:space:]]+|already[[:space:]]+|effectively[[:space:]]+)?ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate)'
   '(this[[:space:]]+)?proof[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms|achieves)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|readiness|broad[[:space:]]+soar|soar[[:space:]]+marketplace|production[[:space:]]+(customer[[:space:]]+)?workflow|production[[:space:]]+automation|commercial[[:space:]]+replacement)'
-  'shuffle[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|closeout)[[:space:]]+truth'
-  'shuffle[[:space:]]+(workflow|success|status|failure|callback|payload|receipt|logs?|canvas|execution)[^.[:cntrl:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|closeout)[[:space:]]+truth'
-  "${subordinate_authority_subjects}[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|closeout)[[:space:]]+truth"
+  'shuffle[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|closeout)[[:space:]]+(source[[:space:]]+of[[:space:]]+)?truth'
+  'shuffle[[:space:]]+(workflow|success|status|failure|callback|payload|receipt|logs?|canvas|execution)[^.[:cntrl:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|closeout)[[:space:]]+(source[[:space:]]+of[[:space:]]+)?truth'
+  "${subordinate_authority_subjects}[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|closeout)[[:space:]]+(source[[:space:]]+of[[:space:]]+)?truth"
   "shuffle[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   "${subordinate_authority_subjects}[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   "${subordinate_authority_subjects}[^.[:cntrl:]]+but[^.[:cntrl:]]+((does|do)[[:space:]]+)?${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   '(direct|ad[[:space:]-]+hoc)[[:space:]]+shuffle[[:space:]-]+launch[^.[:cntrl:]]+(is[[:space:]]+)?(allowed|approved|valid|accepted|enabled)'
-  '(approval|execution)[[:space:]-]+bypass[^.[:cntrl:]]+(is[[:space:]]+)?(allowed|approved|valid|accepted)'
+  '(approval|execution)[[:space:]-]+bypass[^.[:cntrl:]]+(is[[:space:]]+)?(allowed|approved|valid|accepted|enabled)'
   'shuffle[[:space:]]+workflow[[:space:]]+success[^.[:cntrl:]]+(proves|creates|establishes|supplies|satisfies)[^.[:cntrl:]]*reconciliation'
   'callback[[:space:]]+payload[^.[:cntrl:]]+(proves|creates|establishes|supplies|satisfies)[^.[:cntrl:]]*execution[[:space:]-]+receipt'
-  '(workflow[[:space:]]+names?|ticket[[:space:]]+text|comments?|ui[[:space:]]+state|shuffle[[:space:]]+state)[^.[:cntrl:]]+(prove[s]?|create[s]?|establish(es)?|suppl(y|ies)|satisf(y|ies)|imply|implies)[^.[:cntrl:]]*(approval|action[[:space:]-]+request)'
+  '(workflow[[:space:]]+names?|ticket[[:space:]]+text|comments?|ui[[:space:]]+state|shuffle[[:space:]]+state)[^.[:cntrl:]]+(prove[s]?|create[s]?|establish(es)?|suppl(y|ies)|satisf(y|ies)|imply|implies|infer[s]?)[^.[:cntrl:]]*(approval|action[[:space:]-]+request)'
   '(raw[[:space:]]+forwarded[[:space:]]+headers?|inferred[[:space:]]+callback[[:space:]]+identity)[^.[:cntrl:]]+(prove[s]?|create[s]?|establish(es)?|suppl(y|ies)|satisf(y|ies))[^.[:cntrl:]]*callback'
   'aegisops[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|commercial[[:space:]]+replacement|broad[[:space:]]+soar)'
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(readiness|release|gate|workflow|source)[[:space:]]+truth'
@@ -265,6 +266,10 @@ while IFS= read -r line; do
   fi
   if [[ "${line_lower}" =~ ${callback_binding_shortcut_regex} ]]; then
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid callback binding detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" =~ ${execution_receipt_shortcut_value_regex} ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid execution receipt detected" >&2
     exit 1
   fi
   if grep -Eiq -- 'customer[-_ ]private[[:space:]]+data[[:space:]]*[:=]' <<<"${line}"; then
