@@ -12,8 +12,20 @@ pass_stdout="${workdir}/pass.out"
 pass_stderr="${workdir}/pass.err"
 fail_stdout="${workdir}/fail.out"
 fail_stderr="${workdir}/fail.err"
+base_valid_repo=""
 
 assert_passes() {
+  local target="$1"
+
+  if ! PHASE66_3_SKIP_PATH_HYGIENE=1 bash "${verifier}" "${target}" >"${pass_stdout}" 2>"${pass_stderr}"; then
+    echo "Expected verifier to pass for ${target}" >&2
+    cat "${pass_stdout}" >&2
+    cat "${pass_stderr}" >&2
+    exit 1
+  fi
+}
+
+assert_passes_with_path_hygiene() {
   local target="$1"
 
   if ! bash "${verifier}" "${target}" >"${pass_stdout}" 2>"${pass_stderr}"; then
@@ -28,7 +40,7 @@ assert_fails_with() {
   local target="$1"
   local expected="$2"
 
-  if bash "${verifier}" "${target}" >"${fail_stdout}" 2>"${fail_stderr}"; then
+  if PHASE66_3_SKIP_PATH_HYGIENE=1 bash "${verifier}" "${target}" >"${fail_stdout}" 2>"${fail_stderr}"; then
     echo "Expected verifier to fail for ${target}" >&2
     cat "${fail_stdout}" >&2
     exit 1
@@ -53,6 +65,12 @@ copy_repo_path() {
 copy_valid_repo() {
   local target="$1"
   local path
+
+  if [[ -n "${base_valid_repo}" && -d "${base_valid_repo}/.git" ]]; then
+    mkdir -p "${target}"
+    cp -R "${base_valid_repo}/." "${target}/"
+    return
+  fi
 
   mkdir -p "${target}"
   copy_repo_path "${target}" "README.md"
@@ -108,7 +126,8 @@ comment_doc_text() {
 
 valid_repo="${workdir}/valid"
 copy_valid_repo "${valid_repo}"
-assert_passes "${valid_repo}"
+assert_passes_with_path_hygiene "${valid_repo}"
+base_valid_repo="${valid_repo}"
 
 missing_doc_repo="${workdir}/missing-doc"
 copy_valid_repo "${missing_doc_repo}"
@@ -182,6 +201,11 @@ latest_repository_revision_table_repo="${workdir}/latest-repository-revision-tab
 copy_valid_repo "${latest_repository_revision_table_repo}"
 printf '%s\n' "| repository_revision | latest |" >>"${latest_repository_revision_table_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${latest_repository_revision_table_repo}" "non-immutable repository revision detected"
+
+latest_repository_revision_wide_table_repo="${workdir}/latest-repository-revision-wide-table"
+copy_valid_repo "${latest_repository_revision_wide_table_repo}"
+printf '%s\n' "| repository_revision | latest | reviewed |" >>"${latest_repository_revision_wide_table_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${latest_repository_revision_wide_table_repo}" "non-immutable repository revision detected"
 
 valid_repository_revision_repo="${workdir}/valid-repository-revision"
 copy_valid_repo "${valid_repository_revision_repo}"
@@ -378,6 +402,11 @@ copy_valid_repo "${callback_receipt_field_repo}"
 printf '%s\n' "execution_receipt_id: callback_payload" >>"${callback_receipt_field_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${callback_receipt_field_repo}" "invalid execution receipt detected"
 
+shuffle_success_receipt_field_repo="${workdir}/shuffle-success-receipt-field"
+copy_valid_repo "${shuffle_success_receipt_field_repo}"
+printf '%s\n' "execution_receipt_id: shuffle_success" >>"${shuffle_success_receipt_field_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${shuffle_success_receipt_field_repo}" "invalid execution receipt detected"
+
 callback_receipt_wide_table_repo="${workdir}/callback-receipt-wide-table"
 copy_valid_repo "${callback_receipt_wide_table_repo}"
 printf '%s\n' "| execution_receipt_id | callback_payload | reviewed |" >>"${callback_receipt_wide_table_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
@@ -432,6 +461,16 @@ phase_validates_ga_repo="${workdir}/phase-validates-ga"
 copy_valid_repo "${phase_validates_ga_repo}"
 printf '%s\n' "Phase 66.3 validates GA readiness." >>"${phase_validates_ga_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${phase_validates_ga_repo}" "Forbidden Phase 66.3 Shuffle sample execution RC proof claim matched"
+
+phase_demonstrates_ga_repo="${workdir}/phase-demonstrates-ga"
+copy_valid_repo "${phase_demonstrates_ga_repo}"
+printf '%s\n' "Phase 66.3 demonstrates GA readiness." >>"${phase_demonstrates_ga_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${phase_demonstrates_ga_repo}" "Forbidden Phase 66.3 Shuffle sample execution RC proof claim matched"
+
+phase_ga_with_safe_negation_repo="${workdir}/phase-ga-with-safe-negation"
+copy_valid_repo "${phase_ga_with_safe_negation_repo}"
+printf '%s\n' "Phase 66.3 proves GA readiness and does not prove RC pass." >>"${phase_ga_with_safe_negation_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${phase_ga_with_safe_negation_repo}" "Forbidden Phase 66.3 Shuffle sample execution RC proof claim matched"
 
 phase_enables_controlled_write_repo="${workdir}/phase-enables-controlled-write"
 copy_valid_repo "${phase_enables_controlled_write_repo}"
@@ -507,6 +546,11 @@ customer_private_unrelated_negation_repo="${workdir}/customer-private-unrelated-
 copy_valid_repo "${customer_private_unrelated_negation_repo}"
 printf '%s\n' "The proof must not include placeholder screenshots, but includes customer-private ticket export." >>"${customer_private_unrelated_negation_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${customer_private_unrelated_negation_repo}" "customer-private data detected"
+
+customer_private_same_line_prohibition_repo="${workdir}/customer-private-same-line-prohibition"
+copy_valid_repo "${customer_private_same_line_prohibition_repo}"
+printf '%s\n' "The proof must not include customer-private data and includes customer-private ticket export." >>"${customer_private_same_line_prohibition_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${customer_private_same_line_prohibition_repo}" "customer-private data detected"
 
 customer_private_prohibition_repo="${workdir}/customer-private-prohibition"
 copy_valid_repo "${customer_private_prohibition_repo}"

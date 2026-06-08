@@ -8,6 +8,10 @@ repo_root="$(cd "${repo_root}" && pwd -P)"
 doc_path="docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 absolute_doc_path="${repo_root}/${doc_path}"
 readme_path="${repo_root}/README.md"
+phase66_3_tmp_dir="$(mktemp -d)"
+doc_visible_path="${phase66_3_tmp_dir}/phase-66-3-doc.visible.md"
+readme_visible_path="${phase66_3_tmp_dir}/README.visible.md"
+trap 'rm -rf "${phase66_3_tmp_dir}"' EXIT
 
 required_reference_paths=(
   "docs/phase-66-1-clean-host-rc-e2e-harness.md"
@@ -40,6 +44,14 @@ require_file() {
 }
 
 visible_text() {
+  if [[ "$#" -eq 1 && "$1" == "${absolute_doc_path}" && -s "${doc_visible_path}" ]]; then
+    cat "${doc_visible_path}"
+    return
+  fi
+  if [[ "$#" -eq 1 && "$1" == "${readme_path}" && -s "${readme_visible_path}" ]]; then
+    cat "${readme_visible_path}"
+    return
+  fi
   perl -0pe 's/<!--.*?-->//gs' "$@"
 }
 
@@ -93,6 +105,9 @@ done
 for verifier_script in "${required_verifier_scripts[@]}"; do
   require_file "${repo_root}/${verifier_script}" "Phase 66.3 verifier script ${verifier_script}"
 done
+
+perl -0pe 's/<!--.*?-->//gs' "${absolute_doc_path}" >"${doc_visible_path}"
+perl -0pe 's/<!--.*?-->//gs' "${readme_path}" >"${readme_visible_path}"
 
 require_phrase "${readme_path}" "- [Phase 66.3 Shuffle sample execution RC proof](docs/phase-66-3-shuffle-sample-execution-rc-proof.md) defines the reviewed Shuffle sample execution proof surface for RC evidence while preserving Shuffle as subordinate routine automation substrate and excluding broad SOAR marketplace coverage, autonomous remediation, production automation authority, GA, and commercial replacement claims." "README canonical Phase 66.3 boundary bullet"
 require_phrase "${readme_path}" "The Phase 66.3 Shuffle sample execution RC proof is defined by the [Phase 66.3 Shuffle sample execution RC proof](docs/phase-66-3-shuffle-sample-execution-rc-proof.md)." "README Product positioning Phase 66.3 reference"
@@ -170,7 +185,7 @@ authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|rele
 
 repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`[:space:],.;)]+|refs/remotes/[^`[:space:],.;)]+|remotes/[^`[:space:],.;)]+|origin/[^`[:space:],.;)]+|[^`[:space:],.;)]*branch)`?([[:space:].,;)]|$)'
 repository_revision_assignment_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
-repository_revision_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|[[:space:]]*$'
+repository_revision_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|'
 shuffle_profile_value_regex='(^|[[:space:]>*-])`?shuffle_profile`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
 shuffle_profile_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?shuffle_profile`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|[[:space:]]*$'
 reviewed_template_value_regex='(^|[[:space:]>*-])`?reviewed_template_id`?[[:space:]]*[:=][^.[:cntrl:]]*(unreviewed|not[[:space:]_-]*reviewed|draft|sample|placeholder|todo|deprecated)'
@@ -183,17 +198,17 @@ delegation_payload_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?deleg
 callback_binding_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?callback_binding_reference`?[[:space:]]*\|[[:space:]]*`?[^`|]*(raw[[:space:]_-]*forwarded[[:space:]_-]*headers?|inferred[[:space:]_-]*callback[[:space:]_-]*identity)[^`|]*`?[[:space:]]*\|'
 action_request_shortcut_value_regex='(^|[[:space:]>*-])`?action_request_id`?[[:space:]]*[:=][^.[:cntrl:]]*(request[[:space:]_-]*text|ticket[[:space:]_-]*text|workflow[[:space:]_-]*names?)'
 approval_shortcut_value_regex='(^|[[:space:]>*-])`?approval_decision_id`?[[:space:]]*[:=][^.[:cntrl:]]*(comments?|tickets?|ticket[[:space:]_-]*text|ui[[:space:]_-]*state|shuffle[[:space:]_-]*state)'
-execution_receipt_shortcut_value_regex='(^|[[:space:]>*-])`?execution_receipt_id`?[[:space:]]*[:=][[:space:]]*`?(callback[[:space:]_-]*payload|shuffle[[:space:]_-]*workflow[[:space:]_-]*success)'
+execution_receipt_shortcut_value_regex='(^|[[:space:]>*-])`?execution_receipt_id`?[[:space:]]*[:=][[:space:]]*`?(callback[[:space:]_-]*payload|shuffle[[:space:]_-]*(workflow[[:space:]_-]*)?success)'
 reconciliation_shortcut_value_regex='(^|[[:space:]>*-])`?reconciliation_review_id`?[[:space:]]*[:=][^.[:cntrl:]]*(shuffle[[:space:]_-]*success|shuffle[[:space:]_-]*workflow[[:space:]_-]*success|workflow[[:space:]_-]*success)'
 action_request_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?action_request_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(request[[:space:]_-]*text|ticket[[:space:]_-]*text|workflow[[:space:]_-]*names?)[^`|]*`?[[:space:]]*\|'
 approval_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?approval_decision_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(comments?|tickets?|ticket[[:space:]_-]*text|ui[[:space:]_-]*state|shuffle[[:space:]_-]*state)[^`|]*`?[[:space:]]*\|'
-execution_receipt_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?execution_receipt_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(callback[[:space:]_-]*payload|shuffle[[:space:]_-]*workflow[[:space:]_-]*success)[^`|]*`?[[:space:]]*\|'
+execution_receipt_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?execution_receipt_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(callback[[:space:]_-]*payload|shuffle[[:space:]_-]*(workflow[[:space:]_-]*)?success)[^`|]*`?[[:space:]]*\|'
 reconciliation_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?reconciliation_review_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(shuffle[[:space:]_-]*success|shuffle[[:space:]_-]*workflow[[:space:]_-]*success|workflow[[:space:]_-]*success)[^`|]*`?[[:space:]]*\|'
 customer_private_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?(customer[-_ ]private[-_ ]data|raw[[:space:]_-]*customer[[:space:]_-]*data|unredacted[[:space:]_-]*customer)`?[[:space:]]*\|[[:space:]]*`?[^`|[:space:]][^`|]*`?[[:space:]]*\|'
 customer_private_prohibition_regex='(must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include)[^.[:cntrl:]]*customer[-_ ]private'
 
 forbidden_patterns=(
-  'phase[[:space:]]+66\.3[[:space:]]+(proves|satisfies|passes|accepts|grants|achieves|enables|validates)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+soar|soar[[:space:]]+marketplace|arbitrary[[:space:]]+connector|autonomous[[:space:]]+remediation|controlled[[:space:]]+write|hard[[:space:]]+write|production[[:space:]]+(customer[[:space:]]+)?workflow|production[[:space:]]+automation|commercial[[:space:]]+replacement|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
+  'phase[[:space:]]+66\.3[[:space:]]+(proves|satisfies|passes|accepts|grants|achieves|enables|validates|demonstrates)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+soar|soar[[:space:]]+marketplace|arbitrary[[:space:]]+connector|autonomous[[:space:]]+remediation|controlled[[:space:]]+write|hard[[:space:]]+write|production[[:space:]]+(customer[[:space:]]+)?workflow|production[[:space:]]+automation|commercial[[:space:]]+replacement|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.3[[:space:]]+confirms[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+soar[[:space:]]+(coverage|parity|readiness)|soar[[:space:]]+marketplace[[:space:]]+(coverage|readiness)|production[[:space:]]+(customer[[:space:]]+)?workflow[[:space:]]+(import|coverage|readiness)|production[[:space:]]+automation[[:space:]]+(authority|readiness)|commercial[[:space:]]+replacement[[:space:]]+readiness|real[[:space:]]+design[- ]partner[[:space:]]+success|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.3[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc([[:space:][:punct:]]|$)|release[- ]candidate)'
   'phase[[:space:]]+66\.3[[:space:]]+proves[^.[:cntrl:]]*(rc[- ]?(gate|readiness|pass)|release[- ]candidate[- ]?(gate|readiness|pass))'
@@ -218,7 +233,21 @@ forbidden_patterns=(
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source|rc([[:space:][:punct:]]|$)|ga([[:space:][:punct:]]|$))'
 )
 
-forbidden_regex="$(IFS='|'; printf '%s' "${forbidden_patterns[*]}")"
+is_safe_forbidden_claim_line() {
+  local line_lower="$1"
+  local safe_forbidden_claim_line_regex='^[[:space:]>*-]*(phase[[:space:]]+66\.3|this[[:space:]]+proof|proof|aegisops)[^.[:cntrl:]]+(confirms|records|states)[^.[:cntrl:]]+(does[[:space:]]+not[[:space:]]+prove|do[[:space:]]+not[[:space:]]+prove|remains?[[:space:]]+out[[:space:]]+of[[:space:]]+scope|cannot[[:space:]])[^.[:cntrl:]]*[.]?[[:space:]]*$'
+  local safe_cannot_boundary_regex='cannot[[:space:]]+(approve|execute|reconcile|close|release|gate|mutate|create|become|be[[:space:]]+inferred|stand[[:space:]]+in)'
+  if [[ "${line_lower}" =~ (^|[[:space:]])but[[:space:]] ]]; then
+    return 1
+  fi
+  if [[ "${line_lower}" =~ ${safe_forbidden_claim_line_regex} ]]; then
+    return 0
+  fi
+  if [[ "${line_lower}" =~ ${safe_cannot_boundary_regex} ]]; then
+    return 0
+  fi
+  return 1
+}
 
 scan_forbidden_claims() {
   local file="$1"
@@ -226,24 +255,24 @@ scan_forbidden_claims() {
   local scope="${3:-all}"
   local line
   local line_lower
+  local forbidden_pattern
 
   while IFS= read -r line; do
     line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
     if [[ "${scope}" == "phase66_3_readme" ]] && [[ ! "${line_lower}" =~ (phase[[:space:]]+66\.3|shuffle[[:space:]]+sample[[:space:]]+execution|rc[[:space:]]+proof) ]]; then
       continue
     fi
-    if grep -Eiq -- "${forbidden_regex}" <<<"${line_lower}"; then
-      if [[ ! "${line_lower}" =~ (^|[[:space:]])but[[:space:]] ]] && [[ "${line_lower}" =~ (must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include|does[[:space:]]+not[[:space:]]+prove|do[[:space:]]+not[[:space:]]+prove|remains?[[:space:]]+out[[:space:]]+of[[:space:]]+scope|cannot[[:space:]]+(approve|execute|reconcile|close|release|gate|mutate|create|become|be[[:space:]]+inferred|stand[[:space:]]+in)) ]]; then
-        continue
-      fi
-      echo "Forbidden Phase 66.3 ${description} claim matched" >&2
-      exit 1
+    if is_safe_forbidden_claim_line "${line_lower}"; then
+      continue
     fi
+    for forbidden_pattern in "${forbidden_patterns[@]}"; do
+      if [[ "${line_lower}" =~ ${forbidden_pattern} ]]; then
+        echo "Forbidden Phase 66.3 ${description} claim matched" >&2
+        exit 1
+      fi
+    done
   done < <(visible_text "${file}")
 }
-
-scan_forbidden_claims "${absolute_doc_path}" "Shuffle sample execution RC proof"
-scan_forbidden_claims "${readme_path}" "README" "phase66_3_readme"
 
 if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*(bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|basic[[:space:]]+[A-Za-z0-9+/=]{12,})|(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}' < <(visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: production secret-looking value detected" >&2
@@ -369,7 +398,7 @@ while IFS= read -r line; do
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: customer-private data detected" >&2
     exit 1
   fi
-  if [[ ! "${line_lower}" =~ (^|[[:space:]])but[[:space:]] ]] && [[ "${line_lower}" =~ ${customer_private_prohibition_regex} ]]; then
+  if [[ ! "${line_lower}" =~ (^|[[:space:]])but[[:space:]] ]] && [[ ! "${line_lower}" =~ (^|[[:space:]])and[[:space:]]+(includes|contains|embeds|carries)[[:space:]] ]] && [[ "${line_lower}" =~ ${customer_private_prohibition_regex} ]]; then
     continue
   fi
   if grep -Eiq -- '(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_ ]private[[:space:]]+(data|example|ticket|alert|log|chat|payload|export)|unredacted[[:space:]]+customer[[:space:]]+(ticket|alert|log|chat|payload|export|data)' <<<"${line}"; then
@@ -378,12 +407,16 @@ while IFS= read -r line; do
   fi
 done < <(visible_text "${absolute_doc_path}")
 
-path_hygiene_stderr="${repo_root}/.tmp-phase66-3-path-hygiene.err"
-trap 'rm -f "${path_hygiene_stderr}"' EXIT
-if ! bash "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${repo_root}" >/dev/null 2>"${path_hygiene_stderr}"; then
-  cat "${path_hygiene_stderr}" >&2
-  echo "Forbidden Phase 66.3 Shuffle sample execution RC proof absolute path usage detected" >&2
-  exit 1
+scan_forbidden_claims "${absolute_doc_path}" "Shuffle sample execution RC proof"
+scan_forbidden_claims "${readme_path}" "README" "phase66_3_readme"
+
+if [[ "${PHASE66_3_SKIP_PATH_HYGIENE:-0}" != "1" ]]; then
+  path_hygiene_stderr="${phase66_3_tmp_dir}/path-hygiene.err"
+  if ! bash "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${repo_root}" >/dev/null 2>"${path_hygiene_stderr}"; then
+    cat "${path_hygiene_stderr}" >&2
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof absolute path usage detected" >&2
+    exit 1
+  fi
 fi
 
 echo "Phase 66.3 Shuffle sample execution RC proof contract and focused negative checks pass."
