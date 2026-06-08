@@ -165,7 +165,7 @@ require_section_phrase "${limitations_section}" "It does not prove broad SOAR ma
 
 subordinate_authority_subjects='(shuffle([[:space:]]+(workflow|state|success|failure|status|retry|callback|payload|canvas|logs?|execution|api|template|metadata|ticket|receipt))?|workflow[[:space:]]+success|workflow[[:space:]]+status|workflow[[:space:]]+failure|callback[[:space:]]+payloads?|workflow[[:space:]]+canvas[[:space:]]+state|execution[[:space:]]+logs?|generated[[:space:]-]+config(uration)?|ticket[[:space:]]+state|tickets?|ai[[:space:]]+output|api[[:space:]]+responses?|template[[:space:]]+metadata|optional[[:space:]]+evidence|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+output|issue-lint[[:space:]]+output|downstream[[:space:]]+receipts?)'
 authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?|promote[s]?)'
-authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|release|gate|evidence|approval|action[[:space:]-]+requests?|execution[[:space:]-]+receipts?|reconciliation|audit|limitation|closeout)'
+authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|release|gate|evidence|approval|action[[:space:]-]+requests?|execution[[:space:]-]+receipts?|reconciliation|audit|limitation|source[[:space:]-]+admission|closeout)'
 
 repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`[:space:],.;)]+|refs/remotes/[^`[:space:],.;)]+|remotes/[^`[:space:],.;)]+|origin/[^`[:space:],.;)]+|[^`[:space:],.;)]*branch)`?([[:space:].,;)]|$)'
 repository_revision_assignment_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
@@ -178,6 +178,8 @@ direct_launch_value_regex='(^|[[:space:]>*-])`?(direct_shuffle_launch|launch_shu
 direct_launch_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?(direct_shuffle_launch|launch_shuffle_directly|ad_hoc_shuffle_launch|approval_bypass|execution_bypass)`?[[:space:]]*\|[[:space:]]*`?(true|allowed|yes|enabled|approved|accepted|valid)`?[[:space:]]*\|'
 delegation_payload_shortcut_value_regex='(^|[[:space:]>*-])`?delegation_payload_reference`?[[:space:]]*[:=][^.[:cntrl:]]*(direct[[:space:]_-]*shuffle[[:space:]_-]*launch|ad[[:space:]_-]*hoc[[:space:]_-]*shuffle[[:space:]_-]*launch)'
 callback_binding_shortcut_regex='(^|[[:space:]>*-])`?callback_binding_reference`?[[:space:]]*[:=][^.[:cntrl:]]*(raw[[:space:]_-]*forwarded[[:space:]_-]*headers?|inferred[[:space:]_-]*callback[[:space:]_-]*identity)'
+delegation_payload_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?delegation_payload_reference`?[[:space:]]*\|[[:space:]]*`?[^`|]*(direct[[:space:]_-]*shuffle[[:space:]_-]*launch|ad[[:space:]_-]*hoc[[:space:]_-]*shuffle[[:space:]_-]*launch)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
+callback_binding_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?callback_binding_reference`?[[:space:]]*\|[[:space:]]*`?[^`|]*(raw[[:space:]_-]*forwarded[[:space:]_-]*headers?|inferred[[:space:]_-]*callback[[:space:]_-]*identity)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
 action_request_shortcut_value_regex='(^|[[:space:]>*-])`?action_request_id`?[[:space:]]*[:=][^.[:cntrl:]]*(request[[:space:]_-]*text|ticket[[:space:]_-]*text|workflow[[:space:]_-]*names?)'
 approval_shortcut_value_regex='(^|[[:space:]>*-])`?approval_decision_id`?[[:space:]]*[:=][^.[:cntrl:]]*(comments?|tickets?|ticket[[:space:]_-]*text|ui[[:space:]_-]*state|shuffle[[:space:]_-]*state)'
 execution_receipt_shortcut_value_regex='(^|[[:space:]>*-])`?execution_receipt_id`?[[:space:]]*[:=][[:space:]]*`?(callback[[:space:]_-]*payload|shuffle[[:space:]_-]*workflow[[:space:]_-]*success)'
@@ -194,11 +196,11 @@ forbidden_patterns=(
   'phase[[:space:]]+66\.3[[:space:]]+confirms[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+soar[[:space:]]+(coverage|parity|readiness)|soar[[:space:]]+marketplace[[:space:]]+(coverage|readiness)|production[[:space:]]+(customer[[:space:]]+)?workflow[[:space:]]+(import|coverage|readiness)|production[[:space:]]+automation[[:space:]]+(authority|readiness)|commercial[[:space:]]+replacement[[:space:]]+readiness|real[[:space:]]+design[- ]partner[[:space:]]+success|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.3[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc([[:space:][:punct:]]|$)|release[- ]candidate)'
   'phase[[:space:]]+66\.3[[:space:]]+proves[^.[:cntrl:]]*(rc[- ]?(gate|readiness|pass)|release[- ]candidate[- ]?(gate|readiness|pass))'
-  '(phase[[:space:]]+66\.3|this[[:space:]]+proof|proof|aegisops)[[:space:]]+(is|becomes|serves[[:space:]]+as)[[:space:]]+(now[[:space:]]+|already[[:space:]]+|effectively[[:space:]]+)?ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate)'
+  '(phase[[:space:]]+66\.3|this[[:space:]]+proof|proof|aegisops)[[:space:]]+(is|becomes|serves[[:space:]]+as)[[:space:]]+(now[[:space:]]+|already[[:space:]]+|effectively[[:space:]]+)?(ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate)|(ga|rc|release[- ]candidate)[[:space:]-]+ready)'
   '(this[[:space:]]+)?proof[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms|achieves)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|readiness|broad[[:space:]]+soar|soar[[:space:]]+marketplace|production[[:space:]]+(customer[[:space:]]+)?workflow|production[[:space:]]+automation|commercial[[:space:]]+replacement)'
-  'shuffle[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|closeout)[[:space:]]+(source[[:space:]]+of[[:space:]]+)?truth'
-  'shuffle[[:space:]]+(workflow|success|status|failure|callback|payload|receipt|logs?|canvas|execution)[^.[:cntrl:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|closeout)[[:space:]]+(source[[:space:]]+of[[:space:]]+)?truth'
-  "${subordinate_authority_subjects}[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|closeout)[[:space:]]+(source[[:space:]]+of[[:space:]]+)?truth"
+  'shuffle[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|source[[:space:]-]+admission|closeout)[[:space:]]+(source[[:space:]]+of[[:space:]]+)?truth'
+  'shuffle[[:space:]]+(workflow|success|status|failure|callback|payload|receipt|logs?|canvas|execution)[^.[:cntrl:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|source[[:space:]-]+admission|closeout)[[:space:]]+(source[[:space:]]+of[[:space:]]+)?truth'
+  "${subordinate_authority_subjects}[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|source[[:space:]-]+admission|closeout)[[:space:]]+(source[[:space:]]+of[[:space:]]+)?truth"
   "shuffle[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   "${subordinate_authority_subjects}[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   "${subordinate_authority_subjects}[^.[:cntrl:]]+but[^.[:cntrl:]]+((does|do)[[:space:]]+)?${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
@@ -307,7 +309,15 @@ while IFS= read -r line; do
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid delegation payload detected" >&2
     exit 1
   fi
+  if [[ "${line_lower}" =~ ${delegation_payload_shortcut_table_regex} ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid delegation payload detected" >&2
+    exit 1
+  fi
   if [[ "${line_lower}" =~ ${callback_binding_shortcut_regex} ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid callback binding detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" =~ ${callback_binding_shortcut_table_regex} ]]; then
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid callback binding detected" >&2
     exit 1
   fi
