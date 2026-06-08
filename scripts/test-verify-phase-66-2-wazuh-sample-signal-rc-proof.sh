@@ -140,6 +140,16 @@ copy_valid_repo "${missing_source_health_repo}"
 remove_doc_text "${missing_source_health_repo}" "manager, dashboard, indexer, intake, signal freshness, parser, volume, and credential posture"
 assert_fails_with "${missing_source_health_repo}" "Missing Phase 66.2 source-health or admission term"
 
+missing_source_health_citation_repo="${workdir}/missing-source-health-citation"
+copy_valid_repo "${missing_source_health_citation_repo}"
+remove_doc_text "${missing_source_health_citation_repo}" "The proof must cite \`docs/deployment/wazuh-source-health-projection-contract.md\`"
+assert_fails_with "${missing_source_health_citation_repo}" "Missing Phase 66.2 source-health or admission term"
+
+missing_intake_citation_repo="${workdir}/missing-intake-citation"
+copy_valid_repo "${missing_intake_citation_repo}"
+remove_doc_text "${missing_intake_citation_repo}" "The proof must cite \`docs/deployment/wazuh-manager-intake-binding-contract.md\`"
+assert_fails_with "${missing_intake_citation_repo}" "Missing Phase 66.2 source-health or admission term"
+
 missing_limitations_repo="${workdir}/missing-limitations"
 copy_valid_repo "${missing_limitations_repo}"
 remove_doc_text "${missing_limitations_repo}" \
@@ -195,6 +205,21 @@ broad_siem_direct_repo="${workdir}/broad-siem-direct"
 copy_valid_repo "${broad_siem_direct_repo}"
 printf '%s\n' "The proof achieves broad SIEM parity for this path." >>"${broad_siem_direct_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
 assert_fails_with "${broad_siem_direct_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
+broad_wazuh_direct_repo="${workdir}/broad-wazuh-direct"
+copy_valid_repo "${broad_wazuh_direct_repo}"
+printf '%s\n' "The proof achieves broad Wazuh detector parity for this path." >>"${broad_wazuh_direct_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${broad_wazuh_direct_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
+production_telemetry_repo="${workdir}/production-telemetry"
+copy_valid_repo "${production_telemetry_repo}"
+printf '%s\n' "This proof proves production customer telemetry import for this path." >>"${production_telemetry_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${production_telemetry_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
+wazuh_state_authority_repo="${workdir}/wazuh-state-authority"
+copy_valid_repo "${wazuh_state_authority_repo}"
+printf '%s\n' "Wazuh dashboard state approves the release gate." >>"${wazuh_state_authority_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${wazuh_state_authority_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
 
 secret_repo="${workdir}/secret"
 copy_valid_repo "${secret_repo}"
