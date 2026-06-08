@@ -157,20 +157,22 @@ limitations_section="$(section_text "${absolute_doc_path}" "## 5. Accepted Limit
 require_section_phrase "${limitations_section}" "It does not prove broad Wazuh detector parity, production customer telemetry import, production monitoring coverage, real design-partner success, source-native truth, Phase 66 closeout, Phase 67 GA readiness, or commercial replacement readiness." "Phase 66.2 accepted limitations boundary"
 
 forbidden_patterns=(
-  'phase[[:space:]]+66\.2[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(ga|general[- ]availability|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|commercial[[:space:]]+replacement|source[- ]native|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
-  'phase[[:space:]]+66\.2[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc|release[- ]candidate)'
-  'phase[[:space:]]+66\.2[[:space:]]+proves[^.[:cntrl:]]*(rc|release[- ]candidate)[- ]?(gate|readiness|pass)'
-  '(this[[:space:]]+)?proof[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms|achieves)[^.[:cntrl:]]*(ga|general[- ]availability|rc|release[- ]candidate|readiness|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|source[- ]native|commercial[[:space:]]+replacement)'
+  'phase[[:space:]]+66\.2[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|commercial[[:space:]]+replacement|source[- ]native|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
+  'phase[[:space:]]+66\.2[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc([[:space:][:punct:]]|$)|release[- ]candidate)'
+  'phase[[:space:]]+66\.2[[:space:]]+proves[^.[:cntrl:]]*(rc[- ]?(gate|readiness|pass)|release[- ]candidate[- ]?(gate|readiness|pass))'
+  '(this[[:space:]]+)?proof[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms|achieves)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|readiness|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|source[- ]native|commercial[[:space:]]+replacement)'
   'source[- ]native[[:space:]]+truth[[:space:]]+(is|becomes|serves[[:space:]]+as|accepted|approved|allowed)'
   'broad[[:space:]]+(wazuh|siem)[^.[:cntrl:]]+parity[[:space:]]+(is|becomes|serves[[:space:]]+as|accepted|approved|allowed|achieved|satisfied)'
   'wazuh[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
   'wazuh[[:space:]]+(alerts|signals|events|samples)[[:space:]]+(are|become|becomes|serve[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
+  'wazuh[- ]origin[[:space:]]+input[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
   'wazuh[[:space:]]+(promotes|closes|mutates|approves|executes|reconciles|releases|gates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
   'wazuh[[:space:]]+(manager|dashboard|indexer|alert|rule|timestamp|webhook)[^.[:cntrl:]]+state[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
+  '(generated[[:space:]-]+config|generated[[:space:]-]+configuration)[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
   '(ai[[:space:]]+output|browser[[:space:]]+state|ui[[:space:]]+cache|ticket|tickets|downstream[[:space:]]+receipts?)[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
-  'aegisops[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(ga|general[- ]availability|commercial[[:space:]]+replacement|broad[[:space:]]+siem)'
+  'aegisops[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|commercial[[:space:]]+replacement|broad[[:space:]]+siem)'
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(readiness|release|gate|workflow|source)[[:space:]]+truth'
-  '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source|rc|ga)'
+  '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source|rc([[:space:][:punct:]]|$)|ga([[:space:][:punct:]]|$))'
 )
 
 forbidden_regex="$(IFS='|'; printf '%s' "${forbidden_patterns[*]}")"
