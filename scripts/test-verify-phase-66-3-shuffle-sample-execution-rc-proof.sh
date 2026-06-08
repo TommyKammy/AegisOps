@@ -150,6 +150,18 @@ remove_doc_text "${missing_delegation_term_repo}" \
   "template identity, template version, owner, review status, correlation id, action request id, approval decision id, execution receipt id, normalized receipt reference, callback URL, callback secret reference, and idempotency key"
 assert_fails_with "${missing_delegation_term_repo}" "Missing Phase 66.3 delegation, receipt, or reconciliation term"
 
+missing_manual_fallback_citation_repo="${workdir}/missing-manual-fallback-citation"
+copy_valid_repo "${missing_manual_fallback_citation_repo}"
+remove_doc_text "${missing_manual_fallback_citation_repo}" \
+  ", plus \`docs/deployment/shuffle-manual-fallback-contract.md\`"
+assert_fails_with "${missing_manual_fallback_citation_repo}" "Missing Phase 66.3 delegation, receipt, or reconciliation term"
+
+missing_manual_fallback_paths_repo="${workdir}/missing-manual-fallback-paths"
+copy_valid_repo "${missing_manual_fallback_paths_repo}"
+remove_doc_text "${missing_manual_fallback_paths_repo}" \
+  " for unavailable, rejected, missing receipt, stale receipt, and mismatched receipt paths"
+assert_fails_with "${missing_manual_fallback_paths_repo}" "Missing Phase 66.3 delegation, receipt, or reconciliation term"
+
 missing_limitations_repo="${workdir}/missing-limitations"
 copy_valid_repo "${missing_limitations_repo}"
 remove_doc_text "${missing_limitations_repo}" \
@@ -160,6 +172,11 @@ mutable_repository_revision_repo="${workdir}/mutable-repository-revision"
 copy_valid_repo "${mutable_repository_revision_repo}"
 printf '%s\n' "repository_revision: refs/remotes/origin/main" >>"${mutable_repository_revision_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${mutable_repository_revision_repo}" "mutable repository revision detected"
+
+latest_repository_revision_repo="${workdir}/latest-repository-revision"
+copy_valid_repo "${latest_repository_revision_repo}"
+printf '%s\n' "repository_revision: latest" >>"${latest_repository_revision_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${latest_repository_revision_repo}" "non-immutable repository revision detected"
 
 valid_repository_revision_repo="${workdir}/valid-repository-revision"
 copy_valid_repo "${valid_repository_revision_repo}"
@@ -186,6 +203,21 @@ copy_valid_repo "${direct_launch_repo}"
 printf '%s\n' "direct_shuffle_launch: true" >>"${direct_launch_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${direct_launch_repo}" "bypass value detected"
 
+direct_launch_enabled_repo="${workdir}/direct-launch-enabled"
+copy_valid_repo "${direct_launch_enabled_repo}"
+printf '%s\n' "Direct Shuffle launch is enabled for this sample." >>"${direct_launch_enabled_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${direct_launch_enabled_repo}" "Forbidden Phase 66.3 Shuffle sample execution RC proof claim matched"
+
+raw_callback_binding_repo="${workdir}/raw-callback-binding"
+copy_valid_repo "${raw_callback_binding_repo}"
+printf '%s\n' "callback_binding_reference: raw_forwarded_headers" >>"${raw_callback_binding_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${raw_callback_binding_repo}" "invalid callback binding detected"
+
+inferred_callback_binding_repo="${workdir}/inferred-callback-binding"
+copy_valid_repo "${inferred_callback_binding_repo}"
+printf '%s\n' "callback_binding_reference: inferred_callback_identity" >>"${inferred_callback_binding_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${inferred_callback_binding_repo}" "invalid callback binding detected"
+
 approval_bypass_repo="${workdir}/approval-bypass"
 copy_valid_repo "${approval_bypass_repo}"
 printf '%s\n' "Approval bypass is allowed for this Shuffle sample." >>"${approval_bypass_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
@@ -195,6 +227,11 @@ missing_approval_repo="${workdir}/missing-approval"
 copy_valid_repo "${missing_approval_repo}"
 printf '%s\n' "approval_decision_id: missing" >>"${missing_approval_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${missing_approval_repo}" "missing required evidence value detected"
+
+omitted_action_request_repo="${workdir}/omitted-action-request"
+copy_valid_repo "${omitted_action_request_repo}"
+printf '%s\n' "action_request_id: omitted" >>"${omitted_action_request_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${omitted_action_request_repo}" "missing required evidence value detected"
 
 missing_receipt_repo="${workdir}/missing-receipt"
 copy_valid_repo "${missing_receipt_repo}"
@@ -216,6 +253,11 @@ copy_valid_repo "${shuffle_executes_records_repo}"
 printf '%s\n' "Shuffle executes AegisOps records after approval." >>"${shuffle_executes_records_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${shuffle_executes_records_repo}" "Forbidden Phase 66.3 Shuffle sample execution RC proof claim matched"
 
+negation_bypass_authority_repo="${workdir}/negation-bypass-authority"
+copy_valid_repo "${negation_bypass_authority_repo}"
+printf '%s\n' "If callback cannot be verified, Shuffle approves AegisOps records." >>"${negation_bypass_authority_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${negation_bypass_authority_repo}" "Forbidden Phase 66.3 Shuffle sample execution RC proof claim matched"
+
 callback_receipt_shortcut_repo="${workdir}/callback-receipt-shortcut"
 copy_valid_repo "${callback_receipt_shortcut_repo}"
 printf '%s\n' "Callback payload creates execution receipt truth." >>"${callback_receipt_shortcut_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
@@ -230,6 +272,11 @@ ga_ready_repo="${workdir}/ga-ready"
 copy_valid_repo "${ga_ready_repo}"
 printf '%s\n' "Phase 66.3 proves GA readiness." >>"${ga_ready_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${ga_ready_repo}" "Forbidden Phase 66.3 Shuffle sample execution RC proof claim matched"
+
+readme_ga_ready_repo="${workdir}/readme-ga-ready"
+copy_valid_repo "${readme_ga_ready_repo}"
+printf '%s\n' "Phase 66.3 proves GA readiness." >>"${readme_ga_ready_repo}/README.md"
+assert_fails_with "${readme_ga_ready_repo}" "Forbidden Phase 66.3 README claim matched"
 
 rc_pass_repo="${workdir}/rc-pass"
 copy_valid_repo "${rc_pass_repo}"
@@ -250,6 +297,11 @@ secret_repo="${workdir}/secret"
 copy_valid_repo "${secret_repo}"
 printf '%s\n' "api_key: abcdefghijklmnop" >>"${secret_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${secret_repo}" "production secret-looking value detected"
+
+aws_secret_access_key_repo="${workdir}/aws-secret-access-key"
+copy_valid_repo "${aws_secret_access_key_repo}"
+printf '%s\n' "aws_secret_access_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" >>"${aws_secret_access_key_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${aws_secret_access_key_repo}" "production secret-looking value detected"
 
 customer_private_repo="${workdir}/customer-private"
 copy_valid_repo "${customer_private_repo}"

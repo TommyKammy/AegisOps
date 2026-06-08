@@ -147,6 +147,8 @@ delegation_terms=(
   "The proof must cite \`docs/deployment/shuffle-smb-single-node-profile-contract.md\`"
   "The proof must cite \`docs/deployment/shuffle-reviewed-workflow-template-contract.md\`"
   "The proof must cite \`docs/deployment/shuffle-notify-identity-owner-template-import-contract.md\`"
+  "docs/deployment/shuffle-manual-fallback-contract.md"
+  "unavailable, rejected, missing receipt, stale receipt, and mismatched receipt paths"
   "The proof must cite \`docs/deployment/case-timeline-authority-projection-contract.md\`"
   "frontend, backend, orborus, worker, OpenSearch, API, callback, credential custody, volume, port, and pinned-version posture"
   "template identity, template version, owner, review status, correlation id, action request id, approval decision id, execution receipt id, normalized receipt reference, callback URL, callback secret reference, and idempotency key"
@@ -166,9 +168,11 @@ authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|ga
 authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|release|gate|evidence|approval|action[[:space:]-]+requests?|execution[[:space:]-]+receipts?|reconciliation|audit|limitation|closeout)'
 
 repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`[:space:],.;)]+|refs/remotes/[^`[:space:],.;)]+|remotes/[^`[:space:],.;)]+|origin/[^`[:space:],.;)]+|[^`[:space:],.;)]*branch)`?([[:space:].,;)]|$)'
+repository_revision_assignment_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
 shuffle_profile_value_regex='(^|[[:space:]>*-])`?shuffle_profile`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
 reviewed_template_value_regex='(^|[[:space:]>*-])`?reviewed_template_id`?[[:space:]]*[:=][^.[:cntrl:]]*(unreviewed|draft|sample|placeholder|todo|deprecated)'
 direct_launch_value_regex='(^|[[:space:]>*-])`?(direct_shuffle_launch|launch_shuffle_directly|ad_hoc_shuffle_launch|approval_bypass|execution_bypass)`?[[:space:]]*[:=][[:space:]]*`?(true|allowed|yes|enabled)'
+callback_binding_shortcut_regex='(^|[[:space:]>*-])`?callback_binding_reference`?[[:space:]]*[:=][^.[:cntrl:]]*(raw[[:space:]_-]*forwarded[[:space:]_-]*headers?|inferred[[:space:]_-]*callback[[:space:]_-]*identity)'
 
 forbidden_patterns=(
   'phase[[:space:]]+66\.3[[:space:]]+(proves|satisfies|passes|accepts|grants)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+soar|soar[[:space:]]+marketplace|arbitrary[[:space:]]+connector|autonomous[[:space:]]+remediation|controlled[[:space:]]+write|hard[[:space:]]+write|production[[:space:]]+(customer[[:space:]]+)?workflow|production[[:space:]]+automation|commercial[[:space:]]+replacement|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
@@ -182,7 +186,7 @@ forbidden_patterns=(
   "${subordinate_authority_subjects}[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|closeout)[[:space:]]+truth"
   "shuffle[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   "${subordinate_authority_subjects}[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
-  '(direct|ad[[:space:]-]+hoc)[[:space:]]+shuffle[[:space:]-]+launch[^.[:cntrl:]]+(is[[:space:]]+)?(allowed|approved|valid|accepted)'
+  '(direct|ad[[:space:]-]+hoc)[[:space:]]+shuffle[[:space:]-]+launch[^.[:cntrl:]]+(is[[:space:]]+)?(allowed|approved|valid|accepted|enabled)'
   '(approval|execution)[[:space:]-]+bypass[^.[:cntrl:]]+(is[[:space:]]+)?(allowed|approved|valid|accepted)'
   'shuffle[[:space:]]+workflow[[:space:]]+success[^.[:cntrl:]]+(proves|creates|establishes|supplies|satisfies)[^.[:cntrl:]]*reconciliation'
   'callback[[:space:]]+payload[^.[:cntrl:]]+(proves|creates|establishes|supplies|satisfies)[^.[:cntrl:]]*execution[[:space:]-]+receipt'
@@ -198,21 +202,34 @@ forbidden_regex="$(IFS='|'; printf '%s' "${forbidden_patterns[*]}")"
 scan_forbidden_claims() {
   local file="$1"
   local description="$2"
+  local scope="${3:-all}"
+  local line
+  local line_lower
 
-  if grep -Eiv -- '(cannot|must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include|does[[:space:]]+not[[:space:]]+prove|do[[:space:]]+not[[:space:]]+prove|remains?[[:space:]]+out[[:space:]]+of[[:space:]]+scope)' < <(visible_text "${file}") | grep -Eiq -- "${forbidden_regex}"; then
-    echo "Forbidden Phase 66.3 ${description} claim matched" >&2
-    exit 1
-  fi
+  while IFS= read -r line; do
+    line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
+    if [[ "${scope}" == "phase66_3_only" ]] && [[ ! "${line_lower}" =~ phase[[:space:]]+66\.3 ]]; then
+      continue
+    fi
+    if grep -Eiq -- "${forbidden_regex}" <<<"${line_lower}"; then
+      if [[ "${line_lower}" =~ (must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include|does[[:space:]]+not[[:space:]]+prove|do[[:space:]]+not[[:space:]]+prove|remains?[[:space:]]+out[[:space:]]+of[[:space:]]+scope|cannot[[:space:]]+(approve|execute|reconcile|close|release|gate|mutate|create|become|be[[:space:]]+inferred|stand[[:space:]]+in)) ]]; then
+        continue
+      fi
+      echo "Forbidden Phase 66.3 ${description} claim matched" >&2
+      exit 1
+    fi
+  done < <(visible_text "${file}")
 }
 
 scan_forbidden_claims "${absolute_doc_path}" "Shuffle sample execution RC proof"
+scan_forbidden_claims "${readme_path}" "README" "phase66_3_only"
 
-if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|(password|passwd|secret([_ -]?key)?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}' < <(visible_text "${absolute_doc_path}"); then
+if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}' < <(visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: production secret-looking value detected" >&2
   exit 1
 fi
 
-if grep -Eiq -- '(^|[[:space:]>*-])`?(journey_run_id|repository_revision|reviewed_template_id|action_request_id|approval_decision_id|delegation_payload_reference|callback_binding_reference|execution_receipt_id|reconciliation_review_id|limitation_references)`?[[:space:]]*[:=][[:space:]]*`?(missing|none|null|n/a|tbd|todo|unknown|not[[:space:]_-]*provided|not[[:space:]_-]*set)`?([[:space:].,;)]|$)' < <(visible_text "${absolute_doc_path}"); then
+if grep -Eiq -- '(^|[[:space:]>*-])`?(journey_run_id|repository_revision|reviewed_template_id|action_request_id|approval_decision_id|delegation_payload_reference|callback_binding_reference|execution_receipt_id|reconciliation_review_id|limitation_references)`?[[:space:]]*[:=][[:space:]]*`?(missing|none|null|n/a|tbd|todo|unknown|omitted|unavailable|absent|blank|empty|withheld|not[[:space:]_-]*provided|not[[:space:]_-]*set)`?([[:space:].,;)]|$)' < <(visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: missing required evidence value detected" >&2
   exit 1
 fi
@@ -228,6 +245,10 @@ while IFS= read -r line; do
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: mutable repository revision detected" >&2
     exit 1
   fi
+  if [[ "${line_lower}" =~ ${repository_revision_assignment_regex} ]] && [[ ! "${BASH_REMATCH[2]}" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: non-immutable repository revision detected" >&2
+    exit 1
+  fi
   if [[ "${line_lower}" =~ ${shuffle_profile_value_regex} ]] && [[ "${BASH_REMATCH[2]}" != "smb-single-node" ]]; then
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid Shuffle profile detected" >&2
     exit 1
@@ -238,6 +259,10 @@ while IFS= read -r line; do
   fi
   if [[ "${line_lower}" =~ ${direct_launch_value_regex} ]]; then
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: bypass value detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" =~ ${callback_binding_shortcut_regex} ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid callback binding detected" >&2
     exit 1
   fi
   if grep -Eiq -- 'customer[-_ ]private[[:space:]]+data[[:space:]]*[:=]' <<<"${line}"; then
