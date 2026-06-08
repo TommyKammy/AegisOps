@@ -171,8 +171,10 @@ repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:spa
 repository_revision_assignment_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
 repository_revision_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|[[:space:]]*$'
 shuffle_profile_value_regex='(^|[[:space:]>*-])`?shuffle_profile`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
-reviewed_template_value_regex='(^|[[:space:]>*-])`?reviewed_template_id`?[[:space:]]*[:=][^.[:cntrl:]]*(unreviewed|draft|sample|placeholder|todo|deprecated)'
+shuffle_profile_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?shuffle_profile`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|[[:space:]]*$'
+reviewed_template_value_regex='(^|[[:space:]>*-])`?reviewed_template_id`?[[:space:]]*[:=][^.[:cntrl:]]*(unreviewed|not[[:space:]_-]*reviewed|draft|sample|placeholder|todo|deprecated)'
 direct_launch_value_regex='(^|[[:space:]>*-])`?(direct_shuffle_launch|launch_shuffle_directly|ad_hoc_shuffle_launch|approval_bypass|execution_bypass)`?[[:space:]]*[:=][[:space:]]*`?(true|allowed|yes|enabled|approved|accepted|valid)'
+direct_launch_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?(direct_shuffle_launch|launch_shuffle_directly|ad_hoc_shuffle_launch|approval_bypass|execution_bypass)`?[[:space:]]*\|[[:space:]]*`?(true|allowed|yes|enabled|approved|accepted|valid)`?[[:space:]]*\|'
 delegation_payload_shortcut_value_regex='(^|[[:space:]>*-])`?delegation_payload_reference`?[[:space:]]*[:=][^.[:cntrl:]]*(direct[[:space:]_-]*shuffle[[:space:]_-]*launch|ad[[:space:]_-]*hoc[[:space:]_-]*shuffle[[:space:]_-]*launch)'
 callback_binding_shortcut_regex='(^|[[:space:]>*-])`?callback_binding_reference`?[[:space:]]*[:=][^.[:cntrl:]]*(raw[[:space:]_-]*forwarded[[:space:]_-]*headers?|inferred[[:space:]_-]*callback[[:space:]_-]*identity)'
 action_request_shortcut_value_regex='(^|[[:space:]>*-])`?action_request_id`?[[:space:]]*[:=][^.[:cntrl:]]*(request[[:space:]_-]*text|ticket[[:space:]_-]*text|workflow[[:space:]_-]*names?)'
@@ -275,11 +277,19 @@ while IFS= read -r line; do
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid Shuffle profile detected" >&2
     exit 1
   fi
+  if [[ "${line_lower}" =~ ${shuffle_profile_table_regex} ]] && [[ "${BASH_REMATCH[2]}" != "smb-single-node" ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid Shuffle profile detected" >&2
+    exit 1
+  fi
   if [[ "${line_lower}" =~ ${reviewed_template_value_regex} ]]; then
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid reviewed template detected" >&2
     exit 1
   fi
   if [[ "${line_lower}" =~ ${direct_launch_value_regex} ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: bypass value detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" =~ ${direct_launch_table_regex} ]]; then
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: bypass value detected" >&2
     exit 1
   fi

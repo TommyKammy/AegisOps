@@ -193,6 +193,11 @@ copy_valid_repo "${invalid_shuffle_profile_repo}"
 printf '%s\n' "shuffle_profile: enterprise-cluster" >>"${invalid_shuffle_profile_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${invalid_shuffle_profile_repo}" "invalid Shuffle profile detected"
 
+invalid_shuffle_profile_table_repo="${workdir}/invalid-shuffle-profile-table"
+copy_valid_repo "${invalid_shuffle_profile_table_repo}"
+printf '%s\n' "| shuffle_profile | enterprise-cluster |" >>"${invalid_shuffle_profile_table_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${invalid_shuffle_profile_table_repo}" "invalid Shuffle profile detected"
+
 valid_shuffle_profile_repo="${workdir}/valid-shuffle-profile"
 copy_valid_repo "${valid_shuffle_profile_repo}"
 printf '%s\n' "shuffle_profile: smb-single-node" >>"${valid_shuffle_profile_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
@@ -203,10 +208,20 @@ copy_valid_repo "${invalid_template_repo}"
 printf '%s\n' "reviewed_template_id: unreviewed-notify-template" >>"${invalid_template_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${invalid_template_repo}" "invalid reviewed template detected"
 
+not_reviewed_template_repo="${workdir}/not-reviewed-template"
+copy_valid_repo "${not_reviewed_template_repo}"
+printf '%s\n' "reviewed_template_id: not_reviewed" >>"${not_reviewed_template_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${not_reviewed_template_repo}" "invalid reviewed template detected"
+
 direct_launch_repo="${workdir}/direct-launch"
 copy_valid_repo "${direct_launch_repo}"
 printf '%s\n' "direct_shuffle_launch: true" >>"${direct_launch_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${direct_launch_repo}" "bypass value detected"
+
+direct_launch_table_repo="${workdir}/direct-launch-table"
+copy_valid_repo "${direct_launch_table_repo}"
+printf '%s\n' "| direct_shuffle_launch | true |" >>"${direct_launch_table_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${direct_launch_table_repo}" "bypass value detected"
 
 approved_bypass_field_repo="${workdir}/approved-bypass-field"
 copy_valid_repo "${approved_bypass_field_repo}"
