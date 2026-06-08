@@ -178,6 +178,11 @@ copy_valid_repo "${latest_repository_revision_repo}"
 printf '%s\n' "repository_revision: latest" >>"${latest_repository_revision_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${latest_repository_revision_repo}" "non-immutable repository revision detected"
 
+latest_repository_revision_table_repo="${workdir}/latest-repository-revision-table"
+copy_valid_repo "${latest_repository_revision_table_repo}"
+printf '%s\n' "| repository_revision | latest |" >>"${latest_repository_revision_table_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${latest_repository_revision_table_repo}" "non-immutable repository revision detected"
+
 valid_repository_revision_repo="${workdir}/valid-repository-revision"
 copy_valid_repo "${valid_repository_revision_repo}"
 printf '%s\n' "repository_revision: 0123456789abcdef0123456789abcdef01234567" >>"${valid_repository_revision_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
@@ -227,6 +232,11 @@ valid_callback_secret_reference_repo="${workdir}/valid-callback-secret-reference
 copy_valid_repo "${valid_callback_secret_reference_repo}"
 printf '%s\n' "callback_secret_reference: vault/aegisops/shuffle-callback" >>"${valid_callback_secret_reference_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_passes "${valid_callback_secret_reference_repo}"
+
+missing_callback_secret_reference_repo="${workdir}/missing-callback-secret-reference"
+copy_valid_repo "${missing_callback_secret_reference_repo}"
+printf '%s\n' "callback_secret_reference: missing" >>"${missing_callback_secret_reference_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${missing_callback_secret_reference_repo}" "missing required evidence value detected"
 
 approval_bypass_repo="${workdir}/approval-bypass"
 copy_valid_repo "${approval_bypass_repo}"
@@ -377,6 +387,11 @@ aws_secret_access_key_repo="${workdir}/aws-secret-access-key"
 copy_valid_repo "${aws_secret_access_key_repo}"
 printf '%s\n' "aws_secret_access_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" >>"${aws_secret_access_key_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${aws_secret_access_key_repo}" "production secret-looking value detected"
+
+api_key_table_repo="${workdir}/api-key-table"
+copy_valid_repo "${api_key_table_repo}"
+printf '%s\n' "| api_key | abcdefghijklmnop |" >>"${api_key_table_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${api_key_table_repo}" "production secret-looking value detected"
 
 customer_private_repo="${workdir}/customer-private"
 copy_valid_repo "${customer_private_repo}"

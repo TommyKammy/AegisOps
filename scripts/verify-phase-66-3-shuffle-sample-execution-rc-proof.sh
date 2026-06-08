@@ -169,6 +169,7 @@ authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|rele
 
 repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`[:space:],.;)]+|refs/remotes/[^`[:space:],.;)]+|remotes/[^`[:space:],.;)]+|origin/[^`[:space:],.;)]+|[^`[:space:],.;)]*branch)`?([[:space:].,;)]|$)'
 repository_revision_assignment_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
+repository_revision_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|[[:space:]]*$'
 shuffle_profile_value_regex='(^|[[:space:]>*-])`?shuffle_profile`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
 reviewed_template_value_regex='(^|[[:space:]>*-])`?reviewed_template_id`?[[:space:]]*[:=][^.[:cntrl:]]*(unreviewed|draft|sample|placeholder|todo|deprecated)'
 direct_launch_value_regex='(^|[[:space:]>*-])`?(direct_shuffle_launch|launch_shuffle_directly|ad_hoc_shuffle_launch|approval_bypass|execution_bypass)`?[[:space:]]*[:=][[:space:]]*`?(true|allowed|yes|enabled|approved|accepted|valid)'
@@ -236,12 +237,17 @@ if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*bearer[[:space:]]+[A-Za-z
   exit 1
 fi
 
-if grep -Eiq -- '(^|[[:space:]>*-])`?(journey_run_id|repository_revision|reviewed_template_id|action_request_id|approval_decision_id|delegation_payload_reference|callback_binding_reference|execution_receipt_id|reconciliation_review_id|limitation_references)`?[[:space:]]*[:=][[:space:]]*`?(missing|none|null|n/a|tbd|todo|unknown|omitted|unavailable|absent|blank|empty|withheld|not[[:space:]_-]*provided|not[[:space:]_-]*set)`?([[:space:].,;)]|$)' < <(visible_text "${absolute_doc_path}"); then
+if grep -Eiq -- '(^|[[:space:]>*-])\|[[:space:]]*`?(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key|aws[_ -]?secret[_ -]?access[_ -]?key)`?[[:space:]]*\|[[:space:]]*`?[^[:space:]`|<>]+`?[[:space:]]*\|' < <(visible_text "${absolute_doc_path}"); then
+  echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: production secret-looking value detected" >&2
+  exit 1
+fi
+
+if grep -Eiq -- '(^|[[:space:]>*-])`?(journey_run_id|repository_revision|reviewed_template_id|action_request_id|approval_decision_id|delegation_payload_reference|callback_binding_reference|callback_secret_reference|execution_receipt_id|reconciliation_review_id|limitation_references)`?[[:space:]]*[:=][[:space:]]*`?(missing|none|null|n/a|tbd|todo|unknown|omitted|unavailable|absent|blank|empty|withheld|not[[:space:]_-]*provided|not[[:space:]_-]*set)`?([[:space:].,;)]|$)' < <(visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: missing required evidence value detected" >&2
   exit 1
 fi
 
-if grep -Eiq -- '(^|[[:space:]>*-])\|[[:space:]]*`?(journey_run_id|repository_revision|reviewed_template_id|action_request_id|approval_decision_id|delegation_payload_reference|callback_binding_reference|execution_receipt_id|reconciliation_review_id|limitation_references)`?[[:space:]]*\|[[:space:]]*`?(missing|none|null|n/a|tbd|todo|unknown|omitted|unavailable|absent|blank|empty|withheld|not[[:space:]_-]*provided|not[[:space:]_-]*set)`?[[:space:]]*\|' < <(visible_text "${absolute_doc_path}"); then
+if grep -Eiq -- '(^|[[:space:]>*-])\|[[:space:]]*`?(journey_run_id|repository_revision|reviewed_template_id|action_request_id|approval_decision_id|delegation_payload_reference|callback_binding_reference|callback_secret_reference|execution_receipt_id|reconciliation_review_id|limitation_references)`?[[:space:]]*\|[[:space:]]*`?(missing|none|null|n/a|tbd|todo|unknown|omitted|unavailable|absent|blank|empty|withheld|not[[:space:]_-]*provided|not[[:space:]_-]*set)`?[[:space:]]*\|' < <(visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: missing required evidence value detected" >&2
   exit 1
 fi
@@ -258,6 +264,10 @@ while IFS= read -r line; do
     exit 1
   fi
   if [[ "${line_lower}" =~ ${repository_revision_assignment_regex} ]] && [[ ! "${BASH_REMATCH[2]}" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: non-immutable repository revision detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" =~ ${repository_revision_table_regex} ]] && [[ ! "${BASH_REMATCH[2]}" =~ ^[0-9a-f]{40}$ ]]; then
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: non-immutable repository revision detected" >&2
     exit 1
   fi
