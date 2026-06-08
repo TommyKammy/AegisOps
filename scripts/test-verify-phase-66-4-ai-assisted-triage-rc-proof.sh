@@ -193,6 +193,11 @@ copy_valid_repo "${recommendation_authority_repo}"
 printf '%s\n' "recommendation_draft_id: case_closed" >>"${recommendation_authority_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
 assert_fails_with "${recommendation_authority_repo}" "recommendation authority shortcut detected"
 
+recommendation_authority_table_repo="${workdir}/recommendation-authority-table"
+copy_valid_repo "${recommendation_authority_table_repo}"
+printf '%s\n' "| recommendation_draft_id | case_closed | reviewed |" >>"${recommendation_authority_table_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${recommendation_authority_table_repo}" "recommendation authority shortcut detected"
+
 missing_degraded_posture_repo="${workdir}/missing-degraded-posture"
 copy_valid_repo "${missing_degraded_posture_repo}"
 printf '%s\n' "degraded_disabled_posture: not_needed" >>"${missing_degraded_posture_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
@@ -217,6 +222,36 @@ safe_boundary_then_ai_authority_repo="${workdir}/safe-boundary-then-ai-authority
 copy_valid_repo "${safe_boundary_then_ai_authority_repo}"
 printf '%s\n' "AI output cannot approve AegisOps records and AI output executes AegisOps records." >>"${safe_boundary_then_ai_authority_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
 assert_fails_with "${safe_boundary_then_ai_authority_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
+
+safe_sentence_then_ai_authority_repo="${workdir}/safe-sentence-then-ai-authority"
+copy_valid_repo "${safe_sentence_then_ai_authority_repo}"
+printf '%s\n' "AI output cannot approve AegisOps records. AI output executes AegisOps records." >>"${safe_sentence_then_ai_authority_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${safe_sentence_then_ai_authority_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
+
+modal_ai_authority_repo="${workdir}/modal-ai-authority"
+copy_valid_repo "${modal_ai_authority_repo}"
+printf '%s\n' "AI output can approve AegisOps records." >>"${modal_ai_authority_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${modal_ai_authority_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
+
+modal_ai_execute_authority_repo="${workdir}/modal-ai-execute-authority"
+copy_valid_repo "${modal_ai_execute_authority_repo}"
+printf '%s\n' "AI output may execute AegisOps records." >>"${modal_ai_execute_authority_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${modal_ai_execute_authority_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
+
+assistant_output_authority_repo="${workdir}/assistant-output-authority"
+copy_valid_repo "${assistant_output_authority_repo}"
+printf '%s\n' "Assistant output approves AegisOps records." >>"${assistant_output_authority_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${assistant_output_authority_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
+
+assistant_recommendation_authority_repo="${workdir}/assistant-recommendation-authority"
+copy_valid_repo "${assistant_recommendation_authority_repo}"
+printf '%s\n' "Assistant recommendations close cases." >>"${assistant_recommendation_authority_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${assistant_recommendation_authority_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
+
+model_recommendation_authority_repo="${workdir}/model-recommendation-authority"
+copy_valid_repo "${model_recommendation_authority_repo}"
+printf '%s\n' "Model recommendations execute action requests." >>"${model_recommendation_authority_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${model_recommendation_authority_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
 
 passive_ai_authority_repo="${workdir}/passive-ai-authority"
 copy_valid_repo "${passive_ai_authority_repo}"

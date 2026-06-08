@@ -177,8 +177,9 @@ done
 limitations_section="$(section_text "${absolute_doc_path}" "## 5. Accepted Limitations" "## 6. Verification")"
 require_section_phrase "${limitations_section}" "It does not prove autonomous remediation, AI approval, AI execution, AI reconciliation, AI case closure, detector activation, source-native truth, release truth, gate truth, broad AI SOC replacement, real design-partner success, Phase 66 closeout, Phase 67 GA readiness, or commercial replacement readiness." "Phase 66.4 accepted limitations boundary"
 
-subordinate_authority_subjects='(ai([[:space:]]+(output|summary|summaries|recommendations?|trace|trace[[:space:]-]+state|assistant|model|draft|confidence|uncertainty|review|grounding|citation|tool|prompt|prompt[[:space:]-]+injection|generated[[:space:]-]+text))?|model[[:space:]]+output|prompt[[:space:]]+text|prompt[[:space:]-]+injection[[:space:]]+(results?|compliance|output)|grounding[[:space:]]+output|tool[[:space:]]+output|source[[:space:]]+snippets?|citations?|confidence[[:space:]]+scores?|uncertainty[[:space:]]+flags?|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+output|issue-lint[[:space:]]+output|optional[[:space:]]+evidence)'
+subordinate_authority_subjects='(ai([[:space:]]+(output|summary|summaries|recommendations?|trace|trace[[:space:]-]+state|assistant|model|draft|confidence|uncertainty|review|grounding|citation|tool|prompt|prompt[[:space:]-]+injection|generated[[:space:]-]+text))?|assistant[[:space:]]+(output|summaries|recommendations?)|model[[:space:]]+(output|recommendations?)|prompt[[:space:]]+text|prompt[[:space:]-]+injection[[:space:]]+(results?|compliance|output)|grounding[[:space:]]+output|tool[[:space:]]+output|source[[:space:]]+snippets?|citations?|confidence[[:space:]]+scores?|uncertainty[[:space:]]+flags?|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+output|issue-lint[[:space:]]+output|optional[[:space:]]+evidence)'
 authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?|promote[s]?)'
+authority_modals='(can|may|must|should|will|would|could)'
 passive_authority_verbs='(approved|executed|reconciled|closed|released|gated|mutated|promoted)'
 authority_objects='(aegisops[[:space:]]+records?|case|cases|alert|record|workflow|release|gate|evidence|approval|action[[:space:]-]+requests?|execution[[:space:]-]+receipts?|reconciliation|audit|limitation|source[[:space:]-]+admission|closeout)'
 
@@ -200,6 +201,7 @@ citation_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?(source_evidenc
 uncertainty_hidden_regex='(^|[[:space:]>*-])`?uncertainty_flags`?[[:space:]]*[:=][^.[:cntrl:]]*hidden[[:space:]_-]+in[[:space:]_-]+assistant[[:space:]_-]+prose'
 uncertainty_hidden_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?uncertainty_flags`?[[:space:]]*\|[[:space:]]*`?[^`|]*hidden[[:space:]_-]+in[[:space:]_-]+assistant[[:space:]_-]+prose[^`|]*`?[[:space:]]*\|'
 recommendation_authority_regex='(^|[[:space:]>*-])`?recommendation_draft_id`?[[:space:]]*[:=][^.[:cntrl:]]*(approved|executed|reconciled|closed|case[[:space:]_-]*closed|auto[[:space:]_-]*approved)'
+recommendation_authority_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?recommendation_draft_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(approved|executed|reconciled|closed|case[[:space:]_-]*closed|auto[[:space:]_-]*approved)[^`|]*`?[[:space:]]*\|'
 degraded_missing_regex='(^|[[:space:]>*-])`?degraded_disabled_posture`?[[:space:]]*[:=][^.[:cntrl:]]*(not[[:space:]_-]*needed|required[[:space:]_-]*for[[:space:]_-]*rc|always[[:space:]_-]*available)'
 prompt_injection_shortcut_regex='(^|[[:space:]>*-])`?prompt_injection_review_id`?[[:space:]]*[:=][^.[:cntrl:]]*(comply|complied|follow[[:space:]_-]*instructions|override[[:space:]_-]*policy|ignore[[:space:]_-]*policy|developer[[:space:]_-]*override)'
 limitation_hidden_regex='(^|[[:space:]>*-])`?limitation_references`?[[:space:]]*[:=][^.[:cntrl:]]*hidden[[:space:]_-]+in[[:space:]_-]+assistant[[:space:]_-]+output'
@@ -212,7 +214,7 @@ forbidden_patterns=(
   '(phase[[:space:]]+66\.4|this[[:space:]]+proof|proof|aegisops)[[:space:]]+(is|becomes|serves[[:space:]]+as)[[:space:]]+(now[[:space:]]+|already[[:space:]]+|effectively[[:space:]]+)?(ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|commercial[[:space:]]+replacement)|(ga|rc|release[- ]candidate|commercial[[:space:]]+replacement)[[:space:]-]+ready)'
   '(this[[:space:]]+)?proof[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms|achieves|demonstrates)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|readiness|broad[[:space:]]+ai|ai[[:space:]]+soc|commercial[[:space:]]+replacement)'
   'ai[[:space:]]+(output|summary|recommendation|trace|assistant|model)[^.[:cntrl:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|execution|reconciliation|case|workflow|release|gate|evidence|audit|limitation|readiness|closeout)[[:space:]]+(source[[:space:]]+of[[:space:]]+)?truth'
-  "${subordinate_authority_subjects}[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
+  "${subordinate_authority_subjects}([[:space:]]+${authority_modals})?[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   "${authority_objects}[^.[:cntrl:]]+[[:space:]](is|are|was|were|be|been|being)[[:space:]]+${passive_authority_verbs}[[:space:]]+by[[:space:]]+${subordinate_authority_subjects}"
   '(ai|assistant|model)[^.[:cntrl:]]+(auto[[:space:]-]+approve|auto[[:space:]-]+execute|auto[[:space:]-]+reconcile|auto[[:space:]-]+close|autonomously[[:space:]]+(approve|execute|reconcile|close))'
   'prompt[[:space:]-]+injection[^.[:cntrl:]]+(overrides|bypasses|supersedes|replaces)[^.[:cntrl:]]*(policy|approval|review|aegisops)'
@@ -223,15 +225,11 @@ forbidden_patterns=(
 is_safe_forbidden_claim_line() {
   local line_lower="$1"
   local safe_forbidden_claim_line_regex='^[[:space:]>*-]*(phase[[:space:]]+66\.4|this[[:space:]]+proof|proof|aegisops)[^.[:cntrl:]]+(confirms|records|states)[^.[:cntrl:]]+(does[[:space:]]+not[[:space:]]+prove|do[[:space:]]+not[[:space:]]+prove|remains?[[:space:]]+out[[:space:]]+of[[:space:]]+scope|cannot[[:space:]])[^.[:cntrl:]]*[.]?[[:space:]]*$'
-  local safe_cannot_boundary_regex='cannot[[:space:]]+(approve|execute|reconcile|close|release|gate|mutate|promote|create|become|override|be[[:space:]]+required|be[[:space:]]+inferred|stand[[:space:]]+in)'
   local same_line_authority_suffix_regex='(^|[[:space:]])(but|and)[[:space:]]+'
   if [[ "${line_lower}" =~ ${same_line_authority_suffix_regex} ]] || [[ "${line_lower}" =~ \; ]]; then
     return 1
   fi
   if [[ "${line_lower}" =~ ${safe_forbidden_claim_line_regex} ]]; then
-    return 0
-  fi
-  if [[ "${line_lower}" =~ ${safe_cannot_boundary_regex} ]]; then
     return 0
   fi
   return 1
@@ -324,7 +322,7 @@ while IFS= read -r line; do
     echo "Forbidden Phase 66.4 AI-assisted triage RC proof: hidden uncertainty detected" >&2
     exit 1
   fi
-  if [[ "${line_lower}" =~ ${recommendation_authority_regex} ]]; then
+  if [[ "${line_lower}" =~ ${recommendation_authority_regex} ]] || [[ "${line_lower}" =~ ${recommendation_authority_table_regex} ]]; then
     echo "Forbidden Phase 66.4 AI-assisted triage RC proof: recommendation authority shortcut detected" >&2
     exit 1
   fi
