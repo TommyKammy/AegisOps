@@ -158,8 +158,8 @@ limitations_section="$(section_text "${absolute_doc_path}" "## 5. Accepted Limit
 require_section_phrase "${limitations_section}" "It does not prove broad Wazuh detector parity, production customer telemetry import, production monitoring coverage, real design-partner success, source-native truth, Phase 66 closeout, Phase 67 GA readiness, or commercial replacement readiness." "Phase 66.2 accepted limitations boundary"
 
 subordinate_authority_subjects='(wazuh[[:space:]]+alerts?|wazuh[[:space:]]+manager[[:space:]]+state|wazuh[[:space:]]+dashboard[[:space:]]+state|wazuh[[:space:]]+alert[[:space:]]+status|wazuh[[:space:]]+indexer[[:space:]]+contents|wazuh[[:space:]]+source[[:space:]]+health|wazuh[[:space:]]+rule[[:space:]]+state|wazuh[[:space:]]+timestamps?|webhook[[:space:]-]+acknowledgements?|source[- ]health[[:space:]]+projection|generated[[:space:]-]+config(uration)?|tickets?|ai[[:space:]]+output|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+output|issue-lint[[:space:]]+output|downstream[[:space:]]+receipts?)'
-authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?)'
-authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|release|gate|approval|action[[:space:]-]+requests?|execution[[:space:]-]+receipts?|reconciliation|audit|limitation|source[[:space:]-]+admission|closeout)'
+authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?|promote[s]?)'
+authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|release|gate|evidence|approval|action[[:space:]-]+requests?|execution[[:space:]-]+receipts?|reconciliation|audit|limitation|source[[:space:]-]+admission|closeout)'
 
 repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`[:space:],.;)]+|refs/remotes/[^`[:space:],.;)]+|remotes/[^`[:space:],.;)]+|origin/[^`[:space:],.;)]+|[^`[:space:],.;)]*branch)`?([[:space:].,;)]|$)'
 wazuh_profile_value_regex='(^|[[:space:]>*-])`?wazuh_profile`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
@@ -175,15 +175,15 @@ forbidden_patterns=(
   '(this[[:space:]]+)?proof[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms|achieves)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|readiness|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|source[- ]native|commercial[[:space:]]+replacement)'
   'source[- ]native[[:space:]]+truth[[:space:]]+(is|becomes|serves[[:space:]]+as|accepted|approved|allowed)'
   'broad[[:space:]]+(wazuh|siem)[^.[:cntrl:]]+parity[[:space:]]+(is|becomes|serves[[:space:]]+as|accepted|approved|allowed|achieved|satisfied)'
-  'wazuh[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
-  'wazuh[[:space:]]+(alerts|signals|events|samples)[[:space:]]+(are|become|becomes|serve[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
+  'wazuh[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|evidence|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
+  'wazuh[[:space:]]+(alerts|signals|events|samples)[[:space:]]+(are|become|becomes|serve[[:space:]]+as)[^.[:cntrl:]]*(alert|case|evidence|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
   'wazuh[[:space:]]+alert[[:space:]-]+ids?[[:space:]]+(are|become|becomes|serve[[:space:]]+as)[[:space:]]+(aegisops[[:space:]]+)?alert[[:space:]]+truth'
-  'wazuh[- ]origin[[:space:]]+input[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
-  "${subordinate_authority_subjects}[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth"
-  'wazuh[[:space:]]+(promotes|closes|mutates|approves|executes|reconciles|releases|gates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
-  'wazuh[[:space:]]+(manager|dashboard|indexer|alert|rule|timestamp|webhook)[^.[:cntrl:]]+state[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
-  '(generated[[:space:]-]+config|generated[[:space:]-]+configuration)[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
-  '(ai[[:space:]]+output|browser[[:space:]]+state|ui[[:space:]]+cache|ticket|tickets|downstream[[:space:]]+receipts?)[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
+  'wazuh[- ]origin[[:space:]]+input[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|evidence|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
+  "${subordinate_authority_subjects}[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|evidence|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth"
+  "wazuh[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
+  "wazuh[[:space:]]+(manager|dashboard|indexer|alert|rule|timestamp|webhook)[^.[:cntrl:]]+state[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
+  "(generated[[:space:]-]+config|generated[[:space:]-]+configuration)[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
+  "(ai[[:space:]]+output|browser[[:space:]]+state|ui[[:space:]]+cache|ticket|tickets|downstream[[:space:]]+receipts?)[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   "${subordinate_authority_subjects}[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   '(dashboard[[:space:]]+text|file[[:space:]]+names|filenames)[[:space:]]+(create[s]?|generate[s]?|establish(es)?|prove[s]?|suppl(y|ies))[^.[:cntrl:]]*signal[[:space:]-]+identit'
   '(raw[[:space:]]+forwarded[[:space:]]+headers?|inferred[[:space:]]+linkage)[[:space:]]+(prove[s]?|create[s]?|establish(es)?|suppl(y|ies)|satisf(y|ies))[^.[:cntrl:]]*provenance'
@@ -215,6 +215,11 @@ fi
 
 if grep -Eiq -- '(^|[[:space:]>*-])`?(journey_run_id|repository_revision|sample_signal_id|source_health_reference|intake_binding_reference|admission_record_id|aegisops_alert_id|provenance_reference|limitation_references)`?[[:space:]]*[:=][[:space:]]*`?(missing|none|null|n/a|tbd|todo|unknown|not[[:space:]_-]*provided|not[[:space:]_-]*set)`?([[:space:].,;)]|$)' < <(visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: missing required evidence value detected" >&2
+  exit 1
+fi
+
+if grep -Eiq -- '(^|[[:space:]>*-])`?limitation_references`?[[:space:]]*[:=][^.[:cntrl:]]*hidden[[:space:]-]+in[[:space:]-]+source[- ]health[[:space:]-]+text' < <(visible_text "${absolute_doc_path}"); then
+  echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: hidden limitation references detected" >&2
   exit 1
 fi
 
