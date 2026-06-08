@@ -184,11 +184,15 @@ authority_objects='(aegisops[[:space:]]+records?|case|cases|alert|record|workflo
 
 repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`[:space:],.;)]+|refs/remotes/[^`[:space:],.;)]+|remotes/[^`[:space:],.;)]+|origin/[^`[:space:],.;)]+|[^`[:space:],.;)]*branch)`?([[:space:].,;)]|$)'
 repository_revision_assignment_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
+repository_revision_mutable_suffix_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][^.[:cntrl:]]*[0-9a-f]{40}[^.[:cntrl:]]*(main|master|develop|development|trunk|head|refs/heads/|refs/remotes/|remotes/|origin/|branch)'
 repository_revision_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|'
+repository_revision_table_mutable_suffix_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|[[:space:]]*`?[^`|]*[0-9a-f]{40}[^`|]*(main|master|develop|development|trunk|head|refs/heads/|refs/remotes/|remotes/|origin/|branch)[^`|]*`?[[:space:]]*\|'
 missing_value='missing|mismatched|none|null|n/a|tbd|todo|unknown|omitted|unavailable|absent|blank|empty|withheld|not[[:space:]_-]*provided|not[[:space:]_-]*set'
 required_fields='journey_run_id|repository_revision|ai_trace_id|source_evidence_references|cited_summary_id|uncertainty_flags|recommendation_draft_id|operator_review_state|degraded_disabled_posture|prompt_injection_review_id|limitation_references'
 review_state_value_regex='(^|[[:space:]>*-])`?operator_review_state`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
 review_state_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?operator_review_state`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|'
+review_state_authority_suffix_regex='(^|[[:space:]>*-])`?operator_review_state`?[[:space:]]*[:=][^.[:cntrl:]]*(accepted|rejected|unresolved)[^.[:cntrl:]]*(by[[:space:]_-]+ai|ai[[:space:]_-]*approved|ai[[:space:]_-]*self|self[[:space:]_-]*approved)'
+review_state_table_authority_suffix_regex='(^|[[:space:]>*-])\|[[:space:]]*`?operator_review_state`?[[:space:]]*\|[[:space:]]*`?[^`|]*(accepted|rejected|unresolved)[^`|]*(by[[:space:]_-]+ai|ai[[:space:]_-]*approved|ai[[:space:]_-]*self|self[[:space:]_-]*approved)[^`|]*`?[[:space:]]*\|'
 ai_trace_shortcut_regex='(^|[[:space:]>*-])`?ai_trace_id`?[[:space:]]*[:=][^.[:cntrl:]]*(prompt[[:space:]_-]*text|model[[:space:]_-]*output|ui[[:space:]_-]*text)'
 ai_trace_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?ai_trace_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(prompt[[:space:]_-]*text|model[[:space:]_-]*output|ui[[:space:]_-]*text)[^`|]*`?[[:space:]]*\|'
 citation_shortcut_regex='(^|[[:space:]>*-])`?(source_evidence_references|cited_summary_id)`?[[:space:]]*[:=][^.[:cntrl:]]*(uncited|invented|hidden[[:space:]_-]*source|assistant[[:space:]_-]*prose|model[[:space:]_-]*output)'
@@ -220,7 +224,8 @@ is_safe_forbidden_claim_line() {
   local line_lower="$1"
   local safe_forbidden_claim_line_regex='^[[:space:]>*-]*(phase[[:space:]]+66\.4|this[[:space:]]+proof|proof|aegisops)[^.[:cntrl:]]+(confirms|records|states)[^.[:cntrl:]]+(does[[:space:]]+not[[:space:]]+prove|do[[:space:]]+not[[:space:]]+prove|remains?[[:space:]]+out[[:space:]]+of[[:space:]]+scope|cannot[[:space:]])[^.[:cntrl:]]*[.]?[[:space:]]*$'
   local safe_cannot_boundary_regex='cannot[[:space:]]+(approve|execute|reconcile|close|release|gate|mutate|promote|create|become|override|be[[:space:]]+required|be[[:space:]]+inferred|stand[[:space:]]+in)'
-  if [[ "${line_lower}" =~ (^|[[:space:]])but[[:space:]] ]]; then
+  local same_line_authority_suffix_regex='(^|[[:space:]])(but|and)[[:space:]]+'
+  if [[ "${line_lower}" =~ ${same_line_authority_suffix_regex} ]] || [[ "${line_lower}" =~ \; ]]; then
     return 1
   fi
   if [[ "${line_lower}" =~ ${safe_forbidden_claim_line_regex} ]]; then
@@ -283,6 +288,10 @@ while IFS= read -r line; do
     echo "Forbidden Phase 66.4 AI-assisted triage RC proof: mutable repository revision detected" >&2
     exit 1
   fi
+  if [[ "${line_lower}" =~ ${repository_revision_mutable_suffix_regex} ]] || [[ "${line_lower}" =~ ${repository_revision_table_mutable_suffix_regex} ]]; then
+    echo "Forbidden Phase 66.4 AI-assisted triage RC proof: mutable repository revision detected" >&2
+    exit 1
+  fi
   if [[ "${line_lower}" =~ ${repository_revision_assignment_regex} ]] && [[ ! "${BASH_REMATCH[2]}" =~ ^[0-9a-f]{40}$ ]]; then
     echo "Forbidden Phase 66.4 AI-assisted triage RC proof: non-immutable repository revision detected" >&2
     exit 1
@@ -292,6 +301,10 @@ while IFS= read -r line; do
     exit 1
   fi
   if [[ "${line_lower}" =~ ${review_state_value_regex} ]] && [[ ! "${BASH_REMATCH[2]}" =~ ^(accepted|rejected|unresolved)$ ]]; then
+    echo "Forbidden Phase 66.4 AI-assisted triage RC proof: invalid operator review state detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" =~ ${review_state_authority_suffix_regex} ]] || [[ "${line_lower}" =~ ${review_state_table_authority_suffix_regex} ]]; then
     echo "Forbidden Phase 66.4 AI-assisted triage RC proof: invalid operator review state detected" >&2
     exit 1
   fi
@@ -335,7 +348,7 @@ while IFS= read -r line; do
     echo "Forbidden Phase 66.4 AI-assisted triage RC proof: customer-private data detected" >&2
     exit 1
   fi
-  if [[ ! "${line_lower}" =~ (^|[[:space:]])but[[:space:]] ]] && [[ ! "${line_lower}" =~ (^|[[:space:]])and[[:space:]]+(includes|contains|embeds|carries)[[:space:]] ]] && [[ "${line_lower}" =~ ${customer_private_prohibition_regex} ]]; then
+  if [[ "${line_lower}" =~ ${customer_private_prohibition_regex} ]] && ! grep -Eiq -- '(^|[[:space:];,])(but|and)?[[:space:]]*(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)' <<<"${line_lower}"; then
     continue
   fi
   if grep -Eiq -- '(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_ ]private[[:space:]]+(data|example|ticket|alert|log|chat|payload|export)|unredacted[[:space:]]+customer[[:space:]]+(ticket|alert|log|chat|payload|export|data)' <<<"${line}"; then
