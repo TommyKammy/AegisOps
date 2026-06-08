@@ -161,7 +161,9 @@ subordinate_authority_subjects='(wazuh[[:space:]]+alerts?|wazuh[[:space:]]+manag
 authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?)'
 authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|release|gate)'
 
-repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`[:space:],.;)]+|origin/[^`[:space:],.;)]+|[^`[:space:],.;)]*branch)`?([[:space:].,;)]|$)'
+repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`[:space:],.;)]+|refs/remotes/[^`[:space:],.;)]+|remotes/[^`[:space:],.;)]+|origin/[^`[:space:],.;)]+|[^`[:space:],.;)]*branch)`?([[:space:].,;)]|$)'
+wazuh_profile_value_regex='(^|[[:space:]>*-])`?wazuh_profile`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
+source_family_shortcut_regex='(^|[[:space:]>*-])`?source_family`?[[:space:]]*[:=][^.[:cntrl:]]*(inferred([[:space:]-]+from)?[[:space:]-]+nearby[[:space:]-]+prose|inferred|nearby[[:space:]-]+prose)'
 case_linking_value_regex='(^|[[:space:]>*-])`?case_linking_posture`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
 
 forbidden_patterns=(
@@ -219,6 +221,14 @@ while IFS= read -r line; do
   line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
   if [[ "${line_lower}" =~ ${repository_revision_value_regex} ]]; then
     echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: mutable repository revision detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" =~ ${wazuh_profile_value_regex} ]] && [[ "${BASH_REMATCH[2]}" != "smb-single-node" ]]; then
+    echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: invalid Wazuh profile detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" =~ ${source_family_shortcut_regex} ]]; then
+    echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: inferred source-family value detected" >&2
     exit 1
   fi
   if [[ "${line_lower}" =~ ${case_linking_value_regex} ]]; then

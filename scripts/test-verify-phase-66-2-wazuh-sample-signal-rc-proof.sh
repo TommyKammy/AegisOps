@@ -172,10 +172,30 @@ copy_valid_repo "${mutable_repository_revision_repo}"
 printf '%s\n' "repository_revision: main" >>"${mutable_repository_revision_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
 assert_fails_with "${mutable_repository_revision_repo}" "mutable repository revision detected"
 
+remote_tracking_repository_revision_repo="${workdir}/remote-tracking-repository-revision"
+copy_valid_repo "${remote_tracking_repository_revision_repo}"
+printf '%s\n' "repository_revision: refs/remotes/origin/main" >>"${remote_tracking_repository_revision_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${remote_tracking_repository_revision_repo}" "mutable repository revision detected"
+
 valid_repository_revision_repo="${workdir}/valid-repository-revision"
 copy_valid_repo "${valid_repository_revision_repo}"
 printf '%s\n' "repository_revision: 0123456789abcdef0123456789abcdef01234567" >>"${valid_repository_revision_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
 assert_passes "${valid_repository_revision_repo}"
+
+invalid_wazuh_profile_repo="${workdir}/invalid-wazuh-profile"
+copy_valid_repo "${invalid_wazuh_profile_repo}"
+printf '%s\n' "wazuh_profile: enterprise-cluster" >>"${invalid_wazuh_profile_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${invalid_wazuh_profile_repo}" "invalid Wazuh profile detected"
+
+valid_wazuh_profile_repo="${workdir}/valid-wazuh-profile"
+copy_valid_repo "${valid_wazuh_profile_repo}"
+printf '%s\n' "wazuh_profile: smb-single-node" >>"${valid_wazuh_profile_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_passes "${valid_wazuh_profile_repo}"
+
+inferred_source_family_repo="${workdir}/inferred-source-family"
+copy_valid_repo "${inferred_source_family_repo}"
+printf '%s\n' "source_family: inferred from nearby prose" >>"${inferred_source_family_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${inferred_source_family_repo}" "inferred source-family value detected"
 
 invalid_case_linking_posture_repo="${workdir}/invalid-case-linking-posture"
 copy_valid_repo "${invalid_case_linking_posture_repo}"
