@@ -161,6 +161,9 @@ subordinate_authority_subjects='(wazuh[[:space:]]+alerts?|wazuh[[:space:]]+manag
 authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?)'
 authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|release|gate)'
 
+repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`[:space:],.;)]+|origin/[^`[:space:],.;)]+|[^`[:space:],.;)]*branch)`?([[:space:].,;)]|$)'
+case_linking_value_regex='(^|[[:space:]>*-])`?case_linking_posture`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
+
 forbidden_patterns=(
   'phase[[:space:]]+66\.2[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|commercial[[:space:]]+replacement|source[- ]native|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.2[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc([[:space:][:punct:]]|$)|release[- ]candidate)'
@@ -214,6 +217,20 @@ fi
 
 while IFS= read -r line; do
   line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
+  if [[ "${line_lower}" =~ ${repository_revision_value_regex} ]]; then
+    echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: mutable repository revision detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" =~ ${case_linking_value_regex} ]]; then
+    case "${BASH_REMATCH[2]}" in
+      not_linked|linked_by_aegisops_case_workflow|explicitly_deferred)
+        ;;
+      *)
+        echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: invalid case-linking posture detected" >&2
+        exit 1
+        ;;
+    esac
+  fi
   if grep -Eiq -- 'customer[-_ ]private[[:space:]]+data[[:space:]]*[:=]' <<<"${line}"; then
     echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: customer-private data detected" >&2
     exit 1

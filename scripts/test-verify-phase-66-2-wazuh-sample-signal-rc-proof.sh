@@ -167,6 +167,26 @@ copy_valid_repo "${missing_verifier_script_repo}"
 rm "${missing_verifier_script_repo}/scripts/verify-phase-66-2-wazuh-sample-signal-rc-proof.sh"
 assert_fails_with "${missing_verifier_script_repo}" "Missing Phase 66.2 verifier script scripts/verify-phase-66-2-wazuh-sample-signal-rc-proof.sh"
 
+mutable_repository_revision_repo="${workdir}/mutable-repository-revision"
+copy_valid_repo "${mutable_repository_revision_repo}"
+printf '%s\n' "repository_revision: main" >>"${mutable_repository_revision_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${mutable_repository_revision_repo}" "mutable repository revision detected"
+
+valid_repository_revision_repo="${workdir}/valid-repository-revision"
+copy_valid_repo "${valid_repository_revision_repo}"
+printf '%s\n' "repository_revision: 0123456789abcdef0123456789abcdef01234567" >>"${valid_repository_revision_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_passes "${valid_repository_revision_repo}"
+
+invalid_case_linking_posture_repo="${workdir}/invalid-case-linking-posture"
+copy_valid_repo "${invalid_case_linking_posture_repo}"
+printf '%s\n' "case_linking_posture: linked_by_wazuh_case_workflow" >>"${invalid_case_linking_posture_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${invalid_case_linking_posture_repo}" "invalid case-linking posture detected"
+
+valid_case_linking_posture_repo="${workdir}/valid-case-linking-posture"
+copy_valid_repo "${valid_case_linking_posture_repo}"
+printf '%s\n' "case_linking_posture: linked_by_aegisops_case_workflow" >>"${valid_case_linking_posture_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_passes "${valid_case_linking_posture_repo}"
+
 ga_ready_repo="${workdir}/ga-ready"
 copy_valid_repo "${ga_ready_repo}"
 printf '%s\n' "Phase 66.2 proves GA readiness." >>"${ga_ready_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
