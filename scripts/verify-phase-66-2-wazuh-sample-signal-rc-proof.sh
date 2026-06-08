@@ -164,12 +164,14 @@ forbidden_patterns=(
   'phase[[:space:]]+66\.2[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|commercial[[:space:]]+replacement|source[- ]native|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.2[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc([[:space:][:punct:]]|$)|release[- ]candidate)'
   'phase[[:space:]]+66\.2[[:space:]]+proves[^.[:cntrl:]]*(rc[- ]?(gate|readiness|pass)|release[- ]candidate[- ]?(gate|readiness|pass))'
+  '(phase[[:space:]]+66\.2|this[[:space:]]+proof|proof)[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate)'
   '(this[[:space:]]+)?proof[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms|achieves)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|readiness|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|source[- ]native|commercial[[:space:]]+replacement)'
   'source[- ]native[[:space:]]+truth[[:space:]]+(is|becomes|serves[[:space:]]+as|accepted|approved|allowed)'
   'broad[[:space:]]+(wazuh|siem)[^.[:cntrl:]]+parity[[:space:]]+(is|becomes|serves[[:space:]]+as|accepted|approved|allowed|achieved|satisfied)'
   'wazuh[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
   'wazuh[[:space:]]+(alerts|signals|events|samples)[[:space:]]+(are|become|becomes|serve[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
   'wazuh[- ]origin[[:space:]]+input[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
+  "${subordinate_authority_subjects}[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth"
   'wazuh[[:space:]]+(promotes|closes|mutates|approves|executes|reconciles|releases|gates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
   'wazuh[[:space:]]+(manager|dashboard|indexer|alert|rule|timestamp|webhook)[^.[:cntrl:]]+state[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
   '(generated[[:space:]-]+config|generated[[:space:]-]+configuration)[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
@@ -177,6 +179,7 @@ forbidden_patterns=(
   "${subordinate_authority_subjects}[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   '(dashboard[[:space:]]+text|file[[:space:]]+names|filenames)[[:space:]]+(create[s]?|generate[s]?|establish(es)?|prove[s]?|suppl(y|ies))[^.[:cntrl:]]*signal[[:space:]-]+identit'
   '(raw[[:space:]]+forwarded[[:space:]]+headers?|inferred[[:space:]]+linkage)[[:space:]]+(prove[s]?|create[s]?|establish(es)?|suppl(y|ies)|satisf(y|ies))[^.[:cntrl:]]*provenance'
+  '(direct|ad[[:space:]-]+hoc)[[:space:]]+intake[[:space:]]+paths?[[:space:]]+(prove[s]?|create[s]?|establish(es)?|suppl(y|ies)|satisf(y|ies))[^.[:cntrl:]]*intake[[:space:]-]+binding'
   'aegisops[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|commercial[[:space:]]+replacement|broad[[:space:]]+siem)'
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(readiness|release|gate|workflow|source)[[:space:]]+truth'
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source|rc([[:space:][:punct:]]|$)|ga([[:space:][:punct:]]|$))'
