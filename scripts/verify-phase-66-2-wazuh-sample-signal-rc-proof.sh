@@ -157,7 +157,7 @@ limitations_section="$(section_text "${absolute_doc_path}" "## 5. Accepted Limit
 require_section_phrase "${limitations_section}" "It does not prove broad Wazuh detector parity, production customer telemetry import, production monitoring coverage, real design-partner success, source-native truth, Phase 66 closeout, Phase 67 GA readiness, or commercial replacement readiness." "Phase 66.2 accepted limitations boundary"
 
 forbidden_patterns=(
-  'phase[[:space:]]+66\.2[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(ga|general[- ]availability|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|commercial[[:space:]]+replacement|source[- ]native)'
+  'phase[[:space:]]+66\.2[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(ga|general[- ]availability|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|commercial[[:space:]]+replacement|source[- ]native|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.2[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc|release[- ]candidate)'
   'phase[[:space:]]+66\.2[[:space:]]+proves[^.[:cntrl:]]*(rc|release[- ]candidate)[- ]?(gate|readiness|pass)'
   '(this[[:space:]]+)?proof[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms|achieves)[^.[:cntrl:]]*(ga|general[- ]availability|rc|release[- ]candidate|readiness|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|source[- ]native|commercial[[:space:]]+replacement)'
@@ -167,6 +167,7 @@ forbidden_patterns=(
   'wazuh[[:space:]]+(alerts|signals|events|samples)[[:space:]]+(are|become|becomes|serve[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
   'wazuh[[:space:]]+(promotes|closes|mutates|approves|executes|reconciles|releases|gates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
   'wazuh[[:space:]]+(manager|dashboard|indexer|alert|rule|timestamp|webhook)[^.[:cntrl:]]+state[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
+  '(ai[[:space:]]+output|browser[[:space:]]+state|ui[[:space:]]+cache|ticket|tickets|downstream[[:space:]]+receipts?)[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
   'aegisops[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(ga|general[- ]availability|commercial[[:space:]]+replacement|broad[[:space:]]+siem)'
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(readiness|release|gate|workflow|source)[[:space:]]+truth'
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source|rc|ga)'
@@ -194,6 +195,10 @@ fi
 
 while IFS= read -r line; do
   line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
+  if grep -Eiq -- 'customer[-_ ]private[[:space:]]+data[[:space:]]*[:=]' <<<"${line}"; then
+    echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: customer-private data detected" >&2
+    exit 1
+  fi
   if [[ "${line_lower}" =~ (must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include) ]]; then
     continue
   fi
