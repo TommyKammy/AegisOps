@@ -168,10 +168,10 @@ forbidden_patterns=(
   '(this[[:space:]]+)?proof[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms|achieves)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|readiness|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|source[- ]native|commercial[[:space:]]+replacement)'
   'source[- ]native[[:space:]]+truth[[:space:]]+(is|becomes|serves[[:space:]]+as|accepted|approved|allowed)'
   'broad[[:space:]]+(wazuh|siem)[^.[:cntrl:]]+parity[[:space:]]+(is|becomes|serves[[:space:]]+as|accepted|approved|allowed|achieved|satisfied)'
-  'wazuh[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
-  'wazuh[[:space:]]+(alerts|signals|events|samples)[[:space:]]+(are|become|becomes|serve[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
-  'wazuh[- ]origin[[:space:]]+input[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
-  "${subordinate_authority_subjects}[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source|workflow|release|gate|readiness|closeout)[[:space:]]+truth"
+  'wazuh[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
+  'wazuh[[:space:]]+(alerts|signals|events|samples)[[:space:]]+(are|become|becomes|serve[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
+  'wazuh[- ]origin[[:space:]]+input[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
+  "${subordinate_authority_subjects}[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth"
   'wazuh[[:space:]]+(promotes|closes|mutates|approves|executes|reconciles|releases|gates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
   'wazuh[[:space:]]+(manager|dashboard|indexer|alert|rule|timestamp|webhook)[^.[:cntrl:]]+state[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
   '(generated[[:space:]-]+config|generated[[:space:]-]+configuration)[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
@@ -200,8 +200,13 @@ scan_forbidden_claims() {
 scan_forbidden_claims "${absolute_doc_path}" "Wazuh sample signal RC proof"
 scan_forbidden_claims "${readme_path}" "README"
 
-if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|(password|passwd|secret|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}' < <(visible_text "${absolute_doc_path}"); then
+if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|(password|passwd|secret([_ -]?key)?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}' < <(visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: production secret-looking value detected" >&2
+  exit 1
+fi
+
+if grep -Eiq -- '(^|[[:space:]>*-])`?(sample_signal_id|source_health_reference|intake_binding_reference|admission_record_id|aegisops_alert_id|provenance_reference|limitation_references)`?[[:space:]]*[:=][[:space:]]*`?(missing|none|null|n/a|tbd|todo|unknown|not[[:space:]_-]*provided|not[[:space:]_-]*set)`?([[:space:].,;)]|$)' < <(visible_text "${absolute_doc_path}"); then
+  echo "Forbidden Phase 66.2 Wazuh sample signal RC proof: missing required evidence value detected" >&2
   exit 1
 fi
 

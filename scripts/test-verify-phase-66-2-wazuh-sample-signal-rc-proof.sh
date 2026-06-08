@@ -221,6 +221,11 @@ copy_valid_repo "${wazuh_origin_input_truth_repo}"
 printf '%s\n' "Wazuh-origin input is AegisOps case truth before admission." >>"${wazuh_origin_input_truth_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
 assert_fails_with "${wazuh_origin_input_truth_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
 
+source_admission_truth_repo="${workdir}/source-admission-truth"
+copy_valid_repo "${source_admission_truth_repo}"
+printf '%s\n' "Wazuh is source admission truth." >>"${source_admission_truth_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${source_admission_truth_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
 wazuh_manager_state_release_truth_repo="${workdir}/wazuh-manager-state-release-truth"
 copy_valid_repo "${wazuh_manager_state_release_truth_repo}"
 printf '%s\n' "Wazuh manager state is release truth." >>"${wazuh_manager_state_release_truth_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
@@ -325,6 +330,31 @@ secret_repo="${workdir}/secret"
 copy_valid_repo "${secret_repo}"
 printf '%s\n' "api_key: abcdefghijklmnop" >>"${secret_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
 assert_fails_with "${secret_repo}" "production secret-looking value detected"
+
+secret_key_repo="${workdir}/secret-key"
+copy_valid_repo "${secret_key_repo}"
+printf '%s\n' "secret_key: abcdefghijklmnop" >>"${secret_key_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${secret_key_repo}" "production secret-looking value detected"
+
+private_key_repo="${workdir}/private-key"
+copy_valid_repo "${private_key_repo}"
+printf '%s\n' "private_key: abcdefghijklmnop" >>"${private_key_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${private_key_repo}" "production secret-looking value detected"
+
+missing_sample_signal_id_repo="${workdir}/missing-sample-signal-id-value"
+copy_valid_repo "${missing_sample_signal_id_repo}"
+printf '%s\n' "sample_signal_id: missing" >>"${missing_sample_signal_id_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${missing_sample_signal_id_repo}" "missing required evidence value detected"
+
+missing_admission_record_repo="${workdir}/missing-admission-record-value"
+copy_valid_repo "${missing_admission_record_repo}"
+printf '%s\n' "admission_record_id: missing" >>"${missing_admission_record_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${missing_admission_record_repo}" "missing required evidence value detected"
+
+missing_provenance_repo="${workdir}/missing-provenance-value"
+copy_valid_repo "${missing_provenance_repo}"
+printf '%s\n' "provenance_reference: missing" >>"${missing_provenance_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${missing_provenance_repo}" "missing required evidence value detected"
 
 customer_private_repo="${workdir}/customer-private"
 copy_valid_repo "${customer_private_repo}"
