@@ -241,6 +241,21 @@ copy_valid_repo "${wazuh_state_authority_repo}"
 printf '%s\n' "Wazuh dashboard state approves the release gate." >>"${wazuh_state_authority_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
 assert_fails_with "${wazuh_state_authority_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
 
+webhook_ack_authority_repo="${workdir}/webhook-ack-authority"
+copy_valid_repo "${webhook_ack_authority_repo}"
+printf '%s\n' "Webhook acknowledgement approves the release gate." >>"${webhook_ack_authority_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${webhook_ack_authority_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
+wazuh_source_health_authority_repo="${workdir}/wazuh-source-health-authority"
+copy_valid_repo "${wazuh_source_health_authority_repo}"
+printf '%s\n' "Wazuh source health approves the release gate." >>"${wazuh_source_health_authority_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${wazuh_source_health_authority_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
+source_health_projection_authority_repo="${workdir}/source-health-projection-authority"
+copy_valid_repo "${source_health_projection_authority_repo}"
+printf '%s\n' "Source-health projection approves the release gate." >>"${source_health_projection_authority_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${source_health_projection_authority_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
 generated_config_authority_repo="${workdir}/generated-config-authority"
 copy_valid_repo "${generated_config_authority_repo}"
 printf '%s\n' "Generated config approves the release gate." >>"${generated_config_authority_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
@@ -255,6 +270,26 @@ browser_authority_repo="${workdir}/browser-authority"
 copy_valid_repo "${browser_authority_repo}"
 printf '%s\n' "Browser state gates the release." >>"${browser_authority_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
 assert_fails_with "${browser_authority_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
+dashboard_text_identity_repo="${workdir}/dashboard-text-identity"
+copy_valid_repo "${dashboard_text_identity_repo}"
+printf '%s\n' "Dashboard text creates signal identity for the proof." >>"${dashboard_text_identity_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${dashboard_text_identity_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
+filenames_identity_repo="${workdir}/filenames-identity"
+copy_valid_repo "${filenames_identity_repo}"
+printf '%s\n' "Filenames create signal identity for the proof." >>"${filenames_identity_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${filenames_identity_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
+raw_forwarded_headers_provenance_repo="${workdir}/raw-forwarded-headers-provenance"
+copy_valid_repo "${raw_forwarded_headers_provenance_repo}"
+printf '%s\n' "Raw forwarded headers prove provenance for the sample signal." >>"${raw_forwarded_headers_provenance_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${raw_forwarded_headers_provenance_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
+inferred_linkage_provenance_repo="${workdir}/inferred-linkage-provenance"
+copy_valid_repo "${inferred_linkage_provenance_repo}"
+printf '%s\n' "Inferred linkage proves provenance for the sample signal." >>"${inferred_linkage_provenance_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${inferred_linkage_provenance_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
 
 secret_repo="${workdir}/secret"
 copy_valid_repo "${secret_repo}"

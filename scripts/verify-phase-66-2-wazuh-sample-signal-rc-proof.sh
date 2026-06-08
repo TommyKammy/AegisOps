@@ -156,6 +156,10 @@ done
 limitations_section="$(section_text "${absolute_doc_path}" "## 5. Accepted Limitations" "## 6. Verification")"
 require_section_phrase "${limitations_section}" "It does not prove broad Wazuh detector parity, production customer telemetry import, production monitoring coverage, real design-partner success, source-native truth, Phase 66 closeout, Phase 67 GA readiness, or commercial replacement readiness." "Phase 66.2 accepted limitations boundary"
 
+subordinate_authority_subjects='(wazuh[[:space:]]+alerts?|wazuh[[:space:]]+manager[[:space:]]+state|wazuh[[:space:]]+dashboard[[:space:]]+state|wazuh[[:space:]]+indexer[[:space:]]+contents|wazuh[[:space:]]+source[[:space:]]+health|wazuh[[:space:]]+rule[[:space:]]+state|wazuh[[:space:]]+timestamps?|webhook[[:space:]-]+acknowledgements?|source[- ]health[[:space:]]+projection|generated[[:space:]-]+config(uration)?|tickets?|ai[[:space:]]+output|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+output|issue-lint[[:space:]]+output|downstream[[:space:]]+receipts?)'
+authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?)'
+authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|release|gate)'
+
 forbidden_patterns=(
   'phase[[:space:]]+66\.2[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|commercial[[:space:]]+replacement|source[- ]native|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.2[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc([[:space:][:punct:]]|$)|release[- ]candidate)'
@@ -170,6 +174,9 @@ forbidden_patterns=(
   'wazuh[[:space:]]+(manager|dashboard|indexer|alert|rule|timestamp|webhook)[^.[:cntrl:]]+state[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
   '(generated[[:space:]-]+config|generated[[:space:]-]+configuration)[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
   '(ai[[:space:]]+output|browser[[:space:]]+state|ui[[:space:]]+cache|ticket|tickets|downstream[[:space:]]+receipts?)[[:space:]]+(approves|executes|reconciles|closes|releases|gates|mutates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
+  "${subordinate_authority_subjects}[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
+  '(dashboard[[:space:]]+text|file[[:space:]]+names|filenames)[[:space:]]+(create[s]?|generate[s]?|establish(es)?|prove[s]?|suppl(y|ies))[^.[:cntrl:]]*signal[[:space:]-]+identit'
+  '(raw[[:space:]]+forwarded[[:space:]]+headers?|inferred[[:space:]]+linkage)[[:space:]]+(prove[s]?|create[s]?|establish(es)?|suppl(y|ies)|satisf(y|ies))[^.[:cntrl:]]*provenance'
   'aegisops[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|commercial[[:space:]]+replacement|broad[[:space:]]+siem)'
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(readiness|release|gate|workflow|source)[[:space:]]+truth'
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source|rc([[:space:][:punct:]]|$)|ga([[:space:][:punct:]]|$))'
