@@ -213,6 +213,11 @@ copy_valid_repo "${not_reviewed_template_repo}"
 printf '%s\n' "reviewed_template_id: not_reviewed" >>"${not_reviewed_template_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${not_reviewed_template_repo}" "invalid reviewed template detected"
 
+unreviewed_template_table_repo="${workdir}/unreviewed-template-table"
+copy_valid_repo "${unreviewed_template_table_repo}"
+printf '%s\n' "| reviewed_template_id | unreviewed |" >>"${unreviewed_template_table_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${unreviewed_template_table_repo}" "invalid reviewed template detected"
+
 direct_launch_repo="${workdir}/direct-launch"
 copy_valid_repo "${direct_launch_repo}"
 printf '%s\n' "direct_shuffle_launch: true" >>"${direct_launch_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
@@ -313,6 +318,11 @@ copy_valid_repo "${shuffle_executes_records_repo}"
 printf '%s\n' "Shuffle executes AegisOps records after approval." >>"${shuffle_executes_records_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${shuffle_executes_records_repo}" "Forbidden Phase 66.3 Shuffle sample execution RC proof claim matched"
 
+optional_evidence_approves_records_repo="${workdir}/optional-evidence-approves-records"
+copy_valid_repo "${optional_evidence_approves_records_repo}"
+printf '%s\n' "Optional evidence approves AegisOps records." >>"${optional_evidence_approves_records_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${optional_evidence_approves_records_repo}" "Forbidden Phase 66.3 Shuffle sample execution RC proof claim matched"
+
 negation_bypass_authority_repo="${workdir}/negation-bypass-authority"
 copy_valid_repo "${negation_bypass_authority_repo}"
 printf '%s\n' "If callback cannot be verified, Shuffle approves AegisOps records." >>"${negation_bypass_authority_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
@@ -347,6 +357,11 @@ ticket_text_action_request_field_repo="${workdir}/ticket-text-action-request-fie
 copy_valid_repo "${ticket_text_action_request_field_repo}"
 printf '%s\n' "action_request_id: ticket_text" >>"${ticket_text_action_request_field_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${ticket_text_action_request_field_repo}" "invalid action request detected"
+
+ticket_text_action_request_table_repo="${workdir}/ticket-text-action-request-table"
+copy_valid_repo "${ticket_text_action_request_table_repo}"
+printf '%s\n' "| action_request_id | ticket_text |" >>"${ticket_text_action_request_table_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${ticket_text_action_request_table_repo}" "invalid action request detected"
 
 comments_infer_approval_repo="${workdir}/comments-infer-approval"
 copy_valid_repo "${comments_infer_approval_repo}"
@@ -412,6 +427,11 @@ customer_private_repo="${workdir}/customer-private"
 copy_valid_repo "${customer_private_repo}"
 printf '%s\n' "The proof includes customer-private ticket export." >>"${customer_private_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
 assert_fails_with "${customer_private_repo}" "customer-private data detected"
+
+customer_private_table_repo="${workdir}/customer-private-table"
+copy_valid_repo "${customer_private_table_repo}"
+printf '%s\n' "| customer_private_data | exported-ticket |" >>"${customer_private_table_repo}/docs/phase-66-3-shuffle-sample-execution-rc-proof.md"
+assert_fails_with "${customer_private_table_repo}" "customer-private data detected"
 
 customer_private_unrelated_negation_repo="${workdir}/customer-private-unrelated-negation"
 copy_valid_repo "${customer_private_unrelated_negation_repo}"

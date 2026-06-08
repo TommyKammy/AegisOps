@@ -163,7 +163,7 @@ done
 limitations_section="$(section_text "${absolute_doc_path}" "## 5. Accepted Limitations" "## 6. Verification")"
 require_section_phrase "${limitations_section}" "It does not prove broad SOAR marketplace coverage, arbitrary connector import, autonomous remediation, Controlled Write readiness, Hard Write readiness, production customer workflow import, production automation authority, real design-partner success, Phase 66 closeout, Phase 67 GA readiness, or commercial replacement readiness." "Phase 66.3 accepted limitations boundary"
 
-subordinate_authority_subjects='(shuffle([[:space:]]+(workflow|state|success|failure|status|retry|callback|payload|canvas|logs?|execution|api|template|metadata|ticket|receipt))?|workflow[[:space:]]+success|workflow[[:space:]]+status|workflow[[:space:]]+failure|callback[[:space:]]+payloads?|workflow[[:space:]]+canvas[[:space:]]+state|execution[[:space:]]+logs?|generated[[:space:]-]+config(uration)?|ticket[[:space:]]+state|tickets?|ai[[:space:]]+output|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+output|issue-lint[[:space:]]+output|downstream[[:space:]]+receipts?)'
+subordinate_authority_subjects='(shuffle([[:space:]]+(workflow|state|success|failure|status|retry|callback|payload|canvas|logs?|execution|api|template|metadata|ticket|receipt))?|workflow[[:space:]]+success|workflow[[:space:]]+status|workflow[[:space:]]+failure|callback[[:space:]]+payloads?|workflow[[:space:]]+canvas[[:space:]]+state|execution[[:space:]]+logs?|generated[[:space:]-]+config(uration)?|ticket[[:space:]]+state|tickets?|ai[[:space:]]+output|api[[:space:]]+responses?|template[[:space:]]+metadata|optional[[:space:]]+evidence|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+output|issue-lint[[:space:]]+output|downstream[[:space:]]+receipts?)'
 authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?|promote[s]?)'
 authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|release|gate|evidence|approval|action[[:space:]-]+requests?|execution[[:space:]-]+receipts?|reconciliation|audit|limitation|closeout)'
 
@@ -173,6 +173,7 @@ repository_revision_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_re
 shuffle_profile_value_regex='(^|[[:space:]>*-])`?shuffle_profile`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
 shuffle_profile_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?shuffle_profile`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|[[:space:]]*$'
 reviewed_template_value_regex='(^|[[:space:]>*-])`?reviewed_template_id`?[[:space:]]*[:=][^.[:cntrl:]]*(unreviewed|not[[:space:]_-]*reviewed|draft|sample|placeholder|todo|deprecated)'
+reviewed_template_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?reviewed_template_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(unreviewed|not[[:space:]_-]*reviewed|draft|sample|placeholder|todo|deprecated)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
 direct_launch_value_regex='(^|[[:space:]>*-])`?(direct_shuffle_launch|launch_shuffle_directly|ad_hoc_shuffle_launch|approval_bypass|execution_bypass)`?[[:space:]]*[:=][[:space:]]*`?(true|allowed|yes|enabled|approved|accepted|valid)'
 direct_launch_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?(direct_shuffle_launch|launch_shuffle_directly|ad_hoc_shuffle_launch|approval_bypass|execution_bypass)`?[[:space:]]*\|[[:space:]]*`?(true|allowed|yes|enabled|approved|accepted|valid)`?[[:space:]]*\|'
 delegation_payload_shortcut_value_regex='(^|[[:space:]>*-])`?delegation_payload_reference`?[[:space:]]*[:=][^.[:cntrl:]]*(direct[[:space:]_-]*shuffle[[:space:]_-]*launch|ad[[:space:]_-]*hoc[[:space:]_-]*shuffle[[:space:]_-]*launch)'
@@ -181,6 +182,11 @@ action_request_shortcut_value_regex='(^|[[:space:]>*-])`?action_request_id`?[[:s
 approval_shortcut_value_regex='(^|[[:space:]>*-])`?approval_decision_id`?[[:space:]]*[:=][^.[:cntrl:]]*(comments?|tickets?|ticket[[:space:]_-]*text|ui[[:space:]_-]*state|shuffle[[:space:]_-]*state)'
 execution_receipt_shortcut_value_regex='(^|[[:space:]>*-])`?execution_receipt_id`?[[:space:]]*[:=][[:space:]]*`?(callback[[:space:]_-]*payload|shuffle[[:space:]_-]*workflow[[:space:]_-]*success)'
 reconciliation_shortcut_value_regex='(^|[[:space:]>*-])`?reconciliation_review_id`?[[:space:]]*[:=][^.[:cntrl:]]*(shuffle[[:space:]_-]*success|shuffle[[:space:]_-]*workflow[[:space:]_-]*success|workflow[[:space:]_-]*success)'
+action_request_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?action_request_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(request[[:space:]_-]*text|ticket[[:space:]_-]*text|workflow[[:space:]_-]*names?)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
+approval_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?approval_decision_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(comments?|tickets?|ticket[[:space:]_-]*text|ui[[:space:]_-]*state|shuffle[[:space:]_-]*state)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
+execution_receipt_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?execution_receipt_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(callback[[:space:]_-]*payload|shuffle[[:space:]_-]*workflow[[:space:]_-]*success)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
+reconciliation_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?reconciliation_review_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(shuffle[[:space:]_-]*success|shuffle[[:space:]_-]*workflow[[:space:]_-]*success|workflow[[:space:]_-]*success)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
+customer_private_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?(customer[-_ ]private[-_ ]data|raw[[:space:]_-]*customer[[:space:]_-]*data|unredacted[[:space:]_-]*customer)`?[[:space:]]*\|[[:space:]]*`?[^`|[:space:]][^`|]*`?[[:space:]]*\|'
 customer_private_prohibition_regex='(must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include)[^.[:cntrl:]]*customer[-_ ]private'
 
 forbidden_patterns=(
@@ -285,6 +291,10 @@ while IFS= read -r line; do
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid reviewed template detected" >&2
     exit 1
   fi
+  if [[ "${line_lower}" =~ ${reviewed_template_table_regex} ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid reviewed template detected" >&2
+    exit 1
+  fi
   if [[ "${line_lower}" =~ ${direct_launch_value_regex} ]]; then
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: bypass value detected" >&2
     exit 1
@@ -305,7 +315,15 @@ while IFS= read -r line; do
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid action request detected" >&2
     exit 1
   fi
+  if [[ "${line_lower}" =~ ${action_request_shortcut_table_regex} ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid action request detected" >&2
+    exit 1
+  fi
   if [[ "${line_lower}" =~ ${approval_shortcut_value_regex} ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid approval decision detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" =~ ${approval_shortcut_table_regex} ]]; then
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid approval decision detected" >&2
     exit 1
   fi
@@ -313,8 +331,20 @@ while IFS= read -r line; do
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid execution receipt detected" >&2
     exit 1
   fi
+  if [[ "${line_lower}" =~ ${execution_receipt_shortcut_table_regex} ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid execution receipt detected" >&2
+    exit 1
+  fi
   if [[ "${line_lower}" =~ ${reconciliation_shortcut_value_regex} ]]; then
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid reconciliation review detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" =~ ${reconciliation_shortcut_table_regex} ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: invalid reconciliation review detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" =~ ${customer_private_table_regex} ]]; then
+    echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: customer-private data detected" >&2
     exit 1
   fi
   if grep -Eiq -- 'customer[-_ ]private[[:space:]]+data[[:space:]]*[:=]' <<<"${line}"; then
