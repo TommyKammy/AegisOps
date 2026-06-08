@@ -123,6 +123,12 @@ perl -0pi -e 's/- \[Phase 66\.2 Wazuh sample signal RC proof\]\(docs\/phase-66-2
   "${missing_readme_repo}/README.md"
 assert_fails_with "${missing_readme_repo}" "Missing README canonical Phase 66.2 boundary bullet"
 
+missing_authority_policy_baseline_repo="${workdir}/missing-authority-policy-baseline"
+copy_valid_repo "${missing_authority_policy_baseline_repo}"
+remove_doc_text "${missing_authority_policy_baseline_repo}" \
+  "\`docs/phase-51-6-authority-boundary-negative-test-policy.md\`, "
+assert_fails_with "${missing_authority_policy_baseline_repo}" "Missing required Phase 66.2 Wazuh sample signal proof term"
+
 missing_signal_identity_repo="${workdir}/missing-signal-identity"
 copy_valid_repo "${missing_signal_identity_repo}"
 remove_doc_text "${missing_signal_identity_repo}" \
@@ -191,6 +197,11 @@ copy_valid_repo "${rc_ready_copular_repo}"
 printf '%s\n' "Phase 66.2 is ready for RC." >>"${rc_ready_copular_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
 assert_fails_with "${rc_ready_copular_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
 
+aegisops_rc_ready_repo="${workdir}/aegisops-rc-ready"
+copy_valid_repo "${aegisops_rc_ready_repo}"
+printf '%s\n' "AegisOps is ready for RC." >>"${aegisops_rc_ready_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${aegisops_rc_ready_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
 design_partner_success_repo="${workdir}/design-partner-success"
 copy_valid_repo "${design_partner_success_repo}"
 printf '%s\n' "Phase 66.2 proves real design-partner success." >>"${design_partner_success_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
@@ -215,6 +226,11 @@ plural_wazuh_truth_repo="${workdir}/plural-wazuh-truth"
 copy_valid_repo "${plural_wazuh_truth_repo}"
 printf '%s\n' "Wazuh alerts become AegisOps alert truth after admission." >>"${plural_wazuh_truth_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
 assert_fails_with "${plural_wazuh_truth_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
+
+wazuh_alert_id_truth_repo="${workdir}/wazuh-alert-id-truth"
+copy_valid_repo "${wazuh_alert_id_truth_repo}"
+printf '%s\n' "Wazuh alert ids are AegisOps alert truth." >>"${wazuh_alert_id_truth_repo}/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
+assert_fails_with "${wazuh_alert_id_truth_repo}" "Forbidden Phase 66.2 Wazuh sample signal RC proof claim matched"
 
 wazuh_origin_input_truth_repo="${workdir}/wazuh-origin-input-truth"
 copy_valid_repo "${wazuh_origin_input_truth_repo}"

@@ -97,6 +97,7 @@ require_phrase "${readme_path}" "The Phase 66.2 Wazuh sample signal RC proof is 
 required_phrases=(
   "# Phase 66.2 Wazuh Sample Signal RC Proof"
   "**Status**: Accepted as the Phase 66.2 Wazuh sample signal RC proof contract for release-candidate evidence planning only."
+  "**Related Baseline**: \`docs/phase-66-1-clean-host-rc-e2e-harness.md\`, \`docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md\`, \`docs/phase-51-6-authority-boundary-negative-test-policy.md\`, \`docs/deployment/wazuh-manager-intake-binding-contract.md\`, \`docs/deployment/wazuh-source-health-projection-contract.md\`, \`docs/deployment/wazuh-authority-boundary-negative-tests.md\`, \`docs/phase-65-closeout-evaluation.md\`"
   "**Related Issues**: #1397, #1399"
   "This contract defines the Phase 66.2 Wazuh sample signal RC proof surface."
   "The proof depends on the Phase 66.1 clean-host RC E2E harness."
@@ -164,12 +165,13 @@ forbidden_patterns=(
   'phase[[:space:]]+66\.2[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|commercial[[:space:]]+replacement|source[- ]native|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.2[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc([[:space:][:punct:]]|$)|release[- ]candidate)'
   'phase[[:space:]]+66\.2[[:space:]]+proves[^.[:cntrl:]]*(rc[- ]?(gate|readiness|pass)|release[- ]candidate[- ]?(gate|readiness|pass))'
-  '(phase[[:space:]]+66\.2|this[[:space:]]+proof|proof)[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate)'
+  '(phase[[:space:]]+66\.2|this[[:space:]]+proof|proof|aegisops)[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate)'
   '(this[[:space:]]+)?proof[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms|achieves)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|readiness|broad[[:space:]]+wazuh|broad[[:space:]]+siem|production[[:space:]]+(customer[[:space:]]+)?telemetry|production[[:space:]]+monitoring|source[- ]native|commercial[[:space:]]+replacement)'
   'source[- ]native[[:space:]]+truth[[:space:]]+(is|becomes|serves[[:space:]]+as|accepted|approved|allowed)'
   'broad[[:space:]]+(wazuh|siem)[^.[:cntrl:]]+parity[[:space:]]+(is|becomes|serves[[:space:]]+as|accepted|approved|allowed|achieved|satisfied)'
   'wazuh[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
   'wazuh[[:space:]]+(alerts|signals|events|samples)[[:space:]]+(are|become|becomes|serve[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
+  'wazuh[[:space:]]+alert[[:space:]-]+ids?[[:space:]]+(are|become|becomes|serve[[:space:]]+as)[[:space:]]+(aegisops[[:space:]]+)?alert[[:space:]]+truth'
   'wazuh[- ]origin[[:space:]]+input[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth'
   "${subordinate_authority_subjects}[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(alert|case|source([[:space:]-]+admission)?|workflow|release|gate|readiness|closeout)[[:space:]]+truth"
   'wazuh[[:space:]]+(promotes|closes|mutates|approves|executes|reconciles|releases|gates)[^.[:cntrl:]]*(case|alert|record|workflow|release|gate)'
