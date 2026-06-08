@@ -173,9 +173,10 @@ shuffle_profile_value_regex='(^|[[:space:]>*-])`?shuffle_profile`?[[:space:]]*[:
 reviewed_template_value_regex='(^|[[:space:]>*-])`?reviewed_template_id`?[[:space:]]*[:=][^.[:cntrl:]]*(unreviewed|draft|sample|placeholder|todo|deprecated)'
 direct_launch_value_regex='(^|[[:space:]>*-])`?(direct_shuffle_launch|launch_shuffle_directly|ad_hoc_shuffle_launch|approval_bypass|execution_bypass)`?[[:space:]]*[:=][[:space:]]*`?(true|allowed|yes|enabled)'
 callback_binding_shortcut_regex='(^|[[:space:]>*-])`?callback_binding_reference`?[[:space:]]*[:=][^.[:cntrl:]]*(raw[[:space:]_-]*forwarded[[:space:]_-]*headers?|inferred[[:space:]_-]*callback[[:space:]_-]*identity)'
+customer_private_prohibition_regex='(must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include)[^.[:cntrl:]]*customer[-_ ]private'
 
 forbidden_patterns=(
-  'phase[[:space:]]+66\.3[[:space:]]+(proves|satisfies|passes|accepts|grants)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+soar|soar[[:space:]]+marketplace|arbitrary[[:space:]]+connector|autonomous[[:space:]]+remediation|controlled[[:space:]]+write|hard[[:space:]]+write|production[[:space:]]+(customer[[:space:]]+)?workflow|production[[:space:]]+automation|commercial[[:space:]]+replacement|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
+  'phase[[:space:]]+66\.3[[:space:]]+(proves|satisfies|passes|accepts|grants|achieves)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+soar|soar[[:space:]]+marketplace|arbitrary[[:space:]]+connector|autonomous[[:space:]]+remediation|controlled[[:space:]]+write|hard[[:space:]]+write|production[[:space:]]+(customer[[:space:]]+)?workflow|production[[:space:]]+automation|commercial[[:space:]]+replacement|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.3[[:space:]]+confirms[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+soar[[:space:]]+(coverage|parity|readiness)|soar[[:space:]]+marketplace[[:space:]]+(coverage|readiness)|production[[:space:]]+(customer[[:space:]]+)?workflow[[:space:]]+(import|coverage|readiness)|production[[:space:]]+automation[[:space:]]+(authority|readiness)|commercial[[:space:]]+replacement[[:space:]]+readiness|real[[:space:]]+design[- ]partner[[:space:]]+success|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.3[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc([[:space:][:punct:]]|$)|release[- ]candidate)'
   'phase[[:space:]]+66\.3[[:space:]]+proves[^.[:cntrl:]]*(rc[- ]?(gate|readiness|pass)|release[- ]candidate[- ]?(gate|readiness|pass))'
@@ -186,6 +187,7 @@ forbidden_patterns=(
   "${subordinate_authority_subjects}[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|closeout)[[:space:]]+truth"
   "shuffle[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   "${subordinate_authority_subjects}[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
+  "${subordinate_authority_subjects}[^.[:cntrl:]]+but[^.[:cntrl:]]+((does|do)[[:space:]]+)?${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   '(direct|ad[[:space:]-]+hoc)[[:space:]]+shuffle[[:space:]-]+launch[^.[:cntrl:]]+(is[[:space:]]+)?(allowed|approved|valid|accepted|enabled)'
   '(approval|execution)[[:space:]-]+bypass[^.[:cntrl:]]+(is[[:space:]]+)?(allowed|approved|valid|accepted)'
   'shuffle[[:space:]]+workflow[[:space:]]+success[^.[:cntrl:]]+(proves|creates|establishes|supplies|satisfies)[^.[:cntrl:]]*reconciliation'
@@ -212,7 +214,7 @@ scan_forbidden_claims() {
       continue
     fi
     if grep -Eiq -- "${forbidden_regex}" <<<"${line_lower}"; then
-      if [[ "${line_lower}" =~ (must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include|does[[:space:]]+not[[:space:]]+prove|do[[:space:]]+not[[:space:]]+prove|remains?[[:space:]]+out[[:space:]]+of[[:space:]]+scope|cannot[[:space:]]+(approve|execute|reconcile|close|release|gate|mutate|create|become|be[[:space:]]+inferred|stand[[:space:]]+in)) ]]; then
+      if [[ ! "${line_lower}" =~ (^|[[:space:]])but[[:space:]] ]] && [[ "${line_lower}" =~ (must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include|does[[:space:]]+not[[:space:]]+prove|do[[:space:]]+not[[:space:]]+prove|remains?[[:space:]]+out[[:space:]]+of[[:space:]]+scope|cannot[[:space:]]+(approve|execute|reconcile|close|release|gate|mutate|create|become|be[[:space:]]+inferred|stand[[:space:]]+in)) ]]; then
         continue
       fi
       echo "Forbidden Phase 66.3 ${description} claim matched" >&2
@@ -269,7 +271,7 @@ while IFS= read -r line; do
     echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: customer-private data detected" >&2
     exit 1
   fi
-  if [[ "${line_lower}" =~ (must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include) ]]; then
+  if [[ ! "${line_lower}" =~ (^|[[:space:]])but[[:space:]] ]] && [[ "${line_lower}" =~ ${customer_private_prohibition_regex} ]]; then
     continue
   fi
   if grep -Eiq -- '(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_ ]private[[:space:]]+(data|example|ticket|alert|log|chat|payload|export)|unredacted[[:space:]]+customer[[:space:]]+(ticket|alert|log|chat|payload|export|data)' <<<"${line}"; then
