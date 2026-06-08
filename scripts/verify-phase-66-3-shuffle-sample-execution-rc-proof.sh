@@ -165,6 +165,7 @@ require_section_phrase "${limitations_section}" "It does not prove broad SOAR ma
 
 subordinate_authority_subjects='(shuffle([[:space:]]+(workflow|state|success|failure|status|retry|callback|payload|canvas|logs?|execution|api|template|metadata|ticket|receipt))?|workflow[[:space:]]+success|workflow[[:space:]]+status|workflow[[:space:]]+failure|callback[[:space:]]+payloads?|workflow[[:space:]]+canvas[[:space:]]+state|execution[[:space:]]+logs?|generated[[:space:]-]+config(uration)?|ticket[[:space:]]+state|tickets?|ai[[:space:]]+output|api[[:space:]]+responses?|template[[:space:]]+metadata|optional[[:space:]]+evidence|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+output|issue-lint[[:space:]]+output|downstream[[:space:]]+receipts?)'
 authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?|promote[s]?)'
+passive_authority_verbs='(approved|executed|reconciled|closed|released|gated|mutated|promoted)'
 authority_objects='(aegisops[[:space:]]+records?|case|alert|record|workflow|release|gate|evidence|approval|action[[:space:]-]+requests?|execution[[:space:]-]+receipts?|reconciliation|audit|limitation|source[[:space:]-]+admission|closeout)'
 
 repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`[:space:],.;)]+|refs/remotes/[^`[:space:],.;)]+|remotes/[^`[:space:],.;)]+|origin/[^`[:space:],.;)]+|[^`[:space:],.;)]*branch)`?([[:space:].,;)]|$)'
@@ -178,21 +179,21 @@ direct_launch_value_regex='(^|[[:space:]>*-])`?(direct_shuffle_launch|launch_shu
 direct_launch_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?(direct_shuffle_launch|launch_shuffle_directly|ad_hoc_shuffle_launch|approval_bypass|execution_bypass)`?[[:space:]]*\|[[:space:]]*`?(true|allowed|yes|enabled|approved|accepted|valid)`?[[:space:]]*\|'
 delegation_payload_shortcut_value_regex='(^|[[:space:]>*-])`?delegation_payload_reference`?[[:space:]]*[:=][^.[:cntrl:]]*(direct[[:space:]_-]*shuffle[[:space:]_-]*launch|ad[[:space:]_-]*hoc[[:space:]_-]*shuffle[[:space:]_-]*launch)'
 callback_binding_shortcut_regex='(^|[[:space:]>*-])`?callback_binding_reference`?[[:space:]]*[:=][^.[:cntrl:]]*(raw[[:space:]_-]*forwarded[[:space:]_-]*headers?|inferred[[:space:]_-]*callback[[:space:]_-]*identity)'
-delegation_payload_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?delegation_payload_reference`?[[:space:]]*\|[[:space:]]*`?[^`|]*(direct[[:space:]_-]*shuffle[[:space:]_-]*launch|ad[[:space:]_-]*hoc[[:space:]_-]*shuffle[[:space:]_-]*launch)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
-callback_binding_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?callback_binding_reference`?[[:space:]]*\|[[:space:]]*`?[^`|]*(raw[[:space:]_-]*forwarded[[:space:]_-]*headers?|inferred[[:space:]_-]*callback[[:space:]_-]*identity)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
+delegation_payload_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?delegation_payload_reference`?[[:space:]]*\|[[:space:]]*`?[^`|]*(direct[[:space:]_-]*shuffle[[:space:]_-]*launch|ad[[:space:]_-]*hoc[[:space:]_-]*shuffle[[:space:]_-]*launch)[^`|]*`?[[:space:]]*\|'
+callback_binding_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?callback_binding_reference`?[[:space:]]*\|[[:space:]]*`?[^`|]*(raw[[:space:]_-]*forwarded[[:space:]_-]*headers?|inferred[[:space:]_-]*callback[[:space:]_-]*identity)[^`|]*`?[[:space:]]*\|'
 action_request_shortcut_value_regex='(^|[[:space:]>*-])`?action_request_id`?[[:space:]]*[:=][^.[:cntrl:]]*(request[[:space:]_-]*text|ticket[[:space:]_-]*text|workflow[[:space:]_-]*names?)'
 approval_shortcut_value_regex='(^|[[:space:]>*-])`?approval_decision_id`?[[:space:]]*[:=][^.[:cntrl:]]*(comments?|tickets?|ticket[[:space:]_-]*text|ui[[:space:]_-]*state|shuffle[[:space:]_-]*state)'
 execution_receipt_shortcut_value_regex='(^|[[:space:]>*-])`?execution_receipt_id`?[[:space:]]*[:=][[:space:]]*`?(callback[[:space:]_-]*payload|shuffle[[:space:]_-]*workflow[[:space:]_-]*success)'
 reconciliation_shortcut_value_regex='(^|[[:space:]>*-])`?reconciliation_review_id`?[[:space:]]*[:=][^.[:cntrl:]]*(shuffle[[:space:]_-]*success|shuffle[[:space:]_-]*workflow[[:space:]_-]*success|workflow[[:space:]_-]*success)'
-action_request_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?action_request_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(request[[:space:]_-]*text|ticket[[:space:]_-]*text|workflow[[:space:]_-]*names?)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
-approval_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?approval_decision_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(comments?|tickets?|ticket[[:space:]_-]*text|ui[[:space:]_-]*state|shuffle[[:space:]_-]*state)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
-execution_receipt_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?execution_receipt_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(callback[[:space:]_-]*payload|shuffle[[:space:]_-]*workflow[[:space:]_-]*success)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
-reconciliation_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?reconciliation_review_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(shuffle[[:space:]_-]*success|shuffle[[:space:]_-]*workflow[[:space:]_-]*success|workflow[[:space:]_-]*success)[^`|]*`?[[:space:]]*\|[[:space:]]*$'
+action_request_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?action_request_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(request[[:space:]_-]*text|ticket[[:space:]_-]*text|workflow[[:space:]_-]*names?)[^`|]*`?[[:space:]]*\|'
+approval_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?approval_decision_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(comments?|tickets?|ticket[[:space:]_-]*text|ui[[:space:]_-]*state|shuffle[[:space:]_-]*state)[^`|]*`?[[:space:]]*\|'
+execution_receipt_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?execution_receipt_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(callback[[:space:]_-]*payload|shuffle[[:space:]_-]*workflow[[:space:]_-]*success)[^`|]*`?[[:space:]]*\|'
+reconciliation_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?reconciliation_review_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(shuffle[[:space:]_-]*success|shuffle[[:space:]_-]*workflow[[:space:]_-]*success|workflow[[:space:]_-]*success)[^`|]*`?[[:space:]]*\|'
 customer_private_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?(customer[-_ ]private[-_ ]data|raw[[:space:]_-]*customer[[:space:]_-]*data|unredacted[[:space:]_-]*customer)`?[[:space:]]*\|[[:space:]]*`?[^`|[:space:]][^`|]*`?[[:space:]]*\|'
 customer_private_prohibition_regex='(must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include)[^.[:cntrl:]]*customer[-_ ]private'
 
 forbidden_patterns=(
-  'phase[[:space:]]+66\.3[[:space:]]+(proves|satisfies|passes|accepts|grants|achieves|enables)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+soar|soar[[:space:]]+marketplace|arbitrary[[:space:]]+connector|autonomous[[:space:]]+remediation|controlled[[:space:]]+write|hard[[:space:]]+write|production[[:space:]]+(customer[[:space:]]+)?workflow|production[[:space:]]+automation|commercial[[:space:]]+replacement|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
+  'phase[[:space:]]+66\.3[[:space:]]+(proves|satisfies|passes|accepts|grants|achieves|enables|validates)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+soar|soar[[:space:]]+marketplace|arbitrary[[:space:]]+connector|autonomous[[:space:]]+remediation|controlled[[:space:]]+write|hard[[:space:]]+write|production[[:space:]]+(customer[[:space:]]+)?workflow|production[[:space:]]+automation|commercial[[:space:]]+replacement|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.3[[:space:]]+confirms[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|broad[[:space:]]+soar[[:space:]]+(coverage|parity|readiness)|soar[[:space:]]+marketplace[[:space:]]+(coverage|readiness)|production[[:space:]]+(customer[[:space:]]+)?workflow[[:space:]]+(import|coverage|readiness)|production[[:space:]]+automation[[:space:]]+(authority|readiness)|commercial[[:space:]]+replacement[[:space:]]+readiness|real[[:space:]]+design[- ]partner[[:space:]]+success|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.3[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc([[:space:][:punct:]]|$)|release[- ]candidate)'
   'phase[[:space:]]+66\.3[[:space:]]+proves[^.[:cntrl:]]*(rc[- ]?(gate|readiness|pass)|release[- ]candidate[- ]?(gate|readiness|pass))'
@@ -204,6 +205,7 @@ forbidden_patterns=(
   "${subordinate_authority_subjects}[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|action[[:space:]-]+request|execution[[:space:]-]+receipt|reconciliation|case|workflow|release|gate|evidence|audit|limitation|source[[:space:]-]+admission|closeout)[[:space:]]+(source[[:space:]]+of[[:space:]]+)?truth"
   "shuffle[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   "${subordinate_authority_subjects}[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
+  "${authority_objects}[^.[:cntrl:]]+[[:space:]](is|are|was|were|be|been|being)[[:space:]]+${passive_authority_verbs}[[:space:]]+by[[:space:]]+${subordinate_authority_subjects}"
   "${subordinate_authority_subjects}[^.[:cntrl:]]+but[^.[:cntrl:]]+((does|do)[[:space:]]+)?${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   '(direct|ad[[:space:]-]+hoc)[[:space:]]+shuffle[[:space:]-]+launch[^.[:cntrl:]]+(is[[:space:]]+)?(allowed|approved|valid|accepted|enabled)'
   '(approval|execution)[[:space:]-]+bypass[^.[:cntrl:]]+(is[[:space:]]+)?(allowed|approved|valid|accepted|enabled)'
@@ -243,7 +245,7 @@ scan_forbidden_claims() {
 scan_forbidden_claims "${absolute_doc_path}" "Shuffle sample execution RC proof"
 scan_forbidden_claims "${readme_path}" "README" "phase66_3_readme"
 
-if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}' < <(visible_text "${absolute_doc_path}"); then
+if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*(bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|basic[[:space:]]+[A-Za-z0-9+/=]{12,})|(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}' < <(visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: production secret-looking value detected" >&2
   exit 1
 fi
@@ -264,6 +266,11 @@ if grep -Eiq -- '(^|[[:space:]>*-])\|[[:space:]]*`?(journey_run_id|repository_re
 fi
 
 if grep -Eiq -- '(^|[[:space:]>*-])`?limitation_references`?[[:space:]]*[:=][^.[:cntrl:]]*hidden[[:space:]_-]+in[[:space:]_-]+shuffle[[:space:]_-]+execution[[:space:]_-]+text' < <(visible_text "${absolute_doc_path}"); then
+  echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: hidden limitation references detected" >&2
+  exit 1
+fi
+
+if grep -Eiq -- '(^|[[:space:]>*-])\|[[:space:]]*`?limitation_references`?[[:space:]]*\|[[:space:]]*`?[^`|]*hidden[[:space:]_-]+in[[:space:]_-]+shuffle[[:space:]_-]+execution[[:space:]_-]+text[^`|]*`?[[:space:]]*\|' < <(visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.3 Shuffle sample execution RC proof: hidden limitation references detected" >&2
   exit 1
 fi
