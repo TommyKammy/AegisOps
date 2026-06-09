@@ -11,6 +11,8 @@ readme_path="${repo_root}/README.md"
 tmp_dir="$(mktemp -d)"
 doc_visible_path="${tmp_dir}/phase-66-4-doc.visible.md"
 readme_visible_path="${tmp_dir}/README.visible.md"
+doc_visible_lower_path="${tmp_dir}/phase-66-4-doc.visible.lower.md"
+readme_visible_lower_path="${tmp_dir}/README.visible.lower.md"
 trap 'rm -rf "${tmp_dir}"' EXIT
 
 required_reference_paths=(
@@ -52,6 +54,18 @@ visible_text() {
     return
   fi
   perl -0pe 's/<!--.*?-->//gs' "$@"
+}
+
+lower_visible_text() {
+  if [[ "$#" -eq 1 && "$1" == "${absolute_doc_path}" && -s "${doc_visible_lower_path}" ]]; then
+    cat "${doc_visible_lower_path}"
+    return
+  fi
+  if [[ "$#" -eq 1 && "$1" == "${readme_path}" && -s "${readme_visible_lower_path}" ]]; then
+    cat "${readme_visible_lower_path}"
+    return
+  fi
+  visible_text "$@" | tr '[:upper:]' '[:lower:]'
 }
 
 require_phrase() {
@@ -107,6 +121,8 @@ done
 
 perl -0pe 's/<!--.*?-->//gs' "${absolute_doc_path}" >"${doc_visible_path}"
 perl -0pe 's/<!--.*?-->//gs' "${readme_path}" >"${readme_visible_path}"
+tr '[:upper:]' '[:lower:]' <"${doc_visible_path}" >"${doc_visible_lower_path}"
+tr '[:upper:]' '[:lower:]' <"${readme_visible_path}" >"${readme_visible_lower_path}"
 
 require_phrase "${readme_path}" "- [Phase 66.4 AI-assisted triage RC proof](docs/phase-66-4-ai-assisted-triage-rc-proof.md) defines the reviewed AI-assisted triage proof surface for RC evidence while preserving AI output as cited, reviewable, advisory evidence and excluding AI approval, AI execution, AI reconciliation, case-closure authority, GA, and commercial replacement claims." "README canonical Phase 66.4 boundary bullet"
 require_phrase "${readme_path}" "The Phase 66.4 AI-assisted triage RC proof is defined by the [Phase 66.4 AI-assisted triage RC proof](docs/phase-66-4-ai-assisted-triage-rc-proof.md)." "README Product positioning Phase 66.4 reference"
@@ -244,12 +260,10 @@ scan_forbidden_claims() {
   local file="$1"
   local description="$2"
   local scope="${3:-all}"
-  local line
   local line_lower
   local forbidden_pattern
 
-  while IFS= read -r line; do
-    line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
+  while IFS= read -r line_lower; do
     if [[ "${scope}" == "phase66_4_readme" ]] && [[ ! "${line_lower}" =~ (phase[[:space:]]+66\.4|ai-assisted[[:space:]]+triage|rc[[:space:]]+proof) ]]; then
       continue
     fi
@@ -262,10 +276,10 @@ scan_forbidden_claims() {
         exit 1
       fi
     done
-  done < <(visible_text "${file}")
+  done < <(lower_visible_text "${file}")
 
   if [[ "${scope}" == "all" ]]; then
-    line_lower="$(visible_text "${file}" | awk 'NF { printf "%s ", $0 } !NF { printf "\n" }' | tr '[:upper:]' '[:lower:]')"
+    line_lower="$(lower_visible_text "${file}" | awk 'NF { printf "%s ", $0 } !NF { printf "\n" }')"
     for forbidden_pattern in "${forbidden_patterns[@]}"; do
       if [[ "${line_lower}" =~ ${forbidden_pattern} ]]; then
         echo "Forbidden Phase 66.4 ${description} claim matched" >&2
@@ -285,18 +299,17 @@ if grep -Eiq -- '(^|[[:space:]>*-])\|[[:space:]]*`?(password|passwd|secret([_ -]
   exit 1
 fi
 
-if grep -Eiq -- "(^|[[:space:]>*-])\`?(${required_fields})\`?[[:space:]]*[:=][[:space:]]*\`?(${missing_value})\`?([[:space:].,;)]|$)" < <(visible_text "${absolute_doc_path}"); then
+if grep -Eq -- "(^|[[:space:]>*-])\`?(${required_fields})\`?[[:space:]]*[:=][[:space:]]*\`?(${missing_value})([[:space:]_.-]+[^.[:cntrl:]]*)?([[:space:].,;)]|$)" < <(lower_visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.4 AI-assisted triage RC proof: missing required evidence value detected" >&2
   exit 1
 fi
 
-if grep -Eiq -- "(^|[[:space:]>*-])\|[[:space:]]*\`?(${required_fields})\`?[[:space:]]*\|[[:space:]]*\`?(${missing_value})\`?[[:space:]]*\|" < <(visible_text "${absolute_doc_path}"); then
+if grep -Eq -- "(^|[[:space:]>*-])\|[[:space:]]*\`?(${required_fields})\`?[[:space:]]*\|[[:space:]]*\`?(${missing_value})([[:space:]_.-]+[^|]*)?\|" < <(lower_visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.4 AI-assisted triage RC proof: missing required evidence value detected" >&2
   exit 1
 fi
 
-while IFS= read -r line; do
-  line_lower="$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')"
+while IFS= read -r line_lower; do
   if [[ "${line_lower}" =~ ${repository_revision_value_regex} ]]; then
     echo "Forbidden Phase 66.4 AI-assisted triage RC proof: mutable repository revision detected" >&2
     exit 1
@@ -357,18 +370,18 @@ while IFS= read -r line; do
     echo "Forbidden Phase 66.4 AI-assisted triage RC proof: customer-private data detected" >&2
     exit 1
   fi
-  if grep -Eiq -- 'customer[-_ ]private[-_ ]data[[:space:]]*[:=]' <<<"${line}"; then
+  if grep -Eq -- 'customer[-_ ]private[-_ ]data[[:space:]]*[:=]' <<<"${line_lower}"; then
     echo "Forbidden Phase 66.4 AI-assisted triage RC proof: customer-private data detected" >&2
     exit 1
   fi
   if [[ "${line_lower}" =~ ${customer_private_prohibition_regex} ]] && ! grep -Eiq -- '(^|[[:space:];,])(but|and)?[[:space:]]*(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)' <<<"${line_lower}"; then
     continue
   fi
-  if grep -Eiq -- '(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_ ]private[[:space:]]+(data|example|ticket|alert|log|chat|payload|export)|unredacted[[:space:]]+customer[[:space:]]+(ticket|alert|log|chat|payload|export|data)' <<<"${line}"; then
+  if grep -Eq -- '(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_ ]private[[:space:]]+(data|example|ticket|alert|log|chat|payload|export)|unredacted[[:space:]]+customer[[:space:]]+(ticket|alert|log|chat|payload|export|data)' <<<"${line_lower}"; then
     echo "Forbidden Phase 66.4 AI-assisted triage RC proof: customer-private data detected" >&2
     exit 1
   fi
-done < <(visible_text "${absolute_doc_path}")
+done < <(lower_visible_text "${absolute_doc_path}")
 
 scan_forbidden_claims "${absolute_doc_path}" "AI-assisted triage RC proof"
 scan_forbidden_claims "${readme_path}" "README" "phase66_4_readme"

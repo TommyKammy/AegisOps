@@ -148,6 +148,16 @@ copy_valid_repo "${missing_review_state_repo}"
 printf '%s\n' "operator_review_state: missing" >>"${missing_review_state_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
 assert_fails_with "${missing_review_state_repo}" "missing required evidence value detected"
 
+missing_trace_explained_repo="${workdir}/missing-trace-explained"
+copy_valid_repo "${missing_trace_explained_repo}"
+printf '%s\n' "ai_trace_id: missing because trace redacted" >>"${missing_trace_explained_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${missing_trace_explained_repo}" "missing required evidence value detected"
+
+missing_trace_explained_table_repo="${workdir}/missing-trace-explained-table"
+copy_valid_repo "${missing_trace_explained_table_repo}"
+printf '%s\n' "| ai_trace_id | missing because trace redacted | reviewed |" >>"${missing_trace_explained_table_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${missing_trace_explained_table_repo}" "missing required evidence value detected"
+
 invalid_review_state_repo="${workdir}/invalid-review-state"
 copy_valid_repo "${invalid_review_state_repo}"
 printf '%s\n' "operator_review_state: ai_approved" >>"${invalid_review_state_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
