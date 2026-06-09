@@ -193,7 +193,7 @@ done
 limitations_section="$(section_text "${absolute_doc_path}" "## 5. Accepted Limitations" "## 6. Verification")"
 require_section_phrase "${limitations_section}" "It does not prove autonomous remediation, AI approval, AI execution, AI reconciliation, AI case closure, detector activation, source-native truth, release truth, gate truth, broad AI SOC replacement, real design-partner success, Phase 66 closeout, Phase 67 GA readiness, or commercial replacement readiness." "Phase 66.4 accepted limitations boundary"
 
-subordinate_authority_subjects='(ai([[:space:]]+(outputs?|summary|summaries|recommendations?|trace|trace[[:space:]-]+state|assistant|model|draft|confidence|uncertainty|review|grounding|citation|tool|prompt|prompt[[:space:]-]+injection|generated[[:space:]-]+text))?|assistant[[:space:]]+(outputs?|summaries|recommendations?)|model[[:space:]]+(outputs?|recommendations?)|prompt[[:space:]]+text|prompt[[:space:]-]+injection[[:space:]]+(results?|compliance|outputs?)|grounding[[:space:]]+outputs?|tool[[:space:]]+outputs?|source[[:space:]]+snippets?|citations?|confidence[[:space:]]+scores?|uncertainty[[:space:]]+flags?|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+outputs?|issue-lint[[:space:]]+outputs?|optional[[:space:]]+evidence)'
+subordinate_authority_subjects='(ai([[:space:]]+(outputs?|summary|summaries|recommendations?|trace|trace[[:space:]-]+state|assistant|model|draft|confidence|uncertainty|review|grounding|citation|tool|prompt|prompt[[:space:]-]+injection|generated[[:space:]-]+text))?|assistant[[:space:]]+(outputs?|summaries|recommendations?)|model[[:space:]]+(outputs?|recommendations?)|recommendation[[:space:]]+(text|draft)|cited[[:space:]]+summar(y|ies)|prompt[[:space:]]+text|prompt[[:space:]-]+injection[[:space:]]+(results?|compliance|outputs?)|grounding[[:space:]]+outputs?|tool[[:space:]]+outputs?|source[[:space:]]+snippets?|citations?|confidence[[:space:]]+scores?|uncertainty[[:space:]]+flags?|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+outputs?|issue-lint[[:space:]]+outputs?|optional[[:space:]]+evidence)'
 authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?|promote[s]?)'
 authority_modals='(can|may|must|should|will|would|could)'
 passive_authority_verbs='(approved|executed|reconciled|closed|released|gated|mutated|promoted)'
@@ -204,8 +204,10 @@ repository_revision_assignment_regex='(^|[[:space:]>*-])`?repository_revision`?[
 repository_revision_mutable_suffix_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][^.[:cntrl:]]*[0-9a-f]{40}[^.[:cntrl:]]*(main|master|develop|development|trunk|head|refs/heads/|refs/remotes/|remotes/|origin/|branch)'
 repository_revision_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|'
 repository_revision_table_mutable_suffix_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|[[:space:]]*`?[^`|]*[0-9a-f]{40}[^`|]*(main|master|develop|development|trunk|head|refs/heads/|refs/remotes/|remotes/|origin/|branch)[^`|]*`?[[:space:]]*\|'
-missing_value='missing|mismatched|none|null|n/a|tbd|todo|unknown|omitted|absent|blank|empty|withheld|not[[:space:]_-]*provided|not[[:space:]_-]*set'
+missing_value='missing|mismatched|none|null|n/a|tbd|todo|unknown|unavailable|omitted|absent|blank|empty|withheld|not[[:space:]_-]*provided|not[[:space:]_-]*set'
 required_fields='journey_run_id|repository_revision|ai_trace_id|source_evidence_references|cited_summary_id|uncertainty_flags|recommendation_draft_id|operator_review_state|degraded_disabled_posture|prompt_injection_review_id|limitation_references'
+required_missing_fields='journey_run_id|repository_revision|ai_trace_id|source_evidence_references|cited_summary_id|uncertainty_flags|recommendation_draft_id|operator_review_state|prompt_injection_review_id|limitation_references'
+degraded_missing_value='missing|mismatched|none|null|n/a|tbd|todo|unknown|omitted|absent|blank|empty|withheld|not[[:space:]_-]*provided|not[[:space:]_-]*set'
 review_state_value_regex='(^|[[:space:]>*-])`?operator_review_state`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
 review_state_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?operator_review_state`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|'
 review_state_authority_suffix_regex='(^|[[:space:]>*-])`?operator_review_state`?[[:space:]]*[:=][^.[:cntrl:]]*(accepted|rejected|unresolved)[^.[:cntrl:]]*(by[[:space:]_-]+ai|ai[[:space:]_-]*approved|ai[[:space:]_-]*self|self[[:space:]_-]*approved)'
@@ -219,8 +221,8 @@ uncertainty_hidden_regex='(^|[[:space:]>*-])`?uncertainty_flags`?[[:space:]]*[:=
 uncertainty_hidden_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?uncertainty_flags`?[[:space:]]*\|[[:space:]]*`?[^`|]*hidden[[:space:]_-]+in[[:space:]_-]+assistant[[:space:]_-]+prose[^`|]*`?[[:space:]]*\|'
 recommendation_authority_regex='(^|[[:space:]>*-])`?recommendation_draft_id`?[[:space:]]*[:=][^.[:cntrl:]]*(approved|executed|reconciled|closed|case[[:space:]_-]*closed|auto[[:space:]_-]*approved)'
 recommendation_authority_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?recommendation_draft_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(approved|executed|reconciled|closed|case[[:space:]_-]*closed|auto[[:space:]_-]*approved)[^`|]*`?[[:space:]]*\|'
-degraded_missing_regex='(^|[[:space:]>*-])`?degraded_disabled_posture`?[[:space:]]*[:=][^.[:cntrl:]]*(not[[:space:]_-]*needed|required[[:space:]_-]*for[[:space:]_-]*rc|always[[:space:]_-]*available)'
-degraded_missing_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?degraded_disabled_posture`?[[:space:]]*\|[[:space:]]*`?[^`|]*(not[[:space:]_-]*needed|required[[:space:]_-]*for[[:space:]_-]*rc|always[[:space:]_-]*available)[^`|]*`?[[:space:]]*\|'
+degraded_missing_regex='(^|[[:space:]>*-])`?degraded_disabled_posture`?[[:space:]]*[:=][^.[:cntrl:]]*('"${degraded_missing_value}"'|not[[:space:]_-]*needed|required[[:space:]_-]*for[[:space:]_-]*rc|always[[:space:]_-]*available)'
+degraded_missing_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?degraded_disabled_posture`?[[:space:]]*\|[[:space:]]*`?[^`|]*('"${degraded_missing_value}"'|not[[:space:]_-]*needed|required[[:space:]_-]*for[[:space:]_-]*rc|always[[:space:]_-]*available)[^`|]*`?[[:space:]]*\|'
 prompt_injection_shortcut_regex='(^|[[:space:]>*-])`?prompt_injection_review_id`?[[:space:]]*[:=][^.[:cntrl:]]*(comply|complied|follow[[:space:]_-]*instructions|instruction[[:space:]_-]*following|override[[:space:]_-]*policy|ignore[[:space:]_-]*policy|developer[[:space:]_-]*override)'
 prompt_injection_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?prompt_injection_review_id`?[[:space:]]*\|[[:space:]]*`?[^`|]*(comply|complied|follow[[:space:]_-]*instructions|instruction[[:space:]_-]*following|override[[:space:]_-]*policy|ignore[[:space:]_-]*policy|developer[[:space:]_-]*override)[^`|]*`?[[:space:]]*\|'
 limitation_hidden_regex='(^|[[:space:]>*-])`?limitation_references`?[[:space:]]*[:=][^.[:cntrl:]]*hidden[[:space:]_-]+in[[:space:]_-]+assistant[[:space:]_-]+output'
@@ -240,9 +242,9 @@ forbidden_patterns=(
   "${subordinate_authority_subjects}[^.[:cntrl:]]+[[:space:]]+(has|have|holds?|carries|grants?)[[:space:]]+[^.[:cntrl:]]*((approval|approvals?|execution|case[[:space:]-]+closure|reconciliation|actions?|aegisops)[^.[:cntrl:]]+authority|authority[^.[:cntrl:]]*(approval|approvals?|execution|case[[:space:]-]+closure|reconciliation|actions?|aegisops))"
   "${subordinate_authority_subjects}[^.[:cntrl:]]+[[:space:]]+(is|are|becomes?)[[:space:]]+authoritative[[:space:]]+(for|over|as)[^.[:cntrl:]]*(approval|approvals?|execution|case[[:space:]-]+closure|reconciliation|actions?|aegisops)"
   '(ai|assistant|model)[^.[:cntrl:]]+(auto[[:space:]-]+approve|auto[[:space:]-]+execute|auto[[:space:]-]+reconcile|auto[[:space:]-]+close|autonomously[[:space:]]+(approve|execute|reconcile|close))'
-  'prompt[[:space:]-]+injection[^.[:cntrl:]]+(overrides|bypasses|supersedes|replaces)[^.[:cntrl:]]*(policy|approval|review|aegisops)'
+  "prompt[[:space:]-]+injection[[:space:]]+(results?|compliance|outputs?|shortcuts?)([[:space:]]+${authority_modals})?[[:space:]]+(overrides?|bypasses|supersedes|replaces)[^.[:cntrl:]]*(policy|approval|review|aegisops)"
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(readiness|release|gate|workflow|source)[[:space:]]+truth'
-  '(verifier([[:space:]]+outputs?)?|issue-lint([[:space:]]+outputs?)?|ai[[:space:]]+outputs?|ai[[:space:]]+summary|ai[[:space:]]+recommendations?)[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source|rc([[:space:][:punct:]]|$)|ga([[:space:][:punct:]]|$))'
+  "${subordinate_authority_subjects}[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source|rc([[:space:][:punct:]]|$)|ga([[:space:][:punct:]]|$))"
 )
 
 is_safe_forbidden_claim_line() {
@@ -280,15 +282,17 @@ scan_forbidden_claims() {
     done
   done < <(lower_visible_text "${file}")
 
-  if [[ "${scope}" == "all" ]]; then
-    line_lower="$(lower_visible_text "${file}" | awk 'NF { printf "%s ", $0 } !NF { printf "\n" }')"
+  while IFS= read -r line_lower; do
+    if [[ "${scope}" == "phase66_4_readme" ]] && [[ ! "${line_lower}" =~ (phase[[:space:]]+66\.4|ai-assisted[[:space:]]+triage|rc[[:space:]]+proof) ]]; then
+      continue
+    fi
     for forbidden_pattern in "${forbidden_patterns[@]}"; do
       if [[ "${line_lower}" =~ ${forbidden_pattern} ]]; then
         echo "Forbidden Phase 66.4 ${description} claim matched" >&2
         exit 1
       fi
     done
-  fi
+  done < <(lower_visible_text "${file}" | awk 'NF { paragraph = paragraph " " $0; next } paragraph != "" { print paragraph; paragraph = "" } END { if (paragraph != "") print paragraph }')
 }
 
 if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*(bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|basic[[:space:]]+[A-Za-z0-9+/=]{12,})|(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}' "${absolute_doc_path}"; then
@@ -301,12 +305,12 @@ if grep -Eiq -- '(^|[[:space:]>*-])\|[[:space:]]*`?(password|passwd|secret([_ -]
   exit 1
 fi
 
-if grep -Eq -- "(^|[[:space:]>*-])\`?(${required_fields})\`?[[:space:]]*[:=][[:space:]]*\`?(${missing_value})([[:space:]_.-]+[^.[:cntrl:]]*)?([[:space:].,;)]|$)" < <(lower_visible_text "${absolute_doc_path}"); then
+if grep -Eq -- "(^|[[:space:]>*-])\`?(${required_missing_fields})\`?[[:space:]]*[:=][[:space:]]*\`?(${missing_value})([[:space:]_.-]+[^.[:cntrl:]]*)?([[:space:].,;)]|$)" < <(lower_visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.4 AI-assisted triage RC proof: missing required evidence value detected" >&2
   exit 1
 fi
 
-if grep -Eq -- "(^|[[:space:]>*-])\|[[:space:]]*\`?(${required_fields})\`?[[:space:]]*\|[[:space:]]*\`?(${missing_value})([[:space:]_.-]+[^|]*)?\|" < <(lower_visible_text "${absolute_doc_path}"); then
+if grep -Eq -- "(^|[[:space:]>*-])\|[[:space:]]*\`?(${required_missing_fields})\`?[[:space:]]*\|[[:space:]]*\`?(${missing_value})([[:space:]_.-]+[^|]*)?\|" < <(lower_visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.4 AI-assisted triage RC proof: missing required evidence value detected" >&2
   exit 1
 fi
