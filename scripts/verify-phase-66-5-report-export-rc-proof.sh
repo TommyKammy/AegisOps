@@ -214,7 +214,7 @@ forbidden_patterns=(
   '(phase[[:space:]]+66\.5|this[[:space:]]+proof|proof|aegisops)([^.[:cntrl:]]+)?[[:space:]]+(is|becomes|serves[[:space:]]+as)[[:space:]]+(now[[:space:]]+|already[[:space:]]+|effectively[[:space:]]+)?(ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|commercial[[:space:]]+replacement)|(ga|rc|release[- ]candidate|commercial[[:space:]]+replacement)[[:space:]-]+ready|compliance[[:space:]-]+certification|customer[[:space:]-]+portal[[:space:]-]+readiness|production[[:space:]-]+sla[[:space:]-]+reporting|real[[:space:]]+design[- ]partner[[:space:]]+export[[:space:]]+success|commercial[[:space:]-]+replacement[[:space:]-]+readiness)'
   "${subordinate_subjects}[^.[:cntrl:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*((source[[:space:]]+of[[:space:]]+truth)|(workflow|release|gate|readiness|case|action|reconciliation|source[[:space:]-]+record|evidence|approval|audit|limitation|source[[:space:]-]+admission|closeout)[[:space:]]+truth)"
   "${subordinate_subjects}([^.[:cntrl:]]+)?[[:space:]]+${authority_verbs}[[:space:]]+[^.[:cntrl:]]*${authority_objects}"
-  "${authority_objects}[^.[:cntrl:]]+(is|are|was|were|become|becomes)[[:space:]]+(approved|executed|reconciled|closed|released|gated|mutated|promoted|overridden)[[:space:]]+by[[:space:]]+[^.[:cntrl:]]*${subordinate_subjects}"
+  "${authority_objects}[^.[:cntrl:]]+(is|are|was|were|be|being|been|has[[:space:]]+been|have[[:space:]]+been|had[[:space:]]+been|become|becomes)[[:space:]]+(approved|executed|reconciled|closed|released|gated|mutated|promoted|overridden)[[:space:]]+by[[:space:]]+[^.[:cntrl:]]*${subordinate_subjects}"
   "${subordinate_subjects}[^.[:cntrl:]]+(has|have|holds?|carries|grants?)[[:space:]]+[^.[:cntrl:]]*((workflow|release|gate|readiness|case|action|reconciliation|aegisops)[^.[:cntrl:]]+authority|authority[^.[:cntrl:]]*(workflow|release|gate|readiness|case|action|reconciliation|aegisops))"
   "${subordinate_subjects}[^.[:cntrl:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]+authoritative[[:space:]]+(for|over|as)[^.[:cntrl:]]*${authority_objects}"
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as|proves|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source)[[:space:]]+truth'
@@ -256,10 +256,10 @@ scan_forbidden_claims() {
   local forbidden_pattern
 
   while IFS= read -r line_lower; do
-    if [[ "${line_lower}" =~ ^[[:space:]]*\| ]]; then
+    if [[ "${scope}" == "phase66_5_readme" ]] && [[ ! "${line_lower}" =~ (phase[[:space:]]+66\.5|report[[:space:]]+export|rc[[:space:]]+proof) ]]; then
       continue
     fi
-    if [[ "${scope}" == "phase66_5_readme" ]] && [[ ! "${line_lower}" =~ (phase[[:space:]]+66\.5|report[[:space:]]+export|rc[[:space:]]+proof) ]]; then
+    if [[ "${line_lower}" == "${canonical_case_section_reference_row}" ]] || [[ "${line_lower}" == "${canonical_action_section_reference_row}" ]] || [[ "${line_lower}" == "${canonical_reconciliation_section_reference_row}" ]]; then
       continue
     fi
     if is_safe_forbidden_claim_line "${line_lower}"; then

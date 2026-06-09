@@ -180,6 +180,16 @@ copy_valid_repo "${passive_report_closes_case_repo}"
 printf '%s\n' "Cases are closed by report output." >>"${passive_report_closes_case_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${passive_report_closes_case_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
+completed_passive_report_closes_case_repo="${workdir}/completed-passive-report-closes-case"
+copy_valid_repo "${completed_passive_report_closes_case_repo}"
+printf '%s\n' "Cases have been closed by report output." >>"${completed_passive_report_closes_case_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${completed_passive_report_closes_case_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+table_report_truth_repo="${workdir}/table-report-truth"
+copy_valid_repo "${table_report_truth_repo}"
+printf '%s\n' "| note | Report output is workflow truth. |" >>"${table_report_truth_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${table_report_truth_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
 report_approved_action_repo="${workdir}/report-approved-action"
 copy_valid_repo "${report_approved_action_repo}"
 printf '%s\n' "Report output approved action requests." >>"${report_approved_action_repo}/docs/phase-66-5-report-export-rc-proof.md"
