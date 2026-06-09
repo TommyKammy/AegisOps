@@ -199,6 +199,8 @@ section_authority_regex="(^|[[:space:]>*-])\`?(case_section_reference|action_sec
 section_authority_table_regex="(^|[[:space:]>*-])\|[[:space:]]*\`?(case_section_reference|action_section_reference|reconciliation_section_reference)\`?[[:space:]]*\|[[:space:]]*\`?[^\`|]*${section_authority_terms}[^\`|]*\`?[[:space:]]*\|"
 label_missing_regex='(^|[[:space:]>*-])`?rc_label_set`?[[:space:]]*[:=][^.[:cntrl:]]*(missing|without|no[[:space:]_-]*labels?|production[[:space:]_-]*truth|workflow[[:space:]_-]*truth)'
 label_missing_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?rc_label_set`?[[:space:]]*\|[[:space:]]*`?[^`|]*(missing|without|no[[:space:]_-]*labels?|production[[:space:]_-]*truth|workflow[[:space:]_-]*truth)[^`|]*`?[[:space:]]*\|'
+rc_label_set_assignment_regex='(^|[[:space:]>*-])`?rc_label_set`?[[:space:]]*[:=][^.[:cntrl:]]+'
+rc_label_set_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?rc_label_set`?[[:space:]]*\|[[:space:]]*`?([^`|]+)`?[[:space:]]*\|'
 redaction_missing_regex='(^|[[:space:]>*-])`?redaction_posture`?[[:space:]]*[:=][^.[:cntrl:]]*(not[[:space:]_-]*needed|none|unredacted)'
 redaction_missing_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?redaction_posture`?[[:space:]]*\|[[:space:]]*`?[^`|]*(not[[:space:]_-]*needed|none|unredacted)[^`|]*`?[[:space:]]*\|'
 customer_private_prohibition_regex='((must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include|fail[s]?[[:space:]]+the[[:space:]]+proof)[^.[:cntrl:]]*customer[-_ ]private|customer[-_ ]private[^.[:cntrl:]]*fail[s]?[[:space:]]+the[[:space:]]+proof)'
@@ -212,6 +214,7 @@ forbidden_patterns=(
   '(phase[[:space:]]+66\.5|this[[:space:]]+proof|proof|aegisops)([^.[:cntrl:]]+)?[[:space:]]+(is|becomes|serves[[:space:]]+as)[[:space:]]+(now[[:space:]]+|already[[:space:]]+|effectively[[:space:]]+)?(ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|commercial[[:space:]]+replacement)|(ga|rc|release[- ]candidate|commercial[[:space:]]+replacement)[[:space:]-]+ready|compliance[[:space:]-]+certification|customer[[:space:]-]+portal[[:space:]-]+readiness|production[[:space:]-]+sla[[:space:]-]+reporting|real[[:space:]]+design[- ]partner[[:space:]]+export[[:space:]]+success|commercial[[:space:]-]+replacement[[:space:]-]+readiness)'
   "${subordinate_subjects}[^.[:cntrl:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*((source[[:space:]]+of[[:space:]]+truth)|(workflow|release|gate|readiness|case|action|reconciliation|source[[:space:]-]+record|evidence|approval|audit|limitation|source[[:space:]-]+admission|closeout)[[:space:]]+truth)"
   "${subordinate_subjects}([^.[:cntrl:]]+)?[[:space:]]+${authority_verbs}[[:space:]]+[^.[:cntrl:]]*${authority_objects}"
+  "${authority_objects}[^.[:cntrl:]]+(is|are|was|were|become|becomes)[[:space:]]+(approved|executed|reconciled|closed|released|gated|mutated|promoted|overridden)[[:space:]]+by[[:space:]]+[^.[:cntrl:]]*${subordinate_subjects}"
   "${subordinate_subjects}[^.[:cntrl:]]+(has|have|holds?|carries|grants?)[[:space:]]+[^.[:cntrl:]]*((workflow|release|gate|readiness|case|action|reconciliation|aegisops)[^.[:cntrl:]]+authority|authority[^.[:cntrl:]]*(workflow|release|gate|readiness|case|action|reconciliation|aegisops))"
   "${subordinate_subjects}[^.[:cntrl:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]+authoritative[[:space:]]+(for|over|as)[^.[:cntrl:]]*${authority_objects}"
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as|proves|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source)[[:space:]]+truth'
@@ -222,8 +225,15 @@ is_safe_forbidden_claim_line() {
   local line_lower="$1"
   local unsafe_clause_separator_regex='(^|[[:space:]])but[[:space:]]+'
   local unsafe_and_overclaim_regex='(^|[[:space:]])and[[:space:]]+[^.[:cntrl:]]*(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as|has|have|holds?|carries|grants?|proves|confirms|passes|satisfies|validates|demonstrates|authoritative)([[:space:]]|$)'
+  local multi_sentence_safe_regex='\.[^.[:cntrl:]]*(without[[:space:]]+turning|cannot|does[[:space:]]+not[[:space:]]+prove|remain[s]?[[:space:]]+subordinate|reports[[:space:]]+are[[:space:]]+repeatable[[:space:]]+evidence[[:space:]]+exports[[:space:]]+only|aegisops[[:space:]]+records[[:space:]]+remain[[:space:]]+authoritative)'
 
   if [[ "${line_lower}" =~ ${unsafe_clause_separator_regex} ]] || [[ "${line_lower}" =~ \; ]]; then
+    return 1
+  fi
+  if [[ "${line_lower}" =~ ^[[:space:]]*reports[[:space:]]+are[[:space:]]+repeatable[[:space:]]+evidence[[:space:]]+exports[[:space:]]+only\.[^.[:cntrl:]]+cannot ]]; then
+    return 0
+  fi
+  if [[ "${line_lower}" =~ ${multi_sentence_safe_regex} ]]; then
     return 1
   fi
   if [[ "${line_lower}" =~ (without[[:space:]]+turning|cannot|does[[:space:]]+not[[:space:]]+prove|remain[s]?[[:space:]]+subordinate|reports[[:space:]]+are[[:space:]]+repeatable[[:space:]]+evidence[[:space:]]+exports[[:space:]]+only|aegisops[[:space:]]+records[[:space:]]+remain[[:space:]]+authoritative) ]] && [[ "${line_lower}" =~ ${unsafe_and_overclaim_regex} ]]; then
@@ -246,6 +256,9 @@ scan_forbidden_claims() {
   local forbidden_pattern
 
   while IFS= read -r line_lower; do
+    if [[ "${line_lower}" =~ ^[[:space:]]*\| ]]; then
+      continue
+    fi
     if [[ "${scope}" == "phase66_5_readme" ]] && [[ ! "${line_lower}" =~ (phase[[:space:]]+66\.5|report[[:space:]]+export|rc[[:space:]]+proof) ]]; then
       continue
     fi
@@ -286,12 +299,17 @@ if grep -Eiq -- '(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]pri
   exit 1
 fi
 
-if grep -Eq -- "(^|[[:space:]>*-])\`?(${required_fields})\`?[[:space:]]*[:=][[:space:]]*\`?(${missing_value})([[:space:]_.-]+[^.[:cntrl:]]*)?([[:space:].,;)]|$)" < <(lower_visible_text "${absolute_doc_path}"); then
+if grep -Eq -- "(^|[[:space:]>*-])\`?(${required_fields})\`?[[:space:]]*[:=][^.[:cntrl:]]*(^|[[:space:]\`])(${missing_value})([[:space:]_.-]+[^.[:cntrl:]]*)?([[:space:].,;)]|$)" < <(lower_visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.5 report export RC proof: missing required evidence value detected" >&2
   exit 1
 fi
 
-if grep -Eq -- "(^|[[:space:]>*-])\|[[:space:]]*\`?(${required_fields})\`?[[:space:]]*\|[[:space:]]*\`?(${missing_value})([[:space:]_.-]+[^|]*)?\|" < <(lower_visible_text "${absolute_doc_path}"); then
+if grep -Eq -- "(^|[[:space:]>*-])\|[[:space:]]*\`?(${required_fields})\`?[[:space:]]*\|[[:space:]]*\`?[^|]*(^|[[:space:]\`])(${missing_value})([[:space:]_.-]+[^|]*)?\|" < <(lower_visible_text "${absolute_doc_path}"); then
+  echo "Forbidden Phase 66.5 report export RC proof: missing required evidence value detected" >&2
+  exit 1
+fi
+
+if grep -Eq -- '(^|[[:space:]>*-])`?limitation_references`?[[:space:]]*[:=][^.[:cntrl:]]*hidden[[:space:]_-]+in[[:space:]_-]+report[[:space:]_-]+text|(^|[[:space:]>*-])\|[[:space:]]*`?limitation_references`?[[:space:]]*\|[^|]*hidden[[:space:]_-]+in[[:space:]_-]+report[[:space:]_-]+text[^|]*\|' < <(lower_visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.5 report export RC proof: missing required evidence value detected" >&2
   exit 1
 fi
@@ -324,6 +342,14 @@ while IFS= read -r line_lower; do
   if [[ "${line_lower}" =~ ${label_missing_regex} ]] || [[ "${line_lower}" =~ ${label_missing_table_regex} ]]; then
     echo "Forbidden Phase 66.5 report export RC proof: invalid RC label set detected" >&2
     exit 1
+  fi
+  if [[ "${line_lower}" =~ ${rc_label_set_assignment_regex} ]] || [[ "${line_lower}" =~ ${rc_label_set_table_regex} ]]; then
+    for required_rc_label in rc-evidence phase-66 report-export not-workflow-truth; do
+      if ! grep -Eq -- "(^|[[:space:]\`,|])${required_rc_label}([[:space:]\`,|.]|$)" <<<"${line_lower}"; then
+        echo "Forbidden Phase 66.5 report export RC proof: invalid RC label set detected" >&2
+        exit 1
+      fi
+    done
   fi
   if [[ "${line_lower}" =~ ${redaction_missing_regex} ]] || [[ "${line_lower}" =~ ${redaction_missing_table_regex} ]]; then
     echo "Forbidden Phase 66.5 report export RC proof: invalid redaction posture detected" >&2
