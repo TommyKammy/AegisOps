@@ -196,6 +196,7 @@ require_section_phrase "${limitations_section}" "It does not prove autonomous re
 subordinate_authority_subjects='(ai([[:space:]]+(outputs?|summary|summaries|recommendations?|trace|trace[[:space:]-]+state|assistant|model|draft|confidence|uncertainty|review|grounding|citation|tool|prompt|prompt[[:space:]-]+injection|generated[[:space:]-]+text))?|assistant[[:space:]]+(outputs?|summaries|recommendations?)|model[[:space:]]+(outputs?|recommendations?)|recommendation[[:space:]]+(text|draft)|cited[[:space:]]+summar(y|ies)|prompt[[:space:]]+text|prompt[[:space:]-]+injection[[:space:]]+(results?|compliance|outputs?)|grounding[[:space:]]+outputs?|tool[[:space:]]+outputs?|source[[:space:]]+snippets?|citations?|confidence[[:space:]]+scores?|uncertainty[[:space:]]+flags?|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+outputs?|issue-lint[[:space:]]+outputs?|optional[[:space:]]+evidence)'
 authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?|promote[s]?)'
 authority_modals='(can|may|must|should|will|would|could)'
+authority_adverbs='(directly|implicitly|explicitly|automatically|autonomously|independently|silently|effectively)'
 passive_authority_verbs='(approved|executed|reconciled|closed|released|gated|mutated|promoted)'
 authority_objects='(aegisops[[:space:]]+records?|case|cases|alert|record|workflow|release|gate|evidence|approval|actions?|remediation[[:space:]-]+actions?|action[[:space:]-]+requests?|execution[[:space:]-]+receipts?|reconciliation|audit|limitation|source[[:space:]-]+admission|closeout)'
 
@@ -231,13 +232,13 @@ customer_private_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?(customer[-_ ]pr
 customer_private_prohibition_regex='(must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include)[^.[:cntrl:]]*customer[-_ ]private'
 
 forbidden_patterns=(
-  'phase[[:space:]]+66\.4[[:space:]]+(proves|satisfies|passes|accepts|grants|achieves|enables|validates|demonstrates|confirms)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|rc[[:space:]-]+gate|rc[[:space:]-]+readiness|rc[[:space:]-]+pass|broad[[:space:]]+ai|ai[[:space:]]+soc[[:space:]]+replacement|autonomous[[:space:]]+remediation|ai[[:space:]]+(approval|execution|reconciliation|case[[:space:]-]+closure)|detector[[:space:]]+activation|release[[:space:]]+truth|gate[[:space:]]+truth|readiness[[:space:]]+truth|commercial[[:space:]]+replacement|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
+  'phase[[:space:]]+66\.4[[:space:]]+(proves|satisfies|passes|accepts|grants|achieves|enables|validates|demonstrates|confirms)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|rc[[:space:]-]+gate|rc[[:space:]-]+readiness|rc[[:space:]-]+pass|release[- ]candidate[[:space:]-]+(readiness|pass)|broad[[:space:]]+ai|ai[[:space:]]+soc[[:space:]]+replacement|autonomous[[:space:]]+remediation|ai[[:space:]]+(approval|execution|reconciliation|case[[:space:]-]+closure)|detector[[:space:]]+activation|release[[:space:]]+truth|gate[[:space:]]+truth|readiness[[:space:]]+truth|commercial[[:space:]]+replacement|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
   'phase[[:space:]]+66\.4[[:space:]]+(satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(rc([[:space:][:punct:]]|$)|release[- ]candidate)'
   '(phase[[:space:]]+66\.4|this[[:space:]]+proof|proof|aegisops)[[:space:]]+(is|becomes|serves[[:space:]]+as)[[:space:]]+(now[[:space:]]+|already[[:space:]]+|effectively[[:space:]]+)?(ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|commercial[[:space:]]+replacement)|(ga|rc|release[- ]candidate|commercial[[:space:]]+replacement)[[:space:]-]+ready)'
   '(this[[:space:]]+)?proof[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms|achieves|demonstrates)[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|readiness|broad[[:space:]]+ai|ai[[:space:]]+soc|commercial[[:space:]]+replacement)'
   'ai[[:space:]]+(output|summary|recommendation|trace|assistant|model)[^.[:cntrl:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]*(approval|execution|reconciliation|case|workflow|release|gate|evidence|audit|limitation|readiness|closeout)[[:space:]]+(source[[:space:]]+of[[:space:]]+)?truth'
   "${subordinate_authority_subjects}[^.[:cntrl:]]+[[:space:]]+(is|are|becomes?|serves[[:space:]]+as)[^.[:cntrl:]]*source[[:space:]]+of[[:space:]]+truth[[:space:]]+(for|over|as)[^.[:cntrl:]]*(approval|approvals?|execution|case[[:space:]-]+closure|reconciliation|actions?|aegisops)"
-  "${subordinate_authority_subjects}([[:space:]]+${authority_modals})?[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
+  "${subordinate_authority_subjects}([[:space:]]+${authority_modals})?([[:space:]]+${authority_adverbs})?[[:space:]]+${authority_verbs}[^.[:cntrl:]]*${authority_objects}"
   "${authority_objects}[^.[:cntrl:]]+[[:space:]](is|are|was|were|be|been|being)[[:space:]]+${passive_authority_verbs}[[:space:]]+by[[:space:]]+${subordinate_authority_subjects}"
   "${subordinate_authority_subjects}[^.[:cntrl:]]+[[:space:]]+(has|have|holds?|carries|grants?)[[:space:]]+[^.[:cntrl:]]*((approval|approvals?|execution|case[[:space:]-]+closure|reconciliation|actions?|aegisops)[^.[:cntrl:]]+authority|authority[^.[:cntrl:]]*(approval|approvals?|execution|case[[:space:]-]+closure|reconciliation|actions?|aegisops))"
   "${subordinate_authority_subjects}[^.[:cntrl:]]+[[:space:]]+(is|are|becomes?)[[:space:]]+authoritative[[:space:]]+(for|over|as)[^.[:cntrl:]]*(approval|approvals?|execution|case[[:space:]-]+closure|reconciliation|actions?|aegisops)"
@@ -302,6 +303,11 @@ fi
 
 if grep -Eiq -- '(^|[[:space:]>*-])\|[[:space:]]*`?(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key|aws[_ -]?secret[_ -]?access[_ -]?key)`?[[:space:]]*\|[[:space:]]*`?[^[:space:]`|<>]+`?[[:space:]]*\|' "${absolute_doc_path}"; then
   echo "Forbidden Phase 66.4 AI-assisted triage RC proof: production secret-looking value detected" >&2
+  exit 1
+fi
+
+if grep -Eiq -- '(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_ ]private[[:space:]]+(data|example|ticket|alert|log|chat|payload|export)|unredacted[[:space:]]+customer[[:space:]]+(ticket|alert|log|chat|payload|export|data)' < <(perl -0ne 'while (/<!--(.*?)-->/gs) { print "$1\n" }' "${absolute_doc_path}" | tr '[:upper:]' '[:lower:]'); then
+  echo "Forbidden Phase 66.4 AI-assisted triage RC proof: customer-private data detected" >&2
   exit 1
 fi
 
