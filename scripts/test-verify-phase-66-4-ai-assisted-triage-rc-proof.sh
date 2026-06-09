@@ -183,6 +183,21 @@ copy_valid_repo "${uncited_summary_repo}"
 printf '%s\n' "cited_summary_id: uncited" >>"${uncited_summary_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
 assert_fails_with "${uncited_summary_repo}" "invalid citation evidence detected"
 
+no_citations_source_repo="${workdir}/no-citations-source"
+copy_valid_repo "${no_citations_source_repo}"
+printf '%s\n' "source_evidence_references: no citations" >>"${no_citations_source_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${no_citations_source_repo}" "invalid citation evidence detected"
+
+no_citations_summary_repo="${workdir}/no-citations-summary"
+copy_valid_repo "${no_citations_summary_repo}"
+printf '%s\n' "cited_summary_id: no citations" >>"${no_citations_summary_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${no_citations_summary_repo}" "invalid citation evidence detected"
+
+no_citations_source_table_repo="${workdir}/no-citations-source-table"
+copy_valid_repo "${no_citations_source_table_repo}"
+printf '%s\n' "| source_evidence_references | no citations | reviewed |" >>"${no_citations_source_table_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${no_citations_source_table_repo}" "invalid citation evidence detected"
+
 hidden_uncertainty_repo="${workdir}/hidden-uncertainty"
 copy_valid_repo "${hidden_uncertainty_repo}"
 printf '%s\n' "uncertainty_flags: hidden in assistant prose" >>"${hidden_uncertainty_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
@@ -217,6 +232,16 @@ prompt_injection_shortcut_table_repo="${workdir}/prompt-injection-shortcut-table
 copy_valid_repo "${prompt_injection_shortcut_table_repo}"
 printf '%s\n' "| prompt_injection_review_id | comply_with_prompt_instructions | reviewed |" >>"${prompt_injection_shortcut_table_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
 assert_fails_with "${prompt_injection_shortcut_table_repo}" "prompt-injection shortcut detected"
+
+prompt_injection_instruction_following_repo="${workdir}/prompt-injection-instruction-following"
+copy_valid_repo "${prompt_injection_instruction_following_repo}"
+printf '%s\n' "prompt_injection_review_id: instruction_following" >>"${prompt_injection_instruction_following_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${prompt_injection_instruction_following_repo}" "prompt-injection shortcut detected"
+
+prompt_injection_instruction_following_table_repo="${workdir}/prompt-injection-instruction-following-table"
+copy_valid_repo "${prompt_injection_instruction_following_table_repo}"
+printf '%s\n' "| prompt_injection_review_id | instruction following | reviewed |" >>"${prompt_injection_instruction_following_table_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${prompt_injection_instruction_following_table_repo}" "prompt-injection shortcut detected"
 
 hidden_limitation_repo="${workdir}/hidden-limitation"
 copy_valid_repo "${hidden_limitation_repo}"
@@ -273,6 +298,16 @@ copy_valid_repo "${ai_executes_actions_repo}"
 printf '%s\n' "AI output executes actions." >>"${ai_executes_actions_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
 assert_fails_with "${ai_executes_actions_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
 
+ai_approval_authority_repo="${workdir}/ai-approval-authority"
+copy_valid_repo "${ai_approval_authority_repo}"
+printf '%s\n' "AI output has approval authority." >>"${ai_approval_authority_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${ai_approval_authority_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
+
+ai_authoritative_for_approvals_repo="${workdir}/ai-authoritative-for-approvals"
+copy_valid_repo "${ai_authoritative_for_approvals_repo}"
+printf '%s\n' "AI output is authoritative for approvals." >>"${ai_authoritative_for_approvals_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${ai_authoritative_for_approvals_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
+
 wrapped_ai_authority_repo="${workdir}/wrapped-ai-authority"
 copy_valid_repo "${wrapped_ai_authority_repo}"
 printf '%s\n%s\n' "AI output" "approves AegisOps records." >>"${wrapped_ai_authority_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
@@ -292,6 +327,26 @@ phase_demonstrates_ga_repo="${workdir}/phase-demonstrates-ga"
 copy_valid_repo "${phase_demonstrates_ga_repo}"
 printf '%s\n' "Phase 66.4 demonstrates GA readiness." >>"${phase_demonstrates_ga_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
 assert_fails_with "${phase_demonstrates_ga_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
+
+phase_confirms_ga_repo="${workdir}/phase-confirms-ga"
+copy_valid_repo "${phase_confirms_ga_repo}"
+printf '%s\n' "Phase 66.4 confirms GA readiness." >>"${phase_confirms_ga_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${phase_confirms_ga_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
+
+phase_confirms_commercial_replacement_repo="${workdir}/phase-confirms-commercial-replacement"
+copy_valid_repo "${phase_confirms_commercial_replacement_repo}"
+printf '%s\n' "Phase 66.4 confirms commercial replacement readiness." >>"${phase_confirms_commercial_replacement_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${phase_confirms_commercial_replacement_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
+
+phase_confirms_broad_ai_soc_repo="${workdir}/phase-confirms-broad-ai-soc"
+copy_valid_repo "${phase_confirms_broad_ai_soc_repo}"
+printf '%s\n' "Phase 66.4 confirms broad AI SOC replacement." >>"${phase_confirms_broad_ai_soc_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${phase_confirms_broad_ai_soc_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
+
+phase_proves_rc_readiness_repo="${workdir}/phase-proves-rc-readiness"
+copy_valid_repo "${phase_proves_rc_readiness_repo}"
+printf '%s\n' "Phase 66.4 proves RC readiness." >>"${phase_proves_rc_readiness_repo}/docs/phase-66-4-ai-assisted-triage-rc-proof.md"
+assert_fails_with "${phase_proves_rc_readiness_repo}" "Forbidden Phase 66.4 AI-assisted triage RC proof claim matched"
 
 ai_readiness_truth_repo="${workdir}/ai-readiness-truth"
 copy_valid_repo "${ai_readiness_truth_repo}"
