@@ -80,6 +80,11 @@ copy_valid_repo "${missing_required_repo}"
 printf '%s\n' "report_export_id: missing because export failed" >>"${missing_required_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${missing_required_repo}" "missing required evidence value detected"
 
+unavailable_required_repo="${workdir}/unavailable-required"
+copy_valid_repo "${unavailable_required_repo}"
+printf '%s\n' "report_export_id: unavailable" >>"${unavailable_required_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${unavailable_required_repo}" "missing required evidence value detected"
+
 mutable_revision_repo="${workdir}/mutable-revision"
 copy_valid_repo "${mutable_revision_repo}"
 printf '%s\n' "repository_revision: origin/main" >>"${mutable_revision_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -115,30 +120,95 @@ copy_valid_repo "${report_truth_repo}"
 printf '%s\n' "Report output is workflow truth." >>"${report_truth_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${report_truth_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
+report_evidence_truth_repo="${workdir}/report-evidence-truth"
+copy_valid_repo "${report_evidence_truth_repo}"
+printf '%s\n' "Report output is evidence truth." >>"${report_evidence_truth_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_evidence_truth_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+report_source_of_truth_repo="${workdir}/report-source-of-truth"
+copy_valid_repo "${report_source_of_truth_repo}"
+printf '%s\n' "Report output is source of truth for case closure." >>"${report_source_of_truth_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_source_of_truth_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
 report_closes_case_repo="${workdir}/report-closes-case"
 copy_valid_repo "${report_closes_case_repo}"
 printf '%s\n' "Report output closes cases." >>"${report_closes_case_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${report_closes_case_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+report_approved_action_repo="${workdir}/report-approved-action"
+copy_valid_repo "${report_approved_action_repo}"
+printf '%s\n' "Report output approved action requests." >>"${report_approved_action_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_approved_action_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+report_authoritative_repo="${workdir}/report-authoritative"
+copy_valid_repo "${report_authoritative_repo}"
+printf '%s\n' "Report output is authoritative for cases." >>"${report_authoritative_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_authoritative_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+cannot_semicolon_bypass_repo="${workdir}/cannot-semicolon-bypass"
+copy_valid_repo "${cannot_semicolon_bypass_repo}"
+printf '%s\n' "Report output cannot be ignored; report output is workflow truth." >>"${cannot_semicolon_bypass_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${cannot_semicolon_bypass_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
 rc_overclaim_repo="${workdir}/rc-overclaim"
 copy_valid_repo "${rc_overclaim_repo}"
 printf '%s\n' "Phase 66.5 proves release-candidate readiness." >>"${rc_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${rc_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
+proof_rc_overclaim_repo="${workdir}/proof-rc-overclaim"
+copy_valid_repo "${proof_rc_overclaim_repo}"
+printf '%s\n' "This proof passes RC." >>"${proof_rc_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${proof_rc_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
 ga_overclaim_repo="${workdir}/ga-overclaim"
 copy_valid_repo "${ga_overclaim_repo}"
 printf '%s\n' "Phase 66.5 confirms GA readiness." >>"${ga_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${ga_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+proof_ga_overclaim_repo="${workdir}/proof-ga-overclaim"
+copy_valid_repo "${proof_ga_overclaim_repo}"
+printf '%s\n' "This proof proves GA readiness." >>"${proof_ga_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${proof_ga_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+verifier_ga_overclaim_repo="${workdir}/verifier-ga-overclaim"
+copy_valid_repo "${verifier_ga_overclaim_repo}"
+printf '%s\n' "Verifier output confirms GA readiness." >>"${verifier_ga_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${verifier_ga_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+issue_lint_ga_overclaim_repo="${workdir}/issue-lint-ga-overclaim"
+copy_valid_repo "${issue_lint_ga_overclaim_repo}"
+printf '%s\n' "Issue-lint output confirms GA readiness." >>"${issue_lint_ga_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${issue_lint_ga_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
 compliance_overclaim_repo="${workdir}/compliance-overclaim"
 copy_valid_repo "${compliance_overclaim_repo}"
 printf '%s\n' "Phase 66.5 confirms compliance certification." >>"${compliance_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${compliance_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
+hyphenated_compliance_overclaim_repo="${workdir}/hyphenated-compliance-overclaim"
+copy_valid_repo "${hyphenated_compliance_overclaim_repo}"
+printf '%s\n' "Phase 66.5 confirms compliance-certification readiness." >>"${hyphenated_compliance_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${hyphenated_compliance_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
 portal_overclaim_repo="${workdir}/portal-overclaim"
 copy_valid_repo "${portal_overclaim_repo}"
 printf '%s\n' "Phase 66.5 confirms customer portal readiness." >>"${portal_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${portal_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+hyphenated_portal_overclaim_repo="${workdir}/hyphenated-portal-overclaim"
+copy_valid_repo "${hyphenated_portal_overclaim_repo}"
+printf '%s\n' "Phase 66.5 confirms customer-portal readiness." >>"${hyphenated_portal_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${hyphenated_portal_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+hyphenated_sla_overclaim_repo="${workdir}/hyphenated-sla-overclaim"
+copy_valid_repo "${hyphenated_sla_overclaim_repo}"
+printf '%s\n' "Phase 66.5 confirms production-SLA reporting." >>"${hyphenated_sla_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${hyphenated_sla_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+hyphenated_commercial_overclaim_repo="${workdir}/hyphenated-commercial-overclaim"
+copy_valid_repo "${hyphenated_commercial_overclaim_repo}"
+printf '%s\n' "Phase 66.5 confirms commercial-replacement readiness." >>"${hyphenated_commercial_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${hyphenated_commercial_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
 secret_repo="${workdir}/secret"
 copy_valid_repo "${secret_repo}"
