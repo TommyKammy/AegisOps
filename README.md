@@ -78,6 +78,7 @@ Canonical cross-phase boundary reference:
 - [Phase 66.1 clean-host RC E2E harness](docs/phase-66-1-clean-host-rc-e2e-harness.md) defines the clean-host release-candidate journey contract from setup through report export while preserving Phase 65 as input evidence only and excluding GA, production rollout, self-service commercial, and broad SIEM/SOAR parity claims.
 - [Phase 66.2 Wazuh sample signal RC proof](docs/phase-66-2-wazuh-sample-signal-rc-proof.md) defines the reviewed Wazuh-origin sample signal proof surface for RC evidence while preserving Wazuh as subordinate analytic-signal context and excluding broad SIEM parity, production telemetry import, source-native truth, GA, and commercial replacement claims.
 - [Phase 66.3 Shuffle sample execution RC proof](docs/phase-66-3-shuffle-sample-execution-rc-proof.md) defines the reviewed Shuffle sample execution proof surface for RC evidence while preserving Shuffle as subordinate routine automation substrate and excluding broad SOAR marketplace coverage, autonomous remediation, production automation authority, GA, and commercial replacement claims.
+- [Phase 66.4 AI-assisted triage RC proof](docs/phase-66-4-ai-assisted-triage-rc-proof.md) defines the reviewed AI-assisted triage proof surface for RC evidence while preserving AI output as cited, reviewable, advisory evidence and excluding AI approval, AI execution, AI reconciliation, case-closure authority, GA, and commercial replacement claims.
 - [Phase 58.5 upgrade and rollback plan contract](docs/phase-58-5-upgrade-rollback-plan-contract.md) defines reviewed upgrade-plan and rollback-plan evidence fields, failure states, and authority boundaries without implementing live upgrade or rollback execution.
 - [Phase 53.2 Wazuh certificate and credential contract](docs/deployment/wazuh-certificate-credential-contract.md) defines certificate generation-wrapper posture, credential custody, default-credential rejection, rotation guidance, and no-live-secret validation for the Wazuh profile.
 - [Phase 53.3 Wazuh intake binding contract](docs/deployment/wazuh-manager-intake-binding-contract.md) defines the manager-to-AegisOps intake URL, reviewed proxy route, shared-secret custody reference, provenance fields, and analytic-signal admission boundary for Wazuh-origin events.
@@ -110,6 +111,8 @@ The Phase 66.1 clean-host RC E2E harness is defined by the [Phase 66.1 clean-hos
 The Phase 66.2 Wazuh sample signal RC proof is defined by the [Phase 66.2 Wazuh sample signal RC proof](docs/phase-66-2-wazuh-sample-signal-rc-proof.md).
 
 The Phase 66.3 Shuffle sample execution RC proof is defined by the [Phase 66.3 Shuffle sample execution RC proof](docs/phase-66-3-shuffle-sample-execution-rc-proof.md).
+
+The Phase 66.4 AI-assisted triage RC proof is defined by the [Phase 66.4 AI-assisted triage RC proof](docs/phase-66-4-ai-assisted-triage-rc-proof.md).
 
 The Phase 52.1 first-user CLI command contract is defined by the [Phase 52.1 CLI command contract](docs/phase-52-1-cli-command-contract.md).
 
