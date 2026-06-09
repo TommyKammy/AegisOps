@@ -193,7 +193,7 @@ done
 limitations_section="$(section_text "${absolute_doc_path}" "## 5. Accepted Limitations" "## 6. Verification")"
 require_section_phrase "${limitations_section}" "It does not prove autonomous remediation, AI approval, AI execution, AI reconciliation, AI case closure, detector activation, source-native truth, release truth, gate truth, broad AI SOC replacement, real design-partner success, Phase 66 closeout, Phase 67 GA readiness, or commercial replacement readiness." "Phase 66.4 accepted limitations boundary"
 
-subordinate_authority_subjects='(ai([[:space:]]+(output|summary|summaries|recommendations?|trace|trace[[:space:]-]+state|assistant|model|draft|confidence|uncertainty|review|grounding|citation|tool|prompt|prompt[[:space:]-]+injection|generated[[:space:]-]+text))?|assistant[[:space:]]+(output|summaries|recommendations?)|model[[:space:]]+(output|recommendations?)|prompt[[:space:]]+text|prompt[[:space:]-]+injection[[:space:]]+(results?|compliance|output)|grounding[[:space:]]+output|tool[[:space:]]+output|source[[:space:]]+snippets?|citations?|confidence[[:space:]]+scores?|uncertainty[[:space:]]+flags?|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+output|issue-lint[[:space:]]+output|optional[[:space:]]+evidence)'
+subordinate_authority_subjects='(ai([[:space:]]+(outputs?|summary|summaries|recommendations?|trace|trace[[:space:]-]+state|assistant|model|draft|confidence|uncertainty|review|grounding|citation|tool|prompt|prompt[[:space:]-]+injection|generated[[:space:]-]+text))?|assistant[[:space:]]+(outputs?|summaries|recommendations?)|model[[:space:]]+(outputs?|recommendations?)|prompt[[:space:]]+text|prompt[[:space:]-]+injection[[:space:]]+(results?|compliance|outputs?)|grounding[[:space:]]+outputs?|tool[[:space:]]+outputs?|source[[:space:]]+snippets?|citations?|confidence[[:space:]]+scores?|uncertainty[[:space:]]+flags?|browser[[:space:]]+state|ui[[:space:]]+cache|verifier[[:space:]]+outputs?|issue-lint[[:space:]]+outputs?|optional[[:space:]]+evidence)'
 authority_verbs='(approve[s]?|execute[s]?|reconcile[s]?|close[s]?|release[s]?|gate[s]?|mutate[s]?|promote[s]?)'
 authority_modals='(can|may|must|should|will|would|could)'
 passive_authority_verbs='(approved|executed|reconciled|closed|released|gated|mutated|promoted)'
@@ -242,7 +242,7 @@ forbidden_patterns=(
   '(ai|assistant|model)[^.[:cntrl:]]+(auto[[:space:]-]+approve|auto[[:space:]-]+execute|auto[[:space:]-]+reconcile|auto[[:space:]-]+close|autonomously[[:space:]]+(approve|execute|reconcile|close))'
   'prompt[[:space:]-]+injection[^.[:cntrl:]]+(overrides|bypasses|supersedes|replaces)[^.[:cntrl:]]*(policy|approval|review|aegisops)'
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as)[^.[:cntrl:]]*(readiness|release|gate|workflow|source)[[:space:]]+truth'
-  '(verifier|issue-lint|ai[[:space:]]+output|ai[[:space:]]+summary|ai[[:space:]]+recommendation)[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source|rc([[:space:][:punct:]]|$)|ga([[:space:][:punct:]]|$))'
+  '(verifier([[:space:]]+outputs?)?|issue-lint([[:space:]]+outputs?)?|ai[[:space:]]+outputs?|ai[[:space:]]+summary|ai[[:space:]]+recommendations?)[[:space:]]+(proves|satisfies|passes|accepts|grants|confirms)[^.[:cntrl:]]*(readiness|release|gate|workflow|source|rc([[:space:][:punct:]]|$)|ga([[:space:][:punct:]]|$))'
 )
 
 is_safe_forbidden_claim_line() {
@@ -291,12 +291,12 @@ scan_forbidden_claims() {
   fi
 }
 
-if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*(bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|basic[[:space:]]+[A-Za-z0-9+/=]{12,})|(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}' < <(visible_text "${absolute_doc_path}"); then
+if grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*(bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|basic[[:space:]]+[A-Za-z0-9+/=]{12,})|(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}' "${absolute_doc_path}"; then
   echo "Forbidden Phase 66.4 AI-assisted triage RC proof: production secret-looking value detected" >&2
   exit 1
 fi
 
-if grep -Eiq -- '(^|[[:space:]>*-])\|[[:space:]]*`?(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key|aws[_ -]?secret[_ -]?access[_ -]?key)`?[[:space:]]*\|[[:space:]]*`?[^[:space:]`|<>]+`?[[:space:]]*\|' < <(visible_text "${absolute_doc_path}"); then
+if grep -Eiq -- '(^|[[:space:]>*-])\|[[:space:]]*`?(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key|aws[_ -]?secret[_ -]?access[_ -]?key)`?[[:space:]]*\|[[:space:]]*`?[^[:space:]`|<>]+`?[[:space:]]*\|' "${absolute_doc_path}"; then
   echo "Forbidden Phase 66.4 AI-assisted triage RC proof: production secret-looking value detected" >&2
   exit 1
 fi
