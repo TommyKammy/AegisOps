@@ -211,6 +211,11 @@ copy_valid_repo "${workflow_truth_label_repo}"
 printf '%s\n' "rc_label_set: rc-evidence phase-66 report-export not-workflow-truth workflow-truth" >>"${workflow_truth_label_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${workflow_truth_label_repo}" "invalid RC label set detected"
 
+production_truth_extra_table_cell_label_repo="${workdir}/production-truth-extra-table-cell-label"
+copy_valid_repo "${production_truth_extra_table_cell_label_repo}"
+printf '%s\n' "| rc_label_set | rc-evidence phase-66 report-export not-workflow-truth | production-truth |" >>"${production_truth_extra_table_cell_label_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${production_truth_extra_table_cell_label_repo}" "invalid RC label set detected"
+
 bad_redaction_repo="${workdir}/bad-redaction"
 copy_valid_repo "${bad_redaction_repo}"
 printf '%s\n' "redaction_posture: not_needed" >>"${bad_redaction_repo}/docs/phase-66-5-report-export-rc-proof.md"
