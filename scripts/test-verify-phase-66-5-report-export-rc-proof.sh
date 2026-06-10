@@ -71,6 +71,11 @@ printf '%s\n' "redaction_posture: token: redacted" >>"${valid_redacted_credentia
 printf '%s\n' "password: redacted" >>"${valid_redacted_credentials_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${valid_redacted_credentials_repo}"
 
+valid_customer_private_redaction_repo="${workdir}/valid-customer-private-redaction"
+copy_valid_repo "${valid_customer_private_redaction_repo}"
+printf '%s\n' "redaction_posture: customer-private data redacted" >>"${valid_customer_private_redaction_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${valid_customer_private_redaction_repo}"
+
 mixed_redacted_and_secret_repo="${workdir}/mixed-redacted-and-secret"
 copy_valid_repo "${mixed_redacted_and_secret_repo}"
 printf '%s\n' "token: redacted api_key: abcdefghijklmnop" >>"${mixed_redacted_and_secret_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -115,6 +120,11 @@ empty_required_table_cell_repo="${workdir}/empty-required-table-cell"
 copy_valid_repo "${empty_required_table_cell_repo}"
 printf '%s\n' "| report_export_id | |" >>"${empty_required_table_cell_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${empty_required_table_cell_repo}" "missing required evidence value detected"
+
+missing_required_extra_table_cell_repo="${workdir}/missing-required-extra-table-cell"
+copy_valid_repo "${missing_required_extra_table_cell_repo}"
+printf '%s\n' "| report_export_id | EXP-1 | missing timestamp |" >>"${missing_required_extra_table_cell_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${missing_required_extra_table_cell_repo}" "missing required evidence value detected"
 
 unavailable_required_repo="${workdir}/unavailable-required"
 copy_valid_repo "${unavailable_required_repo}"
@@ -185,6 +195,12 @@ source_record_extra_table_cell_repo="${workdir}/source-record-extra-table-cell"
 copy_valid_repo "${source_record_extra_table_cell_repo}"
 printf '%s\n' "| source_record_references | CASE-1 | report metadata |" >>"${source_record_extra_table_cell_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${source_record_extra_table_cell_repo}" "invalid source record reference detected"
+
+valid_section_record_references_repo="${workdir}/valid-section-record-references"
+copy_valid_repo "${valid_section_record_references_repo}"
+printf '%s\n' "action_section_reference: approval record APR-1, execution receipt REC-1" >>"${valid_section_record_references_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "reconciliation_section_reference: reconciliation section REC-1" >>"${valid_section_record_references_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${valid_section_record_references_repo}"
 
 section_authority_repo="${workdir}/section-authority"
 copy_valid_repo "${section_authority_repo}"
@@ -285,6 +301,21 @@ report_creates_workflow_truth_repo="${workdir}/report-creates-workflow-truth"
 copy_valid_repo "${report_creates_workflow_truth_repo}"
 printf '%s\n' "Report output creates workflow truth." >>"${report_creates_workflow_truth_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${report_creates_workflow_truth_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+report_export_ga_ready_repo="${workdir}/report-export-ga-ready"
+copy_valid_repo "${report_export_ga_ready_repo}"
+printf '%s\n' "Report export is GA ready." >>"${report_export_ga_ready_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_export_ga_ready_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+report_export_proves_ga_repo="${workdir}/report-export-proves-ga"
+copy_valid_repo "${report_export_proves_ga_repo}"
+printf '%s\n' "The report export proves GA readiness." >>"${report_export_proves_ga_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_export_proves_ga_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+report_export_sla_repo="${workdir}/report-export-sla"
+copy_valid_repo "${report_export_sla_repo}"
+printf '%s\n' "The report export confirms production SLA reporting." >>"${report_export_sla_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_export_sla_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
 report_closes_case_repo="${workdir}/report-closes-case"
 copy_valid_repo "${report_closes_case_repo}"
@@ -555,6 +586,11 @@ customer_private_prohibition_bypass_repo="${workdir}/customer-private-prohibitio
 copy_valid_repo "${customer_private_prohibition_bypass_repo}"
 printf '%s\n' "The proof stores customer-private ticket export and customer-private data fails the proof." >>"${customer_private_prohibition_bypass_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${customer_private_prohibition_bypass_repo}" "customer-private data detected"
+
+customer_private_exposes_prohibition_bypass_repo="${workdir}/customer-private-exposes-prohibition-bypass"
+copy_valid_repo "${customer_private_exposes_prohibition_bypass_repo}"
+printf '%s\n' "The proof exposes customer-private ticket export and customer-private data fails the proof." >>"${customer_private_exposes_prohibition_bypass_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${customer_private_exposes_prohibition_bypass_repo}" "customer-private data detected"
 
 comment_customer_private_repo="${workdir}/comment-customer-private"
 copy_valid_repo "${comment_customer_private_repo}"
