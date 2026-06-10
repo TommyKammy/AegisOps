@@ -182,8 +182,9 @@ limitations_section="$(section_text "${absolute_doc_path}" "## 5. Accepted Limit
 require_section_phrase "${limitations_section}" "It does not prove compliance certification, customer portal readiness, production SLA reporting, real design-partner export success, report authority over AegisOps records, Phase 66 closeout, Phase 67 GA readiness, or commercial replacement readiness." "Phase 66.5 accepted limitations boundary"
 
 subordinate_subjects='(reports?|report[[:space:]]+(output|sections?|metadata|labels?|text|exports?|files?|artifacts?)|generated[[:space:]]+files?|export[[:space:]]+(metadata|artifacts?|output)|downloaded[[:space:]]+artifacts?|screenshots?|browser[[:space:]]+state|ui[[:space:]]+(state|cache)|optional[[:space:]]+evidence|verifier[[:space:]]+output|issue-lint[[:space:]]+output)'
-authority_verbs='(approve[s]?|approved|execute[s]?|executed|reconcile[s]?|reconciled|close[s]?|closed|release[s]?|released|gate[s]?|gated|mutate[s]?|mutated|promote[s]?|promoted|override[s]?|overrode|overridden)'
+authority_verbs='(approve[s]?|approved|authoriz(e|es|ed)|permit[s]?|permitted|determine[s]?|determined|execute[s]?|executed|reconcile[s]?|reconciled|close[s]?|closed|release[s]?|released|gate[s]?|gated|mutate[s]?|mutated|promote[s]?|promoted|override[s]?|overrode|overridden)'
 authority_objects='(aegisops[[:space:]]+records?|case|cases|alert|record|workflow|release|gate|evidence|approval|action[[:space:]-]+requests?|execution[[:space:]-]+receipts?|reconciliation|audit|limitation|source[[:space:]-]+admission|closeout|actions?)'
+authority_targets='(workflow|release|gate|readiness|case|action|reconciliation|evidence|approval|audit|limitation|source[[:space:]-]+admission|closeout|aegisops)'
 missing_value='missing|mismatched|none|null|n/a|tbd|todo|unknown|unavailable|omitted|absent|blank|empty|withheld|placeholder|sample|not[[:space:]_-]*provided|not[[:space:]_-]*set|unsupported|unspecified'
 required_fields='journey_run_id|repository_revision|report_export_id|export_format|source_record_references|case_section_reference|action_section_reference|reconciliation_section_reference|rc_label_set|redaction_posture|limitation_references'
 
@@ -230,8 +231,8 @@ forbidden_patterns=(
   "${subordinate_subjects}[^.[:cntrl:]]*[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[[:space:]]+[^.[:cntrl:]]*(case[[:space:]-]+closure|action[[:space:]-]+execution|action[[:space:]-]+approval|reconciliation)"
   "${subordinate_subjects}([^.[:cntrl:]]+)?[[:space:]]+${authority_verbs}[[:space:]]+[^.[:cntrl:]]*${authority_objects}"
   "${authority_objects}[^.[:cntrl:]]+(is|are|was|were|be|being|been|has[[:space:]]+been|have[[:space:]]+been|had[[:space:]]+been|become|becomes)[[:space:]]+(approved|executed|reconciled|closed|released|gated|mutated|promoted|overridden)[[:space:]]+by[[:space:]]+[^.[:cntrl:]]*${subordinate_subjects}"
-  "${subordinate_subjects}[^.[:cntrl:]]+(has|have|holds?|carries|grants?)[[:space:]]+[^.[:cntrl:]]*((workflow|release|gate|readiness|case|action|reconciliation|aegisops)[^.[:cntrl:]]+authority|authority[^.[:cntrl:]]*(workflow|release|gate|readiness|case|action|reconciliation|aegisops))"
-  "${subordinate_subjects}[^.[:cntrl:]]+[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[[:space:]]+[^.[:cntrl:]]*((workflow|release|gate|readiness|case|action|reconciliation|aegisops)[^.[:cntrl:]]+authority|authority[^.[:cntrl:]]*(workflow|release|gate|readiness|case|action|reconciliation|aegisops))"
+  "${subordinate_subjects}[^.[:cntrl:]]+(has|have|holds?|carries|grants?)[[:space:]]+[^.[:cntrl:]]*(${authority_targets}[^.[:cntrl:]]+authority|authority[^.[:cntrl:]]*${authority_targets})"
+  "${subordinate_subjects}[^.[:cntrl:]]+[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[[:space:]]+[^.[:cntrl:]]*(${authority_targets}[^.[:cntrl:]]+authority|authority[^.[:cntrl:]]*${authority_targets})"
   "${subordinate_subjects}[^.[:cntrl:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[^.[:cntrl:]]+authoritative[[:space:]]+(for|over|as)[^.[:cntrl:]]*${authority_objects}"
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as|proves|confirms|validates)[^.[:cntrl:]]*(readiness|release|gate|workflow|source)[[:space:]]+truth'
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(proves|confirms|passes|satisfies|validates|demonstrates)[^.[:cntrl:]]*(ga[[:space:]-]+readiness|rc[[:space:]-]+readiness|rc[[:space:]-]+pass|release[- ]candidate[[:space:]-]+(readiness|pass)|release[[:space:]-]+readiness|gate[[:space:]-]+readiness)'
@@ -241,6 +242,7 @@ is_safe_forbidden_claim_line() {
   local line_lower="$1"
   local unsafe_clause_separator_regex='(^|[[:space:]])but[[:space:]]+'
   local unsafe_and_overclaim_regex='(^|[[:space:]])and[[:space:]]+[^.[:cntrl:]]*(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as|has|have|holds?|carries|grants?|proves|confirms|passes|satisfies|validates|demonstrates|authoritative)([[:space:]]|$)'
+  local unsafe_comma_overclaim_regex=',[[:space:]]*([^,.;[:cntrl:]]+[[:space:]])?(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as|has|have|holds?|carries|grants?|proves|confirms|passes|satisfies|validates|demonstrates|authoritative|'"${authority_verbs}"')([[:space:]]|$)'
   local multi_sentence_safe_regex='\.[^.[:cntrl:]]*(without[[:space:]]+turning|cannot|does[[:space:]]+not[[:space:]]+prove|remain[s]?[[:space:]]+subordinate|reports[[:space:]]+are[[:space:]]+repeatable[[:space:]]+evidence[[:space:]]+exports[[:space:]]+only|aegisops[[:space:]]+records[[:space:]]+remain[[:space:]]+authoritative)'
 
   if [[ "${line_lower}" =~ ${unsafe_clause_separator_regex} ]] || [[ "${line_lower}" =~ \; ]]; then
@@ -253,6 +255,9 @@ is_safe_forbidden_claim_line() {
     return 1
   fi
   if [[ "${line_lower}" =~ (without[[:space:]]+turning|cannot|does[[:space:]]+not[[:space:]]+prove|remain[s]?[[:space:]]+subordinate|reports[[:space:]]+are[[:space:]]+repeatable[[:space:]]+evidence[[:space:]]+exports[[:space:]]+only|aegisops[[:space:]]+records[[:space:]]+remain[[:space:]]+authoritative) ]] && [[ "${line_lower}" =~ ${unsafe_and_overclaim_regex} ]]; then
+    return 1
+  fi
+  if [[ "${line_lower}" =~ cannot ]] && [[ "${line_lower}" =~ ${unsafe_comma_overclaim_regex} ]]; then
     return 1
   fi
   if [[ "${line_lower}" =~ (without[[:space:]]+turning|cannot) ]]; then
