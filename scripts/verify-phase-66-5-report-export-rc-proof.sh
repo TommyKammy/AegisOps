@@ -195,9 +195,11 @@ repository_revision_table_mutable_suffix_regex='(^|[[:space:]>*-])\|[[:space:]]*
 repository_revision_table_branch_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|.*\|[[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`|[:space:]]+|refs/remotes/[^`|[:space:]]+|remotes/[^`|[:space:]]+|origin/[^`|[:space:]]+|[^`|[:space:]]*branch)`?[[:space:]]*(\||$)'
 source_record_shortcut_regex='(^|[[:space:]>*-])`?source_record_references`?[[:space:]]*[:=][^.[:cntrl:]]*(report[[:space:]_-]*(text|output|metadata|labels?|artifacts?)|generated[[:space:]_-]*files?|downloaded[[:space:]_-]*artifacts?|export[[:space:]_-]*(artifacts?|output)|screenshots?|browser[[:space:]_-]*state|ui[[:space:]_-]*(state|cache))'
 source_record_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?source_record_references`?[[:space:]]*\|[[:space:]]*`?[^`|]*(report[[:space:]_-]*(text|output|metadata|labels?|artifacts?)|generated[[:space:]_-]*files?|downloaded[[:space:]_-]*artifacts?|export[[:space:]_-]*(artifacts?|output)|screenshots?|browser[[:space:]_-]*state|ui[[:space:]_-]*(state|cache))[^`|]*`?[[:space:]]*\|'
+source_record_shortcut_table_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?source_record_references`?[[:space:]]*\|.*(report[[:space:]_-]*(text|output|metadata|labels?|artifacts?)|generated[[:space:]_-]*files?|downloaded[[:space:]_-]*artifacts?|export[[:space:]_-]*(artifacts?|output)|screenshots?|browser[[:space:]_-]*state|ui[[:space:]_-]*(state|cache))'
 section_authority_terms='(closed|case[[:space:]_-]*closed|case[[:space:]_-]*closure|approval|approved|execution|executed|reconciliation|reconciled|override|truth)'
 section_authority_regex="(^|[[:space:]>*-])\`?(case_section_reference|action_section_reference|reconciliation_section_reference)\`?[[:space:]]*[:=][^.[:cntrl:]]*${section_authority_terms}"
 section_authority_table_regex="(^|[[:space:]>*-])\|[[:space:]]*\`?(case_section_reference|action_section_reference|reconciliation_section_reference)\`?[[:space:]]*\|[[:space:]]*\`?[^\`|]*${section_authority_terms}[^\`|]*\`?[[:space:]]*\|"
+section_authority_table_any_cell_regex="(^|[[:space:]>*-])\|[[:space:]]*\`?(case_section_reference|action_section_reference|reconciliation_section_reference)\`?[[:space:]]*\|.*${section_authority_terms}"
 label_missing_regex='(^|[[:space:]>*-])`?rc_label_set`?[[:space:]]*[:=][^.[:cntrl:]]*(missing|without|no[[:space:]_-]*labels?|production[[:space:]_-]*truth)'
 label_missing_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?rc_label_set`?[[:space:]]*\|[[:space:]]*`?[^`|]*(missing|without|no[[:space:]_-]*labels?|production[[:space:]_-]*truth)[^`|]*`?[[:space:]]*\|'
 label_missing_table_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?rc_label_set`?[[:space:]]*\|.*(missing|without|no[[:space:]_-]*labels?|production[[:space:]_-]*truth)'
@@ -205,10 +207,16 @@ rc_label_set_assignment_regex='(^|[[:space:]>*-])`?rc_label_set`?[[:space:]]*[:=
 rc_label_set_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?rc_label_set`?[[:space:]]*\|[[:space:]]*`?([^`|]+)`?[[:space:]]*\|'
 redaction_missing_regex='(^|[[:space:]>*-])`?redaction_posture`?[[:space:]]*[:=][^.[:cntrl:]]*(not[[:space:]_-]*needed|none|unredacted|raw[[:space:]_-]*secrets?|secrets?[[:space:]_-]*included|customer[-_ ]private[[:space:]_-]*payloads?|workstation[-_ ]local[[:space:]_-]*paths?[[:space:]_-]*included)'
 redaction_missing_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?redaction_posture`?[[:space:]]*\|[[:space:]]*`?[^`|]*(not[[:space:]_-]*needed|none|unredacted|raw[[:space:]_-]*secrets?|secrets?[[:space:]_-]*included|customer[-_ ]private[[:space:]_-]*payloads?|workstation[-_ ]local[[:space:]_-]*paths?[[:space:]_-]*included)[^`|]*`?[[:space:]]*\|'
+redaction_missing_table_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?redaction_posture`?[[:space:]]*\|.*(not[[:space:]_-]*needed|none|unredacted|raw[[:space:]_-]*secrets?|secrets?[[:space:]_-]*included|customer[-_ ]private[[:space:]_-]*payloads?|workstation[-_ ]local[[:space:]_-]*paths?[[:space:]_-]*included)'
+limitation_hidden_regex='(^|[[:space:]>*-])`?limitation_references`?[[:space:]]*[:=][^.[:cntrl:]]*hidden[[:space:]_-]+in[[:space:]_-]+report[[:space:]_-]+text'
+limitation_hidden_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?limitation_references`?[[:space:]]*\|[^|]*hidden[[:space:]_-]+in[[:space:]_-]+report[[:space:]_-]+text[^|]*\|'
+limitation_hidden_table_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?limitation_references`?[[:space:]]*\|.*hidden[[:space:]_-]+in[[:space:]_-]+report[[:space:]_-]+text'
 customer_private_prohibition_regex='((must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include|fail[s]?[[:space:]]+the[[:space:]]+proof)[^.[:cntrl:]]*customer[-_ ]private|customer[-_ ]private[^.[:cntrl:]]*fail[s]?[[:space:]]+the[[:space:]]+proof)'
 customer_private_unsafe_regex='(includes|contains|embeds|carries|stores)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_ ]private[[:space:]]+(examples?|tickets?|alerts?|logs?|chats?|payloads?|exports?)([[:space:].,;)]|[[:space:]]+(are|were|was|is)[[:space:]]+(stored|included|embedded|carried))|unredacted[[:space:]]+customer[[:space:]]+(tickets?|alerts?|logs?|chats?|payloads?|exports?|data)([[:space:].,;)]|$)'
 canonical_source_record_references_row='| `source_record_references` | direct aegisops references for source alert, case, evidence, approval, action request, execution receipt, and reconciliation records. | report text, screenshots, browser state, or ui cache cannot create source-record truth. |'
 canonical_rc_label_set_row='| `rc_label_set` | required labels `rc-evidence`, `phase-66`, `report-export`, and `not-workflow-truth`. | missing rc labels or production-truth labels fail the proof. |'
+canonical_redaction_posture_row='| `redaction_posture` | secret, credential, customer-private data, workstation-local path, and pii redaction posture. | raw secrets, customer-private payloads, and workstation-local paths fail the proof. |'
+canonical_limitation_references_row='| `limitation_references` | known limitation ids, owner, decision date, and follow-up date when export evidence is incomplete. | missing limitations cannot be hidden in report text. |'
 canonical_case_section_reference_row='| `case_section_reference` | reviewed case section containing status, evidence links, owner, and limitation references. | report sections cannot close cases or override case records. |'
 canonical_action_section_reference_row='| `action_section_reference` | reviewed action section containing approval, delegated action request, execution receipt, and mismatch posture. | report sections cannot approve, execute, or reconcile actions. |'
 canonical_reconciliation_section_reference_row='| `reconciliation_section_reference` | reviewed reconciliation section binding receipt, outcome, mismatch state, follow-up owner, and linked record. | report sections cannot become reconciliation truth. |'
@@ -216,6 +224,7 @@ canonical_reconciliation_section_reference_row='| `reconciliation_section_refere
 forbidden_patterns=(
   '(phase[[:space:]]+66\.5|this[[:space:]]+proof|proof)[^.[:cntrl:]]+(proves|satisfies|passes|accepts|grants|achieves|enables|validates|demonstrates|confirms|authorizes|establishes|guarantees|certif(y|ies))[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|ga[[:space:]-]+readiness|general[- ]availability|rc([[:space:][:punct:]]|$)|rc[[:space:]-]+gate|rc[[:space:]-]+readiness|rc[[:space:]-]+pass|release[- ]candidate[[:space:]-]+(readiness|pass)|supportability|closeout[[:space:]-]+evidence|compliance|compliance[[:space:]-]+certification|customer[[:space:]-]+portal|production[[:space:]-]+sla|production[[:space:]-]+reporting|commercial[[:space:]-]+replacement|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
   '(ga[[:space:]-]+readiness|rc[[:space:]-]+pass|compliance([[:space:]-]+certification)?)[^.[:cntrl:]]+(is|are|was|were|be|being|been|has[[:space:]]+been|have[[:space:]]+been|had[[:space:]]+been)[[:space:]]+(authorized|established|guaranteed|certified|proven|confirmed|validated|satisfied)[[:space:]]+by[[:space:]]+(phase[[:space:]]+66\.5|this[[:space:]]+proof|proof)'
+  '(supportability|closeout[[:space:]-]+evidence|customer[[:space:]-]+portal[[:space:]-]+readiness|production[[:space:]-]+sla[[:space:]-]+reporting|commercial[[:space:]-]+replacement[[:space:]-]+readiness|real[[:space:]]+design[- ]partner[[:space:]]+export[[:space:]]+success|phase[[:space:]]+66[[:space:]]+closeout)[^.[:cntrl:]]+(is|are|was|were|be|being|been|has[[:space:]]+been|have[[:space:]]+been|had[[:space:]]+been)[[:space:]]+(authorized|established|guaranteed|certified|proven|confirmed|validated|satisfied|demonstrated)[[:space:]]+by[[:space:]]+(phase[[:space:]]+66\.5|this[[:space:]]+proof|proof)'
   '(phase[[:space:]]+66\.5|this[[:space:]]+proof|proof|aegisops)([^.[:cntrl:]]+)?[[:space:]]+(is|becomes|serves[[:space:]]+as)[[:space:]]+(now[[:space:]]+|already[[:space:]]+|effectively[[:space:]]+)?(ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|commercial[[:space:]]+replacement)|(ga|rc|release[- ]candidate|commercial[[:space:]]+replacement)[[:space:]-]+ready|compliance[[:space:]-]+certification|customer[[:space:]-]+portal[[:space:]-]+readiness|production[[:space:]-]+sla[[:space:]-]+reporting|real[[:space:]]+design[- ]partner[[:space:]]+export[[:space:]]+success|commercial[[:space:]-]+replacement[[:space:]-]+readiness)'
   "${subordinate_subjects}[^.[:cntrl:]]*[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as|creates?|created)[[:space:]]+[^.[:cntrl:]]*((source[[:space:]]+of[[:space:]]+truth)|(workflow|release|gate|readiness|case|action|reconciliation|source[[:space:]-]+record|evidence|approval|audit|limitation|source[[:space:]-]+admission|closeout)[[:space:]]+truth)"
   "${subordinate_subjects}[^.[:cntrl:]]*[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[[:space:]]+[^.[:cntrl:]]*(case[[:space:]-]+closure|action[[:space:]-]+execution|action[[:space:]-]+approval|reconciliation)"
@@ -342,7 +351,7 @@ if grep -Eq -- "(^|[[:space:]>*-])\|[[:space:]]*\`?(${required_fields})\`?[[:spa
   exit 1
 fi
 
-if grep -Eq -- '(^|[[:space:]>*-])`?limitation_references`?[[:space:]]*[:=][^.[:cntrl:]]*hidden[[:space:]_-]+in[[:space:]_-]+report[[:space:]_-]+text|(^|[[:space:]>*-])\|[[:space:]]*`?limitation_references`?[[:space:]]*\|[^|]*hidden[[:space:]_-]+in[[:space:]_-]+report[[:space:]_-]+text[^|]*\|' < <(lower_visible_text "${absolute_doc_path}"); then
+if grep -Eq -- "${limitation_hidden_regex}|${limitation_hidden_table_regex}" < <(lower_visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.5 report export RC proof: missing required evidence value detected" >&2
   exit 1
 fi
@@ -364,11 +373,15 @@ while IFS= read -r line_lower; do
     echo "Forbidden Phase 66.5 report export RC proof: non-immutable repository revision detected" >&2
     exit 1
   fi
-  if [[ "${line_lower}" =~ ${source_record_shortcut_regex} ]] || [[ "${line_lower}" =~ ${source_record_shortcut_table_regex} ]]; then
+  if [[ "${line_lower}" =~ ${source_record_shortcut_regex} ]] || [[ "${line_lower}" =~ ${source_record_shortcut_table_regex} ]] || { [[ "${line_lower}" != "${canonical_source_record_references_row}" ]] && [[ "${line_lower}" =~ ${source_record_shortcut_table_any_cell_regex} ]]; }; then
     echo "Forbidden Phase 66.5 report export RC proof: invalid source record reference detected" >&2
     exit 1
   fi
-  if [[ "${line_lower}" != "${canonical_case_section_reference_row}" ]] && [[ "${line_lower}" != "${canonical_action_section_reference_row}" ]] && [[ "${line_lower}" != "${canonical_reconciliation_section_reference_row}" ]] && { [[ "${line_lower}" =~ ${section_authority_regex} ]] || [[ "${line_lower}" =~ ${section_authority_table_regex} ]]; }; then
+  if [[ "${line_lower}" != "${canonical_limitation_references_row}" ]] && { [[ "${line_lower}" =~ ${limitation_hidden_regex} ]] || [[ "${line_lower}" =~ ${limitation_hidden_table_regex} ]] || [[ "${line_lower}" =~ ${limitation_hidden_table_any_cell_regex} ]]; }; then
+    echo "Forbidden Phase 66.5 report export RC proof: missing required evidence value detected" >&2
+    exit 1
+  fi
+  if [[ "${line_lower}" != "${canonical_case_section_reference_row}" ]] && [[ "${line_lower}" != "${canonical_action_section_reference_row}" ]] && [[ "${line_lower}" != "${canonical_reconciliation_section_reference_row}" ]] && { [[ "${line_lower}" =~ ${section_authority_regex} ]] || [[ "${line_lower}" =~ ${section_authority_table_regex} ]] || [[ "${line_lower}" =~ ${section_authority_table_any_cell_regex} ]]; }; then
     echo "Forbidden Phase 66.5 report export RC proof: report section authority detected" >&2
     exit 1
   fi
@@ -389,7 +402,7 @@ while IFS= read -r line_lower; do
       exit 1
     fi
   fi
-  if [[ "${line_lower}" =~ ${redaction_missing_regex} ]] || [[ "${line_lower}" =~ ${redaction_missing_table_regex} ]]; then
+  if [[ "${line_lower}" =~ ${redaction_missing_regex} ]] || [[ "${line_lower}" =~ ${redaction_missing_table_regex} ]] || { [[ "${line_lower}" != "${canonical_redaction_posture_row}" ]] && [[ "${line_lower}" =~ ${redaction_missing_table_any_cell_regex} ]]; }; then
     echo "Forbidden Phase 66.5 report export RC proof: invalid redaction posture detected" >&2
     exit 1
   fi
