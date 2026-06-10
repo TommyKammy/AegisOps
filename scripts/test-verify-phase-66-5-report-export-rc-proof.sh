@@ -65,6 +65,12 @@ copy_valid_repo "${valid_explicit_labels_repo}"
 printf '%s\n' "rc_label_set: rc-evidence phase-66 report-export not-workflow-truth" >>"${valid_explicit_labels_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${valid_explicit_labels_repo}"
 
+valid_redacted_credentials_repo="${workdir}/valid-redacted-credentials"
+copy_valid_repo "${valid_redacted_credentials_repo}"
+printf '%s\n' "redaction_posture: token: redacted" >>"${valid_redacted_credentials_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "password: redacted" >>"${valid_redacted_credentials_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${valid_redacted_credentials_repo}"
+
 missing_doc_repo="${workdir}/missing-doc"
 copy_valid_repo "${missing_doc_repo}"
 rm "${missing_doc_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -350,15 +356,50 @@ copy_valid_repo "${issue_lint_ga_overclaim_repo}"
 printf '%s\n' "Issue-lint output confirms GA readiness." >>"${issue_lint_ga_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${issue_lint_ga_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
+verifier_readiness_truth_validate_repo="${workdir}/verifier-readiness-truth-validate"
+copy_valid_repo "${verifier_readiness_truth_validate_repo}"
+printf '%s\n' "Verifier output validates readiness truth." >>"${verifier_readiness_truth_validate_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${verifier_readiness_truth_validate_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+issue_lint_readiness_truth_validate_repo="${workdir}/issue-lint-readiness-truth-validate"
+copy_valid_repo "${issue_lint_readiness_truth_validate_repo}"
+printf '%s\n' "Issue-lint output validates readiness truth." >>"${issue_lint_readiness_truth_validate_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${issue_lint_readiness_truth_validate_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
 compliance_overclaim_repo="${workdir}/compliance-overclaim"
 copy_valid_repo "${compliance_overclaim_repo}"
 printf '%s\n' "Phase 66.5 confirms compliance certification." >>"${compliance_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${compliance_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
+authorizes_rc_overclaim_repo="${workdir}/authorizes-rc-overclaim"
+copy_valid_repo "${authorizes_rc_overclaim_repo}"
+printf '%s\n' "Phase 66.5 authorizes RC pass." >>"${authorizes_rc_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${authorizes_rc_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+establishes_ga_overclaim_repo="${workdir}/establishes-ga-overclaim"
+copy_valid_repo "${establishes_ga_overclaim_repo}"
+printf '%s\n' "Phase 66.5 establishes GA readiness." >>"${establishes_ga_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${establishes_ga_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+guarantees_compliance_overclaim_repo="${workdir}/guarantees-compliance-overclaim"
+copy_valid_repo "${guarantees_compliance_overclaim_repo}"
+printf '%s\n' "Phase 66.5 guarantees compliance certification." >>"${guarantees_compliance_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${guarantees_compliance_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
 certify_compliance_overclaim_repo="${workdir}/certify-compliance-overclaim"
 copy_valid_repo "${certify_compliance_overclaim_repo}"
 printf '%s\n' "Phase 66.5 certifies compliance." >>"${certify_compliance_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${certify_compliance_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+supportability_overclaim_repo="${workdir}/supportability-overclaim"
+copy_valid_repo "${supportability_overclaim_repo}"
+printf '%s\n' "Phase 66.5 proves supportability." >>"${supportability_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${supportability_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+closeout_evidence_overclaim_repo="${workdir}/closeout-evidence-overclaim"
+copy_valid_repo "${closeout_evidence_overclaim_repo}"
+printf '%s\n' "This proof satisfies closeout evidence." >>"${closeout_evidence_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${closeout_evidence_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
 proof_compliance_identity_repo="${workdir}/proof-compliance-identity"
 copy_valid_repo "${proof_compliance_identity_repo}"
