@@ -76,6 +76,11 @@ copy_valid_repo "${valid_customer_private_redaction_repo}"
 printf '%s\n' "redaction_posture: customer-private data redacted" >>"${valid_customer_private_redaction_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${valid_customer_private_redaction_repo}"
 
+valid_customer_private_not_stored_repo="${workdir}/valid-customer-private-not-stored"
+copy_valid_repo "${valid_customer_private_not_stored_repo}"
+printf '%s\n' "redaction_posture: customer-private data not stored" >>"${valid_customer_private_not_stored_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${valid_customer_private_not_stored_repo}"
+
 mixed_redacted_and_secret_repo="${workdir}/mixed-redacted-and-secret"
 copy_valid_repo "${mixed_redacted_and_secret_repo}"
 printf '%s\n' "token: redacted api_key: abcdefghijklmnop" >>"${mixed_redacted_and_secret_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -191,6 +196,21 @@ copy_valid_repo "${source_record_report_artifact_repo}"
 printf '%s\n' "source_record_references: report artifact" >>"${source_record_report_artifact_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${source_record_report_artifact_repo}" "invalid source record reference detected"
 
+source_record_export_metadata_repo="${workdir}/source-record-export-metadata"
+copy_valid_repo "${source_record_export_metadata_repo}"
+printf '%s\n' "source_record_references: export metadata" >>"${source_record_export_metadata_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${source_record_export_metadata_repo}" "invalid source record reference detected"
+
+source_record_report_export_repo="${workdir}/source-record-report-export"
+copy_valid_repo "${source_record_report_export_repo}"
+printf '%s\n' "source_record_references: report export" >>"${source_record_report_export_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${source_record_report_export_repo}" "invalid source record reference detected"
+
+source_record_generated_report_file_repo="${workdir}/source-record-generated-report-file"
+copy_valid_repo "${source_record_generated_report_file_repo}"
+printf '%s\n' "source_record_references: generated report file" >>"${source_record_generated_report_file_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${source_record_generated_report_file_repo}" "invalid source record reference detected"
+
 source_record_extra_table_cell_repo="${workdir}/source-record-extra-table-cell"
 copy_valid_repo "${source_record_extra_table_cell_repo}"
 printf '%s\n' "| source_record_references | CASE-1 | report metadata |" >>"${source_record_extra_table_cell_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -297,6 +317,21 @@ copy_valid_repo "${report_creates_source_truth_repo}"
 printf '%s\n' "Report output creates source-record truth." >>"${report_creates_source_truth_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${report_creates_source_truth_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
+report_proves_source_truth_repo="${workdir}/report-proves-source-truth"
+copy_valid_repo "${report_proves_source_truth_repo}"
+printf '%s\n' "Report output proves source-record truth." >>"${report_proves_source_truth_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_proves_source_truth_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+report_confirms_workflow_truth_repo="${workdir}/report-confirms-workflow-truth"
+copy_valid_repo "${report_confirms_workflow_truth_repo}"
+printf '%s\n' "Report output confirms workflow truth." >>"${report_confirms_workflow_truth_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_confirms_workflow_truth_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+report_validates_workflow_truth_repo="${workdir}/report-validates-workflow-truth"
+copy_valid_repo "${report_validates_workflow_truth_repo}"
+printf '%s\n' "Report output validates workflow truth." >>"${report_validates_workflow_truth_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_validates_workflow_truth_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
 report_creates_workflow_truth_repo="${workdir}/report-creates-workflow-truth"
 copy_valid_repo "${report_creates_workflow_truth_repo}"
 printf '%s\n' "Report output creates workflow truth." >>"${report_creates_workflow_truth_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -341,6 +376,21 @@ completed_passive_report_closes_case_repo="${workdir}/completed-passive-report-c
 copy_valid_repo "${completed_passive_report_closes_case_repo}"
 printf '%s\n' "Cases have been closed by report output." >>"${completed_passive_report_closes_case_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${completed_passive_report_closes_case_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+passive_report_authorizes_action_repo="${workdir}/passive-report-authorizes-action"
+copy_valid_repo "${passive_report_authorizes_action_repo}"
+printf '%s\n' "Action requests are authorized by report output." >>"${passive_report_authorizes_action_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${passive_report_authorizes_action_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+passive_report_determines_reconciliation_repo="${workdir}/passive-report-determines-reconciliation"
+copy_valid_repo "${passive_report_determines_reconciliation_repo}"
+printf '%s\n' "Reconciliation is determined by report output." >>"${passive_report_determines_reconciliation_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${passive_report_determines_reconciliation_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+passive_report_permits_approvals_repo="${workdir}/passive-report-permits-approvals"
+copy_valid_repo "${passive_report_permits_approvals_repo}"
+printf '%s\n' "Approvals are permitted by report output." >>"${passive_report_permits_approvals_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${passive_report_permits_approvals_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
 table_report_truth_repo="${workdir}/table-report-truth"
 copy_valid_repo "${table_report_truth_repo}"
@@ -591,6 +641,21 @@ customer_private_exposes_prohibition_bypass_repo="${workdir}/customer-private-ex
 copy_valid_repo "${customer_private_exposes_prohibition_bypass_repo}"
 printf '%s\n' "The proof exposes customer-private ticket export and customer-private data fails the proof." >>"${customer_private_exposes_prohibition_bypass_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${customer_private_exposes_prohibition_bypass_repo}" "customer-private data detected"
+
+redacted_then_customer_private_leak_repo="${workdir}/redacted-then-customer-private-leak"
+copy_valid_repo "${redacted_then_customer_private_leak_repo}"
+printf '%s\n' "redaction_posture: customer-private data redacted; customer-private tickets are stored in the proof." >>"${redacted_then_customer_private_leak_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${redacted_then_customer_private_leak_repo}" "customer-private data detected"
+
+raw_customer_data_stored_repo="${workdir}/raw-customer-data-stored"
+copy_valid_repo "${raw_customer_data_stored_repo}"
+printf '%s\n' "Raw customer data is stored in the proof." >>"${raw_customer_data_stored_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${raw_customer_data_stored_repo}" "customer-private data detected"
+
+raw_customer_data_included_repo="${workdir}/raw-customer-data-included"
+copy_valid_repo "${raw_customer_data_included_repo}"
+printf '%s\n' "Raw customer data was included in the proof." >>"${raw_customer_data_included_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${raw_customer_data_included_repo}" "customer-private data detected"
 
 comment_customer_private_repo="${workdir}/comment-customer-private"
 copy_valid_repo "${comment_customer_private_repo}"
