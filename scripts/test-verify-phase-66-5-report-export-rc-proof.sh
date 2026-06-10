@@ -71,6 +71,11 @@ printf '%s\n' "redaction_posture: token: redacted" >>"${valid_redacted_credentia
 printf '%s\n' "password: redacted" >>"${valid_redacted_credentials_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${valid_redacted_credentials_repo}"
 
+mixed_redacted_and_secret_repo="${workdir}/mixed-redacted-and-secret"
+copy_valid_repo "${mixed_redacted_and_secret_repo}"
+printf '%s\n' "token: redacted api_key: abcdefghijklmnop" >>"${mixed_redacted_and_secret_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${mixed_redacted_and_secret_repo}" "production secret-looking value detected"
+
 missing_doc_repo="${workdir}/missing-doc"
 copy_valid_repo "${missing_doc_repo}"
 rm "${missing_doc_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -95,6 +100,16 @@ missing_required_late_repo="${workdir}/missing-required-late"
 copy_valid_repo "${missing_required_late_repo}"
 printf '%s\n' "report_export_id: export unavailable" >>"${missing_required_late_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${missing_required_late_repo}" "missing required evidence value detected"
+
+empty_required_assignment_repo="${workdir}/empty-required-assignment"
+copy_valid_repo "${empty_required_assignment_repo}"
+printf '%s\n' "report_export_id:" >>"${empty_required_assignment_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${empty_required_assignment_repo}" "missing required evidence value detected"
+
+empty_source_record_assignment_repo="${workdir}/empty-source-record-assignment"
+copy_valid_repo "${empty_source_record_assignment_repo}"
+printf '%s\n' "source_record_references:" >>"${empty_source_record_assignment_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${empty_source_record_assignment_repo}" "missing required evidence value detected"
 
 empty_required_table_cell_repo="${workdir}/empty-required-table-cell"
 copy_valid_repo "${empty_required_table_cell_repo}"
@@ -385,6 +400,21 @@ guarantees_compliance_overclaim_repo="${workdir}/guarantees-compliance-overclaim
 copy_valid_repo "${guarantees_compliance_overclaim_repo}"
 printf '%s\n' "Phase 66.5 guarantees compliance certification." >>"${guarantees_compliance_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${guarantees_compliance_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+passive_compliance_overclaim_repo="${workdir}/passive-compliance-overclaim"
+copy_valid_repo "${passive_compliance_overclaim_repo}"
+printf '%s\n' "Compliance is certified by Phase 66.5." >>"${passive_compliance_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${passive_compliance_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+passive_ga_overclaim_repo="${workdir}/passive-ga-overclaim"
+copy_valid_repo "${passive_ga_overclaim_repo}"
+printf '%s\n' "GA readiness is established by this proof." >>"${passive_ga_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${passive_ga_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+passive_rc_overclaim_repo="${workdir}/passive-rc-overclaim"
+copy_valid_repo "${passive_rc_overclaim_repo}"
+printf '%s\n' "RC pass is authorized by Phase 66.5." >>"${passive_rc_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${passive_rc_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
 certify_compliance_overclaim_repo="${workdir}/certify-compliance-overclaim"
 copy_valid_repo "${certify_compliance_overclaim_repo}"

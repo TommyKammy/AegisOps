@@ -213,6 +213,7 @@ canonical_reconciliation_section_reference_row='| `reconciliation_section_refere
 
 forbidden_patterns=(
   '(phase[[:space:]]+66\.5|this[[:space:]]+proof|proof)[^.[:cntrl:]]+(proves|satisfies|passes|accepts|grants|achieves|enables|validates|demonstrates|confirms|authorizes|establishes|guarantees|certif(y|ies))[^.[:cntrl:]]*(ga([[:space:][:punct:]]|$)|ga[[:space:]-]+readiness|general[- ]availability|rc([[:space:][:punct:]]|$)|rc[[:space:]-]+gate|rc[[:space:]-]+readiness|rc[[:space:]-]+pass|release[- ]candidate[[:space:]-]+(readiness|pass)|supportability|closeout[[:space:]-]+evidence|compliance|compliance[[:space:]-]+certification|customer[[:space:]-]+portal|production[[:space:]-]+sla|production[[:space:]-]+reporting|commercial[[:space:]-]+replacement|real[[:space:]]+design[- ]partner|phase[[:space:]]+66[[:space:]]+closeout)'
+  '(ga[[:space:]-]+readiness|rc[[:space:]-]+pass|compliance([[:space:]-]+certification)?)[^.[:cntrl:]]+(is|are|was|were|be|being|been|has[[:space:]]+been|have[[:space:]]+been|had[[:space:]]+been)[[:space:]]+(authorized|established|guaranteed|certified|proven|confirmed|validated|satisfied)[[:space:]]+by[[:space:]]+(phase[[:space:]]+66\.5|this[[:space:]]+proof|proof)'
   '(phase[[:space:]]+66\.5|this[[:space:]]+proof|proof|aegisops)([^.[:cntrl:]]+)?[[:space:]]+(is|becomes|serves[[:space:]]+as)[[:space:]]+(now[[:space:]]+|already[[:space:]]+|effectively[[:space:]]+)?(ready[[:space:]]+for[[:space:]]+(ga([[:space:][:punct:]]|$)|general[- ]availability|rc([[:space:][:punct:]]|$)|release[- ]candidate|commercial[[:space:]]+replacement)|(ga|rc|release[- ]candidate|commercial[[:space:]]+replacement)[[:space:]-]+ready|compliance[[:space:]-]+certification|customer[[:space:]-]+portal[[:space:]-]+readiness|production[[:space:]-]+sla[[:space:]-]+reporting|real[[:space:]]+design[- ]partner[[:space:]]+export[[:space:]]+success|commercial[[:space:]-]+replacement[[:space:]-]+readiness)'
   "${subordinate_subjects}[^.[:cntrl:]]*[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as|creates?|created)[[:space:]]+[^.[:cntrl:]]*((source[[:space:]]+of[[:space:]]+truth)|(workflow|release|gate|readiness|case|action|reconciliation|source[[:space:]-]+record|evidence|approval|audit|limitation|source[[:space:]-]+admission|closeout)[[:space:]]+truth)"
   "${subordinate_subjects}[^.[:cntrl:]]*[[:space:]]+(is|are|become|becomes|serve[[:space:]]+as|serves[[:space:]]+as)[[:space:]]+[^.[:cntrl:]]*(case[[:space:]-]+closure|action[[:space:]-]+execution|action[[:space:]-]+approval|reconciliation)"
@@ -293,7 +294,7 @@ scan_forbidden_claims() {
   done < <(lower_visible_text "${file}" | awk '!/^[[:space:]]*\|/ && NF { paragraph = paragraph " " $0; next } paragraph != "" { print paragraph; paragraph = "" } END { if (paragraph != "") print paragraph }')
 }
 
-if grep -Eiv -- '(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?(redacted|masked|removed|omitted|not[[:space:]_-]*stored)`?([[:space:].,;)]|$)' "${absolute_doc_path}" | grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*(bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|basic[[:space:]]+[A-Za-z0-9+/=]{12,})|(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}'; then
+if perl -pe 's/(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?(redacted|masked|removed|omitted|not[[:space:]_-]*stored)`?([[:space:].,;)]|$)/redacted_credential_posture /ig' "${absolute_doc_path}" | grep -Eiq -- 'authorization[[:space:]]*:[[:space:]]*(bearer[[:space:]]+[A-Za-z0-9_./+=-]{12,}|basic[[:space:]]+[A-Za-z0-9+/=]{12,})|(password|passwd|secret([_ -]?(key|access[_ -]?key))?|private[_ -]?key|token|api[_ -]?key)[[:space:]]*[:=][[:space:]]*`?[^[:space:]`<>]+`?|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}'; then
   echo "Forbidden Phase 66.5 report export RC proof: production secret-looking value detected" >&2
   exit 1
 fi
@@ -304,6 +305,27 @@ if grep -Eiq -- '(includes|contains|embeds|carries)[[:space:]]+(customer[-_ ]pri
 fi
 
 if grep -Eq -- "(^|[[:space:]>*-])\`?(${required_fields})\`?[[:space:]]*[:=][^.[:cntrl:]]*(^|[[:space:]\`])(${missing_value})([[:space:]_.-]+[^.[:cntrl:]]*)?([[:space:].,;)]|$)" < <(lower_visible_text "${absolute_doc_path}"); then
+  echo "Forbidden Phase 66.5 report export RC proof: missing required evidence value detected" >&2
+  exit 1
+fi
+
+if awk -v fields="${required_fields}" '
+  BEGIN { pattern = "(^|[[:space:]>*-])`?(" fields ")`?[[:space:]]*[:=]" }
+  {
+    line = $0
+    if (match(line, pattern)) {
+      rest = substr(line, RSTART + RLENGTH)
+      gsub(/`/, "", rest)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", rest)
+      gsub(/^[.,;)]*/, "", rest)
+      gsub(/[.,;)]*$/, "", rest)
+      if (rest == "") {
+        found = 1
+      }
+    }
+  }
+  END { exit found ? 0 : 1 }
+' < <(lower_visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.5 report export RC proof: missing required evidence value detected" >&2
   exit 1
 fi
