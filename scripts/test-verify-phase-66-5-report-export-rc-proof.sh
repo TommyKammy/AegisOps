@@ -136,6 +136,26 @@ copy_valid_repo "${unavailable_required_repo}"
 printf '%s\n' "report_export_id: unavailable" >>"${unavailable_required_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${unavailable_required_repo}" "missing required evidence value detected"
 
+report_export_without_timestamp_repo="${workdir}/report-export-without-timestamp"
+copy_valid_repo "${report_export_without_timestamp_repo}"
+printf '%s\n' "report_export_id: EXP-1 without timestamp" >>"${report_export_without_timestamp_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_export_without_timestamp_repo}" "missing required evidence value detected"
+
+report_export_no_operator_repo="${workdir}/report-export-no-operator"
+copy_valid_repo "${report_export_no_operator_repo}"
+printf '%s\n' "report_export_id: EXP-1 no operator" >>"${report_export_no_operator_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_export_no_operator_repo}" "missing required evidence value detected"
+
+export_format_without_checksum_repo="${workdir}/export-format-without-checksum"
+copy_valid_repo "${export_format_without_checksum_repo}"
+printf '%s\n' "export_format: PDF without checksum" >>"${export_format_without_checksum_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${export_format_without_checksum_repo}" "missing required evidence value detected"
+
+missing_required_no_operator_table_repo="${workdir}/missing-required-no-operator-table"
+copy_valid_repo "${missing_required_no_operator_table_repo}"
+printf '%s\n' "| report_export_id | EXP-1 | no operator |" >>"${missing_required_no_operator_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${missing_required_no_operator_table_repo}" "missing required evidence value detected"
+
 hidden_limitation_repo="${workdir}/hidden-limitation"
 copy_valid_repo "${hidden_limitation_repo}"
 printf '%s\n' "limitation_references: hidden in report text" >>"${hidden_limitation_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -287,6 +307,21 @@ copy_valid_repo "${workstation_local_redaction_repo}"
 printf '%s\n' "redaction_posture: workstation-local paths included" >>"${workstation_local_redaction_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${workstation_local_redaction_repo}" "invalid redaction posture detected"
 
+workstation_local_evidence_repo="${workdir}/workstation-local-evidence"
+copy_valid_repo "${workstation_local_evidence_repo}"
+printf '%s\n' "The proof stores workstation-local paths in the report." >>"${workstation_local_evidence_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${workstation_local_evidence_repo}" "workstation-local path evidence detected"
+
+passive_workstation_local_evidence_repo="${workdir}/passive-workstation-local-evidence"
+copy_valid_repo "${passive_workstation_local_evidence_repo}"
+printf '%s\n' "Workstation-local paths are stored in the proof." >>"${passive_workstation_local_evidence_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${passive_workstation_local_evidence_repo}" "workstation-local path evidence detected"
+
+comment_workstation_local_evidence_repo="${workdir}/comment-workstation-local-evidence"
+copy_valid_repo "${comment_workstation_local_evidence_repo}"
+printf '%s\n' "<!-- proof stores workstation-local paths in the report -->" >>"${comment_workstation_local_evidence_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${comment_workstation_local_evidence_repo}" "workstation-local path evidence detected"
+
 redaction_extra_table_cell_repo="${workdir}/redaction-extra-table-cell"
 copy_valid_repo "${redaction_extra_table_cell_repo}"
 printf '%s\n' "| redaction_posture | reviewed | raw secrets included |" >>"${redaction_extra_table_cell_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -367,6 +402,16 @@ copy_valid_repo "${report_determines_reconciliation_repo}"
 printf '%s\n' "Report output determines reconciliation." >>"${report_determines_reconciliation_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${report_determines_reconciliation_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
+report_marks_case_closed_repo="${workdir}/report-marks-case-closed"
+copy_valid_repo "${report_marks_case_closed_repo}"
+printf '%s\n' "Report output marks case closed." >>"${report_marks_case_closed_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_marks_case_closed_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+report_triggers_action_execution_repo="${workdir}/report-triggers-action-execution"
+copy_valid_repo "${report_triggers_action_execution_repo}"
+printf '%s\n' "Report output triggers action execution." >>"${report_triggers_action_execution_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_triggers_action_execution_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
 passive_report_closes_case_repo="${workdir}/passive-report-closes-case"
 copy_valid_repo "${passive_report_closes_case_repo}"
 printf '%s\n' "Cases are closed by report output." >>"${passive_report_closes_case_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -391,6 +436,11 @@ passive_report_permits_approvals_repo="${workdir}/passive-report-permits-approva
 copy_valid_repo "${passive_report_permits_approvals_repo}"
 printf '%s\n' "Approvals are permitted by report output." >>"${passive_report_permits_approvals_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${passive_report_permits_approvals_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+passive_report_marks_cases_repo="${workdir}/passive-report-marks-cases"
+copy_valid_repo "${passive_report_marks_cases_repo}"
+printf '%s\n' "Cases are marked closed by report output." >>"${passive_report_marks_cases_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${passive_report_marks_cases_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
 table_report_truth_repo="${workdir}/table-report-truth"
 copy_valid_repo "${table_report_truth_repo}"
