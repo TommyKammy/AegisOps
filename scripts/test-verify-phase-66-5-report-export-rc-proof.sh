@@ -151,6 +151,28 @@ copy_valid_repo "${export_format_without_checksum_repo}"
 printf '%s\n' "export_format: PDF without checksum" >>"${export_format_without_checksum_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${export_format_without_checksum_repo}" "missing required evidence value detected"
 
+bare_report_export_id_repo="${workdir}/bare-report-export-id"
+copy_valid_repo "${bare_report_export_id_repo}"
+printf '%s\n' "report_export_id: EXP-1" >>"${bare_report_export_id_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${bare_report_export_id_repo}" "missing required evidence value detected"
+
+bare_export_format_repo="${workdir}/bare-export-format"
+copy_valid_repo "${bare_export_format_repo}"
+printf '%s\n' "export_format: PDF" >>"${bare_export_format_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${bare_export_format_repo}" "missing required evidence value detected"
+
+complete_export_identity_repo="${workdir}/complete-export-identity"
+copy_valid_repo "${complete_export_identity_repo}"
+printf '%s\n' "report_export_id: EXP-1; timestamp=2026-07-04T01:22:50Z; operator=reviewer-1; export_profile=bounded" >>"${complete_export_identity_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "export_format: PDF; file_name_pattern=report-*.pdf; checksum=sha256:abcdef123456" >>"${complete_export_identity_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${complete_export_identity_repo}"
+
+complete_export_identity_table_repo="${workdir}/complete-export-identity-table"
+copy_valid_repo "${complete_export_identity_table_repo}"
+printf '%s\n' "| report_export_id | EXP-1 | timestamp=2026-07-04T01:22:50Z | operator=reviewer-1 | export_profile=bounded |" >>"${complete_export_identity_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "| export_format | PDF | file_name_pattern=report-*.pdf | hash=sha256:abcdef123456 |" >>"${complete_export_identity_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${complete_export_identity_table_repo}"
+
 missing_required_no_operator_table_repo="${workdir}/missing-required-no-operator-table"
 copy_valid_repo "${missing_required_no_operator_table_repo}"
 printf '%s\n' "| report_export_id | EXP-1 | no operator |" >>"${missing_required_no_operator_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -251,6 +273,28 @@ copy_valid_repo "${complete_source_record_references_repo}"
 printf '%s\n' "source_record_references: source alert ALERT-1, case CASE-1, evidence EVD-1, approval APR-1, action request ACT-1, execution receipt REC-1, reconciliation record RCN-1" >>"${complete_source_record_references_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${complete_source_record_references_repo}"
 
+complete_source_record_line="source alert ALERT-1; case CASE-1; evidence EVD-1; approval APR-1; action request ACT-1; execution receipt REC-1; reconciliation record RCN-1"
+while IFS='|' read -r fixture_name present_reference negated_reference; do
+  negated_source_record_repo="${workdir}/negated-source-record-${fixture_name}"
+  copy_valid_repo "${negated_source_record_repo}"
+  negated_source_record_line="${complete_source_record_line/${present_reference}/${negated_reference}}"
+  printf '%s\n' "source_record_references: ${negated_source_record_line}" >>"${negated_source_record_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${negated_source_record_repo}" "incomplete source record references detected"
+done <<'EOF'
+source-alert|source alert ALERT-1|no source alert record
+case|case CASE-1|no case record
+evidence|evidence EVD-1|no evidence record
+approval|approval APR-1|no approval record
+action-request|action request ACT-1|no action request record
+execution-receipt|execution receipt REC-1|no execution receipt record
+reconciliation|reconciliation record RCN-1|no reconciliation record
+EOF
+
+negated_source_record_table_repo="${workdir}/negated-source-record-table"
+copy_valid_repo "${negated_source_record_table_repo}"
+printf '%s\n' "| source_record_references | source alert ALERT-1 | no case record | evidence EVD-1 | approval APR-1 | action request ACT-1 | execution receipt REC-1 | reconciliation record RCN-1 |" >>"${negated_source_record_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${negated_source_record_table_repo}" "incomplete source record references detected"
+
 valid_section_record_references_repo="${workdir}/valid-section-record-references"
 copy_valid_repo "${valid_section_record_references_repo}"
 printf '%s\n' "action_section_reference: approval record APR-1, execution receipt REC-1" >>"${valid_section_record_references_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -321,6 +365,31 @@ pii_not_redacted_repo="${workdir}/pii-not-redacted"
 copy_valid_repo "${pii_not_redacted_repo}"
 printf '%s\n' "redaction_posture: PII not redacted" >>"${pii_not_redacted_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${pii_not_redacted_repo}" "invalid redaction posture detected"
+
+credentials_included_redaction_repo="${workdir}/credentials-included-redaction"
+copy_valid_repo "${credentials_included_redaction_repo}"
+printf '%s\n' "redaction_posture: credentials included" >>"${credentials_included_redaction_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${credentials_included_redaction_repo}" "invalid redaction posture detected"
+
+raw_credentials_included_redaction_repo="${workdir}/raw-credentials-included-redaction"
+copy_valid_repo "${raw_credentials_included_redaction_repo}"
+printf '%s\n' "redaction_posture: raw credentials included" >>"${raw_credentials_included_redaction_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${raw_credentials_included_redaction_repo}" "invalid redaction posture detected"
+
+token_included_redaction_repo="${workdir}/token-included-redaction"
+copy_valid_repo "${token_included_redaction_repo}"
+printf '%s\n' "redaction_posture: token included" >>"${token_included_redaction_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${token_included_redaction_repo}" "invalid redaction posture detected"
+
+token_included_redaction_table_repo="${workdir}/token-included-redaction-table"
+copy_valid_repo "${token_included_redaction_table_repo}"
+printf '%s\n' "| redaction_posture | token included |" >>"${token_included_redaction_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${token_included_redaction_table_repo}" "invalid redaction posture detected"
+
+credentials_redacted_repo="${workdir}/credentials-redacted"
+copy_valid_repo "${credentials_redacted_repo}"
+printf '%s\n' "redaction_posture: credentials redacted; token: redacted" >>"${credentials_redacted_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${credentials_redacted_repo}"
 
 customer_private_redaction_repo="${workdir}/customer-private-redaction"
 copy_valid_repo "${customer_private_redaction_repo}"
@@ -712,6 +781,36 @@ copy_valid_repo "${hyphenated_commercial_overclaim_repo}"
 printf '%s\n' "Phase 66.5 confirms commercial-replacement readiness." >>"${hyphenated_commercial_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${hyphenated_commercial_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
+generated_files_ga_overclaim_repo="${workdir}/generated-files-ga-overclaim"
+copy_valid_repo "${generated_files_ga_overclaim_repo}"
+printf '%s\n' "Generated files confirm GA readiness." >>"${generated_files_ga_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${generated_files_ga_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+report_output_compliance_overclaim_repo="${workdir}/report-output-compliance-overclaim"
+copy_valid_repo "${report_output_compliance_overclaim_repo}"
+printf '%s\n' "Report output confirms compliance certification." >>"${report_output_compliance_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${report_output_compliance_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+screenshots_portal_overclaim_repo="${workdir}/screenshots-portal-overclaim"
+copy_valid_repo "${screenshots_portal_overclaim_repo}"
+printf '%s\n' "Screenshots prove customer portal readiness." >>"${screenshots_portal_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${screenshots_portal_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+passive_generated_files_ga_overclaim_repo="${workdir}/passive-generated-files-ga-overclaim"
+copy_valid_repo "${passive_generated_files_ga_overclaim_repo}"
+printf '%s\n' "GA readiness is confirmed by generated files." >>"${passive_generated_files_ga_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${passive_generated_files_ga_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+plural_generated_files_ga_overclaim_repo="${workdir}/plural-generated-files-ga-overclaim"
+copy_valid_repo "${plural_generated_files_ga_overclaim_repo}"
+printf '%s\n' "Generated files are GA ready." >>"${plural_generated_files_ga_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${plural_generated_files_ga_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+negated_then_subordinate_overclaim_repo="${workdir}/negated-then-subordinate-overclaim"
+copy_valid_repo "${negated_then_subordinate_overclaim_repo}"
+printf '%s\n' "Generated files do not confirm GA readiness; screenshots prove customer portal readiness." >>"${negated_then_subordinate_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${negated_then_subordinate_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
 secret_repo="${workdir}/secret"
 copy_valid_repo "${secret_repo}"
 printf '%s\n' "api_key: abcdefghijklmnop" >>"${secret_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -766,6 +865,16 @@ wrapped_readme_claim_repo="${workdir}/wrapped-readme-claim"
 copy_valid_repo "${wrapped_readme_claim_repo}"
 printf '%s\n%s\n' "Phase 66.5 report export" "is GA ready." >>"${wrapped_readme_claim_repo}/README.md"
 assert_fails_with "${wrapped_readme_claim_repo}" "Forbidden Phase 66.5 README claim matched"
+
+pronoun_readme_claim_repo="${workdir}/pronoun-readme-claim"
+copy_valid_repo "${pronoun_readme_claim_repo}"
+printf '%s\n' "This proof proves GA readiness." >>"${pronoun_readme_claim_repo}/README.md"
+assert_fails_with "${pronoun_readme_claim_repo}" "Forbidden Phase 66.5 README claim matched"
+
+safe_pronoun_readme_repo="${workdir}/safe-pronoun-readme"
+copy_valid_repo "${safe_pronoun_readme_repo}"
+printf '%s\n' "This proof does not prove GA readiness." >>"${safe_pronoun_readme_repo}/README.md"
+assert_passes "${safe_pronoun_readme_repo}"
 
 safe_limitation_repo="${workdir}/safe-limitation"
 copy_valid_repo "${safe_limitation_repo}"
