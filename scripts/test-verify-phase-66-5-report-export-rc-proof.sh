@@ -32,6 +32,8 @@ copy_valid_repo() {
   copy_repo_path "${target}" "scripts/verify-publishable-path-hygiene.sh"
 }
 
+complete_redaction_posture="secrets redacted, credentials redacted, customer-private data redacted, workstation-local paths redacted, pii redacted"
+
 assert_passes() {
   local target="$1"
 
@@ -67,18 +69,18 @@ assert_passes "${valid_explicit_labels_repo}"
 
 valid_redacted_credentials_repo="${workdir}/valid-redacted-credentials"
 copy_valid_repo "${valid_redacted_credentials_repo}"
-printf '%s\n' "redaction_posture: token: redacted" >>"${valid_redacted_credentials_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "redaction_posture: ${complete_redaction_posture}, token: redacted" >>"${valid_redacted_credentials_repo}/docs/phase-66-5-report-export-rc-proof.md"
 printf '%s\n' "password: redacted" >>"${valid_redacted_credentials_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${valid_redacted_credentials_repo}"
 
 valid_customer_private_redaction_repo="${workdir}/valid-customer-private-redaction"
 copy_valid_repo "${valid_customer_private_redaction_repo}"
-printf '%s\n' "redaction_posture: customer-private data redacted" >>"${valid_customer_private_redaction_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "redaction_posture: ${complete_redaction_posture}" >>"${valid_customer_private_redaction_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${valid_customer_private_redaction_repo}"
 
 valid_customer_private_not_stored_repo="${workdir}/valid-customer-private-not-stored"
 copy_valid_repo "${valid_customer_private_not_stored_repo}"
-printf '%s\n' "redaction_posture: customer-private data not stored" >>"${valid_customer_private_not_stored_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "redaction_posture: secrets redacted, credentials redacted, customer-private data not stored, workstation-local paths redacted, pii redacted" >>"${valid_customer_private_not_stored_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${valid_customer_private_not_stored_repo}"
 
 mixed_redacted_and_secret_repo="${workdir}/mixed-redacted-and-secret"
@@ -161,6 +163,26 @@ copy_valid_repo "${bare_export_format_repo}"
 printf '%s\n' "export_format: PDF" >>"${bare_export_format_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${bare_export_format_repo}" "missing required evidence value detected"
 
+missing_report_export_primary_id_repo="${workdir}/missing-report-export-primary-id"
+copy_valid_repo "${missing_report_export_primary_id_repo}"
+printf '%s\n' "report_export_id: timestamp=2026-07-04T01:22:50Z; operator=reviewer-1; export_profile=bounded" >>"${missing_report_export_primary_id_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${missing_report_export_primary_id_repo}" "missing required evidence value detected"
+
+missing_export_format_primary_value_repo="${workdir}/missing-export-format-primary-value"
+copy_valid_repo "${missing_export_format_primary_value_repo}"
+printf '%s\n' "export_format: file_name_pattern=report-*.pdf; checksum=sha256:abcdef123456" >>"${missing_export_format_primary_value_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${missing_export_format_primary_value_repo}" "missing required evidence value detected"
+
+missing_export_primary_values_table_repo="${workdir}/missing-export-primary-values-table"
+copy_valid_repo "${missing_export_primary_values_table_repo}"
+printf '%s\n' "| report_export_id | timestamp=2026-07-04T01:22:50Z | operator=reviewer-1 | export_profile=bounded |" >>"${missing_export_primary_values_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${missing_export_primary_values_table_repo}" "missing required evidence value detected"
+
+missing_format_primary_value_table_repo="${workdir}/missing-format-primary-value-table"
+copy_valid_repo "${missing_format_primary_value_table_repo}"
+printf '%s\n' "| export_format | file_name_pattern=report-*.pdf | checksum=sha256:abcdef123456 |" >>"${missing_format_primary_value_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${missing_format_primary_value_table_repo}" "missing required evidence value detected"
+
 complete_export_identity_repo="${workdir}/complete-export-identity"
 copy_valid_repo "${complete_export_identity_repo}"
 printf '%s\n' "report_export_id: EXP-1; timestamp=2026-07-04T01:22:50Z; operator=reviewer-1; export_profile=bounded" >>"${complete_export_identity_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -188,6 +210,21 @@ copy_valid_repo "${hidden_limitation_extra_table_cell_repo}"
 printf '%s\n' "| limitation_references | LIM-1 | hidden in report text |" >>"${hidden_limitation_extra_table_cell_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${hidden_limitation_extra_table_cell_repo}" "missing required evidence value detected"
 
+incomplete_limitation_without_follow_up_repo="${workdir}/incomplete-limitation-without-follow-up"
+copy_valid_repo "${incomplete_limitation_without_follow_up_repo}"
+printf '%s\n' "limitation_references: LIM-1; export evidence incomplete" >>"${incomplete_limitation_without_follow_up_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${incomplete_limitation_without_follow_up_repo}" "missing required evidence value detected"
+
+complete_incomplete_limitation_repo="${workdir}/complete-incomplete-limitation"
+copy_valid_repo "${complete_incomplete_limitation_repo}"
+printf '%s\n' "limitation_references: LIM-1; export evidence incomplete; owner=operator-1; decision_date=2026-07-18; follow_up_date=2026-07-25" >>"${complete_incomplete_limitation_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${complete_incomplete_limitation_repo}"
+
+complete_incomplete_limitation_table_repo="${workdir}/complete-incomplete-limitation-table"
+copy_valid_repo "${complete_incomplete_limitation_table_repo}"
+printf '%s\n' "| limitation_references | LIM-1 | export evidence incomplete | owner=operator-1 | decision_date=2026-07-18 | follow_up_date=2026-07-25 |" >>"${complete_incomplete_limitation_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${complete_incomplete_limitation_table_repo}"
+
 mutable_revision_repo="${workdir}/mutable-revision"
 copy_valid_repo "${mutable_revision_repo}"
 printf '%s\n' "repository_revision: origin/main" >>"${mutable_revision_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -202,6 +239,16 @@ table_hash_with_branch_repo="${workdir}/table-hash-with-branch"
 copy_valid_repo "${table_hash_with_branch_repo}"
 printf '%s\n' "| repository_revision | 0123456789abcdef0123456789abcdef01234567 | origin/main |" >>"${table_hash_with_branch_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${table_hash_with_branch_repo}" "mutable repository revision detected"
+
+table_hash_with_branch_phrase_repo="${workdir}/table-hash-with-branch-phrase"
+copy_valid_repo "${table_hash_with_branch_phrase_repo}"
+printf '%s\n' "| repository_revision | 0123456789abcdef0123456789abcdef01234567 | main branch |" >>"${table_hash_with_branch_phrase_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${table_hash_with_branch_phrase_repo}" "mutable repository revision detected"
+
+table_hash_with_non_branch_note_repo="${workdir}/table-hash-with-non-branch-note"
+copy_valid_repo "${table_hash_with_non_branch_note_repo}"
+printf '%s\n' "| repository_revision | 0123456789abcdef0123456789abcdef01234567 | domain review complete |" >>"${table_hash_with_non_branch_note_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${table_hash_with_non_branch_note_repo}"
 
 source_record_shortcut_repo="${workdir}/source-record-shortcut"
 copy_valid_repo "${source_record_shortcut_repo}"
@@ -274,6 +321,27 @@ printf '%s\n' "source_record_references: source alert ALERT-1, case CASE-1, evid
 assert_passes "${complete_source_record_references_repo}"
 
 complete_source_record_line="source alert ALERT-1; case CASE-1; evidence EVD-1; approval APR-1; action request ACT-1; execution receipt REC-1; reconciliation record RCN-1"
+while IFS='|' read -r fixture_name present_reference identifierless_reference; do
+  identifierless_source_record_repo="${workdir}/identifierless-source-record-${fixture_name}"
+  copy_valid_repo "${identifierless_source_record_repo}"
+  identifierless_source_record_line="${complete_source_record_line/${present_reference}/${identifierless_reference}}"
+  printf '%s\n' "source_record_references: ${identifierless_source_record_line}" >>"${identifierless_source_record_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${identifierless_source_record_repo}" "incomplete source record references detected"
+done <<'EOF'
+source-alert|source alert ALERT-1|source alert
+case|case CASE-1|case
+evidence|evidence EVD-1|evidence
+approval|approval APR-1|approval
+action-request|action request ACT-1|action request
+execution-receipt|execution receipt REC-1|execution receipt
+reconciliation|reconciliation record RCN-1|reconciliation record
+EOF
+
+identifierless_source_alert_table_repo="${workdir}/identifierless-source-alert-table"
+copy_valid_repo "${identifierless_source_alert_table_repo}"
+printf '%s\n' "| source_record_references | source alert | case CASE-1 | evidence EVD-1 | approval APR-1 | action request ACT-1 | execution receipt REC-1 | reconciliation record RCN-1 |" >>"${identifierless_source_alert_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${identifierless_source_alert_table_repo}" "incomplete source record references detected"
+
 while IFS='|' read -r fixture_name present_reference negated_reference; do
   negated_source_record_repo="${workdir}/negated-source-record-${fixture_name}"
   copy_valid_repo "${negated_source_record_repo}"
@@ -297,9 +365,35 @@ assert_fails_with "${negated_source_record_table_repo}" "incomplete source recor
 
 valid_section_record_references_repo="${workdir}/valid-section-record-references"
 copy_valid_repo "${valid_section_record_references_repo}"
-printf '%s\n' "action_section_reference: approval record APR-1, execution receipt REC-1" >>"${valid_section_record_references_repo}/docs/phase-66-5-report-export-rc-proof.md"
-printf '%s\n' "reconciliation_section_reference: reconciliation section REC-1" >>"${valid_section_record_references_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "case_section_reference: CASE-SECTION-1; status=open; evidence_links=EVD-1; owner=operator-1; limitation_references=LIM-1" >>"${valid_section_record_references_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "action_section_reference: ACTION-SECTION-1; approval=APR-1; delegated_action_request=ACT-1; execution_receipt=REC-1; mismatch_posture=matched" >>"${valid_section_record_references_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "reconciliation_section_reference: RECON-SECTION-1; receipt=REC-1; outcome=matched; mismatch_state=matched; follow_up_owner=operator-1; linked_record=CASE-1" >>"${valid_section_record_references_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${valid_section_record_references_repo}"
+
+valid_section_record_references_table_repo="${workdir}/valid-section-record-references-table"
+copy_valid_repo "${valid_section_record_references_table_repo}"
+printf '%s\n' "| case_section_reference | CASE-SECTION-1 | status=open | evidence_links=EVD-1 | owner=operator-1 | limitation_references=LIM-1 |" >>"${valid_section_record_references_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "| action_section_reference | ACTION-SECTION-1 | approval=APR-1 | delegated_action_request=ACT-1 | execution_receipt=REC-1 | mismatch_posture=matched |" >>"${valid_section_record_references_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "| reconciliation_section_reference | RECON-SECTION-1 | receipt=REC-1 | outcome=matched | mismatch_state=matched | follow_up_owner=operator-1 | linked_record=CASE-1 |" >>"${valid_section_record_references_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${valid_section_record_references_table_repo}"
+
+bare_section_references_repo="${workdir}/bare-section-references"
+copy_valid_repo "${bare_section_references_repo}"
+printf '%s\n' "case_section_reference: CASE-1" >>"${bare_section_references_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "action_section_reference: ACTION-1" >>"${bare_section_references_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "reconciliation_section_reference: REC-1" >>"${bare_section_references_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${bare_section_references_repo}" "missing required evidence value detected"
+
+while IFS='|' read -r fixture_name incomplete_section_reference; do
+  incomplete_section_reference_repo="${workdir}/incomplete-section-reference-${fixture_name}"
+  copy_valid_repo "${incomplete_section_reference_repo}"
+  printf '%s\n' "${incomplete_section_reference}" >>"${incomplete_section_reference_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${incomplete_section_reference_repo}" "missing required evidence value detected"
+done <<'EOF'
+case|case_section_reference: CASE-SECTION-1; evidence_links=EVD-1; owner=operator-1; limitation_references=LIM-1
+action|action_section_reference: ACTION-SECTION-1; delegated_action_request=ACT-1; execution_receipt=REC-1; mismatch_posture=matched
+reconciliation|reconciliation_section_reference: RECON-SECTION-1; receipt=REC-1; mismatch_state=matched; follow_up_owner=operator-1; linked_record=CASE-1
+EOF
 
 section_authority_repo="${workdir}/section-authority"
 copy_valid_repo "${section_authority_repo}"
@@ -388,8 +482,18 @@ assert_fails_with "${token_included_redaction_table_repo}" "invalid redaction po
 
 credentials_redacted_repo="${workdir}/credentials-redacted"
 copy_valid_repo "${credentials_redacted_repo}"
-printf '%s\n' "redaction_posture: credentials redacted; token: redacted" >>"${credentials_redacted_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "redaction_posture: ${complete_redaction_posture}, token: redacted" >>"${credentials_redacted_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${credentials_redacted_repo}"
+
+incomplete_redaction_classes_repo="${workdir}/incomplete-redaction-classes"
+copy_valid_repo "${incomplete_redaction_classes_repo}"
+printf '%s\n' "redaction_posture: secrets redacted" >>"${incomplete_redaction_classes_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${incomplete_redaction_classes_repo}" "invalid redaction posture detected"
+
+complete_redaction_classes_table_repo="${workdir}/complete-redaction-classes-table"
+copy_valid_repo "${complete_redaction_classes_table_repo}"
+printf '%s\n' "| redaction_posture | secrets redacted | credentials redacted | customer-private data redacted | workstation-local paths redacted | pii redacted |" >>"${complete_redaction_classes_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${complete_redaction_classes_table_repo}"
 
 customer_private_redaction_repo="${workdir}/customer-private-redaction"
 copy_valid_repo "${customer_private_redaction_repo}"
@@ -843,7 +947,7 @@ assert_fails_with "${customer_private_exposes_prohibition_bypass_repo}" "custome
 
 redacted_then_customer_private_leak_repo="${workdir}/redacted-then-customer-private-leak"
 copy_valid_repo "${redacted_then_customer_private_leak_repo}"
-printf '%s\n' "redaction_posture: customer-private data redacted; customer-private tickets are stored in the proof." >>"${redacted_then_customer_private_leak_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "redaction_posture: secrets redacted, credentials redacted, customer-private data redacted; customer-private tickets are stored in the proof, workstation-local paths redacted, pii redacted." >>"${redacted_then_customer_private_leak_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${redacted_then_customer_private_leak_repo}" "customer-private data detected"
 
 raw_customer_data_stored_repo="${workdir}/raw-customer-data-stored"

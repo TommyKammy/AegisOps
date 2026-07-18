@@ -201,7 +201,7 @@ repository_revision_assignment_regex='(^|[[:space:]>*-])`?repository_revision`?[
 repository_revision_mutable_suffix_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][^.[:cntrl:]]*[0-9a-f]{40}[^.[:cntrl:]]*(main|master|develop|development|trunk|head|refs/heads/|refs/remotes/|remotes/|origin/|branch)'
 repository_revision_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|'
 repository_revision_table_mutable_suffix_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|[[:space:]]*`?[^`|]*[0-9a-f]{40}[^`|]*(main|master|develop|development|trunk|head|refs/heads/|refs/remotes/|remotes/|origin/|branch)[^`|]*`?[[:space:]]*\|'
-repository_revision_table_branch_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|.*\|[[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`|[:space:]]+|refs/remotes/[^`|[:space:]]+|remotes/[^`|[:space:]]+|origin/[^`|[:space:]]+|[^`|[:space:]]*branch)`?[[:space:]]*(\||$)'
+repository_revision_table_branch_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|.*([|[:space:]`(])((main|master|develop|development|trunk|head)([[:space:]_-]+branch)?|refs/heads/[^`|[:space:]]+|refs/remotes/[^`|[:space:]]+|remotes/[^`|[:space:]]+|origin/[^`|[:space:]]+|[[:alnum:]_.-]+[[:space:]_-]+branch)([[:space:]`.,;)|]|$)'
 source_record_shortcut_regex='(^|[[:space:]>*-])`?source_record_references`?[[:space:]]*[:=][^.[:cntrl:]]*(report[[:space:]_-]*(text|output|metadata|labels?|artifacts?|files?)|generated[[:space:]_-]*files?|downloaded[[:space:]_-]*artifacts?|export[[:space:]_-]*(artifacts?|output)|screenshots?|browser[[:space:]_-]*state|ui[[:space:]_-]*(state|cache))'
 source_record_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?source_record_references`?[[:space:]]*\|[[:space:]]*`?[^`|]*(report[[:space:]_-]*(text|output|metadata|labels?|artifacts?|files?)|generated[[:space:]_-]*files?|downloaded[[:space:]_-]*artifacts?|export[[:space:]_-]*(artifacts?|output)|screenshots?|browser[[:space:]_-]*state|ui[[:space:]_-]*(state|cache))[^`|]*`?[[:space:]]*\|'
 source_record_shortcut_table_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?source_record_references`?[[:space:]]*\|.*(report[[:space:]_-]*(text|output|metadata|labels?|artifacts?|files?)|generated[[:space:]_-]*files?|downloaded[[:space:]_-]*artifacts?|export[[:space:]_-]*(artifacts?|output)|screenshots?|browser[[:space:]_-]*state|ui[[:space:]_-]*(state|cache))'
@@ -223,6 +223,7 @@ redaction_missing_table_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?redact
 limitation_hidden_regex='(^|[[:space:]>*-])`?limitation_references`?[[:space:]]*[:=][^.[:cntrl:]]*hidden[[:space:]_-]+in[[:space:]_-]+report[[:space:]_-]+text'
 limitation_hidden_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?limitation_references`?[[:space:]]*\|[^|]*hidden[[:space:]_-]+in[[:space:]_-]+report[[:space:]_-]+text[^|]*\|'
 limitation_hidden_table_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?limitation_references`?[[:space:]]*\|.*hidden[[:space:]_-]+in[[:space:]_-]+report[[:space:]_-]+text'
+incomplete_export_evidence_regex='export[[:space:]_-]+evidence[^.[:cntrl:]]*(incomplete|partial|missing|unavailable|not[[:space:]_-]+complete)|(incomplete|partial|missing|unavailable|not[[:space:]_-]+complete)[^.[:cntrl:]]*export[[:space:]_-]+evidence'
 customer_private_prohibition_regex='((must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include|fail[s]?[[:space:]]+the[[:space:]]+proof)[^.[:cntrl:]]*customer[-_ ]private|customer[-_ ]private[^.[:cntrl:]]*fail[s]?[[:space:]]+the[[:space:]]+proof)'
 customer_private_unsafe_regex='(includes|contains|embeds|carries|stores|exposes?)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_ ]private[[:space:]]+(examples?|tickets?|alerts?|logs?|chats?|payloads?|exports?)([[:space:].,;)]|[[:space:]]+(are|were|was|is)[[:space:]]+(stored|included|embedded|carried|exposed))|raw[[:space:]]+customer[[:space:]]+data[[:space:]]+(is|are|was|were)[[:space:]]+(stored|included|embedded|carried|exposed)|unredacted[[:space:]]+customer[[:space:]]+(tickets?|alerts?|logs?|chats?|payloads?|exports?|data)([[:space:].,;)]|$)'
 safe_customer_private_redaction_regex='customer[-_ ]private[[:space:]]+(data|examples?|tickets?|alerts?|logs?|chats?|payloads?|exports?)[^.[:cntrl:]]+(redacted|masked|removed|omitted|not[[:space:]_-]*stored)'
@@ -324,13 +325,13 @@ has_complete_source_record_references() {
     return 1
   fi
 
-  grep -Eq -- '(^|[[:space:],;|`])source[[:space:]_-]*alert|(^|[[:space:],;|`])alert[[:space:]_-]*[[:alnum:]-]+' <<<"${line_lower}" &&
-    grep -Eq -- '(^|[[:space:],;|`])case[[:space:]_-]*[[:alnum:]-]+' <<<"${line_lower}" &&
-    grep -Eq -- '(^|[[:space:],;|`])evidence[[:space:]_-]*[[:alnum:]-]+' <<<"${line_lower}" &&
-    grep -Eq -- '(^|[[:space:],;|`])approval[[:space:]_-]*[[:alnum:]-]+' <<<"${line_lower}" &&
-    grep -Eq -- 'action[[:space:]_-]*request[[:space:]_-]*[[:alnum:]-]+' <<<"${line_lower}" &&
-    grep -Eq -- 'execution[[:space:]_-]*receipt[[:space:]_-]*[[:alnum:]-]+' <<<"${line_lower}" &&
-    grep -Eq -- 'reconciliation[[:space:]_-]*(record[[:space:]_-]*)?[[:alnum:]-]+' <<<"${line_lower}"
+  has_reference_identifier "${line_lower}" 'source[[:space:]_-]*alert[[:space:]_-]*record|source[[:space:]_-]*alert|alert[[:space:]_-]*record|alert' &&
+    has_reference_identifier "${line_lower}" 'case[[:space:]_-]*record|case' &&
+    has_reference_identifier "${line_lower}" 'evidence[[:space:]_-]*record|evidence' &&
+    has_reference_identifier "${line_lower}" 'approval[[:space:]_-]*record|approval' &&
+    has_reference_identifier "${line_lower}" 'action[[:space:]_-]*request[[:space:]_-]*record|action[[:space:]_-]*request' &&
+    has_reference_identifier "${line_lower}" 'execution[[:space:]_-]*receipt[[:space:]_-]*record|execution[[:space:]_-]*receipt' &&
+    has_reference_identifier "${line_lower}" 'reconciliation[[:space:]_-]*record|reconciliation'
 }
 
 is_named_evidence_field_line() {
@@ -340,6 +341,47 @@ is_named_evidence_field_line() {
 
   field_line_regex='(^|[[:space:]>*-])`?'"${field_name}"'`?[[:space:]]*[:=]|(^|[[:space:]>*-])\|[[:space:]]*`?'"${field_name}"'`?[[:space:]]*\|'
   [[ "${line_lower}" =~ ${field_line_regex} ]]
+}
+
+named_evidence_primary_value() {
+  local field_name="$1"
+  local line_lower="$2"
+  local assignment_regex
+  local table_regex
+
+  assignment_regex='(^|[[:space:]>*-])`?'"${field_name}"'`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],;|]+)'
+  table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?'"${field_name}"'`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)'
+  if [[ "${line_lower}" =~ ${assignment_regex} ]]; then
+    printf '%s\n' "${BASH_REMATCH[2]}"
+    return 0
+  fi
+  if [[ "${line_lower}" =~ ${table_regex} ]]; then
+    printf '%s\n' "${BASH_REMATCH[2]}"
+    return 0
+  fi
+  return 1
+}
+
+is_valid_evidence_primary_value() {
+  local value="$1"
+
+  [[ "${value}" =~ ^[[:alnum:]][[:alnum:]_.:/-]*$ ]] || return 1
+  [[ ! "${value}" =~ ^(${missing_value})$ ]] || return 1
+  case "${value}" in
+    alert|case|evidence|approval|action|request|execution|receipt|reconciliation|record|records|reference|references|id|identifier|only|reviewed|known|value|section|status|owner|timestamp|operator|profile|file|format|checksum|hash|bounded)
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+has_named_evidence_primary_value() {
+  local line_lower="$1"
+  local field_name="$2"
+  local value
+
+  value="$(named_evidence_primary_value "${field_name}" "${line_lower}")" || return 1
+  is_valid_evidence_primary_value "${value}"
 }
 
 has_structured_subfield_value() {
@@ -353,17 +395,102 @@ has_structured_subfield_value() {
 
 has_complete_report_export_identity() {
   local line_lower="$1"
+  local primary_value
 
-  has_structured_subfield_value "${line_lower}" '(export[[:space:]_-]*)?timestamp' &&
+  primary_value="$(named_evidence_primary_value "report_export_id" "${line_lower}")" &&
+    is_valid_evidence_primary_value "${primary_value}" &&
+    [[ ! "${primary_value}" =~ ^(timestamp|operator|export[[:space:]_-]*profile|profile)([:=_-]|$) ]] &&
+    has_structured_subfield_value "${line_lower}" '(export[[:space:]_-]*)?timestamp' &&
     has_structured_subfield_value "${line_lower}" '(export[[:space:]_-]*)?operator([[:space:]_-]*(id|reference|ref))?' &&
     has_structured_subfield_value "${line_lower}" '(export[[:space:]_-]*)?profile([[:space:]_-]*(id|reference|ref))?'
 }
 
 has_complete_export_format() {
   local line_lower="$1"
+  local primary_value
 
-  has_structured_subfield_value "${line_lower}" '(file[[:space:]_-]*name|filename)[[:space:]_-]*pattern' &&
+  primary_value="$(named_evidence_primary_value "export_format" "${line_lower}")" &&
+    is_valid_evidence_primary_value "${primary_value}" &&
+    [[ ! "${primary_value}" =~ ^(file[[:space:]_-]*name[[:space:]_-]*pattern|filename[[:space:]_-]*pattern|checksum|hash|format|bounded)([:=_-]|$) ]] &&
+    has_structured_subfield_value "${line_lower}" '(file[[:space:]_-]*name|filename)[[:space:]_-]*pattern' &&
     has_structured_subfield_value "${line_lower}" '(checksum|hash)([[:space:]_-]*(reference|ref))?'
+}
+
+has_reference_identifier() {
+  local line_lower="$1"
+  local label_regex="$2"
+  local reference_regex
+  local reference_id
+
+  reference_regex='(^|[[:space:],;|`])('"${label_regex}"')[[:space:]_-]+([[:alnum:]][[:alnum:]_.:/-]*)'
+  [[ "${line_lower}" =~ ${reference_regex} ]] || return 1
+  reference_id="${BASH_REMATCH[3]}"
+  is_valid_evidence_primary_value "${reference_id}"
+}
+
+has_complete_section_reference() {
+  local line_lower="$1"
+  local field_name="$2"
+
+  has_named_evidence_primary_value "${line_lower}" "${field_name}" || return 1
+  case "${field_name}" in
+    case_section_reference)
+      has_structured_subfield_value "${line_lower}" 'status' &&
+        has_structured_subfield_value "${line_lower}" 'evidence[[:space:]_-]*(links?|references?|refs?)' &&
+        has_structured_subfield_value "${line_lower}" 'owner([[:space:]_-]*(id|reference|ref))?' &&
+        has_structured_subfield_value "${line_lower}" 'limitation([[:space:]_-]*(references?|refs?|ids?))?'
+      ;;
+    action_section_reference)
+      has_structured_subfield_value "${line_lower}" 'approval([[:space:]_-]*(record|id|reference|ref))?' &&
+        has_structured_subfield_value "${line_lower}" '(delegated[[:space:]_-]*)?action[[:space:]_-]*request([[:space:]_-]*(record|id|reference|ref))?' &&
+        has_structured_subfield_value "${line_lower}" 'execution[[:space:]_-]*receipt([[:space:]_-]*(record|id|reference|ref))?' &&
+        has_structured_subfield_value "${line_lower}" 'mismatch[[:space:]_-]*(posture|state)'
+      ;;
+    reconciliation_section_reference)
+      has_structured_subfield_value "${line_lower}" '(execution[[:space:]_-]*)?receipt([[:space:]_-]*(record|id|reference|ref))?' &&
+        has_structured_subfield_value "${line_lower}" 'outcome' &&
+        has_structured_subfield_value "${line_lower}" 'mismatch[[:space:]_-]*(posture|state)' &&
+        has_structured_subfield_value "${line_lower}" 'follow[[:space:]_-]*up[[:space:]_-]*owner([[:space:]_-]*(id|reference|ref))?' &&
+        has_structured_subfield_value "${line_lower}" 'linked[[:space:]_-]*record([[:space:]_-]*(id|reference|ref))?'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+has_safe_redaction_class() {
+  local line_lower="$1"
+  local class_regex="$2"
+  local safe_posture_regex
+  local class_posture_regex
+
+  safe_posture_regex='(redacted|masked|removed|omitted|excluded|not[[:space:]_-]*(stored|retained|included|exported|present))'
+  class_posture_regex='(^|[[:space:],;|])('"${class_regex}"')([[:space:]_-]+posture)?([[:space:]]*[:=][[:space:]]*|[[:space:]]+)'"${safe_posture_regex}"'([[:space:].,;|]|$)'
+  grep -Eq -- "${class_posture_regex}" <<<"${line_lower}"
+}
+
+has_complete_redaction_posture() {
+  local line_lower="$1"
+
+  has_safe_redaction_class "${line_lower}" 'secrets?' &&
+    has_safe_redaction_class "${line_lower}" 'credentials?' &&
+    has_safe_redaction_class "${line_lower}" 'customer[-_ ]private([[:space:]_-]+data)?' &&
+    has_safe_redaction_class "${line_lower}" 'workstation[-_ ]local[[:space:]_-]+paths?' &&
+    has_safe_redaction_class "${line_lower}" 'pii'
+}
+
+has_complete_limitation_references() {
+  local line_lower="$1"
+
+  has_named_evidence_primary_value "${line_lower}" "limitation_references" || return 1
+  if [[ "${line_lower}" =~ ${incomplete_export_evidence_regex} ]]; then
+    has_structured_subfield_value "${line_lower}" 'owner([[:space:]_-]*(id|reference|ref))?' &&
+      has_structured_subfield_value "${line_lower}" 'decision[[:space:]_-]*date' &&
+      has_structured_subfield_value "${line_lower}" 'follow[[:space:]_-]*up[[:space:]_-]*date'
+    return
+  fi
+  return 0
 }
 
 strip_negated_readiness_verbs() {
@@ -514,10 +641,20 @@ while IFS= read -r line_lower; do
     echo "Forbidden Phase 66.5 report export RC proof: missing required evidence value detected" >&2
     exit 1
   fi
+  if is_named_evidence_field_line "limitation_references" "${line_lower}" && ! has_complete_limitation_references "${line_lower}"; then
+    echo "Forbidden Phase 66.5 report export RC proof: missing required evidence value detected" >&2
+    exit 1
+  fi
   if [[ "${line_lower}" != "${canonical_case_section_reference_row}" ]] && [[ "${line_lower}" != "${canonical_action_section_reference_row}" ]] && [[ "${line_lower}" != "${canonical_reconciliation_section_reference_row}" ]] && { [[ "${line_lower}" =~ ${section_authority_regex} ]] || [[ "${line_lower}" =~ ${section_authority_table_regex} ]] || [[ "${line_lower}" =~ ${section_authority_table_any_cell_regex} ]]; }; then
     echo "Forbidden Phase 66.5 report export RC proof: report section authority detected" >&2
     exit 1
   fi
+  for section_field in case_section_reference action_section_reference reconciliation_section_reference; do
+    if is_named_evidence_field_line "${section_field}" "${line_lower}" && ! has_complete_section_reference "${line_lower}" "${section_field}"; then
+      echo "Forbidden Phase 66.5 report export RC proof: missing required evidence value detected" >&2
+      exit 1
+    fi
+  done
   if [[ "${line_lower}" =~ ${label_missing_regex} ]] || [[ "${line_lower}" =~ ${label_missing_table_regex} ]] || { [[ "${line_lower}" != "${canonical_rc_label_set_row}" ]] && [[ "${line_lower}" =~ ${label_missing_table_any_cell_regex} ]]; }; then
     echo "Forbidden Phase 66.5 report export RC proof: invalid RC label set detected" >&2
     exit 1
@@ -536,6 +673,10 @@ while IFS= read -r line_lower; do
     fi
   fi
   if [[ "${line_lower}" =~ ${redaction_missing_regex} ]] || [[ "${line_lower}" =~ ${redaction_missing_table_regex} ]] || { [[ "${line_lower}" != "${canonical_redaction_posture_row}" ]] && [[ "${line_lower}" =~ ${redaction_missing_table_any_cell_regex} ]]; }; then
+    echo "Forbidden Phase 66.5 report export RC proof: invalid redaction posture detected" >&2
+    exit 1
+  fi
+  if is_named_evidence_field_line "redaction_posture" "${line_lower}" && ! has_complete_redaction_posture "${line_lower}"; then
     echo "Forbidden Phase 66.5 report export RC proof: invalid redaction posture detected" >&2
     exit 1
   fi
