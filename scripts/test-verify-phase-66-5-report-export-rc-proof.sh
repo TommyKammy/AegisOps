@@ -72,11 +72,11 @@ run_assertion() {
   fi
 
   if PHASE66_5_SKIP_PATH_HYGIENE=1 bash "${target}/scripts/verify-phase-66-5-report-export-rc-proof.sh" "${target}" >"${stdout_path}" 2>"${stderr_path}"; then
-    echo "Expected Phase 66.5 verifier failure containing: ${expected_message}" >&2
+    echo "Expected Phase 66.5 verifier failure for ${target#"${workdir}/"} containing: ${expected_message}" >&2
     return 1
   fi
   if ! grep -Fq -- "${expected_message}" "${stderr_path}"; then
-    echo "Missing expected Phase 66.5 verifier failure: ${expected_message}" >&2
+    echo "Missing expected Phase 66.5 verifier failure for ${target#"${workdir}/"}: ${expected_message}" >&2
     cat "${stderr_path}" >&2
     return 1
   fi
@@ -193,6 +193,20 @@ copy_valid_repo "${unavailable_required_repo}"
 printf '%s\n' "report_export_id: unavailable" >>"${unavailable_required_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${unavailable_required_repo}" "missing required evidence value detected"
 
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
+  negative_required_value_repo="${workdir}/negative-required-value-${fixture_name}"
+  copy_valid_repo "${negative_required_value_repo}"
+  printf '%s\n' "${evidence_line}" >>"${negative_required_value_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${negative_required_value_repo}" "missing required evidence value detected"
+done <<'EOF'
+journey-no::journey_run_id: no
+report-no::report_export_id: no; timestamp=2026-07-04T01:22:50Z; operator=reviewer-1; export_profile=bounded
+report-false::report_export_id: false; timestamp=2026-07-04T01:22:50Z; operator=reviewer-1; export_profile=bounded
+report-nil::report_export_id: nil; timestamp=2026-07-04T01:22:50Z; operator=reviewer-1; export_profile=bounded
+EOF
+
 report_export_without_timestamp_repo="${workdir}/report-export-without-timestamp"
 copy_valid_repo "${report_export_without_timestamp_repo}"
 printf '%s\n' "report_export_id: EXP-1 without timestamp" >>"${report_export_without_timestamp_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -249,6 +263,29 @@ copy_valid_repo "${complete_export_identity_table_repo}"
 printf '%s\n' "| report_export_id | EXP-1 | timestamp=2026-07-04T01:22:50Z | operator=reviewer-1 | export_profile=bounded |" >>"${complete_export_identity_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
 printf '%s\n' "| export_format | PDF | file_name_pattern=report-*.pdf | hash=sha256:abcdef123456 |" >>"${complete_export_identity_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${complete_export_identity_table_repo}"
+
+while IFS='|' read -r fixture_name export_format file_extension; do
+  supported_export_format_repo="${workdir}/supported-export-format-${fixture_name}"
+  copy_valid_repo "${supported_export_format_repo}"
+  printf '%s\n' "export_format: ${export_format}; file_name_pattern=report-*.${file_extension}; checksum=sha256:abcdef123456" >>"${supported_export_format_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_passes "${supported_export_format_repo}"
+done <<'EOF'
+pdf|PDF|pdf
+csv|csv|csv
+json|JSON|json
+EOF
+
+while IFS='|' read -r fixture_name export_format file_extension; do
+  unsupported_export_format_repo="${workdir}/unsupported-export-format-${fixture_name}"
+  copy_valid_repo "${unsupported_export_format_repo}"
+  printf '%s\n' "export_format: ${export_format}; file_name_pattern=report-*.${file_extension}; checksum=sha256:abcdef123456" >>"${unsupported_export_format_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${unsupported_export_format_repo}" "missing required evidence value detected"
+done <<'EOF'
+executable|exe|exe
+archive|zip|zip
+custom|custom-report|custom
+pdf-extension-mismatch|pdf|json
+EOF
 
 complete_export_identity_offset_repo="${workdir}/complete-export-identity-offset"
 copy_valid_repo "${complete_export_identity_offset_repo}"
@@ -874,6 +911,68 @@ copy_valid_repo "${passive_report_marks_cases_repo}"
 printf '%s\n' "Cases are marked closed by report output." >>"${passive_report_marks_cases_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${passive_report_marks_cases_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  claim_text="${fixture#*::}"
+  semantic_authority_claim_repo="${workdir}/semantic-authority-claim-${fixture_name}"
+  copy_valid_repo "${semantic_authority_claim_repo}"
+  printf '%s\n' "${claim_text}" >>"${semantic_authority_claim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${semantic_authority_claim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+done <<'EOF'
+passive-using::Cases are closed using report output.
+passive-from::Action requests are authorized from report output.
+passive-via::Reconciliation is determined via report output.
+passive-through::Cases are closed through report output.
+passive-based-on::Actions are executed based on report output.
+truth-acts-as::Report output acts as workflow truth.
+truth-functions-as::Report output functions as source-record truth.
+truth-operates-as::Generated files operate as release truth.
+truth-constitutes::Report output constitutes workflow truth.
+truth-represents::Report metadata represents case truth.
+authority-provides::Report output provides workflow authority.
+authority-confers::Report output confers approval authority.
+authority-conveys::Report output conveys case authority.
+authority-bestows::Report output bestows action authority.
+authority-delegates::Report output delegates reconciliation authority.
+mutation-updates::Report output updates cases.
+mutation-changes::Report output changes AegisOps records.
+mutation-writes::Generated files write AegisOps records.
+mutation-modifies::Report output modifies cases.
+mutation-alters::Report output alters reconciliation.
+mutation-deletes::Report output deletes records.
+mutation-transitions::Report output transitions cases.
+EOF
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  claim_text="${fixture#*::}"
+  coordinated_positive_claim_repo="${workdir}/coordinated-positive-claim-${fixture_name}"
+  copy_valid_repo "${coordinated_positive_claim_repo}"
+  printf '%s\n' "${claim_text}" >>"${coordinated_positive_claim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${coordinated_positive_claim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+done <<'EOF'
+readiness::This proof does not prove GA readiness, confirms GA readiness.
+authority::Report output cannot close cases, approves action requests.
+authority-provider::Report output does not act as workflow truth, provides approval authority.
+EOF
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  claim_text="${fixture#*::}"
+  safe_claim_scope_repo="${workdir}/safe-claim-scope-${fixture_name}"
+  copy_valid_repo "${safe_claim_scope_repo}"
+  printf '%s\n' "${claim_text}" >>"${safe_claim_scope_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_passes "${safe_claim_scope_repo}"
+done <<'EOF'
+negative-authority-list::Report output cannot close cases, approve action requests, execute actions, or reconcile records.
+negative-semantic-list::Report output cannot act as workflow truth, provide approval authority, or update cases.
+negative-truth::Report output does not act as workflow truth.
+negative-passive::Cases are not closed using report output.
+rc-evidence-demonstrates::Phase 66.5 demonstrates report export RC evidence.
+rc-evidence-confirms::This proof confirms RC evidence for report export.
+rc-evidence-validates::Report output validates report export RC evidence.
+EOF
+
 table_report_truth_repo="${workdir}/table-report-truth"
 copy_valid_repo "${table_report_truth_repo}"
 printf '%s\n' "| note | Report output is workflow truth. |" >>"${table_report_truth_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -1179,6 +1278,24 @@ negated_then_subordinate_overclaim_repo="${workdir}/negated-then-subordinate-ove
 copy_valid_repo "${negated_then_subordinate_overclaim_repo}"
 printf '%s\n' "Generated files do not confirm GA readiness; screenshots prove customer portal readiness." >>"${negated_then_subordinate_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${negated_then_subordinate_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  secret_text="${fixture#*::}"
+  bare_secret_value_repo="${workdir}/bare-secret-value-${fixture_name}"
+  copy_valid_repo "${bare_secret_value_repo}"
+  printf '%s\n' "${secret_text}" >>"${bare_secret_value_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${bare_secret_value_repo}" "production secret-looking value detected"
+done <<'EOF'
+bearer::Bearer eyJhbGciOiJIUzI1NiJ9.abcdefghijklmnop.signaturevalue
+jwt::eyJhbGciOiJIUzI1NiJ9.abcdefghijklmnop.signaturevalue
+basic::Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+EOF
+
+safe_bearer_posture_repo="${workdir}/safe-bearer-posture"
+copy_valid_repo "${safe_bearer_posture_repo}"
+printf '%s\n' "Bearer tokens are redacted before evidence is committed." >>"${safe_bearer_posture_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${safe_bearer_posture_repo}"
 
 secret_repo="${workdir}/secret"
 copy_valid_repo "${secret_repo}"

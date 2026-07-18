@@ -34,6 +34,8 @@ Every Phase 66.5 proof packet must include these fields:
 | `redaction_posture` | Secret, credential, customer-private data, workstation-local path, and PII redaction posture. | Raw secrets, customer-private payloads, and workstation-local paths fail the proof. |
 | `limitation_references` | Known limitation ids, owner, decision date, and follow-up date when export evidence is incomplete. | Missing limitations cannot be hidden in report text. |
 
+For Phase 66.5, the bounded `export_format` values are `pdf`, `csv`, and `json`; any other format requires an explicit contract revision before it can satisfy this proof.
+
 ## 3. Export Binding And Redaction
 
 The proof must cite `docs/phase-66-1-clean-host-rc-e2e-harness.md` and include the journey run id, immutable repository revision, export command or UI action reference, generated artifact identity, export format, checksum or hash reference, operator, timestamp, and reviewed storage posture.
