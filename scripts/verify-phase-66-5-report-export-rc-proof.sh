@@ -184,7 +184,7 @@ require_section_phrase "${limitations_section}" "It does not prove compliance ce
 subordinate_subjects='(reports?|report[[:space:]]+(output|sections?|metadata|labels?|text|exports?|files?|artifacts?)|generated[[:space:]]+files?|export[[:space:]]+(metadata|artifacts?|output)|downloaded[[:space:]]+artifacts?|screenshots?|browser[[:space:]]+state|ui[[:space:]]+(state|cache)|optional[[:space:]]+evidence|verifier[[:space:]]+output|issue-lint[[:space:]]+output)'
 readiness_claim_subjects="(phase[[:space:]]+66\\.5|this[[:space:]]+proof|proof|report[[:space:]-]+exports?|${subordinate_subjects})"
 readiness_claim_verbs='(prove(s|d)?|satisf(y|ies|ied)|passes|passed|accept(s|ed)?|grant(s|ed)?|achieve(s|d)?|enable(s|d)?|validate(s|d)?|demonstrate(s|d)?|confirm(s|ed)?|authorize(s|d)?|establish(es|ed)?|guarantee(s|d)?|certif(y|ies|ied)|infer(s|red|ring)?|impl(y|ies|ied)|indicat(e|es|ed)|conclud(e|es|ed))'
-readiness_passive_claim_verbs='(authorized|established|guaranteed|certified|proven|confirmed|validated|satisfied|demonstrated|inferred|implied|indicated|concluded)'
+readiness_passive_claim_verbs='(authorized|established|guaranteed|certified|proven|proved|confirmed|validated|satisfied|demonstrated|inferred|implied|indicated|concluded)'
 readiness_qualified_outcomes='(ga[[:space:]-]+(readiness|pass)|general[- ]availability([[:space:]-]+(readiness|pass))?|rc[[:space:]-]+(gate|readiness|pass)|release[- ]candidate[[:space:]-]+(gate|readiness|pass)|supportability|closeout[[:space:]-]+evidence|compliance([[:space:]-]+certification)?|customer[[:space:]-]+portal[[:space:]-]+(readiness|ready)|production[[:space:]-]+(sla[[:space:]-]+reporting|reporting)|commercial[[:space:]-]+replacement[[:space:]-]+readiness|real[[:space:]]+design[- ]partner[[:space:]-]+export[[:space:]-]+success|phase[[:space:]]+66[[:space:]-]+closeout)'
 readiness_claim_outcomes="(ga|rc|customer[[:space:]-]+portal|commercial[[:space:]-]+replacement|real[[:space:]]+design[- ]partner|${readiness_qualified_outcomes})"
 readiness_identity_outcomes="(ready[[:space:]]+for[[:space:]]+(ga|general[- ]availability|rc|release[- ]candidate|customer[[:space:]-]+portal|commercial[[:space:]-]+replacement)|(ga|rc|release[- ]candidate|customer[[:space:]-]+portal|commercial[[:space:]-]+replacement)[[:space:]-]+ready|${readiness_qualified_outcomes})"
@@ -215,7 +215,7 @@ source_record_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?source_rec
 source_record_shortcut_table_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?source_record_references`?[[:space:]]*\|.*(report[[:space:]_-]*(text|output|metadata|labels?|artifacts?|files?)|generated[[:space:]_-]*files?|downloaded[[:space:]_-]*artifacts?|export[[:space:]_-]*(artifacts?|output)|screenshots?|browser[[:space:]_-]*state|ui[[:space:]_-]*(state|cache))'
 source_record_shortcut_extra_regex='(^|[[:space:]>*-])`?source_record_references`?[[:space:]]*[:=][^.[:cntrl:]]*(export[[:space:]_-]*metadata|report[[:space:]_-]*exports?|generated[[:space:]_-]*report[[:space:]_-]*files?)'
 source_record_shortcut_table_extra_regex='(^|[[:space:]>*-])\|[[:space:]]*`?source_record_references`?[[:space:]]*\|.*(export[[:space:]_-]*metadata|report[[:space:]_-]*exports?|generated[[:space:]_-]*report[[:space:]_-]*files?)'
-section_authority_terms='((closed|case[[:space:]_-]*closed|case[[:space:]_-]*closure|approval|approved|execution|executed|reconciliation|reconciled|override|truth)[^.[:cntrl:]]*(by|via|from|using)[[:space:]]+reports?|reports?[[:space:]_-]*(sections?|output)[^.[:cntrl:]]*(close|closed|closure|approve|approval|execute|execution|reconcile|reconciliation|override|truth))'
+section_authority_terms='((closed|case[[:space:]_-]*closed|case[[:space:]_-]*closure|approval|approved|execution|executed|reconciliation|reconciled|override|truth)[^.;|[:cntrl:]]*(by|via|from|using)[[:space:]_-]+reports?|reports?[[:space:]_-]*(sections?|output)[^.;|[:cntrl:]]*(close|closed|closure|approve|approval|execute|execution|reconcile|reconciliation|override|truth))'
 section_authority_regex="(^|[[:space:]>*-])\`?(case_section_reference|action_section_reference|reconciliation_section_reference)\`?[[:space:]]*[:=][^.[:cntrl:]]*${section_authority_terms}"
 section_authority_table_regex="(^|[[:space:]>*-])\|[[:space:]]*\`?(case_section_reference|action_section_reference|reconciliation_section_reference)\`?[[:space:]]*\|[[:space:]]*\`?[^\`|]*${section_authority_terms}[^\`|]*\`?[[:space:]]*\|"
 section_authority_table_any_cell_regex="(^|[[:space:]>*-])\|[[:space:]]*\`?(case_section_reference|action_section_reference|reconciliation_section_reference)\`?[[:space:]]*\|.*${section_authority_terms}"
@@ -262,7 +262,7 @@ is_safe_customer_private_redaction_line() {
   local line_lower="$1"
 
   [[ "${line_lower}" =~ ${safe_customer_private_redaction_regex} ]] || return 1
-  if [[ "${line_lower}" =~ (;|raw|unredacted|includes|contains|embeds|carries|stores|included|embedded|carried|exposes?|exposed) ]]; then
+  if [[ "${line_lower}" =~ (raw|unredacted|includes|contains|embeds|carries|stores|included|embedded|carried|exposes?|exposed) ]]; then
     return 1
   fi
   if [[ "${line_lower}" =~ stored ]] && ! [[ "${line_lower}" =~ not[[:space:]_-]*stored ]]; then
@@ -361,20 +361,72 @@ has_named_evidence_primary_value() {
   is_valid_evidence_primary_value "${value}"
 }
 
+is_valid_iso_date() {
+  local value="$1"
+  local year
+  local month
+  local day
+  local max_day
+
+  [[ "${value}" =~ ^([0-9]{4})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$ ]] || return 1
+  year=$((10#${BASH_REMATCH[1]}))
+  month=$((10#${BASH_REMATCH[2]}))
+  day=$((10#${BASH_REMATCH[3]}))
+  ((year > 0)) || return 1
+
+  case "${month}" in
+    2)
+      max_day=28
+      if ((year % 400 == 0 || (year % 4 == 0 && year % 100 != 0))); then
+        max_day=29
+      fi
+      ;;
+    4|6|9|11)
+      max_day=30
+      ;;
+    *)
+      max_day=31
+      ;;
+  esac
+  ((day <= max_day))
+}
+
+is_valid_rfc3339_timestamp() {
+  local value="$1"
+  local date_value
+
+  [[ "${value}" =~ ^([0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))t([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$ ]] || return 1
+  date_value="${BASH_REMATCH[1]}"
+  is_valid_iso_date "${date_value}"
+}
+
 is_valid_structured_subfield_value() {
   local value="$1"
-  local allowed_placeholder_values="${2:-}"
+  local validator="${2:-generic}"
 
-  if [[ -n "${allowed_placeholder_values}" ]] && [[ "${value}" =~ ^(${allowed_placeholder_values})([^[:alnum:]].*)?$ ]]; then
-    return 0
-  fi
-  [[ ! "${value}" =~ ^(${structured_placeholder_value})([^[:alnum:]].*)?$ ]]
+  case "${validator}" in
+    generic)
+      [[ ! "${value}" =~ ^(${structured_placeholder_value})([^[:alnum:]].*)?$ ]]
+      ;;
+    iso-date)
+      is_valid_iso_date "${value}"
+      ;;
+    mismatch-state)
+      [[ "${value}" =~ ^(none|matched|mismatched)$ ]]
+      ;;
+    rfc3339-timestamp)
+      is_valid_rfc3339_timestamp "${value}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 has_structured_subfield_value() {
   local line_lower="$1"
   local label_regex="$2"
-  local allowed_placeholder_values="${3:-}"
+  local validator="${3:-generic}"
   local structured_value_regex
   local value
   local value_index
@@ -383,23 +435,23 @@ has_structured_subfield_value() {
   [[ "${line_lower}" =~ ${structured_value_regex} ]] || return 1
   value_index=$((${#BASH_REMATCH[@]} - 1))
   value="${BASH_REMATCH[${value_index}]}"
-  is_valid_structured_subfield_value "${value}" "${allowed_placeholder_values}"
+  is_valid_structured_subfield_value "${value}" "${validator}"
 }
 
 has_required_structured_subfields() {
   local line_lower="$1"
   local subfield_spec
   local label_regex
-  local allowed_placeholder_values
+  local validator
   shift
 
   for subfield_spec in "$@"; do
     label_regex="${subfield_spec%%::*}"
-    allowed_placeholder_values=""
+    validator="generic"
     if [[ "${subfield_spec}" == *"::"* ]]; then
-      allowed_placeholder_values="${subfield_spec#*::}"
+      validator="${subfield_spec#*::}"
     fi
-    has_structured_subfield_value "${line_lower}" "${label_regex}" "${allowed_placeholder_values}" || return 1
+    has_structured_subfield_value "${line_lower}" "${label_regex}" "${validator}" || return 1
   done
 }
 
@@ -411,7 +463,7 @@ has_complete_report_export_identity() {
     is_valid_evidence_primary_value "${primary_value}" &&
     [[ ! "${primary_value}" =~ ^(timestamp|operator|export[[:space:]_-]*profile|profile)([:=_-]|$) ]] &&
     has_required_structured_subfields "${line_lower}" \
-      '(export[[:space:]_-]*)?timestamp' \
+      '(export[[:space:]_-]*)?timestamp::rfc3339-timestamp' \
       '(export[[:space:]_-]*)?operator([[:space:]_-]*(id|reference|ref))?' \
       '(export[[:space:]_-]*)?profile([[:space:]_-]*(id|reference|ref))?'
 }
@@ -460,14 +512,14 @@ has_complete_section_reference() {
         'approval([[:space:]_-]*(record|id|reference|ref))?'
         'delegated[[:space:]_-]+action[[:space:]_-]*request([[:space:]_-]*(record|id|reference|ref))?'
         'execution[[:space:]_-]*receipt([[:space:]_-]*(record|id|reference|ref))?'
-        'mismatch[[:space:]_-]*(posture|state)::(none|matched|mismatched)'
+        'mismatch[[:space:]_-]*(posture|state)::mismatch-state'
       )
       ;;
     reconciliation_section_reference)
       required_subfields=(
         '(execution[[:space:]_-]*)?receipt([[:space:]_-]*(record|id|reference|ref))?'
         'outcome'
-        'mismatch[[:space:]_-]*(posture|state)::(none|matched|mismatched)'
+        'mismatch[[:space:]_-]*(posture|state)::mismatch-state'
         'follow[[:space:]_-]*up[[:space:]_-]*owner([[:space:]_-]*(id|reference|ref))?'
         'linked[[:space:]_-]*record([[:space:]_-]*(id|reference|ref))?'
       )
@@ -507,8 +559,8 @@ has_complete_limitation_references() {
   if [[ "${line_lower}" =~ ${incomplete_export_evidence_regex} ]]; then
     has_required_structured_subfields "${line_lower}" \
       'owner([[:space:]_-]*(id|reference|ref))?' \
-      'decision[[:space:]_-]*date' \
-      'follow[[:space:]_-]*up[[:space:]_-]*date'
+      'decision[[:space:]_-]*date::iso-date' \
+      'follow[[:space:]_-]*up[[:space:]_-]*date::iso-date'
     return
   fi
   return 0
@@ -523,7 +575,7 @@ normalize_negated_claims() {
 
   negated_list_claim_regex="(cannot|can[[:space:]]+not|does[[:space:]]+not|do[[:space:]]+not|did[[:space:]]+not|will[[:space:]]+not|must[[:space:]]+not|never)[[:space:]]+${coordinated_claim_predicate_verbs}"
   negated_claim_regex="(cannot|can[[:space:]]+not|does[[:space:]]+not|do[[:space:]]+not|did[[:space:]]+not|will[[:space:]]+not|must[[:space:]]+not|never)[[:space:]]+${claim_predicate_verbs}"
-  normalized_line="$(sed -E "s/${negated_list_claim_regex}/negated-list-claim/g; s/${negated_claim_regex}/negated-claim/g" <<<"${line_lower}")"
+  normalized_line="$(sed -E "s/\*+([^*]+)\*+/\1/g; s/~+([^~]+)~+/\1/g; s/(^|[^[:alnum:]_])_+([^_]+)_+([^[:alnum:]_]|$)/\1\2\3/g; s/${negated_list_claim_regex}/negated-list-claim/g; s/${negated_claim_regex}/negated-claim/g" <<<"${line_lower}")"
   coordinated_negated_claim_regex="(negated-list-claim[^.[:cntrl:]]*([,][[:space:]]*|[[:space:]]+or[[:space:]]+))${coordinated_claim_predicate_verbs}"
   while [[ "${normalized_line}" =~ ${coordinated_negated_claim_regex} ]]; do
     normalized_line="${normalized_line/"${BASH_REMATCH[0]}"/"${BASH_REMATCH[1]}negated-list-claim"}"
@@ -534,6 +586,7 @@ normalize_negated_claims() {
 scan_forbidden_claims() {
   local file="$1"
   local description="$2"
+  local scope_regex="${3:-}"
   local claim_line_lower
   local line_lower
   local forbidden_pattern
@@ -545,6 +598,9 @@ scan_forbidden_claims() {
     claim_line_lower="$(normalize_negated_claims "${line_lower}")"
     for forbidden_pattern in "${forbidden_patterns[@]}"; do
       if [[ "${claim_line_lower}" =~ ${forbidden_pattern} ]]; then
+        if [[ -n "${scope_regex}" ]] && [[ ! "${BASH_REMATCH[0]}" =~ ${scope_regex} ]]; then
+          continue
+        fi
         echo "Forbidden Phase 66.5 ${description} claim matched" >&2
         exit 1
       fi
@@ -555,6 +611,9 @@ scan_forbidden_claims() {
     claim_line_lower="$(normalize_negated_claims "${line_lower}")"
     for forbidden_pattern in "${forbidden_patterns[@]}"; do
       if [[ "${claim_line_lower}" =~ ${forbidden_pattern} ]]; then
+        if [[ -n "${scope_regex}" ]] && [[ ! "${BASH_REMATCH[0]}" =~ ${scope_regex} ]]; then
+          continue
+        fi
         echo "Forbidden Phase 66.5 ${description} claim matched" >&2
         exit 1
       fi
@@ -731,7 +790,8 @@ while IFS= read -r line_lower; do
 done < <(lower_visible_text "${absolute_doc_path}")
 
 scan_forbidden_claims "${absolute_doc_path}" "report export RC proof"
-scan_forbidden_claims "${readme_path}" "README"
+readme_phase66_5_scope='phase[[:space:]_-]+66(\.|[[:space:]_-]+)5|phase-66-5-report-export-rc-proof'
+scan_forbidden_claims "${readme_path}" "README" "${readme_phase66_5_scope}"
 
 if [[ "${PHASE66_5_SKIP_PATH_HYGIENE:-0}" != "1" ]]; then
   path_hygiene_stderr="${tmp_dir}/path-hygiene.err"

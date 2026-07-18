@@ -78,6 +78,11 @@ copy_valid_repo "${valid_customer_private_redaction_repo}"
 printf '%s\n' "redaction_posture: ${complete_redaction_posture}" >>"${valid_customer_private_redaction_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${valid_customer_private_redaction_repo}"
 
+valid_semicolon_redaction_repo="${workdir}/valid-semicolon-redaction"
+copy_valid_repo "${valid_semicolon_redaction_repo}"
+printf '%s\n' "redaction_posture: secrets redacted; credentials redacted; customer-private data redacted; workstation-local paths redacted; pii redacted" >>"${valid_semicolon_redaction_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${valid_semicolon_redaction_repo}"
+
 valid_customer_private_not_stored_repo="${workdir}/valid-customer-private-not-stored"
 copy_valid_repo "${valid_customer_private_not_stored_repo}"
 printf '%s\n' "redaction_posture: secrets redacted, credentials redacted, customer-private data not stored, workstation-local paths redacted, pii redacted" >>"${valid_customer_private_not_stored_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -195,6 +200,11 @@ printf '%s\n' "| report_export_id | EXP-1 | timestamp=2026-07-04T01:22:50Z | ope
 printf '%s\n' "| export_format | PDF | file_name_pattern=report-*.pdf | hash=sha256:abcdef123456 |" >>"${complete_export_identity_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${complete_export_identity_table_repo}"
 
+complete_export_identity_offset_repo="${workdir}/complete-export-identity-offset"
+copy_valid_repo "${complete_export_identity_offset_repo}"
+printf '%s\n' "report_export_id: EXP-1; timestamp=2024-02-29T01:22:50.123+09:00; operator=reviewer-1; export_profile=bounded" >>"${complete_export_identity_offset_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${complete_export_identity_offset_repo}"
+
 while IFS= read -r fixture; do
   fixture_name="${fixture%%::*}"
   evidence_line="${fixture#*::}"
@@ -208,6 +218,19 @@ operator::report_export_id: EXP-1; timestamp=2026-07-04T01:22:50Z; operator=tbd;
 profile::report_export_id: EXP-1; timestamp=2026-07-04T01:22:50Z; operator=reviewer-1; export_profile=not_provided
 filename::export_format: PDF; file_name_pattern=placeholder; checksum=sha256:abcdef123456
 checksum::export_format: PDF; file_name_pattern=report-*.pdf; checksum=unknown
+EOF
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
+  invalid_timestamp_repo="${workdir}/invalid-timestamp-${fixture_name}"
+  copy_valid_repo "${invalid_timestamp_repo}"
+  printf '%s\n' "${evidence_line}" >>"${invalid_timestamp_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${invalid_timestamp_repo}" "missing required evidence value detected"
+done <<'EOF'
+nonsensical::report_export_id: EXP-1; timestamp=banana; operator=reviewer-1; export_profile=bounded
+invalid-date::report_export_id: EXP-1; timestamp=2026-02-29T01:22:50Z; operator=reviewer-1; export_profile=bounded
+invalid-time::report_export_id: EXP-1; timestamp=2026-07-04T25:22:50Z; operator=reviewer-1; export_profile=bounded
 EOF
 
 placeholder_export_subfield_table_repo="${workdir}/placeholder-export-subfield-table"
@@ -256,6 +279,19 @@ done <<'EOF'
 owner::limitation_references: LIM-1; export evidence incomplete; owner=unknown; decision_date=2026-07-18; follow_up_date=2026-07-25
 decision-date::limitation_references: LIM-1; export evidence incomplete; owner=operator-1; decision_date=tbd; follow_up_date=2026-07-25
 follow-up-date::limitation_references: LIM-1; export evidence incomplete; owner=operator-1; decision_date=2026-07-18; follow_up_date=not_set
+EOF
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
+  invalid_limitation_date_repo="${workdir}/invalid-limitation-date-${fixture_name}"
+  copy_valid_repo "${invalid_limitation_date_repo}"
+  printf '%s\n' "${evidence_line}" >>"${invalid_limitation_date_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${invalid_limitation_date_repo}" "missing required evidence value detected"
+done <<'EOF'
+nonsensical::limitation_references: LIM-1; export evidence incomplete; owner=operator-1; decision_date=banana; follow_up_date=later
+invalid-decision-date::limitation_references: LIM-1; export evidence incomplete; owner=operator-1; decision_date=2026-02-29; follow_up_date=2026-07-25
+invalid-follow-up-date::limitation_references: LIM-1; export evidence incomplete; owner=operator-1; decision_date=2026-07-18; follow_up_date=2026-04-31
 EOF
 
 mutable_revision_repo="${workdir}/mutable-revision"
@@ -419,6 +455,19 @@ assert_passes "${valid_explicit_mismatch_states_repo}"
 while IFS= read -r fixture; do
   fixture_name="${fixture%%::*}"
   evidence_line="${fixture#*::}"
+  invalid_mismatch_state_repo="${workdir}/invalid-mismatch-state-${fixture_name}"
+  copy_valid_repo "${invalid_mismatch_state_repo}"
+  printf '%s\n' "${evidence_line}" >>"${invalid_mismatch_state_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${invalid_mismatch_state_repo}" "missing required evidence value detected"
+done <<'EOF'
+posture-suffix::action_section_reference: ACTION-SECTION-1; approval=APR-1; delegated_action_request=ACT-1; execution_receipt=REC-1; mismatch_posture=matched_by_report
+state-suffix::reconciliation_section_reference: RECON-SECTION-1; receipt=REC-1; outcome=reviewed; mismatch_state=matched_by_report; follow_up_owner=operator-1; linked_record=CASE-1
+unknown-state::action_section_reference: ACTION-SECTION-1; approval=APR-1; delegated_action_request=ACT-1; execution_receipt=REC-1; mismatch_posture=unreviewed
+EOF
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
   placeholder_section_subfield_repo="${workdir}/placeholder-section-subfield-${fixture_name}"
   copy_valid_repo "${placeholder_section_subfield_repo}"
   printf '%s\n' "${evidence_line}" >>"${placeholder_section_subfield_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -491,6 +540,18 @@ section_authority_extra_table_cell_repo="${workdir}/section-authority-extra-tabl
 copy_valid_repo "${section_authority_extra_table_cell_repo}"
 printf '%s\n' "| case_section_reference | reviewed case section | case closure via report |" >>"${section_authority_extra_table_cell_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${section_authority_extra_table_cell_repo}" "report section authority detected"
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
+  underscored_section_authority_repo="${workdir}/underscored-section-authority-${fixture_name}"
+  copy_valid_repo "${underscored_section_authority_repo}"
+  printf '%s\n' "${evidence_line}" >>"${underscored_section_authority_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${underscored_section_authority_repo}" "report section authority detected"
+done <<'EOF'
+underscore::case_section_reference: CASE-SECTION-1; status=closed_by_report; evidence_links=EVD-1; owner=operator-1; limitation_references=LIM-1
+hyphen::case_section_reference: CASE-SECTION-1; status=closed-by-report; evidence_links=EVD-1; owner=operator-1; limitation_references=LIM-1
+EOF
 
 missing_labels_repo="${workdir}/missing-labels"
 copy_valid_repo "${missing_labels_repo}"
@@ -631,6 +692,21 @@ report_confirms_workflow_truth_repo="${workdir}/report-confirms-workflow-truth"
 copy_valid_repo "${report_confirms_workflow_truth_repo}"
 printf '%s\n' "Report output confirms workflow truth." >>"${report_confirms_workflow_truth_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${report_confirms_workflow_truth_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  claim_text="${fixture#*::}"
+  markdown_emphasis_claim_repo="${workdir}/markdown-emphasis-claim-${fixture_name}"
+  copy_valid_repo "${markdown_emphasis_claim_repo}"
+  printf '%s\n' "${claim_text}" >>"${markdown_emphasis_claim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${markdown_emphasis_claim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+done <<'EOF'
+asterisk-bold::Report output **confirms** GA readiness.
+underscore-bold::Report output __confirms__ GA readiness.
+asterisk-italic::Report output *confirms* GA readiness.
+underscore-italic::Report output _confirms_ GA readiness.
+strikethrough::Report output ~~confirms~~ GA readiness.
+EOF
 
 report_validates_workflow_truth_repo="${workdir}/report-validates-workflow-truth"
 copy_valid_repo "${report_validates_workflow_truth_repo}"
@@ -930,6 +1006,19 @@ copy_valid_repo "${passive_commercial_replacement_overclaim_repo}"
 printf '%s\n' "Commercial replacement readiness is established by this proof." >>"${passive_commercial_replacement_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${passive_commercial_replacement_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
 
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  claim_text="${fixture#*::}"
+  passive_proved_overclaim_repo="${workdir}/passive-proved-overclaim-${fixture_name}"
+  copy_valid_repo "${passive_proved_overclaim_repo}"
+  printf '%s\n' "${claim_text}" >>"${passive_proved_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${passive_proved_overclaim_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+done <<'EOF'
+report-output::GA readiness is proved by report output.
+this-proof::GA readiness is proved by this proof.
+report-export::Compliance certification is proved by report export.
+EOF
+
 certify_compliance_overclaim_repo="${workdir}/certify-compliance-overclaim"
 copy_valid_repo "${certify_compliance_overclaim_repo}"
 printf '%s\n' "Phase 66.5 certifies compliance." >>"${certify_compliance_overclaim_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -1072,8 +1161,28 @@ assert_fails_with "${wrapped_readme_claim_repo}" "Forbidden Phase 66.5 README cl
 
 pronoun_readme_claim_repo="${workdir}/pronoun-readme-claim"
 copy_valid_repo "${pronoun_readme_claim_repo}"
-printf '%s\n' "This proof proves GA readiness." >>"${pronoun_readme_claim_repo}/README.md"
+printf '%s\n' "The Phase 66.5 report export proof proves GA readiness." >>"${pronoun_readme_claim_repo}/README.md"
 assert_fails_with "${pronoun_readme_claim_repo}" "Forbidden Phase 66.5 README claim matched"
+
+markdown_readme_claim_repo="${workdir}/markdown-readme-claim"
+copy_valid_repo "${markdown_readme_claim_repo}"
+printf '%s\n' "The Phase **66.5** report export proof **confirms** GA readiness." >>"${markdown_readme_claim_repo}/README.md"
+assert_fails_with "${markdown_readme_claim_repo}" "Forbidden Phase 66.5 README claim matched"
+
+future_phase_readme_claim_repo="${workdir}/future-phase-readme-claim"
+copy_valid_repo "${future_phase_readme_claim_repo}"
+printf '%s\n' "The Phase 67 proof proves GA readiness." >>"${future_phase_readme_claim_repo}/README.md"
+assert_passes "${future_phase_readme_claim_repo}"
+
+mixed_phase_readme_claim_repo="${workdir}/mixed-phase-readme-claim"
+copy_valid_repo "${mixed_phase_readme_claim_repo}"
+printf '%s\n' "The Phase 67 proof proves GA readiness. Phase 66.5 remains RC evidence only." >>"${mixed_phase_readme_claim_repo}/README.md"
+assert_passes "${mixed_phase_readme_claim_repo}"
+
+unscoped_readme_claim_repo="${workdir}/unscoped-readme-claim"
+copy_valid_repo "${unscoped_readme_claim_repo}"
+printf '%s\n' "This proof proves GA readiness." >>"${unscoped_readme_claim_repo}/README.md"
+assert_passes "${unscoped_readme_claim_repo}"
 
 safe_pronoun_readme_repo="${workdir}/safe-pronoun-readme"
 copy_valid_repo "${safe_pronoun_readme_repo}"
