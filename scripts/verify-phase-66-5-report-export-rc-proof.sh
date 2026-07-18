@@ -210,11 +210,10 @@ repository_revision_mutable_suffix_regex='(^|[[:space:]>*-])`?repository_revisio
 repository_revision_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|[[:space:]]*`?([^`|[:space:]]+)`?[[:space:]]*\|'
 repository_revision_table_mutable_suffix_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|[[:space:]]*`?[^`|]*[0-9a-f]{40}[^`|]*(main|master|develop|development|trunk|head|refs/heads/|refs/remotes/|remotes/|origin/|branch)[^`|]*`?[[:space:]]*\|'
 repository_revision_table_branch_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?repository_revision`?[[:space:]]*\|.*([|[:space:]`(])((main|master|develop|development|trunk|head)([[:space:]_-]+branch)?|refs/heads/[^`|[:space:]]+|refs/remotes/[^`|[:space:]]+|remotes/[^`|[:space:]]+|origin/[^`|[:space:]]+|[[:alnum:]_.-]+[[:space:]_-]+branch)([[:space:]`.,;)|]|$)'
-source_record_shortcut_regex='(^|[[:space:]>*-])`?source_record_references`?[[:space:]]*[:=][^.[:cntrl:]]*(report[[:space:]_-]*(text|output|metadata|labels?|artifacts?|files?)|generated[[:space:]_-]*files?|downloaded[[:space:]_-]*artifacts?|export[[:space:]_-]*(artifacts?|output)|screenshots?|browser[[:space:]_-]*state|ui[[:space:]_-]*(state|cache))'
-source_record_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?source_record_references`?[[:space:]]*\|[[:space:]]*`?[^`|]*(report[[:space:]_-]*(text|output|metadata|labels?|artifacts?|files?)|generated[[:space:]_-]*files?|downloaded[[:space:]_-]*artifacts?|export[[:space:]_-]*(artifacts?|output)|screenshots?|browser[[:space:]_-]*state|ui[[:space:]_-]*(state|cache))[^`|]*`?[[:space:]]*\|'
-source_record_shortcut_table_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?source_record_references`?[[:space:]]*\|.*(report[[:space:]_-]*(text|output|metadata|labels?|artifacts?|files?)|generated[[:space:]_-]*files?|downloaded[[:space:]_-]*artifacts?|export[[:space:]_-]*(artifacts?|output)|screenshots?|browser[[:space:]_-]*state|ui[[:space:]_-]*(state|cache))'
-source_record_shortcut_extra_regex='(^|[[:space:]>*-])`?source_record_references`?[[:space:]]*[:=][^.[:cntrl:]]*(export[[:space:]_-]*metadata|report[[:space:]_-]*exports?|generated[[:space:]_-]*report[[:space:]_-]*files?)'
-source_record_shortcut_table_extra_regex='(^|[[:space:]>*-])\|[[:space:]]*`?source_record_references`?[[:space:]]*\|.*(export[[:space:]_-]*metadata|report[[:space:]_-]*exports?|generated[[:space:]_-]*report[[:space:]_-]*files?)'
+source_record_subordinate_reference='(report[[:space:]_-]*(text|output|metadata|labels?|artifacts?|exports?|files?)|generated[[:space:]_-]*((report[[:space:]_-]*)?(artifacts?|files?))|downloaded[[:space:]_-]*artifacts?|export[[:space:]_-]*(metadata|artifacts?|output)|screenshots?|browser[[:space:]_-]*state|ui[[:space:]_-]*(state|cache))'
+source_record_shortcut_regex='(^|[[:space:]>*-])`?source_record_references`?[[:space:]]*[:=][^.[:cntrl:]]*'"${source_record_subordinate_reference}"
+source_record_shortcut_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?source_record_references`?[[:space:]]*\|[[:space:]]*`?[^`|]*'"${source_record_subordinate_reference}"'[^`|]*`?[[:space:]]*\|'
+source_record_shortcut_table_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?source_record_references`?[[:space:]]*\|.*'"${source_record_subordinate_reference}"
 section_authority_terms='((closed|case[[:space:]_-]*closed|case[[:space:]_-]*closure|approval|approved|execution|executed|reconciliation|reconciled|override|truth)[^.;|[:cntrl:]]*(by|via|from|using)[[:space:]_-]+reports?|reports?[[:space:]_-]*(sections?|output)[^.;|[:cntrl:]]*(close|closed|closure|approve|approval|execute|execution|reconcile|reconciliation|override|truth))'
 section_authority_regex="(^|[[:space:]>*-])\`?(case_section_reference|action_section_reference|reconciliation_section_reference)\`?[[:space:]]*[:=][^.[:cntrl:]]*${section_authority_terms}"
 section_authority_table_regex="(^|[[:space:]>*-])\|[[:space:]]*\`?(case_section_reference|action_section_reference|reconciliation_section_reference)\`?[[:space:]]*\|[[:space:]]*\`?[^\`|]*${section_authority_terms}[^\`|]*\`?[[:space:]]*\|"
@@ -224,6 +223,7 @@ label_missing_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?rc_label_set`?[[:sp
 label_missing_table_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?rc_label_set`?[[:space:]]*\|.*(missing|without|no[[:space:]_-]*labels?|production[[:space:]_-]*truth)'
 rc_label_set_assignment_regex='(^|[[:space:]>*-])`?rc_label_set`?[[:space:]]*[:=][^.[:cntrl:]]+'
 rc_label_set_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?rc_label_set`?[[:space:]]*\|[[:space:]]*`?([^`|]+)`?[[:space:]]*\|'
+workflow_truth_label_regex='(^|[[:space:]`,;|])workflow[[:space:]_-]*truth([[:space:]`,;|.]|$)'
 invalid_redaction_posture='(not[[:space:]_-]*needed|none|unredacted|raw[[:space:]_-]*secrets?|secrets?[[:space:]_-]*included|customer[-_ ]private[[:space:]_-]*payloads?|workstation[-_ ]local[[:space:]_-]*paths?[[:space:]_-]*included|pii[[:space:]_-]*(included|not[[:space:]_-]*redacted|unredacted)|((raw[[:space:]_-]+)?(credentials?|tokens?)[[:space:]_-]+(included|unredacted|not[[:space:]_-]*redacted|visible|exposed|present|retained|stored))|((included|unredacted|visible|exposed|retained|stored)[[:space:]_-]+(raw[[:space:]_-]+)?(credentials?|tokens?)))'
 redaction_missing_regex='(^|[[:space:]>*-])`?redaction_posture`?[[:space:]]*[:=][^.[:cntrl:]]*'"${invalid_redaction_posture}"
 redaction_missing_table_regex='(^|[[:space:]>*-])\|[[:space:]]*`?redaction_posture`?[[:space:]]*\|[[:space:]]*`?[^`|]*'"${invalid_redaction_posture}"'[^`|]*`?[[:space:]]*\|'
@@ -288,6 +288,14 @@ forbidden_patterns=(
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(is|becomes|serves[[:space:]]+as|proves|confirms|validates)[^.[:cntrl:]]*(readiness|release|gate|workflow|source)[[:space:]]+truth'
   '(verifier|issue-lint)[[:space:]]+output[[:space:]]+(proves|confirms|passes|satisfies|validates|demonstrates)[^.[:cntrl:]]*(ga[[:space:]-]+readiness|rc[[:space:]-]+readiness|rc[[:space:]-]+pass|release[- ]candidate[[:space:]-]+(readiness|pass)|release[[:space:]-]+readiness|gate[[:space:]-]+readiness)'
 )
+
+forbidden_claim_regex=""
+for forbidden_pattern in "${forbidden_patterns[@]}"; do
+  if [[ -n "${forbidden_claim_regex}" ]]; then
+    forbidden_claim_regex="${forbidden_claim_regex}|"
+  fi
+  forbidden_claim_regex="${forbidden_claim_regex}(${forbidden_pattern})"
+done
 
 is_source_record_reference_line() {
   local line_lower="$1"
@@ -539,7 +547,7 @@ has_safe_redaction_class() {
 
   safe_posture_regex='(redacted|masked|removed|omitted|excluded|not[[:space:]_-]*(stored|retained|included|exported|present))'
   class_posture_regex='(^|[[:space:],;|])('"${class_regex}"')([[:space:]_-]+posture)?([[:space:]]*[:=][[:space:]]*|[[:space:]]+)'"${safe_posture_regex}"'([[:space:].,;|]|$)'
-  grep -Eq -- "${class_posture_regex}" <<<"${line_lower}"
+  [[ "${line_lower}" =~ ${class_posture_regex} ]]
 }
 
 has_complete_redaction_posture() {
@@ -569,18 +577,40 @@ has_complete_limitation_references() {
 normalize_negated_claims() {
   local line_lower="$1"
   local normalized_line
+  local markdown_asterisk_regex
+  local markdown_strikethrough_regex
+  local markdown_underscore_regex
   local negated_list_claim_regex
   local negated_claim_regex
   local coordinated_negated_claim_regex
 
+  normalized_line="${line_lower}"
+  markdown_asterisk_regex='\*+([^*]+)\*+'
+  markdown_strikethrough_regex='~+([^~]+)~+'
+  markdown_underscore_regex='(^|[^[:alnum:]_])_+([^_]+)_+([^[:alnum:]_]|$)'
+  while [[ "${normalized_line}" =~ ${markdown_asterisk_regex} ]]; do
+    normalized_line="${normalized_line/"${BASH_REMATCH[0]}"/${BASH_REMATCH[1]}}"
+  done
+  while [[ "${normalized_line}" =~ ${markdown_strikethrough_regex} ]]; do
+    normalized_line="${normalized_line/"${BASH_REMATCH[0]}"/${BASH_REMATCH[1]}}"
+  done
+  while [[ "${normalized_line}" =~ ${markdown_underscore_regex} ]]; do
+    normalized_line="${normalized_line/"${BASH_REMATCH[0]}"/${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}}"
+  done
+
   negated_list_claim_regex="(cannot|can[[:space:]]+not|does[[:space:]]+not|do[[:space:]]+not|did[[:space:]]+not|will[[:space:]]+not|must[[:space:]]+not|never)[[:space:]]+${coordinated_claim_predicate_verbs}"
   negated_claim_regex="(cannot|can[[:space:]]+not|does[[:space:]]+not|do[[:space:]]+not|did[[:space:]]+not|will[[:space:]]+not|must[[:space:]]+not|never)[[:space:]]+${claim_predicate_verbs}"
-  normalized_line="$(sed -E "s/\*+([^*]+)\*+/\1/g; s/~+([^~]+)~+/\1/g; s/(^|[^[:alnum:]_])_+([^_]+)_+([^[:alnum:]_]|$)/\1\2\3/g; s/${negated_list_claim_regex}/negated-list-claim/g; s/${negated_claim_regex}/negated-claim/g" <<<"${line_lower}")"
+  while [[ "${normalized_line}" =~ ${negated_list_claim_regex} ]]; do
+    normalized_line="${normalized_line/"${BASH_REMATCH[0]}"/negated-list-claim}"
+  done
+  while [[ "${normalized_line}" =~ ${negated_claim_regex} ]]; do
+    normalized_line="${normalized_line/"${BASH_REMATCH[0]}"/negated-claim}"
+  done
   coordinated_negated_claim_regex="(negated-list-claim[^.[:cntrl:]]*([,][[:space:]]*|[[:space:]]+or[[:space:]]+))${coordinated_claim_predicate_verbs}"
   while [[ "${normalized_line}" =~ ${coordinated_negated_claim_regex} ]]; do
-    normalized_line="${normalized_line/"${BASH_REMATCH[0]}"/"${BASH_REMATCH[1]}negated-list-claim"}"
+    normalized_line="${normalized_line/"${BASH_REMATCH[0]}"/${BASH_REMATCH[1]}negated-list-claim}"
   done
-  printf '%s\n' "${normalized_line}"
+  normalized_claim_line="${normalized_line}"
 }
 
 scan_forbidden_claims() {
@@ -589,35 +619,42 @@ scan_forbidden_claims() {
   local scope_regex="${3:-}"
   local claim_line_lower
   local line_lower
-  local forbidden_pattern
 
   while IFS= read -r line_lower; do
     if is_canonical_evidence_row "${line_lower}"; then
       continue
     fi
-    claim_line_lower="$(normalize_negated_claims "${line_lower}")"
-    for forbidden_pattern in "${forbidden_patterns[@]}"; do
-      if [[ "${claim_line_lower}" =~ ${forbidden_pattern} ]]; then
-        if [[ -n "${scope_regex}" ]] && [[ ! "${BASH_REMATCH[0]}" =~ ${scope_regex} ]]; then
-          continue
-        fi
+    if [[ -n "${scope_regex}" ]] && [[ ! "${line_lower}" =~ phase|phase-66-5-report-export-rc-proof ]]; then
+      continue
+    fi
+    normalize_negated_claims "${line_lower}"
+    claim_line_lower="${normalized_claim_line}"
+    if [[ -n "${scope_regex}" ]] && [[ ! "${claim_line_lower}" =~ ${scope_regex} ]]; then
+      continue
+    fi
+    if [[ "${claim_line_lower}" =~ ${forbidden_claim_regex} ]]; then
+      if [[ -z "${scope_regex}" ]] || [[ "${BASH_REMATCH[0]}" =~ ${scope_regex} ]]; then
         echo "Forbidden Phase 66.5 ${description} claim matched" >&2
         exit 1
       fi
-    done
+    fi
   done < <(lower_visible_text "${file}")
 
   while IFS= read -r line_lower; do
-    claim_line_lower="$(normalize_negated_claims "${line_lower}")"
-    for forbidden_pattern in "${forbidden_patterns[@]}"; do
-      if [[ "${claim_line_lower}" =~ ${forbidden_pattern} ]]; then
-        if [[ -n "${scope_regex}" ]] && [[ ! "${BASH_REMATCH[0]}" =~ ${scope_regex} ]]; then
-          continue
-        fi
+    if [[ -n "${scope_regex}" ]] && [[ ! "${line_lower}" =~ phase|phase-66-5-report-export-rc-proof ]]; then
+      continue
+    fi
+    normalize_negated_claims "${line_lower}"
+    claim_line_lower="${normalized_claim_line}"
+    if [[ -n "${scope_regex}" ]] && [[ ! "${claim_line_lower}" =~ ${scope_regex} ]]; then
+      continue
+    fi
+    if [[ "${claim_line_lower}" =~ ${forbidden_claim_regex} ]]; then
+      if [[ -z "${scope_regex}" ]] || [[ "${BASH_REMATCH[0]}" =~ ${scope_regex} ]]; then
         echo "Forbidden Phase 66.5 ${description} claim matched" >&2
         exit 1
       fi
-    done
+    fi
   done < <(lower_visible_text "${file}" | awk '!/^[[:space:]]*\|/ && NF { paragraph = paragraph " " $0; next } paragraph != "" { print paragraph; paragraph = "" } END { if (paragraph != "") print paragraph }')
 }
 
@@ -714,7 +751,7 @@ while IFS= read -r line_lower; do
     echo "Forbidden Phase 66.5 report export RC proof: missing required evidence value detected" >&2
     exit 1
   fi
-  if [[ "${line_lower}" =~ ${source_record_shortcut_regex} ]] || [[ "${line_lower}" =~ ${source_record_shortcut_extra_regex} ]] || [[ "${line_lower}" =~ ${source_record_shortcut_table_regex} ]] || [[ "${line_lower}" =~ ${source_record_shortcut_table_extra_regex} ]] || { [[ "${line_lower}" != "${canonical_source_record_references_row}" ]] && [[ "${line_lower}" =~ ${source_record_shortcut_table_any_cell_regex} ]]; }; then
+  if [[ "${line_lower}" =~ ${source_record_shortcut_regex} ]] || [[ "${line_lower}" =~ ${source_record_shortcut_table_regex} ]] || { [[ "${line_lower}" != "${canonical_source_record_references_row}" ]] && [[ "${line_lower}" =~ ${source_record_shortcut_table_any_cell_regex} ]]; }; then
     echo "Forbidden Phase 66.5 report export RC proof: invalid source record reference detected" >&2
     exit 1
   fi
@@ -746,13 +783,16 @@ while IFS= read -r line_lower; do
   fi
   if [[ "${line_lower}" =~ ${rc_label_set_assignment_regex} ]] || [[ "${line_lower}" =~ ${rc_label_set_table_regex} ]]; then
     for required_rc_label in rc-evidence phase-66 report-export not-workflow-truth; do
-      if ! grep -Eq -- "(^|[[:space:]\`,|])${required_rc_label}([[:space:]\`,|.]|$)" <<<"${line_lower}"; then
+      required_rc_label_regex="(^|[[:space:]\`,;|])${required_rc_label}([[:space:]\`,;|.]|$)"
+      negated_required_rc_label_prefix_regex="(^|[[:space:]\`,;|])(no|not|without|missing|omitted|excluded)[[:space:]_-]+(the[[:space:]_-]+)?${required_rc_label}([[:space:]\`,;|.]|$)"
+      negated_required_rc_label_suffix_regex="(^|[[:space:]\`,;|])${required_rc_label}[[:space:]_-]+(is[[:space:]_-]+)?(missing|omitted|excluded|absent)([[:space:]\`,;|.]|$)"
+      if [[ ! "${line_lower}" =~ ${required_rc_label_regex} ]] || [[ "${line_lower}" =~ ${negated_required_rc_label_prefix_regex} ]] || [[ "${line_lower}" =~ ${negated_required_rc_label_suffix_regex} ]]; then
         echo "Forbidden Phase 66.5 report export RC proof: invalid RC label set detected" >&2
         exit 1
       fi
     done
     label_line_without_required_negative="${line_lower//not-workflow-truth/}"
-    if grep -Eq -- '(^|[[:space:]`,|])workflow[[:space:]_-]*truth([[:space:]`,|.]|$)' <<<"${label_line_without_required_negative}"; then
+    if [[ "${label_line_without_required_negative}" =~ ${workflow_truth_label_regex} ]]; then
       echo "Forbidden Phase 66.5 report export RC proof: invalid RC label set detected" >&2
       exit 1
     fi
@@ -769,21 +809,18 @@ while IFS= read -r line_lower; do
     echo "Forbidden Phase 66.5 report export RC proof: workstation-local path evidence detected" >&2
     exit 1
   fi
-  if ! is_safe_customer_private_redaction_line "${line_lower}" && grep -Eq -- 'customer[-_ ]private[-_ ]data[[:space:]]*[:=]' <<<"${line_lower}"; then
+  if ! is_safe_customer_private_redaction_line "${line_lower}" && [[ "${line_lower}" =~ customer[-_\ ]private[-_\ ]data[[:space:]]*[:=] ]]; then
     echo "Forbidden Phase 66.5 report export RC proof: customer-private data detected" >&2
     exit 1
   fi
-  if ! is_safe_customer_private_redaction_line "${line_lower}" && grep -Eq -- "${customer_private_unsafe_regex}" <<<"${line_lower}"; then
+  if ! is_safe_customer_private_redaction_line "${line_lower}" && [[ "${line_lower}" =~ ${customer_private_unsafe_regex} ]]; then
     echo "Forbidden Phase 66.5 report export RC proof: customer-private data detected" >&2
     exit 1
   fi
-  if [[ "${line_lower}" =~ ${customer_private_prohibition_regex} ]] && ! grep -Eq -- '(includes|contains|embeds|carries|stores|exposes?|are[[:space:]]+stored|is[[:space:]]+stored|were[[:space:]]+stored|was[[:space:]]+stored)' <<<"${line_lower}"; then
+  if [[ "${line_lower}" =~ ${customer_private_prohibition_regex} ]] && [[ ! "${line_lower}" =~ (includes|contains|embeds|carries|stores|exposes?|are[[:space:]]+stored|is[[:space:]]+stored|were[[:space:]]+stored|was[[:space:]]+stored) ]]; then
     continue
   fi
-  if [[ "${line_lower}" =~ ${customer_private_prohibition_regex} ]]; then
-    continue
-  fi
-  if ! is_safe_customer_private_redaction_line "${line_lower}" && grep -Eq -- '(includes|contains|embeds|carries|stores|exposes?)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_ ]private[[:space:]]+data|raw[[:space:]]+customer[[:space:]]+data[[:space:]]+(is|are|was|were)[[:space:]]+(stored|included|embedded|carried|exposed)|unredacted[[:space:]]+customer[[:space:]]+data' <<<"${line_lower}"; then
+  if ! is_safe_customer_private_redaction_line "${line_lower}" && [[ "${line_lower}" =~ (includes|contains|embeds|carries|stores|exposes?)[[:space:]]+(customer[-_\ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_\ ]private[[:space:]]+data|raw[[:space:]]+customer[[:space:]]+data[[:space:]]+(is|are|was|were)[[:space:]]+(stored|included|embedded|carried|exposed)|unredacted[[:space:]]+customer[[:space:]]+data ]]; then
     echo "Forbidden Phase 66.5 report export RC proof: customer-private data detected" >&2
     exit 1
   fi

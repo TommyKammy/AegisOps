@@ -5,6 +5,14 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
+assertion_manifest="${workdir}/assertions.tsv"
+assertion_jobs="${PHASE66_5_TEST_JOBS:-4}"
+: >"${assertion_manifest}"
+
+if [[ ! "${assertion_jobs}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "PHASE66_5_TEST_JOBS must be a positive integer" >&2
+  exit 1
+fi
 
 copy_repo_path() {
   local target="$1"
@@ -37,25 +45,67 @@ complete_redaction_posture="secrets redacted, credentials redacted, customer-pri
 assert_passes() {
   local target="$1"
 
-  PHASE66_5_SKIP_PATH_HYGIENE=1 bash "${target}/scripts/verify-phase-66-5-report-export-rc-proof.sh" "${target}" >/tmp/phase66_5_pass.out 2>/tmp/phase66_5_pass.err || {
-    cat /tmp/phase66_5_pass.err >&2
-    exit 1
-  }
+  printf 'pass\t%s\t\n' "${target}" >>"${assertion_manifest}"
 }
 
 assert_fails_with() {
   local target="$1"
   local expected="$2"
 
-  if PHASE66_5_SKIP_PATH_HYGIENE=1 bash "${target}/scripts/verify-phase-66-5-report-export-rc-proof.sh" "${target}" >/tmp/phase66_5_fail.out 2>/tmp/phase66_5_fail.err; then
-    echo "Expected Phase 66.5 verifier failure containing: ${expected}" >&2
-    exit 1
+  printf 'fail\t%s\t%s\n' "${target}" "${expected}" >>"${assertion_manifest}"
+}
+
+run_assertion() {
+  local expectation="$1"
+  local target="$2"
+  local expected_message="$3"
+  local stdout_path="${target}.assert.out"
+  local stderr_path="${target}.assert.err"
+
+  if [[ "${expectation}" == "pass" ]]; then
+    if ! PHASE66_5_SKIP_PATH_HYGIENE=1 bash "${target}/scripts/verify-phase-66-5-report-export-rc-proof.sh" "${target}" >"${stdout_path}" 2>"${stderr_path}"; then
+      echo "Expected Phase 66.5 verifier success for: ${target#"${workdir}/"}" >&2
+      cat "${stderr_path}" >&2
+      return 1
+    fi
+    return 0
   fi
-  if ! grep -Fq -- "${expected}" /tmp/phase66_5_fail.err; then
-    echo "Missing expected Phase 66.5 verifier failure: ${expected}" >&2
-    cat /tmp/phase66_5_fail.err >&2
-    exit 1
+
+  if PHASE66_5_SKIP_PATH_HYGIENE=1 bash "${target}/scripts/verify-phase-66-5-report-export-rc-proof.sh" "${target}" >"${stdout_path}" 2>"${stderr_path}"; then
+    echo "Expected Phase 66.5 verifier failure containing: ${expected_message}" >&2
+    return 1
   fi
+  if ! grep -Fq -- "${expected_message}" "${stderr_path}"; then
+    echo "Missing expected Phase 66.5 verifier failure: ${expected_message}" >&2
+    cat "${stderr_path}" >&2
+    return 1
+  fi
+}
+
+run_assertions() {
+  local expectation
+  local target
+  local expected_message
+  local pid
+  local failed=0
+  local -a pids
+  pids=()
+
+  while IFS=$'\t' read -r expectation target expected_message; do
+    run_assertion "${expectation}" "${target}" "${expected_message}" &
+    pids+=("$!")
+    if ((${#pids[@]} >= assertion_jobs)); then
+      for pid in "${pids[@]}"; do
+        wait "${pid}" || failed=1
+      done
+      pids=()
+    fi
+  done <"${assertion_manifest}"
+
+  for pid in "${pids[@]}"; do
+    wait "${pid}" || failed=1
+  done
+  ((failed == 0))
 }
 
 valid_repo="${workdir}/valid"
@@ -334,6 +384,18 @@ copy_valid_repo "${source_record_generated_file_repo}"
 printf '%s\n' "source_record_references: generated file" >>"${source_record_generated_file_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${source_record_generated_file_repo}" "invalid source record reference detected"
 
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
+  source_record_generated_artifact_repo="${workdir}/source-record-generated-artifact-${fixture_name}"
+  copy_valid_repo "${source_record_generated_artifact_repo}"
+  printf '%s\n' "${evidence_line}" >>"${source_record_generated_artifact_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${source_record_generated_artifact_repo}" "invalid source record reference detected"
+done <<'EOF'
+assignment::source_record_references: source alert AL-1; case CASE-1; evidence EV-1; approval AP-1; action request AR-1; execution receipt ER-1; reconciliation REC-1; generated artifact ART-1
+table::| source_record_references | source alert AL-1 | case CASE-1 | evidence EV-1 | approval AP-1 | action request AR-1 | execution receipt ER-1 | reconciliation REC-1 | generated report artifact ART-1 |
+EOF
+
 source_record_downloaded_artifact_repo="${workdir}/source-record-downloaded-artifact"
 copy_valid_repo "${source_record_downloaded_artifact_repo}"
 printf '%s\n' "| source_record_references | downloaded artifact |" >>"${source_record_downloaded_artifact_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -572,6 +634,20 @@ production_truth_extra_table_cell_label_repo="${workdir}/production-truth-extra-
 copy_valid_repo "${production_truth_extra_table_cell_label_repo}"
 printf '%s\n' "| rc_label_set | rc-evidence phase-66 report-export not-workflow-truth | production-truth |" >>"${production_truth_extra_table_cell_label_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${production_truth_extra_table_cell_label_repo}" "invalid RC label set detected"
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
+  negated_required_label_repo="${workdir}/negated-required-label-${fixture_name}"
+  copy_valid_repo "${negated_required_label_repo}"
+  printf '%s\n' "${evidence_line}" >>"${negated_required_label_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${negated_required_label_repo}" "invalid RC label set detected"
+done <<'EOF'
+no-prefix::rc_label_set: rc-evidence no phase-66 report-export not-workflow-truth
+without-prefix::rc_label_set: rc-evidence phase-66 without report-export not-workflow-truth
+suffix::rc_label_set: rc-evidence phase-66 report-export excluded not-workflow-truth
+table::| rc_label_set | rc-evidence | phase-66 | report-export | no not-workflow-truth |
+EOF
 
 bad_redaction_repo="${workdir}/bad-redaction"
 copy_valid_repo "${bad_redaction_repo}"
@@ -1134,6 +1210,24 @@ copy_valid_repo "${customer_private_exposes_prohibition_bypass_repo}"
 printf '%s\n' "The proof exposes customer-private ticket export and customer-private data fails the proof." >>"${customer_private_exposes_prohibition_bypass_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${customer_private_exposes_prohibition_bypass_repo}" "customer-private data detected"
 
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
+  customer_private_rule_leak_repo="${workdir}/customer-private-rule-leak-${fixture_name}"
+  copy_valid_repo "${customer_private_rule_leak_repo}"
+  printf '%s\n' "${evidence_line}" >>"${customer_private_rule_leak_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${customer_private_rule_leak_repo}" "customer-private data detected"
+done <<'EOF'
+stored::Customer-private data fails the proof and is stored in the report.
+stores::The proof must reject customer-private data but stores it here.
+EOF
+
+safe_customer_private_rule_repo="${workdir}/safe-customer-private-rule"
+copy_valid_repo "${safe_customer_private_rule_repo}"
+printf '%s\n' "The proof must reject customer-private data." >>"${safe_customer_private_rule_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "Customer-private data fails the proof." >>"${safe_customer_private_rule_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_passes "${safe_customer_private_rule_repo}"
+
 redacted_then_customer_private_leak_repo="${workdir}/redacted-then-customer-private-leak"
 copy_valid_repo "${redacted_then_customer_private_leak_repo}"
 printf '%s\n' "redaction_posture: secrets redacted, credentials redacted, customer-private data redacted; customer-private tickets are stored in the proof, workstation-local paths redacted, pii redacted." >>"${redacted_then_customer_private_leak_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -1194,4 +1288,5 @@ copy_valid_repo "${safe_limitation_repo}"
 printf '%s\n' "Phase 66.5 records that report authority over AegisOps records remains out of scope." >>"${safe_limitation_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${safe_limitation_repo}"
 
+run_assertions
 echo "Phase 66.5 report export RC proof verifier self-test passed."
