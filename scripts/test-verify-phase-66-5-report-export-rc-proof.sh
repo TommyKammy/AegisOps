@@ -102,9 +102,11 @@ run_assertions() {
     fi
   done <"${assertion_manifest}"
 
-  for pid in "${pids[@]}"; do
-    wait "${pid}" || failed=1
-  done
+  if ((${#pids[@]} > 0)); then
+    for pid in "${pids[@]}"; do
+      wait "${pid}" || failed=1
+    done
+  fi
   ((failed == 0))
 }
 
@@ -263,6 +265,31 @@ copy_valid_repo "${complete_export_identity_table_repo}"
 printf '%s\n' "| report_export_id | EXP-1 | timestamp=2026-07-04T01:22:50Z | operator=reviewer-1 | export_profile=bounded |" >>"${complete_export_identity_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
 printf '%s\n' "| export_format | PDF | file_name_pattern=report-*.pdf | hash=sha256:abcdef123456 |" >>"${complete_export_identity_table_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${complete_export_identity_table_repo}"
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
+  valid_checksum_reference_repo="${workdir}/valid-checksum-reference-${fixture_name}"
+  copy_valid_repo "${valid_checksum_reference_repo}"
+  printf '%s\n' "${evidence_line}" >>"${valid_checksum_reference_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_passes "${valid_checksum_reference_repo}"
+done <<'EOF'
+reference-id::export_format: PDF; file_name_pattern=report-*.pdf; checksum=CHECKSUM-REF-123
+bare-digest::export_format: PDF; file_name_pattern=report-*.pdf; hash=abcdef123456
+EOF
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
+  invalid_checksum_reference_repo="${workdir}/invalid-checksum-reference-${fixture_name}"
+  copy_valid_repo "${invalid_checksum_reference_repo}"
+  printf '%s\n' "${evidence_line}" >>"${invalid_checksum_reference_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${invalid_checksum_reference_repo}" "missing required evidence value detected"
+done <<'EOF'
+empty-algorithm::export_format: PDF; file_name_pattern=report-*.pdf; checksum=sha256:
+punctuation-only::export_format: PDF; file_name_pattern=report-*.pdf; checksum=---
+malformed-digest::export_format: PDF; file_name_pattern=report-*.pdf; checksum=sha256:not-a-digest
+EOF
 
 while IFS='|' read -r fixture_name export_format file_extension; do
   supported_export_format_repo="${workdir}/supported-export-format-${fixture_name}"
@@ -554,6 +581,25 @@ assert_passes "${valid_explicit_mismatch_states_repo}"
 while IFS= read -r fixture; do
   fixture_name="${fixture%%::*}"
   evidence_line="${fixture#*::}"
+  subordinate_section_reference_repo="${workdir}/subordinate-section-reference-${fixture_name}"
+  copy_valid_repo "${subordinate_section_reference_repo}"
+  printf '%s\n' "${evidence_line}" >>"${subordinate_section_reference_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${subordinate_section_reference_repo}" "missing required evidence value detected"
+done <<'EOF'
+case-primary::case_section_reference: generated_artifact; status=open; evidence_links=EVD-1; owner=operator-1; limitation_references=LIM-1
+action-primary::action_section_reference: report_output; approval=APR-1; delegated_action_request=ACT-1; execution_receipt=REC-1; mismatch_posture=matched
+reconciliation-primary::reconciliation_section_reference: export_metadata; receipt=REC-1; outcome=reviewed; mismatch_state=matched; follow_up_owner=operator-1; linked_record=CASE-1
+action-approval::action_section_reference: ACTION-SECTION-1; approval=report_output; delegated_action_request=ACT-1; execution_receipt=REC-1; mismatch_posture=matched
+action-request::action_section_reference: ACTION-SECTION-1; approval=APR-1; delegated_action_request=generated_artifact; execution_receipt=REC-1; mismatch_posture=matched
+action-receipt::action_section_reference: ACTION-SECTION-1; approval=APR-1; delegated_action_request=ACT-1; execution_receipt=report_output; mismatch_posture=matched
+reconciliation-receipt::reconciliation_section_reference: RECON-SECTION-1; receipt=report_output; outcome=reviewed; mismatch_state=matched; follow_up_owner=operator-1; linked_record=CASE-1
+reconciliation-outcome::reconciliation_section_reference: RECON-SECTION-1; receipt=REC-1; outcome=generated_artifact; mismatch_state=matched; follow_up_owner=operator-1; linked_record=CASE-1
+reconciliation-linked-record::reconciliation_section_reference: RECON-SECTION-1; receipt=REC-1; outcome=reviewed; mismatch_state=matched; follow_up_owner=operator-1; linked_record=export_metadata
+EOF
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
   invalid_mismatch_state_repo="${workdir}/invalid-mismatch-state-${fixture_name}"
   copy_valid_repo "${invalid_mismatch_state_repo}"
   printf '%s\n' "${evidence_line}" >>"${invalid_mismatch_state_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -765,6 +811,32 @@ comment_workstation_local_evidence_repo="${workdir}/comment-workstation-local-ev
 copy_valid_repo "${comment_workstation_local_evidence_repo}"
 printf '%s\n' "<!-- proof stores workstation-local paths in the report -->" >>"${comment_workstation_local_evidence_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${comment_workstation_local_evidence_repo}" "workstation-local path evidence detected"
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
+  safe_workstation_posture_repo="${workdir}/safe-workstation-posture-${fixture_name}"
+  copy_valid_repo "${safe_workstation_posture_repo}"
+  printf '%s\n' "${evidence_line}" >>"${safe_workstation_posture_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_passes "${safe_workstation_posture_repo}"
+done <<'EOF'
+field-not-included::redaction_posture: secrets redacted, credentials redacted, customer-private data redacted, workstation-local paths not included, pii redacted
+active-not-included::The proof does not include workstation-local paths.
+passive-not-stored::Workstation-local paths are not stored in the proof.
+explicitly-excluded::Workstation-local paths are excluded from export evidence.
+EOF
+
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  evidence_line="${fixture#*::}"
+  mixed_workstation_leak_repo="${workdir}/mixed-workstation-leak-${fixture_name}"
+  copy_valid_repo "${mixed_workstation_leak_repo}"
+  printf '%s\n' "${evidence_line}" >>"${mixed_workstation_leak_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${mixed_workstation_leak_repo}" "workstation-local path evidence detected"
+done <<'EOF'
+active::The proof does not include workstation-local paths, but stores workstation-local paths in the report.
+passive::Workstation-local paths are not stored; workstation-local paths are included in the report.
+EOF
 
 redaction_extra_table_cell_repo="${workdir}/redaction-extra-table-cell"
 copy_valid_repo "${redaction_extra_table_cell_repo}"
@@ -1085,10 +1157,29 @@ ready-for-customer-portal::This proof is ready for customer portal.
 mixed-negated-and-positive::This proof does not infer RC pass and report output infers GA pass.
 EOF
 
+while IFS= read -r fixture; do
+  fixture_name="${fixture%%::*}"
+  claim_text="${fixture#*::}"
+  normalized_claim_grammar_repo="${workdir}/normalized-claim-grammar-${fixture_name}"
+  copy_valid_repo "${normalized_claim_grammar_repo}"
+  printf '%s\n' "${claim_text}" >>"${normalized_claim_grammar_repo}/docs/phase-66-5-report-export-rc-proof.md"
+  assert_fails_with "${normalized_claim_grammar_repo}" "Forbidden Phase 66.5 report export RC proof claim matched"
+done <<'EOF'
+generated-artifact-readiness::Generated artifacts confirm GA readiness.
+generated-artifact-truth::Generated artifact is workflow truth.
+provider-provides::This proof provides compliance certification.
+provider-offers::Phase 66.5 offers customer portal readiness.
+provider-delivers::Report export delivers commercial replacement readiness.
+passive-definite-article::GA readiness is confirmed by the proof.
+passive-report-output-article::GA readiness is confirmed by the report output.
+passive-report-export-article::Compliance certification is proved by the report export.
+EOF
+
 safe_negated_inferred_readiness_repo="${workdir}/safe-negated-inferred-readiness"
 copy_valid_repo "${safe_negated_inferred_readiness_repo}"
 printf '%s\n' "This proof does not infer RC pass." >>"${safe_negated_inferred_readiness_repo}/docs/phase-66-5-report-export-rc-proof.md"
 printf '%s\n' "GA pass is not inferred from report output." >>"${safe_negated_inferred_readiness_repo}/docs/phase-66-5-report-export-rc-proof.md"
+printf '%s\n' "This proof provides report export RC evidence." >>"${safe_negated_inferred_readiness_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_passes "${safe_negated_inferred_readiness_repo}"
 
 rc_overclaim_repo="${workdir}/rc-overclaim"
@@ -1350,6 +1441,11 @@ copy_valid_repo "${redacted_then_customer_private_leak_repo}"
 printf '%s\n' "redaction_posture: secrets redacted, credentials redacted, customer-private data redacted; customer-private tickets are stored in the proof, workstation-local paths redacted, pii redacted." >>"${redacted_then_customer_private_leak_repo}/docs/phase-66-5-report-export-rc-proof.md"
 assert_fails_with "${redacted_then_customer_private_leak_repo}" "customer-private data detected"
 
+redacted_then_implicit_customer_private_leak_repo="${workdir}/redacted-then-implicit-customer-private-leak"
+copy_valid_repo "${redacted_then_implicit_customer_private_leak_repo}"
+printf '%s\n' "redaction_posture: secrets redacted, credentials redacted, customer-private data redacted but stored, workstation-local paths redacted, pii redacted." >>"${redacted_then_implicit_customer_private_leak_repo}/docs/phase-66-5-report-export-rc-proof.md"
+assert_fails_with "${redacted_then_implicit_customer_private_leak_repo}" "customer-private data detected"
+
 raw_customer_data_stored_repo="${workdir}/raw-customer-data-stored"
 copy_valid_repo "${raw_customer_data_stored_repo}"
 printf '%s\n' "Raw customer data is stored in the proof." >>"${raw_customer_data_stored_repo}/docs/phase-66-5-report-export-rc-proof.md"
@@ -1375,6 +1471,11 @@ copy_valid_repo "${pronoun_readme_claim_repo}"
 printf '%s\n' "The Phase 66.5 report export proof proves GA readiness." >>"${pronoun_readme_claim_repo}/README.md"
 assert_fails_with "${pronoun_readme_claim_repo}" "Forbidden Phase 66.5 README claim matched"
 
+inherited_scope_readme_claim_repo="${workdir}/inherited-scope-readme-claim"
+copy_valid_repo "${inherited_scope_readme_claim_repo}"
+printf '%s\n' "The Phase 66.5 report export proof is documented here. This proof proves GA readiness." >>"${inherited_scope_readme_claim_repo}/README.md"
+assert_fails_with "${inherited_scope_readme_claim_repo}" "Forbidden Phase 66.5 README claim matched"
+
 markdown_readme_claim_repo="${workdir}/markdown-readme-claim"
 copy_valid_repo "${markdown_readme_claim_repo}"
 printf '%s\n' "The Phase **66.5** report export proof **confirms** GA readiness." >>"${markdown_readme_claim_repo}/README.md"
@@ -1389,6 +1490,11 @@ mixed_phase_readme_claim_repo="${workdir}/mixed-phase-readme-claim"
 copy_valid_repo "${mixed_phase_readme_claim_repo}"
 printf '%s\n' "The Phase 67 proof proves GA readiness. Phase 66.5 remains RC evidence only." >>"${mixed_phase_readme_claim_repo}/README.md"
 assert_passes "${mixed_phase_readme_claim_repo}"
+
+overridden_scope_readme_claim_repo="${workdir}/overridden-scope-readme-claim"
+copy_valid_repo "${overridden_scope_readme_claim_repo}"
+printf '%s\n' "The Phase 66.5 report export proof is documented here. The Phase 67 proof proves GA readiness." >>"${overridden_scope_readme_claim_repo}/README.md"
+assert_passes "${overridden_scope_readme_claim_repo}"
 
 unscoped_readme_claim_repo="${workdir}/unscoped-readme-claim"
 copy_valid_repo "${unscoped_readme_claim_repo}"

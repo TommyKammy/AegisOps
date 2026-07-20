@@ -182,9 +182,10 @@ done
 limitations_section="$(section_text "${absolute_doc_path}" "## 5. Accepted Limitations" "## 6. Verification")"
 require_section_phrase "${limitations_section}" "It does not prove compliance certification, customer portal readiness, production SLA reporting, real design-partner export success, report authority over AegisOps records, Phase 66 closeout, Phase 67 GA readiness, or commercial replacement readiness." "Phase 66.5 accepted limitations boundary"
 
-subordinate_subjects='(reports?|report[[:space:]]+(output|sections?|metadata|labels?|text|exports?|files?|artifacts?)|generated[[:space:]]+files?|export[[:space:]]+(metadata|artifacts?|output)|downloaded[[:space:]]+artifacts?|screenshots?|browser[[:space:]]+state|ui[[:space:]]+(state|cache)|optional[[:space:]]+evidence|verifier[[:space:]]+output|issue-lint[[:space:]]+output)'
+subordinate_subjects='(reports?|report[[:space:]]+(output|sections?|metadata|labels?|text|exports?|files?|artifacts?)|generated[[:space:]]+(files?|artifacts?)|export[[:space:]]+(metadata|artifacts?|output)|downloaded[[:space:]]+artifacts?|screenshots?|browser[[:space:]]+state|ui[[:space:]]+(state|cache)|optional[[:space:]]+evidence|verifier[[:space:]]+output|issue-lint[[:space:]]+output)'
 readiness_claim_subjects="(phase[[:space:]]+66\\.5|this[[:space:]]+proof|proof|report[[:space:]-]+exports?|${subordinate_subjects})"
-readiness_claim_verbs='(prove(s|d)?|satisf(y|ies|ied)|passes|passed|accept(s|ed)?|grant(s|ed)?|achieve(s|d)?|enable(s|d)?|validate(s|d)?|demonstrate(s|d)?|confirm(s|ed)?|authorize(s|d)?|establish(es|ed)?|guarantee(s|d)?|certif(y|ies|ied)|infer(s|red|ring)?|impl(y|ies|ied)|indicat(e|es|ed)|conclud(e|es|ed))'
+claim_provider_verbs='(provid(e|es|ed)|offer(s|ed)?|deliver(s|ed)?)'
+readiness_claim_verbs="(prove(s|d)?|satisf(y|ies|ied)|passes|passed|accept(s|ed)?|grant(s|ed)?|achieve(s|d)?|enable(s|d)?|validate(s|d)?|demonstrate(s|d)?|confirm(s|ed)?|authorize(s|d)?|establish(es|ed)?|guarantee(s|d)?|certif(y|ies|ied)|infer(s|red|ring)?|impl(y|ies|ied)|indicat(e|es|ed)|conclud(e|es|ed)|${claim_provider_verbs})"
 readiness_passive_claim_verbs='(authorized|established|guaranteed|certified|proven|proved|confirmed|validated|satisfied|demonstrated|inferred|implied|indicated|concluded)'
 readiness_qualified_outcomes='(ga[[:space:]-]+(readiness|pass)|general[- ]availability([[:space:]-]+(readiness|pass))?|rc[[:space:]-]+(gate|readiness|pass)|release[- ]candidate[[:space:]-]+(gate|readiness|pass)|supportability|closeout[[:space:]-]+evidence|compliance([[:space:]-]+certification)?|customer[[:space:]-]+portal[[:space:]-]+(readiness|ready)|production[[:space:]-]+(sla[[:space:]-]+reporting|reporting)|commercial[[:space:]-]+replacement[[:space:]-]+readiness|real[[:space:]]+design[- ]partner[[:space:]-]+export[[:space:]-]+success|phase[[:space:]]+66[[:space:]-]+closeout)'
 readiness_claim_outcomes="${readiness_qualified_outcomes}"
@@ -192,7 +193,7 @@ readiness_terminal_outcomes='(ga|rc)'
 readiness_identity_outcomes="(ready[[:space:]]+for[[:space:]]+(ga|general[- ]availability|rc|release[- ]candidate|customer[[:space:]-]+portal|commercial[[:space:]-]+replacement)|(ga|rc|release[- ]candidate|customer[[:space:]-]+portal|commercial[[:space:]-]+replacement)[[:space:]-]+ready|${readiness_qualified_outcomes})"
 readiness_claim_bridge='([[:space:]]+[^[:space:].,;]+){0,6}[[:space:]]+'
 claim_identity_verbs='(is|are|was|were|be|being|been|become|becomes|became|(serve(s|d)?|act(s|ed)?|function(s|ed)?|operate(s|d)?)[[:space:]]+as|constitute(s|d)?|represent(s|ed)?)'
-authority_provider_verbs='(has|have|had|holds?|held|carr(y|ies|ied)|grants?|granted|provid(e|es|ed)|confer(s|red)?|convey(s|ed)?|bestow(s|ed)?|delegate(s|d)?)'
+authority_provider_verbs="(has|have|had|holds?|held|carr(y|ies|ied)|grants?|granted|${claim_provider_verbs}|confer(s|red)?|convey(s|ed)?|bestow(s|ed)?|delegate(s|d)?)"
 authority_verbs='(approve[s]?|approved|authoriz(e|es|ed)|permit[s]?|permitted|determine[s]?|determined|create[s]?|created|complete[s]?|completed|mark[s]?|marked|trigger[s]?|triggered|execute[s]?|executed|reconcile[s]?|reconciled|close[s]?|closed|release[s]?|released|gate[s]?|gated|mutate[s]?|mutated|promote[s]?|promoted|override[s]?|overrode|overridden|update[s]?|updated|change[s]?|changed|write[s]?|wrote|written|modif(y|ies|ied)|alter[s]?|altered|delete[s]?|deleted|set[s]?|transition[s]?|transitioned|replace[s]?|replaced)'
 authority_passive_verbs='(approved|authorized|permitted|determined|created|completed|marked([[:space:]]+(closed|complete|completed|ready|resolved))?|triggered|executed|reconciled|closed|released|gated|mutated|promoted|overridden|updated|changed|written|modified|altered|deleted|set|transitioned|replaced)'
 authority_objects='(aegisops[[:space:]]+records?|cases?|case[[:space:]-]+closure|case[[:space:]-]+closed|alerts?|records?|workflows?|releases?|gates?|evidence|approvals?|action[[:space:]-]+requests?|action[[:space:]-]+execution|execution[[:space:]-]+receipts?|reconciliation|audits?|limitations?|source[[:space:]-]+admission|closeout|actions?)'
@@ -200,6 +201,7 @@ authority_targets='(workflow|release|gate|readiness|case|action|reconciliation|e
 truth_targets='((source[[:space:]]+of[[:space:]]+truth)|(workflow|release|gate|readiness|case|action|reconciliation|source[[:space:]-]+record|evidence|approval|audit|limitation|source[[:space:]-]+admission|closeout)[[:space:]]+truth)'
 passive_auxiliaries='(is|are|was|were|be|being|been|has[[:space:]]+been|have[[:space:]]+been|had[[:space:]]+been|become|becomes)'
 passive_connectors='(by|from|through|using|via|based[[:space:]]+on|on[[:space:]]+the[[:space:]]+basis[[:space:]]+of|according[[:space:]]+to)'
+passive_subject_determiner='((the|a|an)[[:space:]]+)?'
 positive_clause_connector='([,;][[:space:]]*|[[:space:]]+(and|but|yet)[[:space:]]+)'
 authority_phrase="(${authority_targets}[[:space:]-]+authority|authority[[:space:]]+(for|over|of|within)[[:space:]]+${authority_targets})"
 claim_predicate_verbs="(${readiness_claim_verbs}|${authority_verbs}|${claim_identity_verbs}|${authority_provider_verbs})"
@@ -214,7 +216,10 @@ report_export_missing_subfield='((without|no)[[:space:]_-]+(timestamp|operator|e
 export_format_missing_subfield='((without|no)[[:space:]_-]+(file[[:space:]_-]*name[[:space:]_-]*pattern|checksum|hash)([[:space:].,;)]|$))'
 missing_evidence_subfield_regex="(^|[[:space:]>*-])\`?report_export_id\`?[[:space:]]*[:=][^.[:cntrl:]]*${report_export_missing_subfield}|(^|[[:space:]>*-])\`?export_format\`?[[:space:]]*[:=][^.[:cntrl:]]*${export_format_missing_subfield}"
 missing_evidence_subfield_table_regex="(^|[[:space:]>*-])\|[[:space:]]*\`?report_export_id\`?[[:space:]]*\|.*${report_export_missing_subfield}|(^|[[:space:]>*-])\|[[:space:]]*\`?export_format\`?[[:space:]]*\|.*${export_format_missing_subfield}"
+workstation_local_path='workstation[-_ ]local[[:space:]_-]+paths?'
 workstation_local_unsafe_regex='((stores?|includes?|contains?|embeds?|carr(y|ies)|retains?|preserves?|exposes?)[[:space:]][^.[:cntrl:]]*workstation[-_ ]local[[:space:]_-]+paths?|records?[[:space:]]+(the[[:space:]]+)?workstation[-_ ]local[[:space:]_-]+paths?|workstation[-_ ]local[[:space:]_-]+paths?[^.[:cntrl:]]+(stored|included|embedded|carried|recorded|retained|preserved|exposed))'
+workstation_local_safe_active_regex="((cannot|can[[:space:]]+not|does[[:space:]]+not|do[[:space:]]+not|did[[:space:]]+not|will[[:space:]]+not|must[[:space:]]+not|never)[[:space:]]+(store|include|contain|embed|carry|retain|preserve|expose|record)[^,;.[:cntrl:]]*${workstation_local_path})"
+workstation_local_safe_passive_regex="(${workstation_local_path}[^,;.[:cntrl:]]*((is|are|was|were)[[:space:]]+)?(not[[:space:]]+(stored|included|contained|embedded|carried|recorded|retained|preserved|exposed)|excluded|redacted|masked|removed|omitted))"
 
 repository_revision_value_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?(main|master|develop|development|trunk|head|refs/heads/[^`[:space:],.;)]+|refs/remotes/[^`[:space:],.;)]+|remotes/[^`[:space:],.;)]+|origin/[^`[:space:],.;)]+|[^`[:space:],.;)]*branch)`?([[:space:].,;)]|$)'
 repository_revision_assignment_regex='(^|[[:space:]>*-])`?repository_revision`?[[:space:]]*[:=][[:space:]]*`?([^`[:space:],.;)]+)'
@@ -246,7 +251,7 @@ limitation_hidden_table_any_cell_regex='(^|[[:space:]>*-])\|[[:space:]]*`?limita
 incomplete_export_evidence_regex='export[[:space:]_-]+evidence[^.[:cntrl:]]*(incomplete|partial|missing|unavailable|not[[:space:]_-]+complete)|(incomplete|partial|missing|unavailable|not[[:space:]_-]+complete)[^.[:cntrl:]]*export[[:space:]_-]+evidence'
 customer_private_prohibition_regex='((must[[:space:]]+reject|rejects|rejected|forbidden|not[[:space:]]+include|must[[:space:]]+not[[:space:]]+include|fail[s]?[[:space:]]+the[[:space:]]+proof)[^.[:cntrl:]]*customer[-_ ]private|customer[-_ ]private[^.[:cntrl:]]*fail[s]?[[:space:]]+the[[:space:]]+proof)'
 customer_private_unsafe_regex='(includes|contains|embeds|carries|stores|exposes?)[[:space:]]+(customer[-_ ]private|raw[[:space:]]+customer[[:space:]]+data|unredacted[[:space:]]+customer)|customer[-_ ]private[[:space:]]+(examples?|tickets?|alerts?|logs?|chats?|payloads?|exports?)([[:space:].,;)]|[[:space:]]+(are|were|was|is)[[:space:]]+(stored|included|embedded|carried|exposed))|raw[[:space:]]+customer[[:space:]]+data[[:space:]]+(is|are|was|were)[[:space:]]+(stored|included|embedded|carried|exposed)|unredacted[[:space:]]+customer[[:space:]]+(tickets?|alerts?|logs?|chats?|payloads?|exports?|data)([[:space:].,;)]|$)'
-safe_customer_private_redaction_regex='customer[-_ ]private[[:space:]]+(data|examples?|tickets?|alerts?|logs?|chats?|payloads?|exports?)[^.[:cntrl:]]+(redacted|masked|removed|omitted|not[[:space:]_-]*stored)'
+safe_customer_private_redaction_regex='customer[-_ ]private[[:space:]]+(data|examples?|tickets?|alerts?|logs?|chats?|payloads?|exports?)[^,;.[:cntrl:]]+(redacted|masked|removed|omitted|not[[:space:]_-]*stored)'
 canonical_journey_run_id_row='| `journey_run_id` | the phase 66.1 run identifier that observed the export. | missing or mismatched run identifiers fail the proof. |'
 canonical_repository_revision_row='| `repository_revision` | immutable repository revision for the proof packet. | mutable branch names fail the proof. |'
 canonical_report_export_id_row='| `report_export_id` | reviewed report export identifier, timestamp, operator, and export profile. | missing export identity or placeholder export ids fail the proof. |'
@@ -281,22 +286,41 @@ is_canonical_claim_scan_exemption() {
 
 is_safe_customer_private_redaction_line() {
   local line_lower="$1"
+  local sanitized_line="${line_lower}"
+  local safe_posture_found=0
 
-  [[ "${line_lower}" =~ ${safe_customer_private_redaction_regex} ]] || return 1
-  if [[ "${line_lower}" =~ (raw|unredacted|includes|contains|embeds|carries|stores|included|embedded|carried|exposes?|exposed) ]]; then
-    return 1
-  fi
-  if [[ "${line_lower}" =~ stored ]] && ! [[ "${line_lower}" =~ not[[:space:]_-]*stored ]]; then
+  while [[ "${sanitized_line}" =~ ${safe_customer_private_redaction_regex} ]]; do
+    safe_posture_found=1
+    sanitized_line="${sanitized_line/"${BASH_REMATCH[0]}"/safe-customer-private-posture}"
+  done
+  ((safe_posture_found == 1)) || return 1
+
+  if [[ "${sanitized_line}" =~ ${customer_private_unsafe_regex} ]] ||
+    [[ "${sanitized_line}" =~ customer[-_\ ]private[-_\ ]data[[:space:]]*[:=] ]] ||
+    [[ "${sanitized_line}" =~ safe-customer-private-posture[^.[:cntrl:]]*(and|but|yet)[[:space:]]+((is|are|was|were)[[:space:]]+)?(stored|included|embedded|carried|recorded|retained|preserved|exposed) ]]; then
     return 1
   fi
   return 0
+}
+
+line_has_unsafe_workstation_path() {
+  local line_lower="$1"
+  local sanitized_line="${line_lower}"
+
+  while [[ "${sanitized_line}" =~ ${workstation_local_safe_active_regex} ]]; do
+    sanitized_line="${sanitized_line/"${BASH_REMATCH[0]}"/safe-workstation-path-posture}"
+  done
+  while [[ "${sanitized_line}" =~ ${workstation_local_safe_passive_regex} ]]; do
+    sanitized_line="${sanitized_line/"${BASH_REMATCH[0]}"/safe-workstation-path-posture}"
+  done
+  [[ "${sanitized_line}" =~ ${workstation_local_unsafe_regex} ]]
 }
 
 # Claim policy is grouped by semantic role so each wording form shares one vocabulary.
 readiness_forbidden_patterns=(
   "${readiness_claim_subjects}${readiness_claim_bridge}${readiness_claim_verbs}${readiness_claim_bridge}${readiness_claim_outcomes}([[:space:][:punct:]]|$)"
   "${readiness_claim_subjects}${readiness_claim_bridge}${readiness_claim_verbs}[[:space:]]+(the[[:space:]]+)?${readiness_terminal_outcomes}[[:space:]]*([.,;:!?)]|\`|$)"
-  "${readiness_claim_outcomes}([[:space:][:punct:]]|$)[^.[:cntrl:]]*${passive_auxiliaries}[[:space:]]+${readiness_passive_claim_verbs}[[:space:]]+${passive_connectors}[[:space:]]+${readiness_claim_subjects}([[:space:][:punct:]]|$)"
+  "${readiness_claim_outcomes}([[:space:][:punct:]]|$)[^.[:cntrl:]]*${passive_auxiliaries}[[:space:]]+${readiness_passive_claim_verbs}[[:space:]]+${passive_connectors}[[:space:]]+${passive_subject_determiner}${readiness_claim_subjects}([[:space:][:punct:]]|$)"
   "(${readiness_claim_subjects}|aegisops)([^.[:cntrl:]]+)?[[:space:]]+${claim_identity_verbs}[[:space:]]+(now[[:space:]]+|already[[:space:]]+|effectively[[:space:]]+)?${readiness_identity_outcomes}([[:space:][:punct:]]|$)"
   "${readiness_claim_subjects}[^.[:cntrl:]]*${positive_clause_connector}${readiness_claim_verbs}${readiness_claim_bridge}${readiness_claim_outcomes}([[:space:][:punct:]]|$)"
   "${readiness_claim_subjects}[^.[:cntrl:]]*${positive_clause_connector}${readiness_claim_verbs}[[:space:]]+(the[[:space:]]+)?${readiness_terminal_outcomes}[[:space:]]*([.,;:!?)]|\`|$)"
@@ -465,6 +489,29 @@ is_valid_rfc3339_timestamp() {
   is_valid_iso_date "${date_value}"
 }
 
+is_valid_checksum_reference() {
+  local value="$1"
+  local checksum_algorithm='(md5|sha-?(1|224|256|384|512)|blake2(b|s)?)'
+
+  if [[ "${value}" =~ ^${checksum_algorithm}: ]]; then
+    [[ "${value}" =~ ^${checksum_algorithm}:[0-9a-f]{8,}$ ]]
+    return
+  fi
+  if [[ "${value}" =~ ^[0-9a-f]{8,}$ ]]; then
+    return 0
+  fi
+  [[ "${value}" =~ ^[[:alnum:]][[:alnum:]_.:/-]*[[:alnum:]]$ ]] &&
+    [[ "${value}" =~ [0-9] ]] &&
+    [[ "${value}" =~ [._:/-] ]]
+}
+
+is_valid_non_subordinate_reference() {
+  local value="$1"
+
+  [[ ! "${value}" =~ ^(${structured_placeholder_value})([^[:alnum:]].*)?$ ]] &&
+    [[ ! "${value}" =~ ${source_record_subordinate_reference} ]]
+}
+
 is_valid_structured_subfield_value() {
   local value="$1"
   local validator="${2:-generic}"
@@ -478,6 +525,12 @@ is_valid_structured_subfield_value() {
       ;;
     mismatch-state)
       [[ "${value}" =~ ^(none|matched|mismatched)$ ]]
+      ;;
+    checksum-reference)
+      is_valid_checksum_reference "${value}"
+      ;;
+    non-subordinate-reference)
+      is_valid_non_subordinate_reference "${value}"
       ;;
     rfc3339-timestamp)
       is_valid_rfc3339_timestamp "${value}"
@@ -580,7 +633,7 @@ has_complete_export_format() {
     file_name_pattern="$(structured_subfield_value "${line_lower}" '(file[[:space:]_-]*name|filename)[[:space:]_-]*pattern')" &&
     is_valid_structured_subfield_value "${file_name_pattern}" &&
     is_export_file_name_compatible "${primary_value}" "${file_name_pattern}" &&
-    has_structured_subfield_value "${line_lower}" '(checksum|hash)([[:space:]_-]*(reference|ref))?'
+    has_structured_subfield_value "${line_lower}" '(checksum|hash)([[:space:]_-]*(reference|ref))?' 'checksum-reference'
 }
 
 has_reference_identifier() {
@@ -598,9 +651,11 @@ has_reference_identifier() {
 has_complete_section_reference() {
   local line_lower="$1"
   local field_name="$2"
+  local primary_value
   local -a required_subfields
 
-  has_named_evidence_primary_value "${line_lower}" "${field_name}" || return 1
+  primary_value="$(named_evidence_primary_value "${field_name}" "${line_lower}")" || return 1
+  is_valid_non_subordinate_reference "${primary_value}" || return 1
   case "${field_name}" in
     case_section_reference)
       required_subfields=(
@@ -612,19 +667,19 @@ has_complete_section_reference() {
       ;;
     action_section_reference)
       required_subfields=(
-        'approval([[:space:]_-]*(record|id|reference|ref))?'
-        'delegated[[:space:]_-]+action[[:space:]_-]*request([[:space:]_-]*(record|id|reference|ref))?'
-        'execution[[:space:]_-]*receipt([[:space:]_-]*(record|id|reference|ref))?'
+        'approval([[:space:]_-]*(record|id|reference|ref))?::non-subordinate-reference'
+        'delegated[[:space:]_-]+action[[:space:]_-]*request([[:space:]_-]*(record|id|reference|ref))?::non-subordinate-reference'
+        'execution[[:space:]_-]*receipt([[:space:]_-]*(record|id|reference|ref))?::non-subordinate-reference'
         'mismatch[[:space:]_-]*(posture|state)::mismatch-state'
       )
       ;;
     reconciliation_section_reference)
       required_subfields=(
-        '(execution[[:space:]_-]*)?receipt([[:space:]_-]*(record|id|reference|ref))?'
-        'outcome'
+        '(execution[[:space:]_-]*)?receipt([[:space:]_-]*(record|id|reference|ref))?::non-subordinate-reference'
+        'outcome::non-subordinate-reference'
         'mismatch[[:space:]_-]*(posture|state)::mismatch-state'
         'follow[[:space:]_-]*up[[:space:]_-]*owner([[:space:]_-]*(id|reference|ref))?'
-        'linked[[:space:]_-]*record([[:space:]_-]*(id|reference|ref))?'
+        'linked[[:space:]_-]*record([[:space:]_-]*(id|reference|ref))?::non-subordinate-reference'
       )
       ;;
     *)
@@ -731,6 +786,35 @@ normalize_negated_claims() {
   normalized_claim_line="${normalized_line}"
 }
 
+phase_reference_regex='phase[[:space:]_-]+[0-9]+([.[:space:]_-]+[0-9]+)?'
+
+forbidden_claim_is_scoped() {
+  local claim_line="$1"
+  local claim_match="$2"
+  local scope_regex="$3"
+  local claim_prefix
+  local phase_reference
+  local remaining_prefix
+  local scope_active=0
+
+  if [[ "${claim_match}" =~ ${scope_regex} ]]; then
+    return 0
+  fi
+
+  claim_prefix="${claim_line%%"${claim_match}"*}"
+  remaining_prefix="${claim_prefix}"
+  while [[ "${remaining_prefix}" =~ ${phase_reference_regex} ]]; do
+    phase_reference="${BASH_REMATCH[0]}"
+    if [[ "${phase_reference}" =~ ${scope_regex} ]]; then
+      scope_active=1
+    else
+      scope_active=0
+    fi
+    remaining_prefix="${remaining_prefix#*"${phase_reference}"}"
+  done
+  ((scope_active == 1))
+}
+
 scan_forbidden_claims() {
   local file="$1"
   local description="$2"
@@ -751,7 +835,7 @@ scan_forbidden_claims() {
       continue
     fi
     if line_has_forbidden_claim "${claim_line_lower}"; then
-      if [[ -z "${scope_regex}" ]] || [[ "${forbidden_claim_match}" =~ ${scope_regex} ]]; then
+      if [[ -z "${scope_regex}" ]] || forbidden_claim_is_scoped "${claim_line_lower}" "${forbidden_claim_match}" "${scope_regex}"; then
         echo "Forbidden Phase 66.5 ${description} claim matched" >&2
         exit 1
       fi
@@ -771,7 +855,7 @@ scan_forbidden_claims() {
       continue
     fi
     if line_has_forbidden_claim "${claim_line_lower}"; then
-      if [[ -z "${scope_regex}" ]] || [[ "${forbidden_claim_match}" =~ ${scope_regex} ]]; then
+      if [[ -z "${scope_regex}" ]] || forbidden_claim_is_scoped "${claim_line_lower}" "${forbidden_claim_match}" "${scope_regex}"; then
         echo "Forbidden Phase 66.5 ${description} claim matched" >&2
         exit 1
       fi
@@ -790,10 +874,12 @@ if grep -Eiq -- '(includes|contains|embeds|carries|stores|exposes?)[[:space:]]+(
   exit 1
 fi
 
-if grep -Eiq -- "${workstation_local_unsafe_regex}" < <(perl -0ne 'while (/<!--(.*?)-->/gs) { print "$1\n" }' "${absolute_doc_path}" | tr '[:upper:]' '[:lower:]'); then
-  echo "Forbidden Phase 66.5 report export RC proof: workstation-local path evidence detected" >&2
-  exit 1
-fi
+while IFS= read -r line_lower; do
+  if line_has_unsafe_workstation_path "${line_lower}"; then
+    echo "Forbidden Phase 66.5 report export RC proof: workstation-local path evidence detected" >&2
+    exit 1
+  fi
+done < <(perl -0ne 'while (/<!--(.*?)-->/gs) { print "$1\n" }' "${absolute_doc_path}" | tr '[:upper:]' '[:lower:]')
 
 if grep -Eq -- "(^|[[:space:]>*-])\`?(${required_fields})\`?[[:space:]]*[:=][[:space:]]*\`?(${absent_primary_value})\`?([[:space:]]*[.,;)]|[[:space:]]*$)" < <(lower_visible_text "${absolute_doc_path}"); then
   echo "Forbidden Phase 66.5 report export RC proof: missing required evidence value detected" >&2
@@ -937,7 +1023,7 @@ while IFS= read -r line_lower; do
     echo "Forbidden Phase 66.5 report export RC proof: invalid redaction posture detected" >&2
     exit 1
   fi
-  if [[ "${line_lower}" =~ ${workstation_local_unsafe_regex} ]]; then
+  if line_has_unsafe_workstation_path "${line_lower}"; then
     echo "Forbidden Phase 66.5 report export RC proof: workstation-local path evidence detected" >&2
     exit 1
   fi
