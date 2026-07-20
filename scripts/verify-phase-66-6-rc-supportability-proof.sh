@@ -1,0 +1,593 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+repo_root="$(cd "${repo_root}" && pwd -P)"
+
+doc_path="docs/phase-66-6-rc-supportability-proof.md"
+absolute_doc_path="${repo_root}/${doc_path}"
+readme_path="${repo_root}/README.md"
+
+required_reference_paths=(
+  "docs/phase-66-1-clean-host-rc-e2e-harness.md"
+  "docs/phase-58-3-backup-command-contract.md"
+  "docs/phase-58-4-restore-dry-run-contract.md"
+  "docs/phase-58-5-upgrade-rollback-plan-contract.md"
+  "docs/phase-58-6-support-bundle-redaction-contract.md"
+  "docs/phase-51-6-authority-boundary-negative-test-policy.md"
+  "docs/phase-65-closeout-evaluation.md"
+)
+
+required_verifier_scripts=(
+  "scripts/verify-phase-66-6-rc-supportability-proof.sh"
+  "scripts/test-verify-phase-66-6-rc-supportability-proof.sh"
+  "scripts/verify-phase-51-6-authority-boundary-negative-test-policy.sh"
+  "scripts/verify-publishable-path-hygiene.sh"
+)
+
+require_file() {
+  local path="$1"
+  local description="$2"
+
+  if [[ ! -s "${path}" ]]; then
+    echo "Missing ${description}: ${path#"${repo_root}/"}" >&2
+    exit 1
+  fi
+}
+
+require_file "${absolute_doc_path}" "Phase 66.6 RC supportability proof"
+require_file "${readme_path}" "README for Phase 66.6 link check"
+
+for reference_path in "${required_reference_paths[@]}"; do
+  require_file "${repo_root}/${reference_path}" "Phase 66.6 reference ${reference_path}"
+done
+
+for verifier_script in "${required_verifier_scripts[@]}"; do
+  require_file "${repo_root}/${verifier_script}" "Phase 66.6 verifier script ${verifier_script}"
+done
+
+python3 - "${absolute_doc_path}" "${readme_path}" <<'PY'
+from __future__ import annotations
+
+import re
+import os
+import sys
+from pathlib import Path
+
+
+doc_path = Path(sys.argv[1])
+readme_path = Path(sys.argv[2])
+doc_raw = doc_path.read_text(encoding="utf-8")
+readme_raw = readme_path.read_text(encoding="utf-8")
+
+
+def visible_text(text: str) -> str:
+    return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+
+
+def semantic_text(text: str) -> str:
+    text = visible_text(text)
+    return re.sub(r"^[ \t]*(```|~~~).*?^[ \t]*\1[ \t]*$", "", text, flags=re.DOTALL | re.MULTILINE)
+
+
+doc_semantic = semantic_text(doc_raw)
+readme_semantic = semantic_text(readme_raw)
+
+readme_phrases = (
+    "- [Phase 66.6 RC supportability proof](docs/phase-66-6-rc-supportability-proof.md) defines the reviewed backup, restore dry-run, upgrade, rollback, support-bundle, redaction, owner-review, limitation, and non-claim evidence surface while preserving AegisOps records as workflow, release, gate, limitation, and closeout truth and excluding GA, production support, customer portal, and commercial replacement claims.",
+    "The Phase 66.6 RC supportability proof is defined by the [Phase 66.6 RC supportability proof](docs/phase-66-6-rc-supportability-proof.md).",
+)
+
+for phrase in readme_phrases:
+    if phrase not in readme_semantic:
+        print(f"Missing README canonical Phase 66.6 boundary statement: {phrase}", file=sys.stderr)
+        raise SystemExit(1)
+
+required_phrases = (
+    "# Phase 66.6 RC Supportability Proof",
+    "**Status**: Accepted as the Phase 66.6 RC supportability proof contract for release-candidate evidence planning only.",
+    "**Related Issues**: #1397, #1403",
+    "This contract defines the Phase 66.6 RC supportability proof surface.",
+    "The proof depends on the Phase 66.1 clean-host RC E2E harness and the Phase 58 supportability contracts.",
+    "This proof is RC evidence only.",
+    "A proof packet is fail-closed: once any required field is materialized, every required field must be present, non-placeholder, internally complete, and bound to the same journey run and immutable repository revision.",
+    "AegisOps records remain authoritative for workflow, release, gate, restore acceptance, limitation, audit, approval, action request, execution receipt, reconciliation, source admission, and closeout truth.",
+    "Backup manifests, restore dry-run output, upgrade plans, rollback plans, support bundles, redaction manifests, owner-review summaries, limitation lists, verifier output, issue-lint output, browser state, UI cache, tickets, and optional evidence remain subordinate evidence.",
+    "The proof must reject missing or partial evidence packets, mixed revisions, stale or failed evidence, placeholder values, secret leakage, raw credential leakage, customer-private data, ticket-private content, authorization material, certificate or key material, workstation-local paths, support-bundle-as-truth claims, support-operator authority expansion, live restore claims, live upgrade or rollback claims, inferred RC pass, inferred GA pass, production SLA commitments, 24x7 support claims, customer portal claims, real design-partner support claims, commercial replacement claims, verifier-as-readiness-truth, and issue-lint-as-readiness-truth.",
+    "Later Phase 66 issues must still prove the RC authority-boundary proof pack and closeout evidence independently.",
+    "Run `bash scripts/verify-phase-66-6-rc-supportability-proof.sh`.",
+    "Run `bash scripts/test-verify-phase-66-6-rc-supportability-proof.sh`.",
+    "Run `bash scripts/verify-phase-51-6-authority-boundary-negative-test-policy.sh`.",
+    "Run `bash scripts/verify-publishable-path-hygiene.sh`.",
+    "Run `node <codex-supervisor-root>/dist/index.js issue-lint 1397 --config <supervisor-config-path>`.",
+    "Run `node <codex-supervisor-root>/dist/index.js issue-lint 1403 --config <supervisor-config-path>`.",
+)
+
+for phrase in required_phrases:
+    if phrase not in doc_semantic:
+        print(f"Missing Phase 66.6 RC supportability proof statement: {phrase}", file=sys.stderr)
+        raise SystemExit(1)
+
+required_references = (
+    "docs/phase-66-1-clean-host-rc-e2e-harness.md",
+    "docs/phase-58-3-backup-command-contract.md",
+    "docs/phase-58-4-restore-dry-run-contract.md",
+    "docs/phase-58-5-upgrade-rollback-plan-contract.md",
+    "docs/phase-58-6-support-bundle-redaction-contract.md",
+    "docs/phase-51-6-authority-boundary-negative-test-policy.md",
+    "docs/phase-65-closeout-evaluation.md",
+)
+
+for reference in required_references:
+    if f"`{reference}`" not in doc_semantic:
+        print(f"Missing Phase 66.6 required reference citation: {reference}", file=sys.stderr)
+        raise SystemExit(1)
+
+
+def section(text: str, heading: str, next_heading: str) -> str:
+    start = text.find(heading)
+    if start < 0:
+        return ""
+    end = text.find(next_heading, start + len(heading))
+    return text[start:] if end < 0 else text[start:end]
+
+
+evidence_section = section(
+    doc_semantic,
+    "## 2. RC Supportability Evidence",
+    "## 3. Evidence Binding And Secret Hygiene",
+)
+
+evidence_rows = (
+    "| `journey_run_id` | The Phase 66.1 run identifier that observed the supportability evidence set. | Missing, placeholder, or mismatched journey identifiers fail the proof. |",
+    "| `repository_revision` | One immutable 40-character repository revision shared by the evidence set. | Mutable branches, tags, abbreviated revisions, or mixed revisions fail the proof. |",
+    "| `backup_evidence` | Reviewed backup manifest identity, custody reference, creation timestamp, owner, and completed status. | A manifest alone cannot prove restore success or release readiness. |",
+    "| `restore_dry_run_evidence` | Reviewed dry-run identity, source backup reference, target profile, timestamp, operator, and passed result. | Dry-run output cannot prove live restore completion or mutate authoritative records. |",
+    "| `upgrade_plan` | Reviewed plan identity, exact before and after versions, target profile, passed preflight reference, and AegisOps evidence links. | Floating versions, missing preflight evidence, or plan-as-release-truth claims fail the proof. |",
+    "| `rollback_plan` | Reviewed plan identity, backup reference, accountable rollback owner, trigger, and rollback target. | Missing ownership, vague triggers, or plan-driven substrate mutation fail the proof. |",
+    "| `support_bundle` | Reviewed bundle identity, environment class, component versions, doctor summary, backup/restore references, upgrade/rollback references, timestamp, owner, and AegisOps evidence links. | Missing provenance, mixed snapshots, or bundle-as-truth claims fail the proof. |",
+    "| `redaction_manifest` | Reviewed manifest identity, passed scan result, all Phase 58.6 redaction families, and explicit subordinate-evidence boundary. | Secret, credential, customer-private, ticket-private, token, header, certificate, or workstation-path leakage fails the proof. |",
+    "| `owner_review` | Reviewer, review timestamp, disposition, accepted-risk posture, and follow-up owner. | Missing review, self-approval by an artifact, or unowned follow-up fails the proof. |",
+    "| `limitation_references` | Known limitation ids, owner, decision date, and follow-up date for incomplete evidence. | Hidden, missing, or unowned limitations fail the proof. |",
+    "| `non_claims` | Explicit `rc-evidence-only`, `not-rc-gate-pass`, `not-ga`, `not-production-support`, `not-customer-portal`, `not-commercial-replacement`, and `not-support-truth` labels. | Missing labels or positive readiness claims fail the proof. |",
+)
+
+for row in evidence_rows:
+    if row not in evidence_section:
+        print(f"Missing Phase 66.6 RC supportability evidence row: {row}", file=sys.stderr)
+        raise SystemExit(1)
+
+binding_section = section(
+    doc_semantic,
+    "## 3. Evidence Binding And Secret Hygiene",
+    "## 4. Authority Boundary",
+)
+
+binding_phrases = (
+    "The `backup_evidence` value must include `manifest_id`, `custody_reference`, `created_at`, `owner`, and `status=completed`.",
+    "The `restore_dry_run_evidence` value must include `dry_run_id`, `backup_reference`, `target_profile`, `created_at`, `operator`, and `result=passed`.",
+    "The `upgrade_plan` value must include `plan_id`, `version_before`, `version_after`, `target_profile`, `preflight_result`, and `evidence_links`.",
+    "The `rollback_plan` value must include `plan_id`, `backup_reference`, `rollback_owner`, `rollback_trigger`, and `rollback_target`.",
+    "The `support_bundle` value must include `bundle_id`, `environment_class`, `component_versions`, `doctor_summary`, `backup_restore_references`, `upgrade_rollback_references`, `created_at`, `owner`, and `evidence_links`.",
+    "The `redaction_manifest` value must include `manifest_id`, `scan_result=passed`, `secret_values`, `workstation_paths`, `private_payloads`, `ticket_private_content`, `tokens_and_headers`, `certs_and_keys`, `credentials`, `customer_identifiers`, and `authority_boundary=subordinate-evidence-only`.",
+    "The `owner_review` value must include `reviewer`, `reviewed_at`, `disposition`, `accepted_risk`, and `follow_up_owner`.",
+    "The `limitation_references` value must include `ids`, `owner`, `decision_date`, and `follow_up_date`.",
+)
+
+for phrase in binding_phrases:
+    if phrase not in binding_section:
+        print(f"Missing Phase 66.6 evidence binding statement: {phrase}", file=sys.stderr)
+        raise SystemExit(1)
+
+
+required_fields = (
+    "journey_run_id",
+    "repository_revision",
+    "backup_evidence",
+    "restore_dry_run_evidence",
+    "upgrade_plan",
+    "rollback_plan",
+    "support_bundle",
+    "redaction_manifest",
+    "owner_review",
+    "limitation_references",
+    "non_claims",
+)
+
+required_field_set = set(required_fields)
+field_values: dict[str, list[str]] = {field: [] for field in required_fields}
+current_heading = ""
+in_fence = False
+assignment_pattern = re.compile(
+    r"^\s*(?:[-*>]\s*)?`?(" + "|".join(map(re.escape, required_fields)) + r")`?\s*[:=]\s*(.*?)\s*$",
+    re.IGNORECASE,
+)
+table_pattern = re.compile(r"^\s*\|\s*`?([a-z0-9_]+)`?\s*\|\s*(.*?)\s*\|", re.IGNORECASE)
+
+for raw_line in visible_text(doc_raw).splitlines():
+    stripped = raw_line.strip()
+    if re.match(r"^(```|~~~)", stripped):
+        in_fence = not in_fence
+        continue
+    if in_fence:
+        continue
+    if stripped.startswith("## "):
+        current_heading = stripped
+    match = assignment_pattern.match(raw_line)
+    if match:
+        field_values[match.group(1).lower()].append(match.group(2).strip().strip("`"))
+        continue
+    match = table_pattern.match(raw_line)
+    if match and current_heading != "## 2. RC Supportability Evidence":
+        key = match.group(1).lower()
+        if key in required_field_set:
+            field_values[key].append(match.group(2).strip().strip("`"))
+
+materialized_fields = {field for field, values in field_values.items() if values}
+if materialized_fields:
+    missing_fields = sorted(required_field_set - materialized_fields)
+    if missing_fields:
+        print(
+            "Forbidden Phase 66.6 RC supportability proof: partial evidence packet; missing "
+            + ", ".join(missing_fields),
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+
+placeholder_pattern = re.compile(
+    r"^(?:todo|tbd|tbc|unknown|none|null|n/?a|pending|sample|example|fake|placeholder|omitted|missing|unavailable|not[- _]?available)(?:\b|$)",
+    re.IGNORECASE,
+)
+
+
+def fail_field(field: str, detail: str) -> None:
+    print(f"Forbidden Phase 66.6 RC supportability proof: invalid {field}: {detail}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def parse_parts(field: str, value: str) -> dict[str, str]:
+    parts: dict[str, str] = {}
+    for item in re.split(r"\s*;\s*", value.strip().strip("`")):
+        if not item:
+            continue
+        if "=" not in item:
+            fail_field(field, f"unstructured component {item!r}")
+        key, component_value = item.split("=", 1)
+        key = key.strip().lower()
+        component_value = component_value.strip().strip("`")
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", key):
+            fail_field(field, f"invalid component name {key!r}")
+        if key in parts:
+            fail_field(field, f"duplicate component {key}")
+        parts[key] = component_value
+    return parts
+
+
+def require_components(field: str, value: str, required: tuple[str, ...]) -> dict[str, str]:
+    parts = parse_parts(field, value)
+    missing = [component for component in required if component not in parts]
+    if missing:
+        fail_field(field, "missing components " + ", ".join(missing))
+    for component in required:
+        component_value = parts[component].strip()
+        if not component_value or placeholder_pattern.search(component_value):
+            fail_field(field, f"placeholder component {component}")
+    return parts
+
+
+timestamp_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$")
+date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+immutable_revision_pattern = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
+exact_version_pattern = re.compile(r"^v?\d+\.\d+\.\d+(?:\+[0-9A-Za-z.-]+)?$")
+
+
+def require_timestamp(field: str, name: str, value: str) -> None:
+    if not timestamp_pattern.fullmatch(value):
+        fail_field(field, f"{name} must be an RFC3339 timestamp")
+
+
+def require_date(field: str, name: str, value: str) -> None:
+    if not date_pattern.fullmatch(value):
+        fail_field(field, f"{name} must be an ISO date")
+
+
+def require_aegisops_reference(field: str, name: str, value: str) -> None:
+    if "aegisops://" not in value.lower():
+        fail_field(field, f"{name} must include a direct AegisOps evidence reference")
+
+
+if materialized_fields:
+    revisions = {value.lower() for value in field_values["repository_revision"]}
+    if len(revisions) != 1 or not immutable_revision_pattern.fullmatch(next(iter(revisions))):
+        fail_field("repository_revision", "expected one immutable 40-character revision")
+
+    for field, values in field_values.items():
+        for value in values:
+            if not value or placeholder_pattern.search(value):
+                fail_field(field, "missing or placeholder value")
+
+    for value in field_values["backup_evidence"]:
+        parts = require_components(
+            "backup_evidence",
+            value,
+            ("manifest_id", "custody_reference", "created_at", "owner", "status"),
+        )
+        require_aegisops_reference("backup_evidence", "custody_reference", parts["custody_reference"])
+        require_timestamp("backup_evidence", "created_at", parts["created_at"])
+        if parts["status"].lower() != "completed":
+            fail_field("backup_evidence", "status must be completed")
+
+    for value in field_values["restore_dry_run_evidence"]:
+        parts = require_components(
+            "restore_dry_run_evidence",
+            value,
+            ("dry_run_id", "backup_reference", "target_profile", "created_at", "operator", "result"),
+        )
+        require_aegisops_reference("restore_dry_run_evidence", "backup_reference", parts["backup_reference"])
+        require_timestamp("restore_dry_run_evidence", "created_at", parts["created_at"])
+        if parts["result"].lower() != "passed":
+            fail_field("restore_dry_run_evidence", "result must be passed")
+
+    for value in field_values["upgrade_plan"]:
+        parts = require_components(
+            "upgrade_plan",
+            value,
+            ("plan_id", "version_before", "version_after", "target_profile", "preflight_result", "evidence_links"),
+        )
+        if not exact_version_pattern.fullmatch(parts["version_before"]):
+            fail_field("upgrade_plan", "version_before must be an exact stable version")
+        if not exact_version_pattern.fullmatch(parts["version_after"]):
+            fail_field("upgrade_plan", "version_after must be an exact stable version")
+        if not parts["preflight_result"].lower().startswith("passed:"):
+            fail_field("upgrade_plan", "preflight_result must be passed with evidence")
+        require_aegisops_reference("upgrade_plan", "preflight_result", parts["preflight_result"])
+        require_aegisops_reference("upgrade_plan", "evidence_links", parts["evidence_links"])
+
+    for value in field_values["rollback_plan"]:
+        parts = require_components(
+            "rollback_plan",
+            value,
+            ("plan_id", "backup_reference", "rollback_owner", "rollback_trigger", "rollback_target"),
+        )
+        require_aegisops_reference("rollback_plan", "backup_reference", parts["backup_reference"])
+        require_aegisops_reference("rollback_plan", "rollback_target", parts["rollback_target"])
+
+    for value in field_values["support_bundle"]:
+        parts = require_components(
+            "support_bundle",
+            value,
+            (
+                "bundle_id",
+                "environment_class",
+                "component_versions",
+                "doctor_summary",
+                "backup_restore_references",
+                "upgrade_rollback_references",
+                "created_at",
+                "owner",
+                "evidence_links",
+            ),
+        )
+        require_timestamp("support_bundle", "created_at", parts["created_at"])
+        for name in ("doctor_summary", "backup_restore_references", "upgrade_rollback_references", "evidence_links"):
+            require_aegisops_reference("support_bundle", name, parts[name])
+        if re.search(r"(?:^|[-_.])(latest|beta|alpha|rc)(?:$|[-_.0-9])", parts["component_versions"], re.IGNORECASE):
+            fail_field("support_bundle", "component_versions must be exact stable versions")
+
+    redaction_components = (
+        "manifest_id",
+        "scan_result",
+        "secret_values",
+        "workstation_paths",
+        "private_payloads",
+        "ticket_private_content",
+        "tokens_and_headers",
+        "certs_and_keys",
+        "credentials",
+        "customer_identifiers",
+        "authority_boundary",
+    )
+    redaction_states = {"redacted", "absent", "passed"}
+    for value in field_values["redaction_manifest"]:
+        parts = require_components("redaction_manifest", value, redaction_components)
+        if parts["scan_result"].lower() != "passed":
+            fail_field("redaction_manifest", "scan_result must be passed")
+        for name in redaction_components[2:-1]:
+            if parts[name].lower() not in redaction_states:
+                fail_field("redaction_manifest", f"{name} must be redacted, absent, or passed")
+        if parts["authority_boundary"].lower() != "subordinate-evidence-only":
+            fail_field("redaction_manifest", "authority_boundary must be subordinate-evidence-only")
+
+    for value in field_values["owner_review"]:
+        parts = require_components(
+            "owner_review",
+            value,
+            ("reviewer", "reviewed_at", "disposition", "accepted_risk", "follow_up_owner"),
+        )
+        require_timestamp("owner_review", "reviewed_at", parts["reviewed_at"])
+        if parts["disposition"].lower() not in {"accepted", "accepted-with-follow-up", "rejected"}:
+            fail_field("owner_review", "unsupported disposition")
+        if re.search(r"(?:verifier|issue-lint|support[-_ ]?bundle|plan|artifact)", parts["reviewer"], re.IGNORECASE):
+            fail_field("owner_review", "reviewer must be an accountable human or owner group")
+
+    for value in field_values["limitation_references"]:
+        parts = require_components(
+            "limitation_references",
+            value,
+            ("ids", "owner", "decision_date", "follow_up_date"),
+        )
+        require_date("limitation_references", "decision_date", parts["decision_date"])
+        require_date("limitation_references", "follow_up_date", parts["follow_up_date"])
+
+    required_non_claims = {
+        "rc-evidence-only",
+        "not-rc-gate-pass",
+        "not-ga",
+        "not-production-support",
+        "not-customer-portal",
+        "not-commercial-replacement",
+        "not-support-truth",
+    }
+    for value in field_values["non_claims"]:
+        labels = {label for label in re.split(r"[\s,;]+", value.lower()) if label}
+        missing_labels = sorted(required_non_claims - labels)
+        if missing_labels:
+            fail_field("non_claims", "missing labels " + ", ".join(missing_labels))
+
+
+secret_patterns = (
+    re.compile(r"\bauthorization\s*:\s*(?:bearer|basic)\s+[A-Za-z0-9_+./=-]{12,}", re.IGNORECASE),
+    re.compile(
+        r"(?<![A-Za-z0-9])(?:[A-Za-z0-9][A-Za-z0-9_-]*[_-])?(?:password|passwd|secret(?:[_ -]?(?:key|access[_ -]?key))?|api[_ -]?key|access[_ -]?token|client[_ -]?secret|private[_ -]?key)\s*[:=]\s*[`\"']?(?!\[redacted)[^\s`\"'<>|]{4,}",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"\b(?:ghp_|github_pat_)[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
+    re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]+:[^\s@]+@"),
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----", re.IGNORECASE),
+    re.compile(r"-----BEGIN CERTIFICATE-----", re.IGNORECASE),
+    re.compile(r"^\s*\|\s*`?(?:password|passwd|secret|token|api[_ -]?key|private[_ -]?key)`?\s*\|\s*`?[^\s`|<>]{4,}", re.IGNORECASE | re.MULTILINE),
+)
+
+for pattern in secret_patterns:
+    if pattern.search(doc_raw):
+        print("Forbidden Phase 66.6 RC supportability proof: production secret-looking value detected", file=sys.stderr)
+        raise SystemExit(1)
+
+workstation_patterns = (
+    re.compile(r"(?:^|[\s`\"'(<])/(?:Users|home)/[^\s`\"'()<>/]+/", re.IGNORECASE),
+    re.compile(r"(?:^|[\s`\"'(<])[A-Za-z]:[\\/]Users[\\/][^\s`\"'()<>\\/]+[\\/]", re.IGNORECASE),
+    re.compile(r"file://(?:[^\s`\"'()<>]*/)?(?:Users|home)/[^\s`\"'()<>/]+/", re.IGNORECASE),
+)
+
+for pattern in workstation_patterns:
+    if pattern.search(doc_raw):
+        print("Forbidden Phase 66.6 RC supportability proof: workstation-local path detected", file=sys.stderr)
+        raise SystemExit(1)
+
+private_data_pattern = re.compile(
+    r"\b(?:includes?|contains?|retains?|stores?|embeds?|exports?|captures?|carries|publishes)\b.{0,50}\b(?:raw\s+customer|customer[- ]private|unredacted\s+customer|private\s+ticket|raw\s+ticket|private\s+support\s+note|raw\s+payload)",
+    re.IGNORECASE,
+)
+private_assignment_pattern = re.compile(
+    r"^\s*(?:[-*>]\s*)?`?(?:customer[_ -]?private(?:[_ -]?(?:data|payload))?|ticket[_ -]?private[_ -]?content|raw[_ -]?(?:customer|ticket)[_ -]?(?:data|payload|content)?)`?\s*[:=|]\s*(?!\s*(?:redacted|absent|rejected|forbidden|removed|none)\b)\S+",
+    re.IGNORECASE,
+)
+safe_private_pattern = re.compile(
+    r"\b(?:cannot|must\s+not|does\s+not|do\s+not|never|rejects?|rejected|redacts?|redacted|removes?|removed|forbidden|without|must\s+exclude|must\s+not\s+contain|not\s+contain)\b",
+    re.IGNORECASE,
+)
+
+for line in doc_raw.splitlines():
+    if private_assignment_pattern.search(line):
+        print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
+        raise SystemExit(1)
+    if private_data_pattern.search(line) and not safe_private_pattern.search(line):
+        print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
+        raise SystemExit(1)
+
+
+subordinate_subject = (
+    r"(?:this\s+proof|phase\s+66\.6|supportability\s+proof|support\s+artifacts?|support\s+bundles?|bundle\s+output|"
+    r"backup\s+(?:evidence|manifests?)|restore\s+dry[- ]run(?:\s+output)?|upgrade\s+plans?|rollback\s+plans?|"
+    r"redaction\s+manifests?|owner[- ]review\s+summaries|limitation\s+lists?|verifier\s+output|issue-lint\s+output)"
+)
+claim_verb = r"(?:proves?|confirms?|establishes?|satisfies?|passes?|grants?|achieves?|guarantees?|certifies?|validates?|demonstrates?)"
+readiness_outcome = (
+    r"(?:rc\s+(?:gate|pass|readiness)|release[- ]candidate\s+(?:gate|pass|readiness)|ga(?:\s+readiness|\s+gate|\s+pass)?|"
+    r"general\s+availability|production\s+(?:readiness|support|sla)|24x7\s+support|customer\s+portal|"
+    r"real\s+design[- ]partner|commercial\s+replacement|live\s+(?:restore|upgrade|rollback)(?:\s+completion)?)"
+)
+truth_outcome = (
+    r"(?:(?:workflow|release|gate|restore|limitation|audit|readiness|closeout|approval|execution|reconciliation)\s+truth|"
+    r"source\s+of\s+(?:workflow|release|gate|restore|limitation|audit|readiness|closeout)\s+truth)"
+)
+authority_action = r"(?:approves?|executes?|reconciles?|closes?|releases?|gates?|restores?|mutates?|promotes?|overrides?|replaces?)"
+authority_object = r"(?:aegisops\s+records?|workflows?|releases?|gates?|restore\s+acceptance|limitations?|audits?|actions?|cases?|closeout)"
+
+claim_patterns = (
+    re.compile(
+        subordinate_subject
+        + r"\s+(?:(?:now|already|independently|directly|automatically|effectively|itself|can|may|will|does)\s+){0,4}"
+        + claim_verb
+        + r"\b.{0,140}"
+        + readiness_outcome,
+        re.IGNORECASE,
+    ),
+    re.compile(
+        subordinate_subject
+        + r"\s+(?:(?:now|already|effectively|itself)\s+){0,3}(?:is|are|becomes?|serves?\s+as)\b.{0,80}"
+        + truth_outcome,
+        re.IGNORECASE,
+    ),
+    re.compile(
+        subordinate_subject
+        + r"\s+(?:(?:now|already|independently|directly|automatically|effectively|itself|can|may|will|does)\s+){0,4}"
+        + authority_action
+        + r"\b.{0,100}"
+        + authority_object,
+        re.IGNORECASE,
+    ),
+    re.compile(readiness_outcome + r".{0,100}\b(?:is|are|was|were|be|been)\s+(?:proven|confirmed|established|satisfied|passed|granted|certified|validated)\s+by\b.{0,100}" + subordinate_subject, re.IGNORECASE),
+    re.compile(truth_outcome + r".{0,80}\b(?:is|are|was|were|be|been)\s+(?:provided|established|owned|controlled|defined)\s+by\b.{0,80}" + subordinate_subject, re.IGNORECASE),
+)
+support_authority_pattern = re.compile(
+    r"\bsupport\s+(?:collaborator|reviewer|bundle\s+owner|agent|analyst)\b.{0,80}\b(?:is|becomes?|acts?\s+as|can|may|has\s+authority\s+to)\b.{0,80}\b(?:operator|approver|administrator|substrate\s+operator|backend\s+authority|approve|execute|reconcile|close|release|gate|restore|mutate)\b",
+    re.IGNORECASE,
+)
+negation_pattern = re.compile(
+    r"\b(?:cannot|can't|does\s+not|do\s+not|is\s+not|are\s+not|must\s+not|never|no\s+longer|without)\b",
+    re.IGNORECASE,
+)
+
+
+def claim_clauses(text: str):
+    normalized = re.sub(r"[`*_#|]", " ", text)
+    normalized = re.sub(r"\s+", " ", normalized)
+    for sentence in re.split(r"(?<=[.!?])\s+", normalized):
+        inherited_subject = ""
+        for clause in re.split(r"\s*(?:;|\bbut\b|\bhowever\b|\byet\b|\band\b)\s*", sentence, flags=re.IGNORECASE):
+            clause = clause.strip()
+            if clause:
+                yield clause
+                subject_match = re.search(subordinate_subject, clause, re.IGNORECASE)
+                if subject_match:
+                    inherited_subject = subject_match.group(0)
+                elif inherited_subject:
+                    yield f"{inherited_subject} {clause}"
+
+
+claim_inputs = (doc_raw, "\n".join(line for line in readme_raw.splitlines() if re.search(r"phase\s+66\.6|supportability\s+proof", line, re.IGNORECASE)))
+for claim_input in claim_inputs:
+    for clause in claim_clauses(claim_input):
+        if negation_pattern.search(clause):
+            continue
+        matched_claims = [index for index, pattern in enumerate(claim_patterns) if pattern.search(clause)]
+        matched_support_authority = bool(support_authority_pattern.search(clause))
+        if matched_support_authority or matched_claims:
+            if os.environ.get("PHASE66_6_DEBUG") == "1":
+                print(
+                    f"Matched clause (support_authority={matched_support_authority}, patterns={matched_claims}): {clause}",
+                    file=sys.stderr,
+                )
+            print("Forbidden Phase 66.6 RC supportability proof: authority or readiness overclaim detected", file=sys.stderr)
+            raise SystemExit(1)
+
+print("Phase 66.6 proof document, evidence schema, secret hygiene, and authority checks pass.")
+PY
+
+if [[ "${PHASE66_6_SKIP_PATH_HYGIENE:-0}" != "1" ]]; then
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "${tmp_dir}"' EXIT
+  path_hygiene_stderr="${tmp_dir}/path-hygiene.err"
+  if ! bash "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${repo_root}" >/dev/null 2>"${path_hygiene_stderr}"; then
+    cat "${path_hygiene_stderr}" >&2
+    echo "Forbidden Phase 66.6 RC supportability proof: publishable path hygiene failed" >&2
+    exit 1
+  fi
+fi
+
+echo "Phase 66.6 RC supportability proof contract and focused negative checks pass."
