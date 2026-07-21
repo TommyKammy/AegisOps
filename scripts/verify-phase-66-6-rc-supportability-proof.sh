@@ -168,14 +168,15 @@ binding_section = section(
 )
 
 binding_phrases = (
-    "The `backup_evidence` value must include `manifest_id`, `custody_reference`, `created_at`, `owner`, and `status=completed`.",
-    "The `restore_dry_run_evidence` value must include `dry_run_id`, `backup_reference`, `target_profile`, `created_at`, `operator`, and `result=passed`.",
-    "The `upgrade_plan` value must include `plan_id`, `version_before`, `version_after`, `target_profile`, `preflight_result`, and `evidence_links`.",
-    "The `rollback_plan` value must include `plan_id`, `backup_reference`, `rollback_owner`, `rollback_trigger`, and `rollback_target`.",
-    "The `support_bundle` value must include `bundle_id`, `environment_class`, `component_versions`, `doctor_summary`, `backup_restore_references`, `upgrade_rollback_references`, `created_at`, `owner`, and `evidence_links`.",
-    "The `redaction_manifest` value must include `manifest_id`, `scan_result=passed`, `secret_values`, `workstation_paths`, `private_payloads`, `ticket_private_content`, `tokens_and_headers`, `certs_and_keys`, `credentials`, `customer_identifiers`, and `authority_boundary=subordinate-evidence-only`.",
-    "The `owner_review` value must include `reviewer`, `reviewed_at`, `disposition`, `accepted_risk`, and `follow_up_owner`.",
-    "The `limitation_references` value must include `ids`, `owner`, `decision_date`, and `follow_up_date`.",
+    "Every structured evidence value must include the packet's exact `journey_run_id` and `repository_revision`; implicit binding through names, paths, or ticket context is not accepted.",
+    "The `backup_evidence` value must include `journey_run_id`, `repository_revision`, `manifest_id`, `custody_reference`, `created_at`, `owner`, and `status=completed`.",
+    "The `restore_dry_run_evidence` value must include `journey_run_id`, `repository_revision`, `dry_run_id`, `backup_reference`, `target_profile`, `created_at`, `operator`, and `result=passed`.",
+    "The `upgrade_plan` value must include `journey_run_id`, `repository_revision`, `plan_id`, `version_before`, `version_after`, `target_profile`, `preflight_result`, and `evidence_links`.",
+    "The `rollback_plan` value must include `journey_run_id`, `repository_revision`, `plan_id`, `backup_reference`, `rollback_owner`, `rollback_trigger`, and `rollback_target`.",
+    "The `support_bundle` value must include `journey_run_id`, `repository_revision`, `bundle_id`, `environment_class`, `component_versions`, `doctor_summary`, `backup_restore_references`, `upgrade_rollback_references`, `created_at`, `owner`, and `evidence_links`.",
+    "The `redaction_manifest` value must include `journey_run_id`, `repository_revision`, `manifest_id`, `scan_result=passed`, `secret_values`, `workstation_paths`, `private_payloads`, `ticket_private_content`, `tokens_and_headers`, `certs_and_keys`, `credentials`, `customer_identifiers`, and `authority_boundary=subordinate-evidence-only`.",
+    "The `owner_review` value must include `journey_run_id`, `repository_revision`, `reviewer`, `reviewed_at`, `disposition`, `accepted_risk`, and `follow_up_owner`.",
+    "The `limitation_references` value must include `journey_run_id`, `repository_revision`, `ids`, `owner`, `decision_date`, and `follow_up_date`.",
 )
 
 for phrase in binding_phrases:
@@ -329,23 +330,47 @@ def require_components(field: str, value: str, required: tuple[str, ...]) -> dic
 timestamp_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$")
 date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 immutable_revision_pattern = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
-exact_version_pattern = re.compile(r"^v?\d+\.\d+\.\d+(?:\+[0-9A-Za-z.-]+)?$")
+exact_version_pattern = re.compile(
+    r"^v?(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$"
+)
+prerelease_label_pattern = re.compile(r"(?<![a-z0-9])(?:alpha|beta|rc)[.-]?\d*(?![a-z0-9])", re.IGNORECASE)
+component_version_pattern = re.compile(
+    r"^(?P<component>[a-z0-9][a-z0-9._-]*)-(?P<version>v?(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?)$",
+    re.IGNORECASE,
+)
 
 
-def require_timestamp(field: str, name: str, value: str) -> None:
+def require_timestamp(field: str, name: str, value: str) -> datetime:
     if not timestamp_pattern.fullmatch(value):
         fail_field(field, f"{name} must be an RFC3339 timestamp")
     try:
-        datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         fail_field(field, f"{name} must be an RFC3339 timestamp")
 
 
-def require_date(field: str, name: str, value: str) -> None:
+def require_stable_version(field: str, name: str, value: str) -> None:
+    if not exact_version_pattern.fullmatch(value) or prerelease_label_pattern.search(value):
+        fail_field(field, f"{name} must be an exact stable version")
+
+
+def require_packet_binding(
+    field: str,
+    parts: dict[str, str],
+    journey_run_id: str,
+    repository_revision: str,
+) -> None:
+    if parts["journey_run_id"] != journey_run_id:
+        fail_field(field, "journey_run_id must match the proof packet")
+    if parts["repository_revision"].lower() != repository_revision:
+        fail_field(field, "repository_revision must match the proof packet")
+
+
+def require_date(field: str, name: str, value: str) -> date:
     if not date_pattern.fullmatch(value):
         fail_field(field, f"{name} must be an ISO date")
     try:
-        date.fromisoformat(value)
+        return date.fromisoformat(value)
     except ValueError:
         fail_field(field, f"{name} must be an ISO date")
 
@@ -361,6 +386,7 @@ def require_aegisops_reference(field: str, name: str, value: str) -> None:
 
 
 if materialized_fields:
+    journey_run_id = field_values["journey_run_id"][0]
     revisions = {value.lower() for value in field_values["repository_revision"]}
     if len(revisions) != 1 or not immutable_revision_pattern.fullmatch(next(iter(revisions))):
         fail_field("repository_revision", "expected one immutable 40-character revision")
@@ -387,16 +413,20 @@ if materialized_fields:
     rollback_backup_references: set[str] = set()
     restore_target_profiles: set[str] = set()
     upgrade_target_profiles: set[str] = set()
+    backup_created_at: datetime | None = None
+    restore_created_at: datetime | None = None
+    bundle_created_at: datetime | None = None
 
     for value in field_values["backup_evidence"]:
         parts = require_components(
             "backup_evidence",
             value,
-            ("manifest_id", "custody_reference", "created_at", "owner", "status"),
+            ("journey_run_id", "repository_revision", "manifest_id", "custody_reference", "created_at", "owner", "status"),
         )
+        require_packet_binding("backup_evidence", parts, journey_run_id, repository_revision)
         require_aegisops_reference("backup_evidence", "custody_reference", parts["custody_reference"])
         backup_references.add(parts["custody_reference"])
-        require_timestamp("backup_evidence", "created_at", parts["created_at"])
+        backup_created_at = require_timestamp("backup_evidence", "created_at", parts["created_at"])
         if parts["status"].lower() != "completed":
             fail_field("backup_evidence", "status must be completed")
 
@@ -404,12 +434,13 @@ if materialized_fields:
         parts = require_components(
             "restore_dry_run_evidence",
             value,
-            ("dry_run_id", "backup_reference", "target_profile", "created_at", "operator", "result"),
+            ("journey_run_id", "repository_revision", "dry_run_id", "backup_reference", "target_profile", "created_at", "operator", "result"),
         )
+        require_packet_binding("restore_dry_run_evidence", parts, journey_run_id, repository_revision)
         require_aegisops_reference("restore_dry_run_evidence", "backup_reference", parts["backup_reference"])
         restore_backup_references.add(parts["backup_reference"])
         restore_target_profiles.add(parts["target_profile"])
-        require_timestamp("restore_dry_run_evidence", "created_at", parts["created_at"])
+        restore_created_at = require_timestamp("restore_dry_run_evidence", "created_at", parts["created_at"])
         if parts["result"].lower() != "passed":
             fail_field("restore_dry_run_evidence", "result must be passed")
 
@@ -417,12 +448,11 @@ if materialized_fields:
         parts = require_components(
             "upgrade_plan",
             value,
-            ("plan_id", "version_before", "version_after", "target_profile", "preflight_result", "evidence_links"),
+            ("journey_run_id", "repository_revision", "plan_id", "version_before", "version_after", "target_profile", "preflight_result", "evidence_links"),
         )
-        if not exact_version_pattern.fullmatch(parts["version_before"]):
-            fail_field("upgrade_plan", "version_before must be an exact stable version")
-        if not exact_version_pattern.fullmatch(parts["version_after"]):
-            fail_field("upgrade_plan", "version_after must be an exact stable version")
+        require_packet_binding("upgrade_plan", parts, journey_run_id, repository_revision)
+        require_stable_version("upgrade_plan", "version_before", parts["version_before"])
+        require_stable_version("upgrade_plan", "version_after", parts["version_after"])
         normalized_version_before = parts["version_before"].lower().removeprefix("v")
         normalized_version_after = parts["version_after"].lower().removeprefix("v")
         if normalized_version_before == normalized_version_after:
@@ -437,8 +467,9 @@ if materialized_fields:
         parts = require_components(
             "rollback_plan",
             value,
-            ("plan_id", "backup_reference", "rollback_owner", "rollback_trigger", "rollback_target"),
+            ("journey_run_id", "repository_revision", "plan_id", "backup_reference", "rollback_owner", "rollback_trigger", "rollback_target"),
         )
+        require_packet_binding("rollback_plan", parts, journey_run_id, repository_revision)
         require_aegisops_reference("rollback_plan", "backup_reference", parts["backup_reference"])
         rollback_backup_references.add(parts["backup_reference"])
         require_aegisops_reference("rollback_plan", "rollback_target", parts["rollback_target"])
@@ -454,12 +485,16 @@ if materialized_fields:
         )
     if len(restore_target_profiles) != 1 or upgrade_target_profiles != restore_target_profiles:
         fail_field("target_profile_binding", "restore and upgrade target profiles must match")
+    if backup_created_at is None or restore_created_at is None or restore_created_at < backup_created_at:
+        fail_field("recovery_timeline", "restore evidence cannot predate backup evidence")
 
     for value in field_values["support_bundle"]:
         parts = require_components(
             "support_bundle",
             value,
             (
+                "journey_run_id",
+                "repository_revision",
                 "bundle_id",
                 "environment_class",
                 "component_versions",
@@ -471,17 +506,30 @@ if materialized_fields:
                 "evidence_links",
             ),
         )
-        require_timestamp("support_bundle", "created_at", parts["created_at"])
+        require_packet_binding("support_bundle", parts, journey_run_id, repository_revision)
+        bundle_created_at = require_timestamp("support_bundle", "created_at", parts["created_at"])
         for name in ("doctor_summary", "backup_restore_references", "upgrade_rollback_references", "evidence_links"):
             require_aegisops_reference("support_bundle", name, parts[name])
-        if re.search(
-            r"(?<![a-z0-9])(?:latest|beta[0-9]*|alpha[0-9]*|rc[0-9]*)(?![a-z0-9])",
-            parts["component_versions"],
-            re.IGNORECASE,
-        ):
+        component_names: set[str] = set()
+        component_entries = [entry.strip() for entry in parts["component_versions"].split(",")]
+        if not component_entries or any(not entry for entry in component_entries):
             fail_field("support_bundle", "component_versions must be exact stable versions")
+        for entry in component_entries:
+            match = component_version_pattern.fullmatch(entry)
+            if match is None:
+                fail_field("support_bundle", "component_versions must be exact stable versions")
+            component_name = match.group("component").lower()
+            if component_name in component_names:
+                fail_field("support_bundle", f"duplicate component version for {component_name}")
+            component_names.add(component_name)
+            require_stable_version("support_bundle", "component_versions", match.group("version"))
+
+    if restore_created_at is None or bundle_created_at is None or bundle_created_at < restore_created_at:
+        fail_field("support_bundle_timeline", "support bundle cannot predate restore evidence")
 
     redaction_components = (
+        "journey_run_id",
+        "repository_revision",
         "manifest_id",
         "scan_result",
         "secret_values",
@@ -497,9 +545,10 @@ if materialized_fields:
     redaction_states = {"redacted", "absent", "passed"}
     for value in field_values["redaction_manifest"]:
         parts = require_components("redaction_manifest", value, redaction_components)
+        require_packet_binding("redaction_manifest", parts, journey_run_id, repository_revision)
         if parts["scan_result"].lower() != "passed":
             fail_field("redaction_manifest", "scan_result must be passed")
-        for name in redaction_components[2:-1]:
+        for name in redaction_components[4:-1]:
             if parts[name].lower() not in redaction_states:
                 fail_field("redaction_manifest", f"{name} must be redacted, absent, or passed")
         if parts["authority_boundary"].lower() != "subordinate-evidence-only":
@@ -509,9 +558,12 @@ if materialized_fields:
         parts = require_components(
             "owner_review",
             value,
-            ("reviewer", "reviewed_at", "disposition", "accepted_risk", "follow_up_owner"),
+            ("journey_run_id", "repository_revision", "reviewer", "reviewed_at", "disposition", "accepted_risk", "follow_up_owner"),
         )
-        require_timestamp("owner_review", "reviewed_at", parts["reviewed_at"])
+        require_packet_binding("owner_review", parts, journey_run_id, repository_revision)
+        reviewed_at = require_timestamp("owner_review", "reviewed_at", parts["reviewed_at"])
+        if bundle_created_at is None or reviewed_at < bundle_created_at:
+            fail_field("owner_review_timeline", "owner review cannot predate support bundle")
         if parts["disposition"].lower() not in {"accepted", "accepted-with-follow-up", "rejected"}:
             fail_field("owner_review", "unsupported disposition")
         if re.search(r"(?:verifier|issue-lint|support[-_ ]?bundle|plan|artifact)", parts["reviewer"], re.IGNORECASE):
@@ -521,10 +573,13 @@ if materialized_fields:
         parts = require_components(
             "limitation_references",
             value,
-            ("ids", "owner", "decision_date", "follow_up_date"),
+            ("journey_run_id", "repository_revision", "ids", "owner", "decision_date", "follow_up_date"),
         )
-        require_date("limitation_references", "decision_date", parts["decision_date"])
-        require_date("limitation_references", "follow_up_date", parts["follow_up_date"])
+        require_packet_binding("limitation_references", parts, journey_run_id, repository_revision)
+        decision_date = require_date("limitation_references", "decision_date", parts["decision_date"])
+        follow_up_date = require_date("limitation_references", "follow_up_date", parts["follow_up_date"])
+        if follow_up_date < decision_date:
+            fail_field("limitation_references", "follow_up_date cannot predate decision_date")
 
     required_non_claims = {
         "rc-evidence-only",

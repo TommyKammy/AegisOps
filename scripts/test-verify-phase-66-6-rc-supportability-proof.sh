@@ -164,14 +164,14 @@ insert_before_doc_text() {
 packet_lines=(
   "journey_run_id=journey-66-1-0007"
   "repository_revision=__REPOSITORY_REVISION__"
-  "backup_evidence=manifest_id=backup-007; custody_reference=aegisops://evidence/backup-007; created_at=2026-07-21T09:00:00Z; owner=release-ops; status=completed"
-  "restore_dry_run_evidence=dry_run_id=restore-dry-007; backup_reference=aegisops://evidence/backup-007; target_profile=smb-single-node; created_at=2026-07-21T09:15:00Z; operator=release-ops; result=passed"
-  "upgrade_plan=plan_id=upgrade-007; version_before=1.6.0; version_after=1.7.0; target_profile=smb-single-node; preflight_result=passed:aegisops://evidence/preflight-007; evidence_links=aegisops://evidence/upgrade-007"
-  "rollback_plan=plan_id=rollback-007; backup_reference=aegisops://evidence/backup-007; rollback_owner=release-ops; rollback_trigger=post-upgrade-smoke-failure; rollback_target=aegisops://evidence/backup-007"
-  "support_bundle=bundle_id=bundle-007; environment_class=rc-lab; component_versions=aegisops-1.7.0; doctor_summary=aegisops://evidence/doctor-007; backup_restore_references=aegisops://evidence/recovery-007; upgrade_rollback_references=aegisops://evidence/change-007; created_at=2026-07-21T09:30:00Z; owner=support-review; evidence_links=aegisops://evidence/bundle-007"
-  "redaction_manifest=manifest_id=redaction-007; scan_result=passed; secret_values=absent; workstation_paths=absent; private_payloads=redacted; ticket_private_content=absent; tokens_and_headers=absent; certs_and_keys=absent; credentials=absent; customer_identifiers=redacted; authority_boundary=subordinate-evidence-only"
-  "owner_review=reviewer=release-owner; reviewed_at=2026-07-21T10:00:00Z; disposition=accepted-with-follow-up; accepted_risk=bounded-rc-only; follow_up_owner=support-owner"
-  "limitation_references=ids=LIM-66-006; owner=support-owner; decision_date=2026-07-21; follow_up_date=2026-08-15"
+  "backup_evidence=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; manifest_id=backup-007; custody_reference=aegisops://evidence/backup-007; created_at=2026-07-21T09:00:00Z; owner=release-ops; status=completed"
+  "restore_dry_run_evidence=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; dry_run_id=restore-dry-007; backup_reference=aegisops://evidence/backup-007; target_profile=smb-single-node; created_at=2026-07-21T09:15:00Z; operator=release-ops; result=passed"
+  "upgrade_plan=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; plan_id=upgrade-007; version_before=1.6.0; version_after=1.7.0; target_profile=smb-single-node; preflight_result=passed:aegisops://evidence/preflight-007; evidence_links=aegisops://evidence/upgrade-007"
+  "rollback_plan=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; plan_id=rollback-007; backup_reference=aegisops://evidence/backup-007; rollback_owner=release-ops; rollback_trigger=post-upgrade-smoke-failure; rollback_target=aegisops://evidence/backup-007"
+  "support_bundle=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; bundle_id=bundle-007; environment_class=rc-lab; component_versions=aegisops-1.7.0; doctor_summary=aegisops://evidence/doctor-007; backup_restore_references=aegisops://evidence/recovery-007; upgrade_rollback_references=aegisops://evidence/change-007; created_at=2026-07-21T09:30:00Z; owner=support-review; evidence_links=aegisops://evidence/bundle-007"
+  "redaction_manifest=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; manifest_id=redaction-007; scan_result=passed; secret_values=absent; workstation_paths=absent; private_payloads=redacted; ticket_private_content=absent; tokens_and_headers=absent; certs_and_keys=absent; credentials=absent; customer_identifiers=redacted; authority_boundary=subordinate-evidence-only"
+  "owner_review=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; reviewer=release-owner; reviewed_at=2026-07-21T10:00:00Z; disposition=accepted-with-follow-up; accepted_risk=bounded-rc-only; follow_up_owner=support-owner"
+  "limitation_references=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; ids=LIM-66-006; owner=support-owner; decision_date=2026-07-21; follow_up_date=2026-08-15"
   "non_claims=rc-evidence-only,not-rc-gate-pass,not-ga,not-production-support,not-customer-portal,not-commercial-replacement,not-support-truth"
 )
 
@@ -313,7 +313,7 @@ assert_fails_with "${missing_row_repo}" "Missing Phase 66.6 RC supportability ev
 
 missing_binding_repo="${workdir}/missing-binding"
 copy_valid_repo "${missing_binding_repo}"
-remove_doc_text "${missing_binding_repo}" 'The `redaction_manifest` value must include `manifest_id`, `scan_result=passed`, `secret_values`, `workstation_paths`, `private_payloads`, `ticket_private_content`, `tokens_and_headers`, `certs_and_keys`, `credentials`, `customer_identifiers`, and `authority_boundary=subordinate-evidence-only`.'
+remove_doc_text "${missing_binding_repo}" 'The `redaction_manifest` value must include `journey_run_id`, `repository_revision`, `manifest_id`, `scan_result=passed`, `secret_values`, `workstation_paths`, `private_payloads`, `ticket_private_content`, `tokens_and_headers`, `certs_and_keys`, `credentials`, `customer_identifiers`, and `authority_boundary=subordinate-evidence-only`.'
 assert_fails_with "${missing_binding_repo}" "Missing Phase 66.6 evidence binding statement"
 
 partial_packet_repo="${workdir}/partial-packet"
@@ -360,6 +360,17 @@ for field in \
   assert_fails_with "${placeholder_field_repo}" "invalid ${field}"
 done
 
+mismatched_nested_revision_repo="${workdir}/mismatched-nested-revision"
+copy_valid_repo "${mismatched_nested_revision_repo}"
+append_complete_packet "${mismatched_nested_revision_repo}"
+nested_fixture_revision="$(git -C "${mismatched_nested_revision_repo}" rev-parse HEAD)"
+replace_doc_text \
+  "${mismatched_nested_revision_repo}" \
+  "support_bundle" \
+  "repository_revision=${nested_fixture_revision}" \
+  "repository_revision=ffffffffffffffffffffffffffffffffffffffff"
+assert_fails_with "${mismatched_nested_revision_repo}" "repository_revision must match the proof packet"
+
 mixed_revision_repo="${workdir}/mixed-revision"
 copy_valid_repo "${mixed_revision_repo}"
 append_complete_packet "${mixed_revision_repo}"
@@ -386,11 +397,14 @@ assert_fails_with "${nonexistent_revision_repo}" "does not resolve to a commit"
 mutated_packet_case "backup-missing-component" "backup_evidence" "manifest_id=backup-007; custody_reference" "custody_reference" "invalid backup_evidence"
 mutated_packet_case "backup-failed" "backup_evidence" "status=completed" "status=failed" "invalid backup_evidence"
 mutated_packet_case "backup-invalid-time" "backup_evidence" "created_at=2026-07-21T09:00:00Z" "created_at=2026-07-21" "invalid backup_evidence"
+mutated_packet_case "restore-before-backup" "restore_dry_run_evidence" "created_at=2026-07-21T09:15:00Z" "created_at=2026-07-21T08:59:59Z" "restore evidence cannot predate backup evidence"
+mutated_packet_case "restore-before-backup-offset" "restore_dry_run_evidence" "created_at=2026-07-21T09:15:00Z" "created_at=2026-07-21T10:59:59+02:00" "restore evidence cannot predate backup evidence"
 mutated_packet_case "restore-failed" "restore_dry_run_evidence" "result=passed" "result=failed" "invalid restore_dry_run_evidence"
 mutated_packet_case "restore-ticket-ref" "restore_dry_run_evidence" "backup_reference=aegisops://evidence/backup-007" "backup_reference=ticket://private/77" "invalid restore_dry_run_evidence"
 mutated_packet_case "restore-mismatched-backup" "restore_dry_run_evidence" "backup_reference=aegisops://evidence/backup-007" "backup_reference=aegisops://evidence/backup-008" "backup references must match"
 mutated_packet_case "restore-mismatched-profile" "restore_dry_run_evidence" "target_profile=smb-single-node" "target_profile=enterprise-cluster" "target profiles must match"
 mutated_packet_case "upgrade-floating-version" "upgrade_plan" "version_after=1.7.0" "version_after=latest" "invalid upgrade_plan"
+mutated_packet_case "upgrade-rc-build-version" "upgrade_plan" "version_after=1.7.0" "version_after=1.7.0+rc.1" "invalid upgrade_plan"
 mutated_packet_case "upgrade-same-version" "upgrade_plan" "version_after=1.7.0" "version_after=1.6.0" "version_before and version_after must differ"
 mutated_packet_case "upgrade-equivalent-v-version" "upgrade_plan" "version_after=1.7.0" "version_after=v1.6.0" "version_before and version_after must differ"
 mutated_packet_case "upgrade-failed-preflight" "upgrade_plan" "preflight_result=passed:aegisops://evidence/preflight-007" "preflight_result=failed:aegisops://evidence/preflight-007" "invalid upgrade_plan"
@@ -400,16 +414,48 @@ mutated_packet_case "rollback-ticket-target" "rollback_plan" "rollback_target=ae
 mutated_packet_case "rollback-mismatched-backup" "rollback_plan" "backup_reference=aegisops://evidence/backup-007" "backup_reference=aegisops://evidence/backup-009" "backup references must match"
 mutated_packet_case "bundle-floating-version" "support_bundle" "component_versions=aegisops-1.7.0" "component_versions=aegisops-latest" "invalid support_bundle"
 mutated_packet_case "bundle-list-floating-version" "support_bundle" "component_versions=aegisops-1.7.0" "component_versions=aegisops-latest,wazuh-4.0.0" "invalid support_bundle"
+mutated_packet_case "bundle-unversioned-component" "support_bundle" "component_versions=aegisops-1.7.0" "component_versions=aegisops-unversioned,wazuh-4.0.0" "invalid support_bundle"
+mutated_packet_case "bundle-version-without-component" "support_bundle" "component_versions=aegisops-1.7.0" "component_versions=1.7.0" "invalid support_bundle"
+mutated_packet_case "bundle-rc-build-version" "support_bundle" "component_versions=aegisops-1.7.0" "component_versions=aegisops-1.7.0+rc.1" "invalid support_bundle"
+mutated_packet_case "bundle-duplicate-component" "support_bundle" "component_versions=aegisops-1.7.0" "component_versions=aegisops-1.7.0,aegisops-v1.7.1" "duplicate component version"
+mutated_packet_case "bundle-empty-component" "support_bundle" "component_versions=aegisops-1.7.0" "component_versions=aegisops-1.7.0," "invalid support_bundle"
+mutated_packet_case "bundle-before-restore" "support_bundle" "created_at=2026-07-21T09:30:00Z" "created_at=2026-07-21T09:14:59Z" "support bundle cannot predate restore evidence"
 mutated_packet_case "bundle-ticket-links" "support_bundle" "evidence_links=aegisops://evidence/bundle-007" "evidence_links=ticket://private/77" "invalid support_bundle"
 mutated_packet_case "redaction-failed" "redaction_manifest" "scan_result=passed" "scan_result=failed" "invalid redaction_manifest"
 mutated_packet_case "redaction-retained-secret" "redaction_manifest" "secret_values=absent" "secret_values=retained" "invalid redaction_manifest"
 mutated_packet_case "redaction-authority" "redaction_manifest" "authority_boundary=subordinate-evidence-only" "authority_boundary=release-truth" "invalid redaction_manifest"
 mutated_packet_case "artifact-self-review" "owner_review" "reviewer=release-owner" "reviewer=verifier-output" "invalid owner_review"
 mutated_packet_case "unsupported-review" "owner_review" "disposition=accepted-with-follow-up" "disposition=approved-by-bundle" "invalid owner_review"
+mutated_packet_case "review-before-bundle" "owner_review" "reviewed_at=2026-07-21T10:00:00Z" "reviewed_at=2026-07-21T09:29:59Z" "owner review cannot predate support bundle"
 mutated_packet_case "invalid-limitation-date" "limitation_references" "decision_date=2026-07-21" "decision_date=21-07-2026" "invalid limitation_references"
 mutated_packet_case "impossible-limitation-date" "limitation_references" "decision_date=2026-07-21" "decision_date=2026-13-40" "invalid limitation_references"
+mutated_packet_case "limitation-follow-up-before-decision" "limitation_references" "follow_up_date=2026-08-15" "follow_up_date=2026-07-20" "follow_up_date cannot predate decision_date"
 mutated_packet_case "embedded-owner-placeholder" "owner_review" "follow_up_owner=support-owner" "follow_up_owner=support-TODO" "invalid owner_review"
 mutated_packet_case "missing-non-claim" "non_claims" "not-customer-portal," "" "invalid non_claims"
+
+for field in \
+  backup_evidence restore_dry_run_evidence upgrade_plan rollback_plan support_bundle \
+  redaction_manifest owner_review limitation_references; do
+  mutated_packet_case \
+    "mismatched-journey-${field}" \
+    "${field}" \
+    "journey_run_id=journey-66-1-0007" \
+    "journey_run_id=journey-66-1-other" \
+    "journey_run_id must match the proof packet"
+  mutated_packet_case \
+    "missing-journey-${field}" \
+    "${field}" \
+    "journey_run_id=journey-66-1-0007; " \
+    "" \
+    "missing components journey_run_id"
+done
+
+stable_build_metadata_repo="${workdir}/stable-build-metadata"
+copy_valid_repo "${stable_build_metadata_repo}"
+append_complete_packet "${stable_build_metadata_repo}"
+replace_doc_text "${stable_build_metadata_repo}" "upgrade_plan" "version_after=1.7.0" "version_after=1.7.0+build.7"
+replace_doc_text "${stable_build_metadata_repo}" "support_bundle" "component_versions=aegisops-1.7.0" "component_versions=aegisops-1.7.0+build.7,wazuh-v4.0.0"
+assert_passes "${stable_build_metadata_repo}"
 
 forbidden_claim_case "bundle-rc-overclaim" "Support bundle proves RC gate readiness."
 forbidden_claim_case "bundle-truth" "Support bundle is release truth."
