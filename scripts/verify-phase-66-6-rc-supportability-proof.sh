@@ -719,13 +719,18 @@ if materialized_fields:
 
 
 credential_assignment_pattern = re.compile(
-    r"(?<![A-Za-z0-9])(?:[A-Za-z0-9][A-Za-z0-9_-]*[_-])?(?:password|passwd|secret(?:[_ -]?(?:key|access[_ -]?key))?|api[_ -]?key|access[_ -]?token|client[_ -]?secret|private[_ -]?key)\s*[:=]\s*[`\"']?(?P<value>[^\s`\"'<>|]{4,})",
+    r"(?<![A-Za-z0-9])(?:[A-Za-z0-9][A-Za-z0-9_-]*[_-])?(?:password|passwd|secret(?:[_ -]?(?:key|access[_ -]?key))?|api[_ -]?key|access[_ -]?token|client[_ -]?secret|private[_ -]?key)\s*[:=]\s*(?P<value>[^\r\n]*)$",
     re.IGNORECASE,
 )
-safe_redaction_value_pattern = re.compile(r"^\[REDACTED(?::[a-z0-9-]+)?\][.,;:]?$", re.IGNORECASE)
+redaction_marker = r"\[REDACTED(?::[a-z0-9-]+)?\]"
+safe_redaction_value_pattern = re.compile(
+    rf"^(?:{redaction_marker}|`{redaction_marker}`|\"{redaction_marker}\"|'{redaction_marker}')[.,;:]?$",
+    re.IGNORECASE,
+)
 
-for assignment in credential_assignment_pattern.finditer(doc_raw):
-    if not safe_redaction_value_pattern.fullmatch(assignment.group("value")):
+for credential_line in doc_raw.splitlines():
+    assignment = credential_assignment_pattern.search(credential_line)
+    if assignment and not safe_redaction_value_pattern.fullmatch(assignment.group("value").strip()):
         print("Forbidden Phase 66.6 RC supportability proof: production secret-looking value detected", file=sys.stderr)
         raise SystemExit(1)
 
@@ -810,11 +815,16 @@ subordinate_subject = (
     r"backup\s+(?:evidence|manifests?)|restore\s+dry[- ]run(?:\s+output)?|upgrade\s+plans?|rollback\s+plans?|"
     r"redaction\s+manifests?|owner[- ]review\s+summaries|limitation\s+lists?|verifier\s+output|issue-lint\s+output)"
 )
+broad_readiness_subject = (
+    r"(?:this\s+proof|supportability\s+proof|support\s+artifacts?|support\s+bundles?|bundle\s+output|"
+    r"backup\s+(?:evidence|manifests?)|restore\s+dry[- ]run(?:\s+output)?|upgrade\s+plans?|rollback\s+plans?|"
+    r"redaction\s+manifests?|owner[- ]review\s+summaries|limitation\s+lists?|verifier\s+output|issue-lint\s+output)"
+)
 claim_verb = r"(?:proves?|confirms?|establishes?|satisfies?|passes?|grants?|achieves?|guarantees?|certifies?|validates?|demonstrates?)"
 readiness_outcome = (
-    r"(?:rc\s+(?:gate|pass|readiness)|release[- ]candidate\s+(?:gate|pass|readiness)|ga(?:\s+readiness|\s+gate|\s+pass)?|"
+    r"\b(?:rc\s+(?:gate|pass|readiness)|release[- ]candidate\s+(?:gate|pass|readiness)|ga(?:\s+readiness|\s+gate|\s+pass)?|"
     r"general\s+availability|production\s+(?:readiness|support|sla)|24x7\s+support|customer\s+portal|"
-    r"real\s+design[- ]partner|commercial\s+replacement|live\s+(?:restore|upgrade|rollback)(?:\s+completion)?)"
+    r"real\s+design[- ]partner|commercial\s+replacement|live\s+(?:restore|upgrade|rollback)(?:\s+completion)?)\b"
 )
 truth_outcome = (
     r"(?:(?:workflow|release|gate|restore|limitation|audit|readiness|closeout|approval|execution|reconciliation)\s+truth|"
@@ -826,6 +836,28 @@ non_negated_predicate_context = (
     r"(?:(?!\b(?:cannot|can't|does\s+not|do\s+not|did\s+not|will\s+not|should\s+not|"
     r"may\s+not|must\s+not|never|no\s+longer)\b).)"
 )
+readiness_relation_patterns = (
+    re.compile(
+        rf"^\s*(?:[-:>]\s*)?(?:(?:according\s+to|based\s+on|using|with)\s+)?(?:the\s+|a\s+)?(?P<subject>{broad_readiness_subject})(?P<relation>.{{0,180}})(?P<outcome>{readiness_outcome})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"^\s*(?:[-:>]\s*)?(?P<outcome>{readiness_outcome})(?P<relation>.{{0,180}})(?:the\s+|a\s+)?(?P<subject>{broad_readiness_subject})",
+        re.IGNORECASE,
+    ),
+)
+denied_relation_pattern = re.compile(
+    r"\b(?:cannot|can't|does\s+not|do\s+not|did\s+not|will\s+not|should\s+not|may\s+not|must\s+not|"
+    r"not|never|no(?:\s+longer)?|lacks?|fails?\s+to|without\s+(?:proving|providing|establishing|confirming|demonstrating|certifying|validating)|"
+    r"reject(?:s|ed|ing)?|forbid(?:s|den|ding)?|exclud(?:e|es|ed|ing)|"
+    r"den(?:y|ies|ied|ying)|disclaim(?:s|ed|ing)?)\b",
+    re.IGNORECASE,
+)
+
+
+def readiness_relation_is_denied(relation: str) -> bool:
+    predicate_scope = relation.rsplit(",", 1)[-1]
+    return bool(denied_relation_pattern.search(predicate_scope))
 
 claim_patterns = (
     re.compile(
@@ -902,12 +934,17 @@ def claim_clauses(text: str):
 claim_inputs = (doc_raw, "\n".join(line for line in readme_raw.splitlines() if re.search(r"phase\s+66\.6|supportability\s+proof", line, re.IGNORECASE)))
 for claim_input in claim_inputs:
     for clause in claim_clauses(claim_input):
+        broad_readiness_claims = [
+            match
+            for pattern in readiness_relation_patterns
+            if (match := pattern.search(clause)) and not readiness_relation_is_denied(match.group("relation"))
+        ]
         matched_claims = [index for index, pattern in enumerate(claim_patterns) if pattern.search(clause)]
         matched_support_authority = bool(support_authority_pattern.search(clause))
-        if matched_support_authority or matched_claims:
+        if matched_support_authority or matched_claims or broad_readiness_claims:
             if os.environ.get("PHASE66_6_DEBUG") == "1":
                 print(
-                    f"Matched clause (support_authority={matched_support_authority}, patterns={matched_claims}): {clause}",
+                    f"Matched clause (support_authority={matched_support_authority}, patterns={matched_claims}, broad_readiness={[match.groupdict() for match in broad_readiness_claims]}): {clause}",
                     file=sys.stderr,
                 )
             print("Forbidden Phase 66.6 RC supportability proof: authority or readiness overclaim detected", file=sys.stderr)
