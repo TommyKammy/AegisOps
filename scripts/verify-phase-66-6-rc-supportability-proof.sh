@@ -47,17 +47,20 @@ for verifier_script in "${required_verifier_scripts[@]}"; do
   require_file "${repo_root}/${verifier_script}" "Phase 66.6 verifier script ${verifier_script}"
 done
 
-python3 - "${absolute_doc_path}" "${readme_path}" <<'PY'
+python3 - "${absolute_doc_path}" "${readme_path}" "${repo_root}" <<'PY'
 from __future__ import annotations
 
-import re
 import os
+import re
+import subprocess
 import sys
+from datetime import date, datetime
 from pathlib import Path
 
 
 doc_path = Path(sys.argv[1])
 readme_path = Path(sys.argv[2])
+repo_root = Path(sys.argv[3])
 doc_raw = doc_path.read_text(encoding="utf-8")
 readme_raw = readme_path.read_text(encoding="utf-8")
 
@@ -197,13 +200,25 @@ required_fields = (
 
 required_field_set = set(required_fields)
 field_values: dict[str, list[str]] = {field: [] for field in required_fields}
-current_heading = ""
+section_field_values: dict[str, dict[str, list[str]]] = {}
+current_section = "document-preamble"
+section_index = 0
 in_fence = False
 assignment_pattern = re.compile(
     r"^\s*(?:[-*>]\s*)?`?(" + "|".join(map(re.escape, required_fields)) + r")`?\s*[:=]\s*(.*?)\s*$",
     re.IGNORECASE,
 )
 table_pattern = re.compile(r"^\s*\|\s*`?([a-z0-9_]+)`?\s*\|\s*(.*?)\s*\|", re.IGNORECASE)
+canonical_evidence_rows = {row.strip() for row in evidence_rows}
+
+
+def record_field(section_name: str, field: str, value: str) -> None:
+    field_values[field].append(value)
+    section_values = section_field_values.setdefault(
+        section_name,
+        {required_field: [] for required_field in required_fields},
+    )
+    section_values[field].append(value)
 
 for raw_line in visible_text(doc_raw).splitlines():
     stripped = raw_line.strip()
@@ -213,16 +228,42 @@ for raw_line in visible_text(doc_raw).splitlines():
     if in_fence:
         continue
     if stripped.startswith("## "):
-        current_heading = stripped
+        section_index += 1
+        current_section = f"{section_index}:{stripped}"
     match = assignment_pattern.match(raw_line)
     if match:
-        field_values[match.group(1).lower()].append(match.group(2).strip().strip("`"))
+        record_field(current_section, match.group(1).lower(), match.group(2).strip().strip("`"))
         continue
     match = table_pattern.match(raw_line)
-    if match and current_heading != "## 2. RC Supportability Evidence":
+    if match and stripped not in canonical_evidence_rows:
         key = match.group(1).lower()
         if key in required_field_set:
-            field_values[key].append(match.group(2).strip().strip("`"))
+            record_field(current_section, key, match.group(2).strip().strip("`"))
+
+for section_name, section_values in section_field_values.items():
+    section_materialized_fields = {field for field, values in section_values.items() if values}
+    if not section_materialized_fields:
+        continue
+    section_missing_fields = sorted(required_field_set - section_materialized_fields)
+    if section_missing_fields:
+        print(
+            "Forbidden Phase 66.6 RC supportability proof: partial evidence packet in "
+            + section_name.split(":", 1)[-1]
+            + "; missing "
+            + ", ".join(section_missing_fields),
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    duplicate_section_fields = sorted(field for field, values in section_values.items() if len(values) != 1)
+    if duplicate_section_fields:
+        print(
+            "Forbidden Phase 66.6 RC supportability proof: multiple materialized values in "
+            + section_name.split(":", 1)[-1]
+            + " for "
+            + ", ".join(duplicate_section_fields),
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
 
 materialized_fields = {field for field, values in field_values.items() if values}
 if materialized_fields:
@@ -234,10 +275,18 @@ if materialized_fields:
             file=sys.stderr,
         )
         raise SystemExit(1)
+    duplicate_fields = sorted(field for field, values in field_values.items() if len(values) != 1)
+    if duplicate_fields:
+        print(
+            "Forbidden Phase 66.6 RC supportability proof: multiple materialized values across evidence packets for "
+            + ", ".join(duplicate_fields),
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
 
 
 placeholder_pattern = re.compile(
-    r"^(?:todo|tbd|tbc|unknown|none|null|n/?a|pending|sample|example|fake|placeholder|omitted|missing|unavailable|not[- _]?available)(?:\b|$)",
+    r"(?:^|[^a-z0-9])(?:todo|tbd|tbc|unknown|none|null|n/?a|pending|sample|example|fake|placeholder|omitted|missing|unavailable|not[- _]?available)(?:$|[^a-z0-9])",
     re.IGNORECASE,
 )
 
@@ -286,15 +335,28 @@ exact_version_pattern = re.compile(r"^v?\d+\.\d+\.\d+(?:\+[0-9A-Za-z.-]+)?$")
 def require_timestamp(field: str, name: str, value: str) -> None:
     if not timestamp_pattern.fullmatch(value):
         fail_field(field, f"{name} must be an RFC3339 timestamp")
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        fail_field(field, f"{name} must be an RFC3339 timestamp")
 
 
 def require_date(field: str, name: str, value: str) -> None:
     if not date_pattern.fullmatch(value):
         fail_field(field, f"{name} must be an ISO date")
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        fail_field(field, f"{name} must be an ISO date")
 
 
 def require_aegisops_reference(field: str, name: str, value: str) -> None:
-    if "aegisops://" not in value.lower():
+    reference_value = value
+    if reference_value.lower().startswith("passed:"):
+        reference_value = reference_value[len("passed:") :]
+    references = [reference for reference in re.split(r"[\s,]+", reference_value) if reference]
+    reference_pattern = re.compile(r"^aegisops://[a-z0-9][a-z0-9._~:/?#@!$&'()*+;=%-]*$", re.IGNORECASE)
+    if not references or any(not reference_pattern.fullmatch(reference) for reference in references):
         fail_field(field, f"{name} must include a direct AegisOps evidence reference")
 
 
@@ -302,11 +364,29 @@ if materialized_fields:
     revisions = {value.lower() for value in field_values["repository_revision"]}
     if len(revisions) != 1 or not immutable_revision_pattern.fullmatch(next(iter(revisions))):
         fail_field("repository_revision", "expected one immutable 40-character revision")
+    repository_revision = next(iter(revisions))
+    try:
+        revision_check = subprocess.run(
+            ["git", "-C", str(repo_root), "cat-file", "-e", f"{repository_revision}^{{commit}}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        fail_field("repository_revision", "revision cannot be resolved in the target repository")
+    if revision_check.returncode != 0:
+        fail_field("repository_revision", "revision does not resolve to a commit in the target repository")
 
     for field, values in field_values.items():
         for value in values:
             if not value or placeholder_pattern.search(value):
                 fail_field(field, "missing or placeholder value")
+
+    backup_references: set[str] = set()
+    restore_backup_references: set[str] = set()
+    rollback_backup_references: set[str] = set()
+    restore_target_profiles: set[str] = set()
+    upgrade_target_profiles: set[str] = set()
 
     for value in field_values["backup_evidence"]:
         parts = require_components(
@@ -315,6 +395,7 @@ if materialized_fields:
             ("manifest_id", "custody_reference", "created_at", "owner", "status"),
         )
         require_aegisops_reference("backup_evidence", "custody_reference", parts["custody_reference"])
+        backup_references.add(parts["custody_reference"])
         require_timestamp("backup_evidence", "created_at", parts["created_at"])
         if parts["status"].lower() != "completed":
             fail_field("backup_evidence", "status must be completed")
@@ -326,6 +407,8 @@ if materialized_fields:
             ("dry_run_id", "backup_reference", "target_profile", "created_at", "operator", "result"),
         )
         require_aegisops_reference("restore_dry_run_evidence", "backup_reference", parts["backup_reference"])
+        restore_backup_references.add(parts["backup_reference"])
+        restore_target_profiles.add(parts["target_profile"])
         require_timestamp("restore_dry_run_evidence", "created_at", parts["created_at"])
         if parts["result"].lower() != "passed":
             fail_field("restore_dry_run_evidence", "result must be passed")
@@ -340,6 +423,11 @@ if materialized_fields:
             fail_field("upgrade_plan", "version_before must be an exact stable version")
         if not exact_version_pattern.fullmatch(parts["version_after"]):
             fail_field("upgrade_plan", "version_after must be an exact stable version")
+        normalized_version_before = parts["version_before"].lower().removeprefix("v")
+        normalized_version_after = parts["version_after"].lower().removeprefix("v")
+        if normalized_version_before == normalized_version_after:
+            fail_field("upgrade_plan", "version_before and version_after must differ")
+        upgrade_target_profiles.add(parts["target_profile"])
         if not parts["preflight_result"].lower().startswith("passed:"):
             fail_field("upgrade_plan", "preflight_result must be passed with evidence")
         require_aegisops_reference("upgrade_plan", "preflight_result", parts["preflight_result"])
@@ -352,7 +440,20 @@ if materialized_fields:
             ("plan_id", "backup_reference", "rollback_owner", "rollback_trigger", "rollback_target"),
         )
         require_aegisops_reference("rollback_plan", "backup_reference", parts["backup_reference"])
+        rollback_backup_references.add(parts["backup_reference"])
         require_aegisops_reference("rollback_plan", "rollback_target", parts["rollback_target"])
+
+    if (
+        len(backup_references) != 1
+        or restore_backup_references != backup_references
+        or rollback_backup_references != backup_references
+    ):
+        fail_field(
+            "recovery_binding",
+            "backup references must match across backup evidence, restore dry-run evidence, and rollback plan",
+        )
+    if len(restore_target_profiles) != 1 or upgrade_target_profiles != restore_target_profiles:
+        fail_field("target_profile_binding", "restore and upgrade target profiles must match")
 
     for value in field_values["support_bundle"]:
         parts = require_components(
@@ -373,7 +474,11 @@ if materialized_fields:
         require_timestamp("support_bundle", "created_at", parts["created_at"])
         for name in ("doctor_summary", "backup_restore_references", "upgrade_rollback_references", "evidence_links"):
             require_aegisops_reference("support_bundle", name, parts[name])
-        if re.search(r"(?:^|[-_.])(latest|beta|alpha|rc)(?:$|[-_.0-9])", parts["component_versions"], re.IGNORECASE):
+        if re.search(
+            r"(?<![a-z0-9])(?:latest|beta[0-9]*|alpha[0-9]*|rc[0-9]*)(?![a-z0-9])",
+            parts["component_versions"],
+            re.IGNORECASE,
+        ):
             fail_field("support_bundle", "component_versions must be exact stable versions")
 
     redaction_components = (
@@ -469,25 +574,52 @@ for pattern in workstation_patterns:
         raise SystemExit(1)
 
 private_data_pattern = re.compile(
-    r"\b(?:includes?|contains?|retains?|stores?|embeds?|exports?|captures?|carries|publishes)\b.{0,50}\b(?:raw\s+customer|customer[- ]private|unredacted\s+customer|private\s+ticket|raw\s+ticket|private\s+support\s+note|raw\s+payload)",
+    r"\b(?:include(?:s|d|ing)?|contain(?:s|ed|ing)?|retain(?:s|ed|ing)?|store(?:s|d|ing)?|embed(?:s|ded|ding)?|export(?:s|ed|ing)?|capture(?:s|d|ing)?|carr(?:y|ies|ied|ying)|publish(?:es|ed|ing)?)\b.{0,50}\b(?:raw\s+customer|customer[- ]private|unredacted\s+customer|private\s+ticket|raw\s+ticket|private\s+support\s+note|raw\s+payload)",
     re.IGNORECASE,
 )
 private_assignment_pattern = re.compile(
     r"^\s*(?:[-*>]\s*)?`?(?:customer[_ -]?private(?:[_ -]?(?:data|payload))?|ticket[_ -]?private[_ -]?content|raw[_ -]?(?:customer|ticket)[_ -]?(?:data|payload|content)?)`?\s*[:=|]\s*(?!\s*(?:redacted|absent|rejected|forbidden|removed|none)\b)\S+",
     re.IGNORECASE,
 )
-safe_private_pattern = re.compile(
-    r"\b(?:cannot|must\s+not|does\s+not|do\s+not|never|rejects?|rejected|redacts?|redacted|removes?|removed|forbidden|without|must\s+exclude|must\s+not\s+contain|not\s+contain)\b",
-    re.IGNORECASE,
-)
+
+
+def split_semantic_clauses(text: str) -> list[str]:
+    return [
+        clause.strip()
+        for clause in re.split(
+            r"\s*(?:;|\bbut\b|\bhowever\b|\byet\b|\bwhile\b|\balthough\b|\bthough\b|\band\b)\s*",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if clause.strip()
+    ]
+
+
+def private_predicate_is_negated(clause: str, match: re.Match[str]) -> bool:
+    predicate_prefix = clause[: match.start()]
+    if re.search(
+        r"\b(?:no|zero)\s+(?:raw\s+customer|customer[- ]private|unredacted\s+customer|private\s+ticket|raw\s+ticket|private\s+support\s+note|raw\s+payload)",
+        match.group(0),
+        re.IGNORECASE,
+    ):
+        return True
+    return bool(
+        re.search(
+            r"(?:cannot|can't|must\s+not|does\s+not|do\s+not|did\s+not|will\s+not|should\s+not|never|forbidden\s+to|without)\s*$",
+            predicate_prefix,
+            re.IGNORECASE,
+        )
+    )
 
 for line in doc_raw.splitlines():
     if private_assignment_pattern.search(line):
         print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
         raise SystemExit(1)
-    if private_data_pattern.search(line) and not safe_private_pattern.search(line):
-        print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
-        raise SystemExit(1)
+    for private_clause in split_semantic_clauses(line):
+        private_match = private_data_pattern.search(private_clause)
+        if private_match and not private_predicate_is_negated(private_clause, private_match):
+            print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
+            raise SystemExit(1)
 
 
 subordinate_subject = (
@@ -507,11 +639,17 @@ truth_outcome = (
 )
 authority_action = r"(?:approves?|executes?|reconciles?|closes?|releases?|gates?|restores?|mutates?|promotes?|overrides?|replaces?)"
 authority_object = r"(?:aegisops\s+records?|workflows?|releases?|gates?|restore\s+acceptance|limitations?|audits?|actions?|cases?|closeout)"
+non_negated_predicate_context = (
+    r"(?:(?!\b(?:cannot|can't|does\s+not|do\s+not|did\s+not|will\s+not|should\s+not|"
+    r"may\s+not|must\s+not|never|no\s+longer)\b).)"
+)
 
 claim_patterns = (
     re.compile(
         subordinate_subject
-        + r"\s+(?:(?:now|already|independently|directly|automatically|effectively|itself|can|may|will|does)\s+){0,4}"
+        + r"\s+"
+        + non_negated_predicate_context
+        + r"{0,120}\b"
         + claim_verb
         + r"\b.{0,140}"
         + readiness_outcome,
@@ -519,27 +657,44 @@ claim_patterns = (
     ),
     re.compile(
         subordinate_subject
-        + r"\s+(?:(?:now|already|effectively|itself)\s+){0,3}(?:is|are|becomes?|serves?\s+as)\b.{0,80}"
+        + r"\s+"
+        + non_negated_predicate_context
+        + r"{0,120}\b(?:is|are|becomes?|serves?\s+as)\b"
+        + r"(?:(?!\b(?:not|never)\b).){0,80}"
         + truth_outcome,
         re.IGNORECASE,
     ),
     re.compile(
         subordinate_subject
-        + r"\s+(?:(?:now|already|independently|directly|automatically|effectively|itself|can|may|will|does)\s+){0,4}"
+        + r"\s+"
+        + r"(?:(?:now|already|independently|directly|automatically|effectively|itself)\s+){0,4}"
+        + r"(?:(?:can|may|will|does)\s+)?"
         + authority_action
         + r"\b.{0,100}"
         + authority_object,
         re.IGNORECASE,
     ),
-    re.compile(readiness_outcome + r".{0,100}\b(?:is|are|was|were|be|been)\s+(?:proven|confirmed|established|satisfied|passed|granted|certified|validated)\s+by\b.{0,100}" + subordinate_subject, re.IGNORECASE),
-    re.compile(truth_outcome + r".{0,80}\b(?:is|are|was|were|be|been)\s+(?:provided|established|owned|controlled|defined)\s+by\b.{0,80}" + subordinate_subject, re.IGNORECASE),
+    re.compile(
+        readiness_outcome
+        + non_negated_predicate_context
+        + r"{0,100}\b(?:is|are|was|were|be|been)\s+(?:proven|confirmed|established|satisfied|passed|granted|certified|validated)\b"
+        + non_negated_predicate_context
+        + r"{0,100}\bby\b.{0,100}"
+        + subordinate_subject,
+        re.IGNORECASE,
+    ),
+    re.compile(
+        truth_outcome
+        + non_negated_predicate_context
+        + r"{0,80}\b(?:is|are|was|were|be|been)\s+(?:provided|established|owned|controlled|defined)\b"
+        + non_negated_predicate_context
+        + r"{0,80}\bby\b.{0,80}"
+        + subordinate_subject,
+        re.IGNORECASE,
+    ),
 )
 support_authority_pattern = re.compile(
-    r"\bsupport\s+(?:collaborator|reviewer|bundle\s+owner|agent|analyst)\b.{0,80}\b(?:is|becomes?|acts?\s+as|can|may|has\s+authority\s+to)\b.{0,80}\b(?:operator|approver|administrator|substrate\s+operator|backend\s+authority|approve|execute|reconcile|close|release|gate|restore|mutate)\b",
-    re.IGNORECASE,
-)
-negation_pattern = re.compile(
-    r"\b(?:cannot|can't|does\s+not|do\s+not|is\s+not|are\s+not|must\s+not|never|no\s+longer|without)\b",
+    r"\bsupport\s+(?:collaborator|reviewer|bundle\s+owner|agent|analyst)\b.{0,80}\b(?:is|becomes?|acts?\s+as|can|may|has\s+authority\s+to)\b(?:(?!\b(?:not|never)\b).){0,80}\b(?:operator|approver|administrator|substrate\s+operator|backend\s+authority|approve|execute|reconcile|close|release|gate|restore|mutate)\b",
     re.IGNORECASE,
 )
 
@@ -549,7 +704,7 @@ def claim_clauses(text: str):
     normalized = re.sub(r"\s+", " ", normalized)
     for sentence in re.split(r"(?<=[.!?])\s+", normalized):
         inherited_subject = ""
-        for clause in re.split(r"\s*(?:;|\bbut\b|\bhowever\b|\byet\b|\band\b)\s*", sentence, flags=re.IGNORECASE):
+        for clause in split_semantic_clauses(sentence):
             clause = clause.strip()
             if clause:
                 yield clause
@@ -557,14 +712,13 @@ def claim_clauses(text: str):
                 if subject_match:
                     inherited_subject = subject_match.group(0)
                 elif inherited_subject:
-                    yield f"{inherited_subject} {clause}"
+                    inherited_clause = re.sub(r"^(?:it|they)\s+", "", clause, flags=re.IGNORECASE)
+                    yield f"{inherited_subject} {inherited_clause}"
 
 
 claim_inputs = (doc_raw, "\n".join(line for line in readme_raw.splitlines() if re.search(r"phase\s+66\.6|supportability\s+proof", line, re.IGNORECASE)))
 for claim_input in claim_inputs:
     for clause in claim_clauses(claim_input):
-        if negation_pattern.search(clause):
-            continue
         matched_claims = [index for index, pattern in enumerate(claim_patterns) if pattern.search(clause)]
         matched_support_authority = bool(support_authority_pattern.search(clause))
         if matched_support_authority or matched_claims:
