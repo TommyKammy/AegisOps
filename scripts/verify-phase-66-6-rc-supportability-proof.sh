@@ -54,7 +54,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -98,6 +98,7 @@ required_phrases = (
     "AegisOps records remain authoritative for workflow, release, gate, restore acceptance, limitation, audit, approval, action request, execution receipt, reconciliation, source admission, and closeout truth.",
     "Backup manifests, restore dry-run output, upgrade plans, rollback plans, support bundles, redaction manifests, owner-review summaries, limitation lists, verifier output, issue-lint output, browser state, UI cache, tickets, and optional evidence remain subordinate evidence.",
     "The proof must reject missing or partial evidence packets, mixed revisions, stale or failed evidence, placeholder values, secret leakage, raw credential leakage, customer-private data, ticket-private content, authorization material, certificate or key material, workstation-local paths, support-bundle-as-truth claims, support-operator authority expansion, live restore claims, live upgrade or rollback claims, inferred RC pass, inferred GA pass, production SLA commitments, 24x7 support claims, customer portal claims, real design-partner support claims, commercial replacement claims, verifier-as-readiness-truth, and issue-lint-as-readiness-truth.",
+    "Materialized evidence timestamps must be no more than 24 hours old at verification time and must not be more than five minutes in the future.",
     "Later Phase 66 issues must still prove the RC authority-boundary proof pack and closeout evidence independently.",
     "Run `bash scripts/verify-phase-66-6-rc-supportability-proof.sh`.",
     "Run `bash scripts/test-verify-phase-66-6-rc-supportability-proof.sh`.",
@@ -329,6 +330,8 @@ def require_components(field: str, value: str, required: tuple[str, ...]) -> dic
 
 
 timestamp_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$")
+evidence_freshness_window = timedelta(hours=24)
+allowed_future_skew = timedelta(minutes=5)
 date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 immutable_revision_pattern = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
 exact_version_pattern = re.compile(
@@ -457,6 +460,7 @@ if materialized_fields:
     backup_created_at: datetime | None = None
     restore_created_at: datetime | None = None
     bundle_created_at: datetime | None = None
+    reviewed_at: datetime | None = None
 
     for value in field_values["backup_evidence"]:
         parts = require_components(
@@ -688,6 +692,14 @@ if materialized_fields:
             fail_field("owner_review", "unsupported disposition")
     if owner_review_references != bundle_evidence_references | redaction_evidence_references:
         fail_field("owner_review", "reviewed_references must match the support bundle and redaction manifest")
+    evidence_timestamps = (backup_created_at, restore_created_at, bundle_created_at, reviewed_at)
+    if any(timestamp is None for timestamp in evidence_timestamps):
+        fail_field("evidence_freshness", "all evidence timestamps must be present")
+    verification_time = datetime.now(timezone.utc)
+    if any(timestamp > verification_time + allowed_future_skew for timestamp in evidence_timestamps if timestamp):
+        fail_field("evidence_freshness", "evidence timestamp is in the future")
+    if any(verification_time - timestamp > evidence_freshness_window for timestamp in evidence_timestamps if timestamp):
+        fail_field("evidence_freshness", "evidence exceeds the 24-hour freshness window")
 
     for value in field_values["limitation_references"]:
         parts = require_components(
@@ -719,7 +731,7 @@ if materialized_fields:
 
 
 credential_assignment_pattern = re.compile(
-    r"(?<![A-Za-z0-9])(?:[A-Za-z0-9][A-Za-z0-9_-]*[_-])?(?:password|passwd|secret(?:[_ -]?(?:key|access[_ -]?key))?|api[_ -]?key|access[_ -]?token|client[_ -]?secret|private[_ -]?key)\s*[:=]\s*(?P<value>[^\r\n]*)$",
+    r"(?<![A-Za-z0-9])(?:[A-Za-z0-9][A-Za-z0-9_-]*[_-])?(?:password|passwd|secret(?:[_ -]?(?:key|access[_ -]?key))?|api[_ -]?key|access[_ -]?token|token|client[_ -]?secret|private[_ -]?key)\s*[:=]\s*(?P<value>[^\r\n]*)$",
     re.IGNORECASE,
 )
 redaction_marker = r"\[REDACTED(?::[a-z0-9-]+)?\]"
@@ -741,7 +753,10 @@ secret_patterns = (
     re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
     re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]+:[^\s@]+@"),
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----", re.IGNORECASE),
-    re.compile(r"-----BEGIN CERTIFICATE-----", re.IGNORECASE),
+    re.compile(
+        r"-----BEGIN (?:(?:(?:TRUSTED|X\.?509) )?CERTIFICATE(?: REQUEST)?|NEW CERTIFICATE REQUEST)-----",
+        re.IGNORECASE,
+    ),
     re.compile(r"^\s*\|\s*`?(?:password|passwd|secret|token|api[_ -]?key|private[_ -]?key)`?\s*\|\s*`?[^\s`|<>]{4,}", re.IGNORECASE | re.MULTILINE),
 )
 
@@ -769,6 +784,15 @@ private_assignment_pattern = re.compile(
     r"^\s*(?:[-*>]\s*)?`?(?:customer[_ -]?private(?:[_ -]?(?:data|payload))?|ticket[_ -]?private[_ -]?content|raw[_ -]?(?:customer|ticket)[_ -]?(?:data|payload|content)?)`?\s*[:=|]\s*(?!\s*(?:redacted|absent|rejected|forbidden|removed|none)\b)\S+",
     re.IGNORECASE,
 )
+customer_identifier_assignment_pattern = re.compile(
+    r"^\s*(?:<!--\s*)?(?:[-*>]\s*)?`?(?:(?:customer|tenant)(?:[_ -]?account)?[_ -]?(?:id|identifier|name|email|host(?:name)?)|account[_ -]?(?:id|identifier|name)|email(?:[_ -]?address)?)`?\s*[:=|]\s*(?P<value>.*?)(?:\s*-->)?\s*$",
+    re.IGNORECASE,
+)
+safe_private_value_pattern = re.compile(
+    rf"^(?:{redaction_marker}|`{redaction_marker}`|\"{redaction_marker}\"|'{redaction_marker}'|redacted|absent|rejected|forbidden|removed|none)[.,;:]?$",
+    re.IGNORECASE,
+)
+email_value_pattern = re.compile(r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9.-])")
 
 
 def split_semantic_clauses(text: str) -> list[str]:
@@ -801,6 +825,13 @@ def private_predicate_is_negated(clause: str, match: re.Match[str]) -> bool:
 
 for line in doc_raw.splitlines():
     if private_assignment_pattern.search(line):
+        print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
+        raise SystemExit(1)
+    identifier_assignment = customer_identifier_assignment_pattern.search(line)
+    if identifier_assignment and not safe_private_value_pattern.fullmatch(identifier_assignment.group("value").strip()):
+        print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
+        raise SystemExit(1)
+    if email_value_pattern.search(line):
         print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
         raise SystemExit(1)
     for private_clause in split_semantic_clauses(line):

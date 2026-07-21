@@ -161,17 +161,48 @@ insert_before_doc_text() {
   ' "${target}/${doc_rel}"
 }
 
+timestamp_values="$(python3 <<'PY'
+from datetime import datetime, timedelta, timezone
+
+now = datetime.now(timezone.utc).replace(microsecond=0)
+values = {
+    "backup_created_at": now - timedelta(hours=3),
+    "restore_created_at": now - timedelta(hours=2, minutes=45),
+    "restore_before_backup": now - timedelta(hours=3, seconds=1),
+    "bundle_created_at": now - timedelta(hours=2, minutes=30),
+    "bundle_before_restore": now - timedelta(hours=2, minutes=45, seconds=1),
+    "reviewed_at": now - timedelta(hours=2),
+    "review_before_bundle": now - timedelta(hours=2, minutes=30, seconds=1),
+    "future_reviewed_at": now + timedelta(hours=1),
+}
+ordered = [value.isoformat().replace("+00:00", "Z") for value in values.values()]
+ordered.extend(
+    (
+        values["restore_before_backup"].astimezone(timezone(timedelta(hours=2))).isoformat(),
+        now.date().isoformat(),
+        (now.date() + timedelta(days=25)).isoformat(),
+        (now.date() - timedelta(days=1)).isoformat(),
+    )
+)
+print("|".join(ordered))
+PY
+)"
+IFS='|' read -r backup_created_at restore_created_at restore_before_backup \
+  bundle_created_at bundle_before_restore reviewed_at review_before_bundle \
+  future_reviewed_at restore_before_backup_offset decision_date follow_up_date prior_date \
+  <<<"${timestamp_values}"
+
 packet_lines=(
   "journey_run_id=journey-66-1-0007"
   "repository_revision=__REPOSITORY_REVISION__"
-  "backup_evidence=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; manifest_id=backup-007; custody_reference=aegisops://evidence/backup-007; created_at=2026-07-21T09:00:00Z; owner=group:release-ops; status=completed"
-  "restore_dry_run_evidence=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; dry_run_id=restore-dry-007; evidence_reference=aegisops://evidence/restore-dry-007; backup_reference=aegisops://evidence/backup-007; target_profile=smb-single-node; created_at=2026-07-21T09:15:00Z; operator=group:release-ops; result=passed"
+  "backup_evidence=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; manifest_id=backup-007; custody_reference=aegisops://evidence/backup-007; created_at=${backup_created_at}; owner=group:release-ops; status=completed"
+  "restore_dry_run_evidence=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; dry_run_id=restore-dry-007; evidence_reference=aegisops://evidence/restore-dry-007; backup_reference=aegisops://evidence/backup-007; target_profile=smb-single-node; created_at=${restore_created_at}; operator=group:release-ops; result=passed"
   "upgrade_plan=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; plan_id=upgrade-007; evidence_reference=aegisops://evidence/upgrade-007; version_before=1.6.0; version_after=1.7.0; target_profile=smb-single-node; preflight_result=passed:aegisops://evidence/preflight-007; evidence_links=aegisops://evidence/upgrade-detail-007"
   "rollback_plan=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; plan_id=rollback-007; evidence_reference=aegisops://evidence/rollback-007; backup_reference=aegisops://evidence/backup-007; rollback_owner=group:release-ops; rollback_trigger=failed:aegisops://evidence/post-upgrade-smoke-007; rollback_target=aegisops://evidence/backup-007"
-  "support_bundle=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; bundle_id=bundle-007; evidence_reference=aegisops://evidence/bundle-007; environment_class=rc-lab; component_versions=aegisops-1.7.0; doctor_summary=aegisops://evidence/doctor-007; backup_restore_references=aegisops://evidence/backup-007,aegisops://evidence/restore-dry-007; upgrade_rollback_references=aegisops://evidence/upgrade-007,aegisops://evidence/rollback-007; created_at=2026-07-21T09:30:00Z; owner=group:support-review; evidence_links=aegisops://evidence/bundle-detail-007"
+  "support_bundle=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; bundle_id=bundle-007; evidence_reference=aegisops://evidence/bundle-007; environment_class=rc-lab; component_versions=aegisops-1.7.0; doctor_summary=aegisops://evidence/doctor-007; backup_restore_references=aegisops://evidence/backup-007,aegisops://evidence/restore-dry-007; upgrade_rollback_references=aegisops://evidence/upgrade-007,aegisops://evidence/rollback-007; created_at=${bundle_created_at}; owner=group:support-review; evidence_links=aegisops://evidence/bundle-detail-007"
   "redaction_manifest=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; manifest_id=redaction-007; evidence_reference=aegisops://evidence/redaction-007; bundle_reference=aegisops://evidence/bundle-007; scan_result=passed; secret_values=absent; workstation_paths=absent; private_payloads=redacted; ticket_private_content=absent; tokens_and_headers=absent; certs_and_keys=absent; credentials=absent; customer_identifiers=redacted; authority_boundary=subordinate-evidence-only"
-  "owner_review=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; reviewer=person:release-owner; reviewed_references=aegisops://evidence/bundle-007,aegisops://evidence/redaction-007; reviewed_at=2026-07-21T10:00:00Z; disposition=accepted-with-follow-up; accepted_risk=bounded-rc-only; follow_up_owner=group:support-owner"
-  "limitation_references=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; ids=LIM-66-006; owner=group:support-owner; decision_date=2026-07-21; follow_up_date=2026-08-15"
+  "owner_review=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; reviewer=person:release-owner; reviewed_references=aegisops://evidence/bundle-007,aegisops://evidence/redaction-007; reviewed_at=${reviewed_at}; disposition=accepted-with-follow-up; accepted_risk=bounded-rc-only; follow_up_owner=group:support-owner"
+  "limitation_references=journey_run_id=journey-66-1-0007; repository_revision=__REPOSITORY_REVISION__; ids=LIM-66-006; owner=group:support-owner; decision_date=${decision_date}; follow_up_date=${follow_up_date}"
   "non_claims=rc-evidence-only,not-rc-gate-pass,not-ga,not-production-support,not-customer-portal,not-commercial-replacement,not-support-truth"
 )
 
@@ -398,9 +429,9 @@ mutated_packet_case "backup-missing-component" "backup_evidence" "manifest_id=ba
 mutated_packet_case "backup-failed" "backup_evidence" "status=completed" "status=failed" "invalid backup_evidence"
 mutated_packet_case "backup-broad-owner" "backup_evidence" "owner=group:release-ops" "owner=operator" "accountable person or group"
 mutated_packet_case "backup-prefixed-broad-owner" "backup_evidence" "owner=group:release-ops" "owner=group:operators" "accountable person or group"
-mutated_packet_case "backup-invalid-time" "backup_evidence" "created_at=2026-07-21T09:00:00Z" "created_at=2026-07-21" "invalid backup_evidence"
-mutated_packet_case "restore-before-backup" "restore_dry_run_evidence" "created_at=2026-07-21T09:15:00Z" "created_at=2026-07-21T08:59:59Z" "restore evidence cannot predate backup evidence"
-mutated_packet_case "restore-before-backup-offset" "restore_dry_run_evidence" "created_at=2026-07-21T09:15:00Z" "created_at=2026-07-21T10:59:59+02:00" "restore evidence cannot predate backup evidence"
+mutated_packet_case "backup-invalid-time" "backup_evidence" "created_at=${backup_created_at}" "created_at=${decision_date}" "invalid backup_evidence"
+mutated_packet_case "restore-before-backup" "restore_dry_run_evidence" "created_at=${restore_created_at}" "created_at=${restore_before_backup}" "restore evidence cannot predate backup evidence"
+mutated_packet_case "restore-before-backup-offset" "restore_dry_run_evidence" "created_at=${restore_created_at}" "created_at=${restore_before_backup_offset}" "restore evidence cannot predate backup evidence"
 mutated_packet_case "restore-failed" "restore_dry_run_evidence" "result=passed" "result=failed" "invalid restore_dry_run_evidence"
 mutated_packet_case "restore-automated-operator" "restore_dry_run_evidence" "operator=group:release-ops" "operator=person:ci-bot" "accountable person or group"
 mutated_packet_case "restore-ticket-ref" "restore_dry_run_evidence" "backup_reference=aegisops://evidence/backup-007" "backup_reference=ticket://private/77" "invalid restore_dry_run_evidence"
@@ -428,7 +459,7 @@ mutated_packet_case "bundle-version-without-component" "support_bundle" "compone
 mutated_packet_case "bundle-rc-build-version" "support_bundle" "component_versions=aegisops-1.7.0" "component_versions=aegisops-1.7.0+rc.1" "invalid support_bundle"
 mutated_packet_case "bundle-duplicate-component" "support_bundle" "component_versions=aegisops-1.7.0" "component_versions=aegisops-1.7.0,aegisops-v1.7.1" "duplicate component version"
 mutated_packet_case "bundle-empty-component" "support_bundle" "component_versions=aegisops-1.7.0" "component_versions=aegisops-1.7.0," "invalid support_bundle"
-mutated_packet_case "bundle-before-restore" "support_bundle" "created_at=2026-07-21T09:30:00Z" "created_at=2026-07-21T09:14:59Z" "support bundle cannot predate restore evidence"
+mutated_packet_case "bundle-before-restore" "support_bundle" "created_at=${bundle_created_at}" "created_at=${bundle_before_restore}" "support bundle cannot predate restore evidence"
 mutated_packet_case "bundle-missing-backup-ref" "support_bundle" "backup_restore_references=aegisops://evidence/backup-007,aegisops://evidence/restore-dry-007" "backup_restore_references=aegisops://evidence/restore-dry-007" "backup_restore_references must match"
 mutated_packet_case "bundle-missing-restore-ref" "support_bundle" "backup_restore_references=aegisops://evidence/backup-007,aegisops://evidence/restore-dry-007" "backup_restore_references=aegisops://evidence/backup-007" "backup_restore_references must match"
 mutated_packet_case "bundle-duplicate-restore-ref" "support_bundle" "backup_restore_references=aegisops://evidence/backup-007,aegisops://evidence/restore-dry-007" "backup_restore_references=aegisops://evidence/backup-007,aegisops://evidence/restore-dry-007,aegisops://evidence/restore-dry-007" "must not contain duplicate evidence references"
@@ -444,10 +475,22 @@ mutated_packet_case "artifact-self-review" "owner_review" "reviewer=person:relea
 mutated_packet_case "automated-self-review" "owner_review" "reviewer=person:release-owner" "reviewer=person:ci-bot" "accountable person or group"
 mutated_packet_case "review-missing-redaction" "owner_review" "reviewed_references=aegisops://evidence/bundle-007,aegisops://evidence/redaction-007" "reviewed_references=aegisops://evidence/bundle-007" "reviewed_references must match"
 mutated_packet_case "unsupported-review" "owner_review" "disposition=accepted-with-follow-up" "disposition=approved-by-bundle" "invalid owner_review"
-mutated_packet_case "review-before-bundle" "owner_review" "reviewed_at=2026-07-21T10:00:00Z" "reviewed_at=2026-07-21T09:29:59Z" "owner review cannot predate support bundle"
-mutated_packet_case "invalid-limitation-date" "limitation_references" "decision_date=2026-07-21" "decision_date=21-07-2026" "invalid limitation_references"
-mutated_packet_case "impossible-limitation-date" "limitation_references" "decision_date=2026-07-21" "decision_date=2026-13-40" "invalid limitation_references"
-mutated_packet_case "limitation-follow-up-before-decision" "limitation_references" "follow_up_date=2026-08-15" "follow_up_date=2026-07-20" "follow_up_date cannot predate decision_date"
+mutated_packet_case "review-before-bundle" "owner_review" "reviewed_at=${reviewed_at}" "reviewed_at=${review_before_bundle}" "owner review cannot predate support bundle"
+
+stale_evidence_repo="${workdir}/stale-evidence"
+copy_valid_repo "${stale_evidence_repo}"
+append_complete_packet "${stale_evidence_repo}"
+replace_doc_text "${stale_evidence_repo}" "backup_evidence" "created_at=${backup_created_at}" "created_at=2000-01-01T09:00:00Z"
+replace_doc_text "${stale_evidence_repo}" "restore_dry_run_evidence" "created_at=${restore_created_at}" "created_at=2000-01-01T09:15:00Z"
+replace_doc_text "${stale_evidence_repo}" "support_bundle" "created_at=${bundle_created_at}" "created_at=2000-01-01T09:30:00Z"
+replace_doc_text "${stale_evidence_repo}" "owner_review" "reviewed_at=${reviewed_at}" "reviewed_at=2000-01-01T10:00:00Z"
+assert_fails_with "${stale_evidence_repo}" "evidence exceeds the 24-hour freshness window"
+
+mutated_packet_case "future-owner-review" "owner_review" "reviewed_at=${reviewed_at}" "reviewed_at=${future_reviewed_at}" "evidence timestamp is in the future"
+
+mutated_packet_case "invalid-limitation-date" "limitation_references" "decision_date=${decision_date}" "decision_date=21-07-2026" "invalid limitation_references"
+mutated_packet_case "impossible-limitation-date" "limitation_references" "decision_date=${decision_date}" "decision_date=2026-13-40" "invalid limitation_references"
+mutated_packet_case "limitation-follow-up-before-decision" "limitation_references" "follow_up_date=${follow_up_date}" "follow_up_date=${prior_date}" "follow_up_date cannot predate decision_date"
 mutated_packet_case "embedded-owner-placeholder" "owner_review" "follow_up_owner=group:support-owner" "follow_up_owner=group:support-TODO" "invalid owner_review"
 mutated_packet_case "missing-non-claim" "non_claims" "not-customer-portal," "" "invalid non_claims"
 
@@ -532,8 +575,14 @@ leak_case "quoted-whitespace-redaction-password-leak" 'password="[REDACTED:secre
 leak_case "bearer-leak" "Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456" "production secret-looking value detected"
 leak_case "jwt-leak" "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBwb3J0In0.signaturevalue123" "production secret-looking value detected"
 leak_case "api-key-leak" "api_key=abcdefghijklmnop1234567890" "production secret-looking value detected"
+leak_case "generic-token-leak" "token=SuperSecretValue123" "production secret-looking value detected"
+leak_case "prefixed-token-leak" "support_token=SuperSecretValue123" "production secret-looking value detected"
 leak_case "private-key-leak" "-----BEGIN PRIVATE KEY-----" "production secret-looking value detected"
 leak_case "certificate-leak" "-----BEGIN CERTIFICATE-----" "production secret-looking value detected"
+leak_case "trusted-certificate-leak" "-----BEGIN TRUSTED CERTIFICATE-----" "production secret-looking value detected"
+leak_case "x509-certificate-leak" "-----BEGIN X509 CERTIFICATE-----" "production secret-looking value detected"
+leak_case "certificate-request-leak" "-----BEGIN CERTIFICATE REQUEST-----" "production secret-looking value detected"
+leak_case "new-certificate-request-leak" "-----BEGIN NEW CERTIFICATE REQUEST-----" "production secret-looking value detected"
 leak_case "credential-url-leak" "postgres://support:credentialvalue123@db.internal/aegisops" "production secret-looking value detected"
 leak_case "comment-secret-leak" "<!-- password=CommentSecretValue123 -->" "production secret-looking value detected"
 
@@ -543,11 +592,18 @@ append_doc_line "${safe_redaction_repo}" "password=[REDACTED:secret]"
 append_doc_line "${safe_redaction_repo}" "client_secret=[REDACTED]."
 append_doc_line "${safe_redaction_repo}" 'api_key="[REDACTED:secret]"'
 append_doc_line "${safe_redaction_repo}" "access_token=[REDACTED:token]   "
+append_doc_line "${safe_redaction_repo}" "token=[REDACTED:token]"
 assert_passes "${safe_redaction_repo}"
 
 leak_case "customer-private-leak" "The bundle contains raw customer payload data." "customer-private or ticket-private data detected"
 leak_case "private-ticket-leak" "The bundle retains private ticket content." "customer-private or ticket-private data detected"
 leak_case "customer-assignment-leak" "customer_private_data=Acme raw incident payload" "customer-private or ticket-private data detected"
+leak_case "customer-email-leak" "customer_email=alice@example.com" "customer-private or ticket-private data detected"
+leak_case "tenant-id-leak" "tenant_id=tenant-acme-001" "customer-private or ticket-private data detected"
+leak_case "customer-account-name-leak" "customer_account_name=Acme" "customer-private or ticket-private data detected"
+leak_case "account-name-leak" "account_name=Acme" "customer-private or ticket-private data detected"
+leak_case "bare-email-leak" "Contact alice@example.com for the retained case." "customer-private or ticket-private data detected"
+leak_case "comment-tenant-id-leak" "<!-- tenant_id=tenant-acme-001 -->" "customer-private or ticket-private data detected"
 leak_case "comment-private-leak" "<!-- The bundle exports customer-private logs. -->" "customer-private or ticket-private data detected"
 leak_case "unrelated-private-negation" "The bundle must not contain diagnostics, but it retains private ticket content." "customer-private or ticket-private data detected"
 
@@ -557,6 +613,10 @@ append_doc_line "${safe_redaction_repo}" "The bundle must not contain raw custom
 append_doc_line "${safe_redaction_repo}" "Customer-private data is redacted before retention."
 append_doc_line "${safe_redaction_repo}" "The bundle does not retain private ticket content."
 append_doc_line "${safe_redaction_repo}" "The bundle retains no private ticket content."
+append_doc_line "${safe_redaction_repo}" "customer_email=[REDACTED:customer-identifier]"
+append_doc_line "${safe_redaction_repo}" "tenant_id=redacted"
+append_doc_line "${safe_redaction_repo}" "customer_account_name=removed"
+append_doc_line "${safe_redaction_repo}" "account_name=absent"
 assert_passes "${safe_redaction_repo}"
 
 macos_path_fragment="/""Users/example"
