@@ -475,6 +475,7 @@ mutated_packet_case "artifact-self-review" "owner_review" "reviewer=person:relea
 mutated_packet_case "automated-self-review" "owner_review" "reviewer=person:release-owner" "reviewer=person:ci-bot" "accountable person or group"
 mutated_packet_case "review-missing-redaction" "owner_review" "reviewed_references=aegisops://evidence/bundle-007,aegisops://evidence/redaction-007" "reviewed_references=aegisops://evidence/bundle-007" "reviewed_references must match"
 mutated_packet_case "unsupported-review" "owner_review" "disposition=accepted-with-follow-up" "disposition=approved-by-bundle" "invalid owner_review"
+mutated_packet_case "rejected-owner-review" "owner_review" "disposition=accepted-with-follow-up" "disposition=rejected" "rejected owner review cannot pass the proof"
 mutated_packet_case "review-before-bundle" "owner_review" "reviewed_at=${reviewed_at}" "reviewed_at=${review_before_bundle}" "owner review cannot predate support bundle"
 
 stale_evidence_repo="${workdir}/stale-evidence"
@@ -542,6 +543,11 @@ forbidden_claim_case "verifier-ga-overclaim" "Verifier output validates GA readi
 forbidden_claim_case "passive-ga-overclaim" "GA readiness is proven by the support bundle."
 forbidden_claim_case "passive-restore-overclaim" "Live restore completion is confirmed by restore dry-run output."
 forbidden_claim_case "support-operator-authority" "Support collaborator can approve actions."
+forbidden_claim_case "support-operator-role-authority" "Support operator can approve actions."
+forbidden_claim_case "support-engineer-authority" "Support engineer may execute actions."
+forbidden_claim_case "support-specialist-authority" "Support specialist acts as an approver."
+forbidden_claim_case "support-representative-authority" "Support representative is an approver."
+forbidden_claim_case "support-team-authority" "Support team can approve actions."
 forbidden_claim_case "adversative-overclaim" "Support bundle cannot prove RC readiness but proves GA readiness."
 forbidden_claim_case "unrelated-without-overclaim" "Support bundle proves GA readiness without a manual review."
 forbidden_claim_case "pre-predicate-without-overclaim" "Support bundle without a manual review proves GA readiness."
@@ -573,6 +579,9 @@ append_doc_line "${safe_non_claim_repo}" "Support bundle operates without provin
 append_doc_line "${safe_non_claim_repo}" "Phase 66.6 does not provide GA readiness."
 append_doc_line "${safe_non_claim_repo}" "Support bundle is not the release gate."
 append_doc_line "${safe_non_claim_repo}" "Support bundle cannot serve as a release gate."
+append_doc_line "${safe_non_claim_repo}" "Support operator cannot approve actions."
+append_doc_line "${safe_non_claim_repo}" "Support engineer has no authority to execute actions."
+append_doc_line "${safe_non_claim_repo}" "Support team cannot approve actions."
 assert_passes "${safe_non_claim_repo}"
 
 leak_case "password-leak" "support_password=SuperSecretValue123" "production secret-looking value detected"
@@ -603,6 +612,11 @@ leak_case "certificate-request-leak" "-----BEGIN CERTIFICATE REQUEST-----" "prod
 leak_case "new-certificate-request-leak" "-----BEGIN NEW CERTIFICATE REQUEST-----" "production secret-looking value detected"
 leak_case "credential-url-leak" "postgres://support:credentialvalue123@db.internal/aegisops" "production secret-looking value detected"
 leak_case "comment-secret-leak" "<!-- password=CommentSecretValue123 -->" "production secret-looking value detected"
+leak_case "json-password-leak" '{"password":"SuperSecretValue123"}' "production secret-looking value detected"
+leak_case "json-prefixed-token-leak" '{"support_token":"SuperSecretValue123"}' "production secret-looking value detected"
+leak_case "json-api-key-leak" '{"api_key":"abcdefghijklmnop1234567890"}' "production secret-looking value detected"
+leak_case "nested-json-password-leak" '{"diagnostics":{"password":"SuperSecretValue123"}}' "production secret-looking value detected"
+leak_case "escaped-json-password-key-leak" '{"pass\u0077ord":"SuperSecretValue123"}' "production secret-looking value detected"
 
 safe_redaction_repo="${workdir}/safe-redaction-marker"
 copy_valid_repo "${safe_redaction_repo}"
@@ -613,6 +627,10 @@ append_doc_line "${safe_redaction_repo}" "access_token=[REDACTED:token]   "
 append_doc_line "${safe_redaction_repo}" "token=[REDACTED:token]"
 append_doc_line "${safe_redaction_repo}" "Authorization=[REDACTED:authorization]"
 append_doc_line "${safe_redaction_repo}" "Cookie: [REDACTED:cookie]"
+append_doc_line "${safe_redaction_repo}" '{"password":"[REDACTED:secret]"}'
+append_doc_line "${safe_redaction_repo}" '{"support_token":"[REDACTED:token]"}'
+append_doc_line "${safe_redaction_repo}" '{"diagnostics":{"password":"[REDACTED:secret]"}}'
+append_doc_line "${safe_redaction_repo}" '{"password":"\u005bREDACTED:secret\u005d"}'
 assert_passes "${safe_redaction_repo}"
 
 leak_case "customer-private-leak" "The bundle contains raw customer payload data." "customer-private or ticket-private data detected"

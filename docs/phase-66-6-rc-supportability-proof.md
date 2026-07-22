@@ -52,6 +52,8 @@ The `redaction_manifest` value must include `journey_run_id`, `repository_revisi
 
 The `owner_review` value must include `journey_run_id`, `repository_revision`, `reviewer`, `reviewed_references`, `reviewed_at`, `disposition`, `accepted_risk`, and `follow_up_owner`. Its reviewed references must exactly identify the packet's support bundle and redaction manifest, and its timestamp must not predate the support bundle. Allowed dispositions are `accepted`, `accepted-with-follow-up`, and `rejected`; only explicit accountable person or group identities may review, and artifacts, bots, service identities, verifiers, issue-lint output, support bundles, and plans cannot review or approve themselves.
 
+A rejected owner review is a valid recorded disposition but cannot pass a materialized proof. It remains owned limitation evidence until a later accountable review records an accepted disposition.
+
 Materialized evidence timestamps must be no more than 24 hours old at verification time and must not be more than five minutes in the future. The backup, restore dry-run, support-bundle, and owner-review timestamps remain subject to their chronological ordering rules within that freshness window.
 
 The `limitation_references` value must include `journey_run_id`, `repository_revision`, `ids`, `owner`, `decision_date`, and `follow_up_date`. The follow-up date must not predate the limitation decision. Missing or rejected evidence remains an owned limitation; it cannot be converted into a pass by absence, inference, verifier output, issue-lint output, or support-bundle generation.

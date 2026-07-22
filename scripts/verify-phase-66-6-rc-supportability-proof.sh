@@ -50,6 +50,7 @@ done
 python3 - "${absolute_doc_path}" "${readme_path}" "${repo_root}" <<'PY'
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -95,6 +96,7 @@ required_phrases = (
     "The proof depends on the Phase 66.1 clean-host RC E2E harness and the Phase 58 supportability contracts.",
     "This proof is RC evidence only.",
     "A proof packet is fail-closed: once any required field is materialized, every required field must be present, non-placeholder, internally complete, and bound to the same journey run and immutable repository revision.",
+    "A rejected owner review is a valid recorded disposition but cannot pass a materialized proof.",
     "AegisOps records remain authoritative for workflow, release, gate, restore acceptance, limitation, audit, approval, action request, execution receipt, reconciliation, source admission, and closeout truth.",
     "Backup manifests, restore dry-run output, upgrade plans, rollback plans, support bundles, redaction manifests, owner-review summaries, limitation lists, verifier output, issue-lint output, browser state, UI cache, tickets, and optional evidence remain subordinate evidence.",
     "The proof must reject missing or partial evidence packets, mixed revisions, stale or failed evidence, placeholder values, secret leakage, raw credential leakage, customer-private data, ticket-private content, authorization material, certificate or key material, workstation-local paths, support-bundle-as-truth claims, support-operator authority expansion, live restore claims, live upgrade or rollback claims, inferred RC pass, inferred GA pass, production SLA commitments, 24x7 support claims, customer portal claims, real design-partner support claims, commercial replacement claims, verifier-as-readiness-truth, and issue-lint-as-readiness-truth.",
@@ -688,8 +690,11 @@ if materialized_fields:
         reviewed_at = require_timestamp("owner_review", "reviewed_at", parts["reviewed_at"])
         if bundle_created_at is None or reviewed_at < bundle_created_at:
             fail_field("owner_review_timeline", "owner review cannot predate support bundle")
-        if parts["disposition"].lower() not in {"accepted", "accepted-with-follow-up", "rejected"}:
+        disposition = parts["disposition"].lower()
+        if disposition not in {"accepted", "accepted-with-follow-up", "rejected"}:
             fail_field("owner_review", "unsupported disposition")
+        if disposition == "rejected":
+            fail_field("owner_review", "rejected owner review cannot pass the proof")
     if owner_review_references != bundle_evidence_references | redaction_evidence_references:
         fail_field("owner_review", "reviewed_references must match the support bundle and redaction manifest")
     evidence_timestamps = (backup_created_at, restore_created_at, bundle_created_at, reviewed_at)
@@ -730,8 +735,18 @@ if materialized_fields:
             fail_field("non_claims", "missing labels " + ", ".join(missing_labels))
 
 
+credential_key = (
+    r"(?:[A-Za-z0-9][A-Za-z0-9_-]*[_-])?"
+    r"(?:password|passwd|secret(?:[_ -]?(?:key|access[_ -]?key))?|api[_ -]?key|access[_ -]?token|token|client[_ -]?secret|private[_ -]?key)"
+)
 credential_assignment_pattern = re.compile(
-    r"(?<![A-Za-z0-9])(?:[A-Za-z0-9][A-Za-z0-9_-]*[_-])?(?:password|passwd|secret(?:[_ -]?(?:key|access[_ -]?key))?|api[_ -]?key|access[_ -]?token|token|client[_ -]?secret|private[_ -]?key)\s*[:=]\s*(?P<value>[^\r\n]*)$",
+    rf"(?<![A-Za-z0-9]){credential_key}\s*[:=]\s*(?P<value>[^\r\n]*)$",
+    re.IGNORECASE,
+)
+credential_key_pattern = re.compile(rf"^{credential_key}$", re.IGNORECASE)
+json_credential_assignment_pattern = re.compile(
+    rf"(?P<key_quote>[\"']){credential_key}(?P=key_quote)\s*:\s*"
+    r"(?P<value>\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|[^,}\]\s]+)",
     re.IGNORECASE,
 )
 redaction_marker = r"\[REDACTED(?::[a-z0-9-]+)?\]"
@@ -746,12 +761,38 @@ sensitive_header_assignment_pattern = re.compile(
     re.IGNORECASE,
 )
 
+
+def reject_unsafe_json_credentials(value: object) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if credential_key_pattern.fullmatch(str(key)):
+                if not isinstance(item, str) or not safe_redaction_value_pattern.fullmatch(item):
+                    print("Forbidden Phase 66.6 RC supportability proof: production secret-looking value detected", file=sys.stderr)
+                    raise SystemExit(1)
+            reject_unsafe_json_credentials(item)
+    elif isinstance(value, list):
+        for item in value:
+            reject_unsafe_json_credentials(item)
+
 for sensitive_line in doc_raw.splitlines():
     for assignment_pattern in (credential_assignment_pattern, sensitive_header_assignment_pattern):
         assignment = assignment_pattern.search(sensitive_line)
         if assignment and not safe_redaction_value_pattern.fullmatch(assignment.group("value").strip()):
             print("Forbidden Phase 66.6 RC supportability proof: production secret-looking value detected", file=sys.stderr)
             raise SystemExit(1)
+    json_candidate = sensitive_line.strip().strip("`")
+    try:
+        parsed_json = json.loads(json_candidate)
+    except (json.JSONDecodeError, TypeError):
+        for json_assignment in json_credential_assignment_pattern.finditer(sensitive_line):
+            json_value = json_assignment.group("value").strip()
+            if len(json_value) >= 2 and json_value[0] == json_value[-1] and json_value[0] in {"\"", "'"}:
+                json_value = json_value[1:-1]
+            if not safe_redaction_value_pattern.fullmatch(json_value):
+                print("Forbidden Phase 66.6 RC supportability proof: production secret-looking value detected", file=sys.stderr)
+                raise SystemExit(1)
+    else:
+        reject_unsafe_json_credentials(parsed_json)
 
 secret_patterns = (
     re.compile(r"\bauthorization\s*[:=]\s*(?:bearer|basic)\s+[A-Za-z0-9_+./=-]{12,}", re.IGNORECASE),
@@ -1011,7 +1052,7 @@ claim_patterns = (
     ),
 )
 support_authority_pattern = re.compile(
-    r"\bsupport\s+(?:collaborator|reviewer|bundle\s+owner|agent|analyst)\b.{0,80}\b(?:is|becomes?|acts?\s+as|can|may|has\s+authority\s+to)\b(?:(?!\b(?:not|never)\b).){0,80}\b(?:operator|approver|administrator|substrate\s+operator|backend\s+authority|approve|execute|reconcile|close|release|gate|restore|mutate)\b",
+    r"\bsupport\s+(?:collaborator|reviewer|bundle\s+owner|agent|analyst|operator|engineer|specialist|technician|administrator|lead|representative|manager|coordinator|advisor|team|staff|personnel)\b.{0,80}\b(?:is|becomes?|acts?\s+as|can|may|has\s+authority\s+to)\b(?:(?!\b(?:not|never)\b).){0,80}\b(?:operator|approver|administrator|substrate\s+operator|backend\s+authority|approve|execute|reconcile|close|release|gate|restore|mutate)\b",
     re.IGNORECASE,
 )
 
