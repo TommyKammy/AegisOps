@@ -150,7 +150,7 @@ evidence_rows = (
     "| `repository_revision` | One immutable 40-character repository revision shared by the evidence set. | Mutable branches, tags, abbreviated revisions, or mixed revisions fail the proof. |",
     "| `backup_evidence` | Reviewed backup manifest identity, custody reference, creation timestamp, owner, and completed status. | A manifest alone cannot prove restore success or release readiness. |",
     "| `restore_dry_run_evidence` | Reviewed dry-run identity, source backup reference, target profile, timestamp, operator, and passed result. | Dry-run output cannot prove live restore completion or mutate authoritative records. |",
-    "| `upgrade_plan` | Reviewed plan identity, exact before and after versions, target profile, passed preflight reference, and AegisOps evidence links. | Floating versions, missing preflight evidence, or plan-as-release-truth claims fail the proof. |",
+    "| `upgrade_plan` | Reviewed plan identity, exact before and after versions, target profile, passed preflight reference, reviewed backup or restore reference, and AegisOps evidence links. | Floating versions, missing preflight or recovery evidence, or plan-as-release-truth claims fail the proof. |",
     "| `rollback_plan` | Reviewed plan identity, backup reference, accountable rollback owner, trigger, and rollback target. | Missing ownership, vague triggers, or plan-driven substrate mutation fail the proof. |",
     "| `support_bundle` | Reviewed bundle identity, environment class, component versions, doctor summary, backup/restore references, upgrade/rollback references, timestamp, owner, and AegisOps evidence links. | Missing provenance, mixed snapshots, or bundle-as-truth claims fail the proof. |",
     "| `redaction_manifest` | Reviewed manifest identity, passed scan result, all Phase 58.6 redaction families, and explicit subordinate-evidence boundary. | Secret, credential, customer-private, ticket-private, token, header, certificate, or workstation-path leakage fails the proof. |",
@@ -175,8 +175,9 @@ binding_phrases = (
     "The `backup_evidence` value must include `journey_run_id`, `repository_revision`, `manifest_id`, `custody_reference`, `created_at`, `owner`, and `status=completed`.",
     "Accountable people and groups must use explicit `person:<id>` or `group:<id>` identities; broad operator labels and automated identities are not accepted.",
     "The `restore_dry_run_evidence` value must include `journey_run_id`, `repository_revision`, `dry_run_id`, `evidence_reference`, `backup_reference`, `target_profile`, `created_at`, `operator`, and `result=passed`.",
-    "The `upgrade_plan` value must include `journey_run_id`, `repository_revision`, `plan_id`, `evidence_reference`, `version_before`, `version_after`, `target_profile`, `preflight_result`, and `evidence_links`.",
+    "The `upgrade_plan` value must include `journey_run_id`, `repository_revision`, `plan_id`, `evidence_reference`, `version_before`, `version_after`, `target_profile`, `preflight_result`, `backup_reference`, and `evidence_links`.",
     "The `rollback_plan` value must include `journey_run_id`, `repository_revision`, `plan_id`, `evidence_reference`, `backup_reference`, `rollback_owner`, `rollback_trigger`, and `rollback_target`.",
+    "The upgrade plan's backup reference must exactly identify the packet's reviewed backup custody or restore dry-run record; the rollback plan's backup reference must exactly identify its backup custody record.",
     "The `support_bundle` value must include `journey_run_id`, `repository_revision`, `bundle_id`, `evidence_reference`, `environment_class`, `component_versions`, `doctor_summary`, `backup_restore_references`, `upgrade_rollback_references`, `created_at`, `owner`, and `evidence_links`.",
     "The `redaction_manifest` value must include `journey_run_id`, `repository_revision`, `manifest_id`, `evidence_reference`, `bundle_reference`, `scan_result=passed`, `secret_values`, `workstation_paths`, `private_payloads`, `ticket_private_content`, `tokens_and_headers`, `certs_and_keys`, `credentials`, `customer_identifiers`, and `authority_boundary=subordinate-evidence-only`.",
     "The `owner_review` value must include `journey_run_id`, `repository_revision`, `reviewer`, `reviewed_references`, `reviewed_at`, `disposition`, `accepted_risk`, and `follow_up_owner`.",
@@ -447,6 +448,7 @@ if materialized_fields:
 
     backup_references: set[str] = set()
     restore_backup_references: set[str] = set()
+    upgrade_recovery_references: set[str] = set()
     rollback_backup_references: set[str] = set()
     restore_target_profiles: set[str] = set()
     upgrade_target_profiles: set[str] = set()
@@ -506,7 +508,7 @@ if materialized_fields:
         parts = require_components(
             "upgrade_plan",
             value,
-            ("journey_run_id", "repository_revision", "plan_id", "evidence_reference", "version_before", "version_after", "target_profile", "preflight_result", "evidence_links"),
+            ("journey_run_id", "repository_revision", "plan_id", "evidence_reference", "version_before", "version_after", "target_profile", "preflight_result", "backup_reference", "evidence_links"),
         )
         require_packet_binding("upgrade_plan", parts, journey_run_id, repository_revision)
         upgrade_evidence_references.add(
@@ -522,6 +524,9 @@ if materialized_fields:
         if not parts["preflight_result"].lower().startswith("passed:"):
             fail_field("upgrade_plan", "preflight_result must be passed with evidence")
         require_aegisops_reference("upgrade_plan", "preflight_result", parts["preflight_result"])
+        upgrade_recovery_references.add(
+            require_single_aegisops_reference("upgrade_plan", "backup_reference", parts["backup_reference"])
+        )
         require_aegisops_reference("upgrade_plan", "evidence_links", parts["evidence_links"])
 
     for value in field_values["rollback_plan"]:
@@ -558,6 +563,14 @@ if materialized_fields:
         fail_field(
             "recovery_binding",
             "backup references must match across backup evidence, restore dry-run evidence, and rollback plan",
+        )
+    if (
+        len(upgrade_recovery_references) != 1
+        or not upgrade_recovery_references.issubset(backup_references | restore_evidence_references)
+    ):
+        fail_field(
+            "upgrade_plan",
+            "backup_reference must match packet backup evidence or restore dry-run evidence",
         )
     if len(restore_target_profiles) != 1 or upgrade_target_profiles != restore_target_profiles:
         fail_field("target_profile_binding", "restore and upgrade target profiles must match")
@@ -839,9 +852,8 @@ secret_patterns = (
     re.compile(r"\b(?:ghp_|github_pat_)[A-Za-z0-9_]{20,}\b"),
     re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
     re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]+:[^\s@]+@"),
-    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----", re.IGNORECASE),
     re.compile(
-        r"-----BEGIN (?:(?:(?:TRUSTED|X\.?509) )?CERTIFICATE(?: REQUEST)?|NEW CERTIFICATE REQUEST)-----",
+        r"-----(?:BEGIN|END) (?=[A-Z0-9 ._-]*\b(?:KEY|CERTIFICATE|PKCS7|CMS)\b)[A-Z0-9][A-Z0-9 ._-]*-----",
         re.IGNORECASE,
     ),
 )
@@ -984,6 +996,12 @@ truth_outcome = (
 )
 authority_action = r"(?:approves?|executes?|reconciles?|closes?|releases?|gates?|restores?|mutates?|promotes?|overrides?|replaces?)"
 authority_object = r"(?:aegisops\s+records?|workflows?|releases?|gates?|restore\s+acceptance|limitations?|audits?|actions?|cases?|closeout)"
+authority_predicate_prefix = (
+    r"(?:(?:(?:can|may|will|does)\s+)|"
+    r"(?:(?:has|have|had|holds?|held|possess(?:es|ed)?|receiv(?:e|es|ed)|obtain(?:s|ed)?|(?:does|do|did)\s+have)\s+(?:the\s+)?authority\s+to\s+)|"
+    r"(?:(?:is|are|was|were|has\s+been|have\s+been|had\s+been)\s+"
+    r"(?:(?:authorized|empowered|permitted)|(?:(?:assigned|granted|given|delegated)\s+(?:the\s+)?authority))\s+to\s+))?"
+)
 non_negated_predicate_context = (
     r"(?:(?!\b(?:cannot|can't|does\s+not|do\s+not|did\s+not|will\s+not|should\s+not|"
     r"may\s+not|must\s+not|never|no\s+longer)\b).)"
@@ -1056,7 +1074,7 @@ claim_patterns = (
         subordinate_subject
         + r"\s+"
         + r"(?:(?:now|already|independently|directly|automatically|effectively|itself)\s+){0,4}"
-        + r"(?:(?:can|may|will|does)\s+)?"
+        + authority_predicate_prefix
         + authority_action
         + r"\b.{0,100}"
         + authority_object,
@@ -1088,10 +1106,38 @@ claim_patterns = (
         + subordinate_subject,
         re.IGNORECASE,
     ),
+    re.compile(
+        r"(?:authority|permission)\s+to\s+"
+        + authority_action
+        + r"\b.{0,100}"
+        + authority_object
+        + r"\s+(?:is|are|was|were|has\s+been|have\s+been|had\s+been)\s+"
+        + r"(?:assigned|granted|given|delegated)\s+to\s+(?:the\s+|a\s+)?"
+        + subordinate_subject,
+        re.IGNORECASE,
+    ),
 )
-support_authority_pattern = re.compile(
-    r"\bsupport\s+(?:collaborator|reviewer|bundle\s+owner|agent|analyst|operator|engineer|specialist|technician|administrator|lead|representative|manager|coordinator|advisor|team|staff|personnel)\b.{0,80}\b(?:is|becomes?|acts?\s+as|can|may|has\s+authority\s+to)\b(?:(?!\b(?:not|never)\b).){0,80}\b(?:operator|approver|administrator|substrate\s+operator|backend\s+authority|approve|execute|reconcile|close|release|gate|restore|mutate)\b",
-    re.IGNORECASE,
+support_role_subject = (
+    r"\bsupport\s+(?:collaborator|reviewer|bundle\s+owner|agent|analyst|operator|engineer|specialist|technician|"
+    r"administrator|lead|representative|manager|coordinator|advisor|team|staff|personnel)\b"
+)
+support_authority_patterns = (
+    re.compile(
+        support_role_subject
+        + r".{0,80}\b(?:is|becomes?|acts?\s+as)\b(?:(?!\b(?:not|never)\b).){0,80}"
+        + r"\b(?:operator|approver|administrator|substrate\s+operator|backend\s+authority)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        support_role_subject
+        + r"\s+"
+        + r"(?:(?:now|already|independently|directly|automatically|effectively|itself)\s+){0,4}"
+        + authority_predicate_prefix
+        + authority_action
+        + r"\b.{0,100}"
+        + authority_object,
+        re.IGNORECASE,
+    ),
 )
 
 
@@ -1104,7 +1150,7 @@ def claim_clauses(text: str):
             clause = clause.strip()
             if clause:
                 yield clause
-                subject_match = re.search(subordinate_subject, clause, re.IGNORECASE)
+                subject_match = re.search(rf"(?:{subordinate_subject}|{support_role_subject})", clause, re.IGNORECASE)
                 if subject_match:
                     inherited_subject = subject_match.group(0)
                 elif inherited_subject:
@@ -1123,7 +1169,7 @@ for claim_input in claim_inputs:
             and readiness_relation_is_assertive(match.group("subject"), match.group("relation"))
         ]
         matched_claims = [index for index, pattern in enumerate(claim_patterns) if pattern.search(clause)]
-        matched_support_authority = bool(support_authority_pattern.search(clause))
+        matched_support_authority = any(pattern.search(clause) for pattern in support_authority_patterns)
         if matched_support_authority or matched_claims or broad_readiness_claims:
             if os.environ.get("PHASE66_6_DEBUG") == "1":
                 print(
