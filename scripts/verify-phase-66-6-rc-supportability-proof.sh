@@ -739,13 +739,18 @@ credential_key = (
     r"(?:[A-Za-z0-9][A-Za-z0-9_-]*[_-])?"
     r"(?:password|passwd|secret(?:[_ -]?(?:key|access[_ -]?key))?|api[_ -]?key|access[_ -]?token|token|client[_ -]?secret|private[_ -]?key)"
 )
-credential_assignment_pattern = re.compile(
-    rf"(?<![A-Za-z0-9]){credential_key}\s*[:=]\s*(?P<value>[^\r\n]*)$",
+sensitive_header_key = (
+    r"(?:authorization|proxy[_ -]?authorization|cookie|set[_ -]?cookie|forwarded|"
+    r"x[_ -]?forwarded[_ -]?(?:for|host|proto)|x[_ -]?(?:real[_ -]?ip|tenant[_ -]?id|customer[_ -]?id|user[_ -]?id)|host)"
+)
+sensitive_key = rf"(?:{credential_key}|{sensitive_header_key})"
+sensitive_assignment_pattern = re.compile(
+    rf"(?<![A-Za-z0-9])[`\"']?{sensitive_key}[`\"']?\s*[:=]\s*(?P<value>[^\r\n]*)$",
     re.IGNORECASE,
 )
-credential_key_pattern = re.compile(rf"^{credential_key}$", re.IGNORECASE)
-json_credential_assignment_pattern = re.compile(
-    rf"(?P<key_quote>[\"']){credential_key}(?P=key_quote)\s*:\s*"
+sensitive_key_pattern = re.compile(rf"^{sensitive_key}$", re.IGNORECASE)
+json_sensitive_assignment_pattern = re.compile(
+    rf"(?P<key_quote>[\"']){sensitive_key}(?P=key_quote)\s*:\s*"
     r"(?P<value>\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|[^,}\]\s]+)",
     re.IGNORECASE,
 )
@@ -754,45 +759,79 @@ safe_redaction_value_pattern = re.compile(
     rf"^(?:{redaction_marker}|`{redaction_marker}`|\"{redaction_marker}\"|'{redaction_marker}')[.,;:]?$",
     re.IGNORECASE,
 )
-sensitive_header_assignment_pattern = re.compile(
-    r"(?<![A-Za-z0-9])(?:authorization|proxy[_ -]?authorization|cookie|set[_ -]?cookie|forwarded|"
-    r"x[_ -]?forwarded[_ -]?(?:for|host|proto)|x[_ -]?(?:real[_ -]?ip|tenant[_ -]?id|customer[_ -]?id|user[_ -]?id)|host)"
-    r"\s*[:=]\s*(?P<value>[^\r\n]*)$",
-    re.IGNORECASE,
-)
+def reject_sensitive_value(value: object) -> None:
+    if not isinstance(value, str) or not safe_redaction_value_pattern.fullmatch(value.strip()):
+        print("Forbidden Phase 66.6 RC supportability proof: production secret-looking value detected", file=sys.stderr)
+        raise SystemExit(1)
 
 
-def reject_unsafe_json_credentials(value: object) -> None:
+def is_sensitive_key(value: object) -> bool:
+    key = str(value).strip()
+    return bool(sensitive_key_pattern.fullmatch(key))
+
+
+def reject_unsafe_structured_values(value: object) -> None:
     if isinstance(value, dict):
         for key, item in value.items():
-            if credential_key_pattern.fullmatch(str(key)):
-                if not isinstance(item, str) or not safe_redaction_value_pattern.fullmatch(item):
-                    print("Forbidden Phase 66.6 RC supportability proof: production secret-looking value detected", file=sys.stderr)
-                    raise SystemExit(1)
-            reject_unsafe_json_credentials(item)
+            if is_sensitive_key(key):
+                reject_sensitive_value(item)
+            reject_unsafe_structured_values(item)
     elif isinstance(value, list):
         for item in value:
-            reject_unsafe_json_credentials(item)
+            reject_unsafe_structured_values(item)
+
+
+def markdown_cell_key(value: str) -> str:
+    key = value.strip()
+    wrappers = (("`", "`"), ("**", "**"), ("__", "__"), ("<code>", "</code>"))
+    changed = True
+    while changed:
+        changed = False
+        for prefix, suffix in wrappers:
+            if key.startswith(prefix) and key.endswith(suffix) and len(key) > len(prefix) + len(suffix):
+                key = key[len(prefix):-len(suffix)].strip()
+                changed = True
+                break
+    return key
+
+
+def markdown_table_cells(line: str) -> list[str]:
+    if "|" not in line:
+        return []
+    cells = re.split(r"(?<!\\)\|", line.strip())
+    if cells and not cells[0]:
+        cells = cells[1:]
+    if cells and not cells[-1]:
+        cells = cells[:-1]
+    return [cell.strip() for cell in cells]
 
 for sensitive_line in doc_raw.splitlines():
-    for assignment_pattern in (credential_assignment_pattern, sensitive_header_assignment_pattern):
-        assignment = assignment_pattern.search(sensitive_line)
-        if assignment and not safe_redaction_value_pattern.fullmatch(assignment.group("value").strip()):
-            print("Forbidden Phase 66.6 RC supportability proof: production secret-looking value detected", file=sys.stderr)
-            raise SystemExit(1)
     json_candidate = sensitive_line.strip().strip("`")
+    scan_json_fragment = False
     try:
         parsed_json = json.loads(json_candidate)
     except (json.JSONDecodeError, TypeError):
-        for json_assignment in json_credential_assignment_pattern.finditer(sensitive_line):
+        line_to_scan = sensitive_line
+        scan_json_fragment = True
+    else:
+        reject_unsafe_structured_values(parsed_json)
+        if not isinstance(parsed_json, str):
+            continue
+        line_to_scan = parsed_json
+
+    assignment = sensitive_assignment_pattern.search(line_to_scan)
+    if assignment:
+        reject_sensitive_value(assignment.group("value"))
+    table_cells = markdown_table_cells(line_to_scan)
+    for index, table_cell in enumerate(table_cells[:-1]):
+        if is_sensitive_key(markdown_cell_key(table_cell)):
+            reject_sensitive_value(table_cells[index + 1])
+    if scan_json_fragment:
+        for json_assignment in json_sensitive_assignment_pattern.finditer(sensitive_line):
             json_value = json_assignment.group("value").strip()
             if len(json_value) >= 2 and json_value[0] == json_value[-1] and json_value[0] in {"\"", "'"}:
                 json_value = json_value[1:-1]
-            if not safe_redaction_value_pattern.fullmatch(json_value):
-                print("Forbidden Phase 66.6 RC supportability proof: production secret-looking value detected", file=sys.stderr)
-                raise SystemExit(1)
-    else:
-        reject_unsafe_json_credentials(parsed_json)
+            reject_sensitive_value(json_value)
 
 secret_patterns = (
     re.compile(r"\bauthorization\s*[:=]\s*(?:bearer|basic)\s+[A-Za-z0-9_+./=-]{12,}", re.IGNORECASE),
@@ -805,7 +844,6 @@ secret_patterns = (
         r"-----BEGIN (?:(?:(?:TRUSTED|X\.?509) )?CERTIFICATE(?: REQUEST)?|NEW CERTIFICATE REQUEST)-----",
         re.IGNORECASE,
     ),
-    re.compile(r"^\s*\|\s*`?(?:password|passwd|secret|token|api[_ -]?key|private[_ -]?key)`?\s*\|\s*`?[^\s`|<>]{4,}", re.IGNORECASE | re.MULTILINE),
 )
 
 for pattern in secret_patterns:

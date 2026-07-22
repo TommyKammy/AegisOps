@@ -612,17 +612,28 @@ leak_case "certificate-request-leak" "-----BEGIN CERTIFICATE REQUEST-----" "prod
 leak_case "new-certificate-request-leak" "-----BEGIN NEW CERTIFICATE REQUEST-----" "production secret-looking value detected"
 leak_case "credential-url-leak" "postgres://support:credentialvalue123@db.internal/aegisops" "production secret-looking value detected"
 leak_case "comment-secret-leak" "<!-- password=CommentSecretValue123 -->" "production secret-looking value detected"
+leak_case "markdown-code-assignment-leak" '`password`: SuperSecretValue123' "production secret-looking value detected"
+leak_case "quoted-header-leak" '"Authorization": Bearer abcdefghijklmnopqrstuvwxyz123456' "production secret-looking value detected"
 leak_case "json-password-leak" '{"password":"SuperSecretValue123"}' "production secret-looking value detected"
 leak_case "json-prefixed-token-leak" '{"support_token":"SuperSecretValue123"}' "production secret-looking value detected"
 leak_case "json-api-key-leak" '{"api_key":"abcdefghijklmnop1234567890"}' "production secret-looking value detected"
+leak_case "json-authorization-leak" '{"Authorization":"Bearer abcdefghijklmnopqrstuvwxyz123456"}' "production secret-looking value detected"
+leak_case "json-string-password-leak" '"password=SuperSecretValue123"' "production secret-looking value detected"
+leak_case "json-string-authorization-leak" '"Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456"' "production secret-looking value detected"
 leak_case "nested-json-password-leak" '{"diagnostics":{"password":"SuperSecretValue123"}}' "production secret-looking value detected"
 leak_case "escaped-json-password-key-leak" '{"pass\u0077ord":"SuperSecretValue123"}' "production secret-looking value detected"
+leak_case "markdown-table-password-leak" '| support_password | SuperSecretValue123 |' "production secret-looking value detected"
+leak_case "markdown-table-client-secret-leak" '| `client_secret` | `SuperSecretValue123` |' "production secret-looking value detected"
+leak_case "markdown-table-authorization-leak" '| Authorization | Bearer abcdefghijklmnopqrstuvwxyz123456 |' "production secret-looking value detected"
+leak_case "markdown-table-cookie-leak" '| Context | **Cookie** | session=abcdefghijklmnopqrstuvwx |' "production secret-looking value detected"
+leak_case "markdown-table-without-outer-pipes-leak" 'support_token | SuperSecretValue123' "production secret-looking value detected"
 
 safe_redaction_repo="${workdir}/safe-redaction-marker"
 copy_valid_repo "${safe_redaction_repo}"
 append_doc_line "${safe_redaction_repo}" "password=[REDACTED:secret]"
 append_doc_line "${safe_redaction_repo}" "client_secret=[REDACTED]."
 append_doc_line "${safe_redaction_repo}" 'api_key="[REDACTED:secret]"'
+append_doc_line "${safe_redaction_repo}" '`password`: [REDACTED:secret]'
 append_doc_line "${safe_redaction_repo}" "access_token=[REDACTED:token]   "
 append_doc_line "${safe_redaction_repo}" "token=[REDACTED:token]"
 append_doc_line "${safe_redaction_repo}" "Authorization=[REDACTED:authorization]"
@@ -631,6 +642,12 @@ append_doc_line "${safe_redaction_repo}" '{"password":"[REDACTED:secret]"}'
 append_doc_line "${safe_redaction_repo}" '{"support_token":"[REDACTED:token]"}'
 append_doc_line "${safe_redaction_repo}" '{"diagnostics":{"password":"[REDACTED:secret]"}}'
 append_doc_line "${safe_redaction_repo}" '{"password":"\u005bREDACTED:secret\u005d"}'
+append_doc_line "${safe_redaction_repo}" '{"Authorization":"[REDACTED:authorization]"}'
+append_doc_line "${safe_redaction_repo}" '"password=[REDACTED:secret]"'
+append_doc_line "${safe_redaction_repo}" '"Authorization: [REDACTED:authorization]"'
+append_doc_line "${safe_redaction_repo}" '| `password` | `[REDACTED:secret]` |'
+append_doc_line "${safe_redaction_repo}" '| Context | **Authorization** | [REDACTED:authorization] |'
+append_doc_line "${safe_redaction_repo}" 'support_token | [REDACTED:token]'
 assert_passes "${safe_redaction_repo}"
 
 leak_case "customer-private-leak" "The bundle contains raw customer payload data." "customer-private or ticket-private data detected"
