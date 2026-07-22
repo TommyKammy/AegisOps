@@ -739,15 +739,22 @@ safe_redaction_value_pattern = re.compile(
     rf"^(?:{redaction_marker}|`{redaction_marker}`|\"{redaction_marker}\"|'{redaction_marker}')[.,;:]?$",
     re.IGNORECASE,
 )
+sensitive_header_assignment_pattern = re.compile(
+    r"(?<![A-Za-z0-9])(?:authorization|proxy[_ -]?authorization|cookie|set[_ -]?cookie|forwarded|"
+    r"x[_ -]?forwarded[_ -]?(?:for|host|proto)|x[_ -]?(?:real[_ -]?ip|tenant[_ -]?id|customer[_ -]?id|user[_ -]?id)|host)"
+    r"\s*[:=]\s*(?P<value>[^\r\n]*)$",
+    re.IGNORECASE,
+)
 
-for credential_line in doc_raw.splitlines():
-    assignment = credential_assignment_pattern.search(credential_line)
-    if assignment and not safe_redaction_value_pattern.fullmatch(assignment.group("value").strip()):
-        print("Forbidden Phase 66.6 RC supportability proof: production secret-looking value detected", file=sys.stderr)
-        raise SystemExit(1)
+for sensitive_line in doc_raw.splitlines():
+    for assignment_pattern in (credential_assignment_pattern, sensitive_header_assignment_pattern):
+        assignment = assignment_pattern.search(sensitive_line)
+        if assignment and not safe_redaction_value_pattern.fullmatch(assignment.group("value").strip()):
+            print("Forbidden Phase 66.6 RC supportability proof: production secret-looking value detected", file=sys.stderr)
+            raise SystemExit(1)
 
 secret_patterns = (
-    re.compile(r"\bauthorization\s*:\s*(?:bearer|basic)\s+[A-Za-z0-9_+./=-]{12,}", re.IGNORECASE),
+    re.compile(r"\bauthorization\s*[:=]\s*(?:bearer|basic)\s+[A-Za-z0-9_+./=-]{12,}", re.IGNORECASE),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(r"\b(?:ghp_|github_pat_)[A-Za-z0-9_]{20,}\b"),
     re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
@@ -767,8 +774,10 @@ for pattern in secret_patterns:
 
 workstation_patterns = (
     re.compile(r"(?:^|[\s`\"'(<])/(?:Users|home)/[^\s`\"'()<>/]+/", re.IGNORECASE),
+    re.compile(r"(?:^|[\s`\"'(<])/(?:root)(?:/|$)", re.IGNORECASE),
+    re.compile(r"(?:^|[\s`\"'(<])~/(?:[^\s`\"'()<>]+)", re.IGNORECASE),
     re.compile(r"(?:^|[\s`\"'(<])[A-Za-z]:[\\/]Users[\\/][^\s`\"'()<>\\/]+[\\/]", re.IGNORECASE),
-    re.compile(r"file://(?:[^\s`\"'()<>]*/)?(?:Users|home)/[^\s`\"'()<>/]+/", re.IGNORECASE),
+    re.compile(r"file://(?:[^\s`\"'()<>]*/)?(?:(?:Users|home)/[^\s`\"'()<>/]+|root)/", re.IGNORECASE),
 )
 
 for pattern in workstation_patterns:
@@ -785,7 +794,7 @@ private_assignment_pattern = re.compile(
     re.IGNORECASE,
 )
 customer_identifier_assignment_pattern = re.compile(
-    r"^\s*(?:<!--\s*)?(?:[-*>]\s*)?`?(?:(?:customer|tenant)(?:[_ -]?account)?[_ -]?(?:id|identifier|name|email|host(?:name)?)|account[_ -]?(?:id|identifier|name)|email(?:[_ -]?address)?)`?\s*[:=|]\s*(?P<value>.*?)(?:\s*-->)?\s*$",
+    r"^\s*(?:<!--\s*)?(?:[-*>]\s*)?`?(?:(?:customer|tenant)(?:(?:[_ -]?account)?[_ -]?(?:id|identifier|name|email|host(?:name)?))?|account[_ -]?(?:id|identifier|name)|email(?:[_ -]?address)?)`?\s*[:=|]\s*(?P<value>.*?)(?:\s*-->)?\s*$",
     re.IGNORECASE,
 )
 safe_private_value_pattern = re.compile(
@@ -793,6 +802,32 @@ safe_private_value_pattern = re.compile(
     re.IGNORECASE,
 )
 email_value_pattern = re.compile(r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9.-])")
+private_identifier_value = (
+    r"(?!(?:Support|Portal|Identifiers?|Data|Private|Names?|Records?|Evidence|Content|Payloads?)\b)"
+    r"(?:[`'\"][^`'\"\r\n]{2,80}[`'\"]|[A-Z][A-Za-z0-9&._-]*(?:\s+[A-Z][A-Za-z0-9&._-]*){0,3})"
+)
+private_identifier_patterns = (
+    re.compile(
+        rf"(?i:\b(?:customer|tenant)(?:\s+(?:name|account))?\b)\s+(?P<identifier>{private_identifier_value})"
+        rf"(?P<relation>.{{0,40}})(?i:\b(?:included|retained|stored|embedded|exported|captured|carried|published)\b)"
+    ),
+    re.compile(
+        rf"(?i:\b(?:include(?:s|d|ing)?|contain(?:s|ed|ing)?|retain(?:s|ed|ing)?|store(?:s|d|ing)?|"
+        rf"embed(?:s|ded|ding)?|export(?:s|ed|ing)?|capture(?:s|d|ing)?|carr(?:y|ies|ied|ying)|publish(?:es|ed|ing)?)\b)"
+        rf"(?P<relation>.{{0,40}})(?i:\b(?:customer|tenant)(?:\s+(?:name|account))?\b)\s+(?P<identifier>{private_identifier_value})"
+    ),
+    re.compile(
+        rf"(?i:\b(?:customer|tenant)\s+is\b)(?P<relation>.{{0,20}})\s+(?P<identifier>{private_identifier_value})"
+    ),
+    re.compile(
+        rf"(?P<identifier>{private_identifier_value})(?P<relation>.{{0,30}})(?i:\bis\s+the\s+(?:retained\s+)?(?:customer|tenant)\b)"
+    ),
+)
+private_identifier_denial_pattern = re.compile(
+    r"\b(?:cannot|can't|does\s+not|do\s+not|did\s+not|will\s+not|should\s+not|may\s+not|must\s+not|not|never|"
+    r"reject(?:s|ed|ing)?|redact(?:s|ed|ing)?|remov(?:e|es|ed|ing))\b",
+    re.IGNORECASE,
+)
 
 
 def split_semantic_clauses(text: str) -> list[str]:
@@ -835,6 +870,13 @@ for line in doc_raw.splitlines():
         print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
         raise SystemExit(1)
     for private_clause in split_semantic_clauses(line):
+        for identifier_pattern in private_identifier_patterns:
+            identifier_match = identifier_pattern.search(private_clause)
+            if identifier_match:
+                denial_scope = private_clause[max(0, identifier_match.start() - 40) : identifier_match.end()]
+                if not private_identifier_denial_pattern.search(denial_scope):
+                    print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
+                    raise SystemExit(1)
         private_match = private_data_pattern.search(private_clause)
         if private_match and not private_predicate_is_negated(private_clause, private_match):
             print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
@@ -847,7 +889,7 @@ subordinate_subject = (
     r"redaction\s+manifests?|owner[- ]review\s+summaries|limitation\s+lists?|verifier\s+output|issue-lint\s+output)"
 )
 broad_readiness_subject = (
-    r"(?:this\s+proof|supportability\s+proof|support\s+artifacts?|support\s+bundles?|bundle\s+output|"
+    r"(?:this\s+proof|phase\s+66\.6|supportability\s+proof|support\s+artifacts?|support\s+bundles?|bundle\s+output|"
     r"backup\s+(?:evidence|manifests?)|restore\s+dry[- ]run(?:\s+output)?|upgrade\s+plans?|rollback\s+plans?|"
     r"redaction\s+manifests?|owner[- ]review\s+summaries|limitation\s+lists?|verifier\s+output|issue-lint\s+output)"
 )
@@ -859,7 +901,7 @@ readiness_outcome = (
 )
 truth_outcome = (
     r"(?:(?:workflow|release|gate|restore|limitation|audit|readiness|closeout|approval|execution|reconciliation)\s+truth|"
-    r"source\s+of\s+(?:workflow|release|gate|restore|limitation|audit|readiness|closeout)\s+truth)"
+    r"source\s+of\s+(?:workflow|release|gate|restore|limitation|audit|readiness|closeout)\s+truth|release\s+gate)"
 )
 authority_action = r"(?:approves?|executes?|reconciles?|closes?|releases?|gates?|restores?|mutates?|promotes?|overrides?|replaces?)"
 authority_object = r"(?:aegisops\s+records?|workflows?|releases?|gates?|restore\s+acceptance|limitations?|audits?|actions?|cases?|closeout)"
@@ -888,7 +930,28 @@ denied_relation_pattern = re.compile(
 
 def readiness_relation_is_denied(relation: str) -> bool:
     predicate_scope = relation.rsplit(",", 1)[-1]
-    return bool(denied_relation_pattern.search(predicate_scope))
+    if denied_relation_pattern.search(predicate_scope):
+        return True
+    list_denial = re.search(r"\b(?:excluding|rejecting|forbidding|disclaiming)\b", relation, re.IGNORECASE)
+    positive_tail = re.search(
+        r"\b(?:provides?|establishes?|confirms?|proves?|delivers?|offers?|constitutes?|is|are|serves?)\b",
+        predicate_scope,
+        re.IGNORECASE,
+    )
+    return bool(list_denial and not positive_tail)
+
+
+def readiness_relation_is_assertive(subject: str, relation: str) -> bool:
+    if not re.fullmatch(r"phase\s+66\.6", subject, re.IGNORECASE):
+        return True
+    return bool(
+        re.search(
+            r"\b(?:provides?|establishes?|confirms?|proves?|delivers?|offers?|constitutes?|gives?|supplies?|yields?|"
+            r"represents?|is|are|serves?|grants?|achieves?)\b",
+            relation,
+            re.IGNORECASE,
+        )
+    )
 
 claim_patterns = (
     re.compile(
@@ -905,7 +968,7 @@ claim_patterns = (
         subordinate_subject
         + r"\s+"
         + non_negated_predicate_context
-        + r"{0,120}\b(?:is|are|becomes?|serves?\s+as)\b"
+        + r"{0,120}\b(?:is|are|becomes?|serves?\s+as|acts?\s+as)\b"
         + r"(?:(?!\b(?:not|never)\b).){0,80}"
         + truth_outcome,
         re.IGNORECASE,
@@ -935,6 +998,14 @@ claim_patterns = (
         + r"{0,80}\b(?:is|are|was|were|be|been)\s+(?:provided|established|owned|controlled|defined)\b"
         + non_negated_predicate_context
         + r"{0,80}\bby\b.{0,80}"
+        + subordinate_subject,
+        re.IGNORECASE,
+    ),
+    re.compile(
+        truth_outcome
+        + non_negated_predicate_context
+        + r"{0,80}\b(?:is|are|was|were|be|been)\b"
+        + r"(?:(?!\b(?:not|never)\b).){0,40}"
         + subordinate_subject,
         re.IGNORECASE,
     ),
@@ -968,7 +1039,9 @@ for claim_input in claim_inputs:
         broad_readiness_claims = [
             match
             for pattern in readiness_relation_patterns
-            if (match := pattern.search(clause)) and not readiness_relation_is_denied(match.group("relation"))
+            if (match := pattern.search(clause))
+            and not readiness_relation_is_denied(match.group("relation"))
+            and readiness_relation_is_assertive(match.group("subject"), match.group("relation"))
         ]
         matched_claims = [index for index, pattern in enumerate(claim_patterns) if pattern.search(clause)]
         matched_support_authority = bool(support_authority_pattern.search(clause))
