@@ -619,8 +619,9 @@ if materialized_fields:
             detail.append("unexpected " + ", ".join(extra))
         fail("invalid non_claims: " + "; ".join(detail))
 
+redaction_marker = re.compile(r"(?:redacted|absent|rejected|forbidden|removed)", re.IGNORECASE)
 sensitive_assignment = re.compile(
-    r"(?:^|[;,\s{|])`?(?:password|passwd|secret|client_secret|api_key|access_token|refresh_token|private_key|authorization)`?\s*[:=]\s*(?!\s*(?:redacted|absent|rejected|forbidden|removed)\b)(?:[\"'][^\"'\r\n]{4,}[\"']|[^\s;,|}]{4,})",
+    r"(?:^|[;,\s{|])`?(?:password|passwd|secret|client_secret|api_key|access_token|refresh_token|private_key|authorization)`?\s*[:=]\s*(?P<value>[^;,|}\r\n]+)",
     re.IGNORECASE,
 )
 secret_patterns = (
@@ -631,7 +632,21 @@ secret_patterns = (
     re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]+:[^\s@]+@"),
     re.compile(r"-----(?:BEGIN|END) [A-Z0-9 ._-]*(?:KEY|CERTIFICATE)[A-Z0-9 ._-]*-----", re.IGNORECASE),
 )
-if any(sensitive_assignment.search(line) for line in doc_raw.splitlines()) or any(
+def assignment_contains_forbidden_value(pattern: re.Pattern, line: str) -> bool:
+    for match in pattern.finditer(line):
+        value = match.group("value").strip()
+        if len(value) >= 2 and (value[0], value[-1]) in {
+            ("`", "`"),
+            ('"', '"'),
+            ("'", "'"),
+        }:
+            value = value[1:-1].strip()
+        if not redaction_marker.fullmatch(value):
+            return True
+    return False
+
+
+if any(assignment_contains_forbidden_value(sensitive_assignment, line) for line in doc_raw.splitlines()) or any(
     pattern.search(doc_raw) for pattern in secret_patterns
 ):
     fail("production secret-looking value detected")
@@ -650,14 +665,16 @@ email_pattern = re.compile(
     r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9.-])"
 )
 private_assignment = re.compile(
-    r"(?:^|[;,\s{|])`?(?:customer[_ -]?(?:name|identifier|private_data|private_payload)|tenant[_ -]?(?:name|identifier)|ticket[_ -]?private[_ -]?content|raw[_ -]?(?:customer|ticket)[_ -]?(?:data|payload|content))`?\s*[:=]\s*(?!\s*(?:redacted|absent|rejected|forbidden|removed)\b)(?:[\"'][^\"'\r\n]{2,}[\"']|[^\s;,|}]{2,})",
+    r"(?:^|[;,\s{|])`?(?:customer[_ -]?(?:name|identifier|private_data|private_payload)|tenant[_ -]?(?:name|identifier)|ticket[_ -]?private[_ -]?content|raw[_ -]?(?:customer|ticket)[_ -]?(?:data|payload|content))`?\s*[:=]\s*(?P<value>[^;,|}\r\n]+)",
     re.IGNORECASE,
 )
 private_data_claim = re.compile(
     r"\b(?:includes?|contains?|retains?|stores?|embeds?|exports?|captures?|publishes?)\b.{0,60}\b(?:raw customer|customer[- ]private|private ticket|raw ticket|raw payload|customer identifier)",
     re.IGNORECASE,
 )
-if email_pattern.search(doc_raw) or any(private_assignment.search(line) for line in doc_raw.splitlines()):
+if email_pattern.search(doc_raw) or any(
+    assignment_contains_forbidden_value(private_assignment, line) for line in doc_raw.splitlines()
+):
     fail("customer-private or ticket-private data detected")
 for line in doc_raw.splitlines():
     match = private_data_claim.search(line)
@@ -687,6 +704,11 @@ authority_action = (
     r"clos(?:e|es|ed|ing)(?:\s+the)?\s+cases?|admit(?:s|ted|ting)?|"
     r"releas(?:e|es|ed|ing)|gat(?:e|es|ed|ing)|overrid(?:e|es|den|ing))"
 )
+direct_authority_action = (
+    r"(?:approv(?:es|ed|ing)|execut(?:es|ed|ing)|reconcil(?:es|ed|ing)|"
+    r"clos(?:es|ed|ing)(?:\s+the)?\s+cases?|admit(?:s|ted|ting)|"
+    r"releas(?:es|ed|ing)|gat(?:es|ed|ing)|overrid(?:es|den|ing))"
+)
 claim_patterns = (
     re.compile(
         rf"\b{subordinate_subject}\b.{{0,120}}\b(?:is|are|becomes?|serves?\s+as|acts?\s+as|owns?|defines?|determines?)\b.{{0,80}}\b{truth_outcome}\b",
@@ -694,6 +716,10 @@ claim_patterns = (
     ),
     re.compile(
         rf"\b{subordinate_subject}\b.{{0,100}}\b(?:can|could|may|might|will|would|does|do|automatically|independently|directly)\b.{{0,60}}\b{authority_action}\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b{subordinate_subject}\b\s+(?:(?:automatically|independently|directly)\s+)?{direct_authority_action}\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -721,10 +747,24 @@ claim_patterns = (
         re.IGNORECASE,
     ),
 )
-denial_pattern = re.compile(
-    r"\b(?:cannot|can't|does\s+not|do\s+not|did\s+not|will\s+not|would\s+not|should\s+not|"
-    r"may\s+not|must\s+not|not|never|no\s+longer|reject(?:s|ed|ing)?|forbid(?:s|den|ding)?|"
-    r"exclud(?:e|es|ed|ing)|without|remains?\s+subordinate|evidence\s+only)\b",
+denial_scope_boundary = (
+    rf"(?:[,;]|\b(?:and|or|but|however|yet|although|though|while|whereas|because|since)\b)\s*"
+    rf"(?:(?:{subordinate_subject}|it|they|this)\b\s*)?"
+    r"(?:can|could|may|might|will|would|does|do|is|are|automatically|independently|directly|"
+    r"becomes?|serves?|acts?|"
+    r"owns?|defines?|determines?|proves?|confirms?|establishes?|satisfies?|passes?|"
+    r"grants?|achieves?|certifies?|validates?|delivers?|enables?|provides?)\b"
+)
+denied_claim_target = (
+    rf"(?:{authority_action}|{truth_outcome}|{readiness_outcome}|"
+    r"proven|confirmed|established|satisfied|passed|achieved|validated|"
+    r"owned|defined|provided|determined|controlled|allowed|accepted|supported|valid)"
+)
+scoped_denial_pattern = re.compile(
+    rf"\b(?:cannot|can't|does\s+not|do\s+not|did\s+not|will\s+not|would\s+not|should\s+not|"
+    rf"may\s+not|must\s+not|not|never|no\s+longer|reject(?:s|ed|ing)?|forbid(?:s|den|ding)?|"
+    rf"exclud(?:e|es|ed|ing)|without|remains?\s+subordinate|evidence\s+only)\b"
+    rf"(?:(?!{denial_scope_boundary}).){{0,120}}\b{denied_claim_target}\b",
     re.IGNORECASE,
 )
 
@@ -765,7 +805,7 @@ for claim_input in claim_inputs:
     for clause in claim_clauses(claim_input):
         for pattern in claim_patterns:
             match = pattern.search(clause)
-            if match and not denial_pattern.search(match.group(0)):
+            if match and not scoped_denial_pattern.search(match.group(0)):
                 if os.environ.get("PHASE66_7_DEBUG") == "1":
                     print(f"Matched overclaim: {match.group(0)}", file=sys.stderr)
                 fail("authority or readiness overclaim detected")

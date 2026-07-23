@@ -253,6 +253,16 @@ overclaim_case() {
   assert_fails_with "${target}" "authority or readiness overclaim detected"
 }
 
+allowed_doc_line_case() {
+  local name="$1"
+  local claim="$2"
+  local target="${workdir}/${name}"
+
+  copy_valid_repo "${target}"
+  append_doc_line "${target}" "${claim}"
+  assert_passes "${target}"
+}
+
 valid_repo="${workdir}/valid"
 copy_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
@@ -502,14 +512,28 @@ leak_case \
   "production secret-looking value detected"
 
 leak_case \
+  "secret-after-redaction-marker" \
+  "api_key=redacted supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
   "nested-customer-name" \
   "debug_note=reviewed; customer_name=AcmeCorp; disposition=accepted" \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "private-data-after-redaction-marker" \
+  "customer_name=redacted AcmeCorp" \
   "customer-private or ticket-private data detected"
 
 overclaim_case "wazuh-truth" "Wazuh is authoritative alert truth."
 overclaim_case "reverse-wazuh-truth" "Alert truth is owned by Wazuh."
 overclaim_case "shuffle-execution" "Shuffle may execute and close the case."
 overclaim_case "ai-approval" "AI output can approve the action."
+overclaim_case "direct-ai-approval" "AI output approves the action."
+overclaim_case "unrelated-negation-before-ai-approval" "AI output is not advisory and can approve the action."
+overclaim_case "unrelated-negation-before-pronoun-approval" "AI output is not advisory, but it can approve the action."
+overclaim_case "unrelated-negation-before-direct-approval" "AI output is not advisory and independently approves the action."
 overclaim_case "ai-plural-case-closure" "AI output can close cases."
 overclaim_case "ticket-closure" "Tickets can close the case."
 overclaim_case "external-evidence-truth" "External evidence is evidence truth."
@@ -529,6 +553,12 @@ overclaim_case "execution-bypass" "Execution bypass is supported."
 overclaim_case "reconciliation-bypass" "Reconciliation bypass is valid."
 overclaim_case "case-shortcut" "Case-closure shortcut is accepted."
 overclaim_case "source-shortcut" "Source-admission shortcut is allowed."
+
+allowed_doc_line_case "redacted-secret" "api_key=redacted"
+allowed_doc_line_case "quoted-removed-private-data" "customer_name=\"removed\""
+allowed_doc_line_case "denied-ai-approval" "AI output can not approve the action."
+allowed_doc_line_case "denied-ai-truth" "AI output is not approval truth."
+allowed_doc_line_case "denied-release-readiness" "Release artifacts do not prove RC readiness."
 
 real_worktree="${workdir}/real-prerequisite-worktree"
 git -C "${repo_root}" worktree add --detach --quiet "${real_worktree}" HEAD
