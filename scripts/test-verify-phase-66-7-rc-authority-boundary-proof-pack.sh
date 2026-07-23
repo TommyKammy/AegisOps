@@ -633,6 +633,21 @@ leak_case \
   "production secret-looking value detected"
 
 leak_case \
+  "html-entity-secret-assignment" \
+  "api_key&#61;supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "numeric-html-entity-secret-assignment" \
+  "api_key&#x3d;supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "html-entity-secret-field-and-colon" \
+  "api&#95;key&colon;supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
   "nested-customer-name" \
   "debug_note=reviewed; customer_name=AcmeCorp; disposition=accepted" \
   "customer-private or ticket-private data detected"
@@ -642,10 +657,58 @@ leak_case \
   "customer_name=redacted AcmeCorp" \
   "customer-private or ticket-private data detected"
 
+leak_case \
+  "html-entity-private-assignment" \
+  "customer_name&#61;AcmeCorp" \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "unrelated-denial-before-private-data-claim" \
+  "The proof pack does not preserve formatting and includes raw customer payload." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "denied-then-positive-private-data-claim" \
+  "The proof pack does not include raw customer payload but includes raw customer payload." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "html-entity-private-data-claim" \
+  "The proof pack includes raw&nbsp;customer payload." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "html-entity-email" \
+  "customer_contact=analyst&#64;example.com" \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "html-entity-local-path" \
+  "artifact=&#47;Users&#47;example&#47;proof.json" \
+  "workstation-local path detected"
+
+leak_case \
+  "positive-then-denied-private-data-claim" \
+  "The proof pack includes raw customer payload but does not preserve formatting." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "bare-not-before-private-data-claim" \
+  "The proof pack is not safe because it includes raw customer payload." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "unrelated-never-before-private-data-claim" \
+  "The proof pack never alters formatting then includes raw customer payload." \
+  "customer-private or ticket-private data detected"
+
 overclaim_case "wazuh-truth" "Wazuh is authoritative alert truth."
 overclaim_case "reverse-wazuh-truth" "Alert truth is owned by Wazuh."
 overclaim_case "shuffle-execution" "Shuffle may execute and close the case."
 overclaim_case "ai-approval" "AI output can approve the action."
+overclaim_case "html-entity-ai-approval" "AI&nbsp;output can approve the action."
+overclaim_case "numeric-html-entity-ai-approval" "AI&#32;output can approve the action."
+overclaim_case "html-entity-ai-subject" "A&#73;&nbsp;output can approve the action."
 overclaim_case "direct-ai-approval" "AI output approves the action."
 overclaim_case "unrelated-negation-before-ai-approval" "AI output is not advisory and can approve the action."
 overclaim_case "unrelated-negation-before-pronoun-approval" "AI output is not advisory, but it can approve the action."
@@ -676,6 +739,10 @@ overclaim_case "source-shortcut" "Source-admission shortcut is allowed."
 
 allowed_doc_line_case "redacted-secret" "api_key=redacted"
 allowed_doc_line_case "quoted-removed-private-data" "customer_name=\"removed\""
+allowed_doc_line_case "denied-private-data-claim" "The proof pack does not include raw customer payload."
+allowed_doc_line_case "must-not-retain-private-data" "The proof pack must not retain raw customer payload."
+allowed_doc_line_case "adverbially-denied-private-data" "The proof pack does not intentionally include raw customer payload."
+allowed_doc_line_case "denied-private-data-list" "The proof pack does not include, retain, or publish raw customer payload."
 allowed_doc_line_case "denied-ai-approval" "AI output can not approve the action."
 allowed_doc_line_case "denied-elided-ai-execution" "AI output cannot approve the action; cannot execute the action."
 allowed_doc_line_case "sentence-boundary-no-elision" "AI output cannot approve the action. Can operators execute the action?"

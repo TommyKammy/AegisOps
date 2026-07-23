@@ -59,6 +59,7 @@ python3 - "${doc_path}" "${readme_path}" "${repo_root}" <<'PY'
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import os
 import re
@@ -74,6 +75,14 @@ readme_path = Path(sys.argv[2])
 repo_root = Path(sys.argv[3])
 doc_raw = doc_path.read_text(encoding="utf-8")
 readme_raw = readme_path.read_text(encoding="utf-8")
+
+
+def rendered_text(text: str) -> str:
+    return re.sub(r"[^\S\r\n]", " ", html.unescape(text))
+
+
+rendered_doc_raw = rendered_text(doc_raw)
+rendered_readme_raw = rendered_text(readme_raw)
 
 
 def visible_text(text: str) -> str:
@@ -715,8 +724,11 @@ def assignment_contains_forbidden_value(pattern: re.Pattern, line: str) -> bool:
     return False
 
 
-if any(assignment_contains_forbidden_value(sensitive_assignment, line) for line in doc_raw.splitlines()) or any(
-    pattern.search(doc_raw) for pattern in secret_patterns
+if any(
+    assignment_contains_forbidden_value(sensitive_assignment, line)
+    for line in rendered_doc_raw.splitlines()
+) or any(
+    pattern.search(rendered_doc_raw) for pattern in secret_patterns
 ):
     fail("production secret-looking value detected")
 
@@ -727,7 +739,7 @@ workstation_patterns = (
     re.compile(r"(?:^|[\s`\"'(<:=])[A-Za-z]:[\\/]Users[\\/][^\s`\"'()<>\\/]+[\\/]", re.IGNORECASE),
     re.compile(r"file://(?:[^\s`\"'()<>]*/)?(?:(?:Users|home)/[^\s`\"'()<>/]+|root)/", re.IGNORECASE),
 )
-if any(pattern.search(doc_raw) for pattern in workstation_patterns):
+if any(pattern.search(rendered_doc_raw) for pattern in workstation_patterns):
     fail("workstation-local path detected")
 
 email_pattern = re.compile(
@@ -738,21 +750,28 @@ private_assignment = re.compile(
     re.IGNORECASE,
 )
 private_data_claim = re.compile(
-    r"\b(?:includes?|contains?|retains?|stores?|embeds?|exports?|captures?|publishes?)\b.{0,60}\b(?:raw customer|customer[- ]private|private ticket|raw ticket|raw payload|customer identifier)",
+    r"\b(?:includes?|contains?|retains?|stores?|embeds?|exports?|captures?|publishes?)\b.{0,60}?\b(?:raw customer|customer[- ]private|private ticket|raw ticket|raw payload|customer identifier)",
     re.IGNORECASE,
 )
-if email_pattern.search(doc_raw) or any(
-    assignment_contains_forbidden_value(private_assignment, line) for line in doc_raw.splitlines()
+if email_pattern.search(rendered_doc_raw) or any(
+    assignment_contains_forbidden_value(private_assignment, line)
+    for line in rendered_doc_raw.splitlines()
 ):
     fail("customer-private or ticket-private data detected")
-for line in doc_raw.splitlines():
-    match = private_data_claim.search(line)
-    if match and not re.search(
-        r"\b(?:cannot|does not|must not|never|rejects?|forbids?|without|redacts?|removes?)\b",
-        line[: match.end()],
-        re.IGNORECASE,
-    ):
-        fail("customer-private or ticket-private data detected")
+private_denial_boundary = (
+    r"(?:[.!?,;]|\b(?:and|or|but|however|yet|although|though|while|whereas|"
+    r"because|since|then|before|after)\b)"
+)
+private_claim_denial = re.compile(
+    rf"\b(?:cannot|can't|does\s+not|do\s+not|did\s+not|will\s+not|would\s+not|"
+    rf"should\s+not|may\s+not|must\s+not|never)\b"
+    rf"(?:(?!{private_denial_boundary}).){{0,60}}$",
+    re.IGNORECASE,
+)
+for line in rendered_doc_raw.splitlines():
+    for match in private_data_claim.finditer(line):
+        if not private_claim_denial.search(line[: match.start()]):
+            fail("customer-private or ticket-private data detected")
 
 subordinate_subject = (
     r"(?:this\s+proof(?:\s+pack)?|phase\s+66\.7|proof\s+pack|wazuh|shuffle|ai(?:\s+output)?|tickets?|"
@@ -878,7 +897,7 @@ def claim_clauses(text: str):
         yield clause
 
 
-claim_scan_doc = doc_raw.replace(
+claim_scan_doc = rendered_doc_raw.replace(
     "Phase 66.7 does not add runtime feature breadth, execute production operations, grant new AI or integration authority, prove real design-partner outcomes, complete production rollout, implement commercial billing or entitlement enforcement, prove Phase 67 GA readiness, or claim broad enterprise SIEM/SOAR parity.",
     "",
 )
@@ -886,7 +905,7 @@ claim_inputs = (
     claim_scan_doc,
     "\n".join(
         line
-        for line in readme_raw.splitlines()
+        for line in rendered_readme_raw.splitlines()
         if re.search(r"phase\s+66\.7|authority-boundary\s+proof\s+pack", line, re.IGNORECASE)
     ),
 )
