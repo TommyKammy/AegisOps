@@ -795,7 +795,10 @@ if materialized_fields:
 
 redaction_marker = re.compile(r"(?:redacted|absent|rejected|forbidden|removed)", re.IGNORECASE)
 sensitive_assignment = re.compile(
-    r"(?:^|[;,\s{|])`?(?:password|passwd|secret|client_secret|api_key|access_token|refresh_token|private_key|authorization)`?\s*[:=]\s*(?P<value>[^;,|}\r\n]+)",
+    r"(?:^|[;,\s{|])`?(?:password|passwd|secret(?:[ _-]*key)?|client[ _-]*secret|"
+    r"x[ _-]*api[ _-]*key|api[ _-]*key|access[ _-]*token|refresh[ _-]*token|"
+    r"private[ _-]*key|"
+    r"authorization)`?\s*[:=]\s*(?P<value>[^;,|}\r\n]+)",
     re.IGNORECASE,
 )
 secret_patterns = (
@@ -885,12 +888,16 @@ readiness_outcome = (
 )
 authority_action = (
     r"(?:approv(?:e|es|ed|ing)|execut(?:e|es|ed|ing)|reconcil(?:e|es|ed|ing)|"
-    r"clos(?:e|es|ed|ing)(?:\s+the)?\s+cases?|admit(?:s|ted|ting)?|"
+    r"clos(?:e|es|ed|ing)\s+(?:(?:a|an|the|one|any|this|that|each|every)\s+)?"
+    r"(?:(?:single|individual|specific|given|open|selected|current)\s+)?cases?|"
+    r"admit(?:s|ted|ting)?|"
     r"releas(?:e|es|ed|ing)|gat(?:e|es|ed|ing)|overrid(?:e|es|den|ing))"
 )
 direct_authority_action = (
     r"(?:approv(?:es|ed|ing)|execut(?:es|ed|ing)|reconcil(?:es|ed|ing)|"
-    r"clos(?:es|ed|ing)(?:\s+the)?\s+cases?|admit(?:s|ted|ting)|"
+    r"clos(?:es|ed|ing)\s+(?:(?:a|an|the|one|any|this|that|each|every)\s+)?"
+    r"(?:(?:single|individual|specific|given|open|selected|current)\s+)?cases?|"
+    r"admit(?:s|ted|ting)|"
     r"releas(?:es|ed|ing)|gat(?:es|ed|ing)|overrid(?:es|den|ing))"
 )
 claim_patterns = (

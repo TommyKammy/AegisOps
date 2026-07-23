@@ -745,6 +745,56 @@ leak_case \
   "production secret-looking value detected"
 
 leak_case \
+  "spaced-api-key" \
+  "API key: supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "hyphenated-api-key" \
+  "api-key=supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "connected-api-key" \
+  "APIKey=supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "prefixed-api-key" \
+  "X-API-Key=supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "spaced-client-secret" \
+  "client secret: supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "hyphenated-access-token" \
+  "access-token=supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "spaced-refresh-token" \
+  "refresh token: supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "spaced-secret-key" \
+  "secret key: supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "spaced-private-key" \
+  "private key: supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "html-entity-spaced-api-key" \
+  "API&nbsp;key&colon;supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
   "secret-after-redaction-marker" \
   "api_key=redacted supersecretvalue123" \
   "production secret-looking value detected"
@@ -845,6 +895,11 @@ overclaim_case "elided-direct-ai-execution" "AI output cannot approve the action
 overclaim_case "adversative-elided-ai-execution" "AI output cannot approve the action but can execute the action."
 overclaim_case "elided-ai-truth" "AI output is not authoritative; is approval truth."
 overclaim_case "ai-plural-case-closure" "AI output can close cases."
+overclaim_case "ai-article-case-closure" "AI output can close a case."
+overclaim_case "direct-ai-demonstrative-case-closure" "AI output closes this case."
+overclaim_case "authorized-ai-any-case-closure" "AI output is authorized to close any case."
+overclaim_case "ai-individual-case-closure" "AI output can close an individual case."
+overclaim_case "direct-ai-single-case-closure" "AI output closes a single case."
 overclaim_case "ticket-closure" "Tickets can close the case."
 overclaim_case "external-evidence-truth" "External evidence is evidence truth."
 overclaim_case "ui-cache-truth" "UI cache is workflow truth."
@@ -865,6 +920,7 @@ overclaim_case "case-shortcut" "Case-closure shortcut is accepted."
 overclaim_case "source-shortcut" "Source-admission shortcut is allowed."
 
 allowed_doc_line_case "redacted-secret" "api_key=redacted"
+allowed_doc_line_case "redacted-spaced-api-key" "API key: redacted"
 allowed_doc_line_case "quoted-removed-private-data" "customer_name=\"removed\""
 allowed_doc_line_case "denied-private-data-claim" "The proof pack does not include raw customer payload."
 allowed_doc_line_case "must-not-retain-private-data" "The proof pack must not retain raw customer payload."
@@ -875,6 +931,8 @@ allowed_doc_line_case "denied-ai-permission" "AI output is not permitted to appr
 allowed_doc_line_case "denied-ai-authorization" "AI output cannot be authorized to execute the action."
 allowed_doc_line_case "denied-ai-authority" "AI output does not have authority to approve the action."
 allowed_doc_line_case "denied-granted-ai-authority" "AI output is granted no authority to approve the action."
+allowed_doc_line_case "denied-ai-article-case-closure" "AI output cannot close a case."
+allowed_doc_line_case "denied-ai-individual-case-closure" "AI output cannot close an individual case."
 allowed_doc_line_case "denied-elided-ai-execution" "AI output cannot approve the action; cannot execute the action."
 allowed_doc_line_case "sentence-boundary-no-elision" "AI output cannot approve the action. Can operators execute the action?"
 allowed_doc_line_case "denied-ai-truth" "AI output is not approval truth."
