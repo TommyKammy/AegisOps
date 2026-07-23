@@ -68,6 +68,7 @@ import subprocess
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 
 doc_path = Path(sys.argv[1])
@@ -77,16 +78,89 @@ doc_raw = doc_path.read_text(encoding="utf-8")
 readme_raw = readme_path.read_text(encoding="utf-8")
 
 
+def visible_text(text: str) -> str:
+    return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+
+
+class VisibleHTMLTextRenderer(HTMLParser):
+    block_tags = {
+        "address",
+        "article",
+        "aside",
+        "blockquote",
+        "br",
+        "dd",
+        "div",
+        "dl",
+        "dt",
+        "figcaption",
+        "figure",
+        "footer",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "header",
+        "hr",
+        "li",
+        "main",
+        "nav",
+        "ol",
+        "p",
+        "pre",
+        "section",
+        "table",
+        "tbody",
+        "td",
+        "tfoot",
+        "th",
+        "thead",
+        "tr",
+        "ul",
+    }
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.suppressed_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
+        tag = tag.lower()
+        if tag in {"script", "style"}:
+            self.suppressed_depth += 1
+        elif not self.suppressed_depth and tag in self.block_tags:
+            self.parts.append("\n")
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag.lower() in {"script", "style"}:
+            self.suppressed_depth -= 1
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in {"script", "style"} and self.suppressed_depth:
+            self.suppressed_depth -= 1
+        elif not self.suppressed_depth and tag in self.block_tags:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if not self.suppressed_depth:
+            self.parts.append(data)
+
+
 def rendered_text(text: str) -> str:
-    return re.sub(r"[^\S\r\n]", " ", html.unescape(text))
+    parser = VisibleHTMLTextRenderer()
+    parser.feed(visible_text(text))
+    parser.close()
+    return re.sub(r"[^\S\r\n]", " ", html.unescape("".join(parser.parts)))
 
 
 rendered_doc_raw = rendered_text(doc_raw)
 rendered_readme_raw = rendered_text(readme_raw)
-
-
-def visible_text(text: str) -> str:
-    return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+rendered_source_doc_raw = re.sub(r"[^\S\r\n]", " ", html.unescape(doc_raw))
 
 
 def semantic_text(text: str) -> str:
@@ -253,6 +327,25 @@ structured_key_pattern = re.compile(
 )
 if structured_key_pattern.search(doc_raw):
     fail("JSON, YAML, and object-literal evidence syntax is not supported")
+
+unsupported_structural_html = re.compile(
+    r"<\s*/?\s*(?:article|aside|dd|div|dl|dt|li|ol|p|pre|section|table|tbody|td|"
+    r"tfoot|th|thead|tr|ul)\b",
+    re.IGNORECASE,
+)
+if unsupported_structural_html.search(visible_text(doc_raw)):
+    fail("raw HTML evidence syntax is not supported")
+
+inline_html_tag = re.compile(
+    r"<\s*/?\s*(?:b|code|em|i|mark|small|span|strong|sub|sup)\b[^>]*>",
+    re.IGNORECASE,
+)
+for raw_line in visible_text(doc_raw).splitlines():
+    if not inline_html_tag.search(raw_line):
+        continue
+    rendered_line = rendered_text(raw_line)
+    if re.search(rf"\b(?:{field_alternation})\b", rendered_line, re.IGNORECASE):
+        fail("raw HTML evidence syntax is not supported")
 
 
 def markdown_cells(line: str) -> list[str]:
@@ -823,11 +916,14 @@ def assignment_contains_forbidden_value(pattern: re.Pattern, line: str) -> bool:
     return False
 
 
+secret_hygiene_inputs = (rendered_doc_raw, rendered_source_doc_raw)
 if any(
-    assignment_contains_forbidden_value(sensitive_assignment, line)
-    for line in rendered_doc_raw.splitlines()
-) or any(
-    pattern.search(rendered_doc_raw) for pattern in secret_patterns
+    any(
+        assignment_contains_forbidden_value(sensitive_assignment, line)
+        for line in hygiene_input.splitlines()
+    )
+    or any(pattern.search(hygiene_input) for pattern in secret_patterns)
+    for hygiene_input in secret_hygiene_inputs
 ):
     fail("production secret-looking value detected")
 
@@ -838,7 +934,11 @@ workstation_patterns = (
     re.compile(r"(?:^|[\s`\"'(<:=])[A-Za-z]:[\\/]Users[\\/][^\s`\"'()<>\\/]+[\\/]", re.IGNORECASE),
     re.compile(r"file://(?:[^\s`\"'()<>]*/)?(?:(?:Users|home)/[^\s`\"'()<>/]+|root)/", re.IGNORECASE),
 )
-if any(pattern.search(rendered_doc_raw) for pattern in workstation_patterns):
+if any(
+    pattern.search(hygiene_input)
+    for hygiene_input in secret_hygiene_inputs
+    for pattern in workstation_patterns
+):
     fail("workstation-local path detected")
 
 email_pattern = re.compile(
@@ -852,9 +952,13 @@ private_data_claim = re.compile(
     r"\b(?:includes?|contains?|retains?|stores?|embeds?|exports?|captures?|publishes?)\b.{0,60}?\b(?:raw customer|customer[- ]private|private ticket|raw ticket|raw payload|customer identifier)",
     re.IGNORECASE,
 )
-if email_pattern.search(rendered_doc_raw) or any(
-    assignment_contains_forbidden_value(private_assignment, line)
-    for line in rendered_doc_raw.splitlines()
+if any(
+    email_pattern.search(hygiene_input)
+    or any(
+        assignment_contains_forbidden_value(private_assignment, line)
+        for line in hygiene_input.splitlines()
+    )
+    for hygiene_input in secret_hygiene_inputs
 ):
     fail("customer-private or ticket-private data detected")
 private_denial_boundary = (
@@ -906,7 +1010,10 @@ claim_patterns = (
         re.IGNORECASE,
     ),
     re.compile(
-        rf"\b{subordinate_subject}\b.{{0,100}}\b(?:can|could|may|might|will|would|does|do|automatically|independently|directly)\b.{{0,60}}\b{authority_action}\b",
+        rf"\b{subordinate_subject}\b.{{0,100}}\b"
+        rf"(?:can|could|may|might|will|would|must|should|shall|does|do|"
+        rf"has\s+to|have\s+to|needs?\s+to|ought\s+to|"
+        rf"automatically|independently|directly)\b.{{0,60}}\b{authority_action}\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -920,7 +1027,7 @@ claim_patterns = (
         rf"will(?:\s+not)?\s+be|would(?:\s+not)?\s+be|must(?:\s+not)?\s+be|"
         rf"should(?:\s+not)?\s+be)\s+"
         rf"(?:(?:not|never|fully|explicitly|independently|directly)\s+)*"
-        rf"(?:permitted|allowed|authorized|empowered|entitled)\s+"
+        rf"(?:permitted|allowed|authorized|empowered|entitled|required|obligated|mandated)\s+"
         rf"(?:by\s+[a-z0-9._@/-]+\s+)?to\s+"
         rf"(?:(?:automatically|independently|directly)\s+)?{authority_action}\b",
         re.IGNORECASE,
@@ -962,7 +1069,9 @@ claim_patterns = (
 denial_scope_boundary = (
     rf"(?:[,;]|\b(?:and|or|but|however|yet|although|though|while|whereas|because|since)\b)\s*"
     rf"(?:(?:{subordinate_subject}|it|they|this)\b\s*)?"
-    r"(?:can|could|may|might|will|would|does|do|is|are|has|have|holds?|receives?|"
+    r"(?:can|could|may|might|will|would|must|should|shall|does|do|"
+    r"has\s+to|have\s+to|needs?\s+to|ought\s+to|"
+    r"is|are|has|have|holds?|receives?|"
     r"automatically|independently|directly|"
     r"becomes?|serves?|acts?|"
     r"owns?|defines?|determines?|proves?|confirms?|establishes?|satisfies?|passes?|"
@@ -975,7 +1084,8 @@ denied_claim_target = (
 )
 scoped_denial_pattern = re.compile(
     rf"\b(?:cannot|can't|does\s+not|do\s+not|did\s+not|will\s+not|would\s+not|should\s+not|"
-    rf"may\s+not|must\s+not|not|never|no\s+longer|reject(?:s|ed|ing)?|forbid(?:s|den|ding)?|"
+    rf"may\s+not|must\s+not|shall\s+not|not|never|no\s+longer|"
+    rf"reject(?:s|ed|ing)?|forbid(?:s|den|ding)?|"
     rf"exclud(?:e|es|ed|ing)|without|remains?\s+subordinate|evidence\s+only)\b"
     rf"(?:(?!{denial_scope_boundary}).){{0,120}}\b{denied_claim_target}\b",
     re.IGNORECASE,
@@ -993,9 +1103,10 @@ def claim_clauses(text: str):
     )
     elision_boundaries = {";", "but", "however", "yet", "although", "though"}
     verb_led_continuation = re.compile(
-        rf"^(?:can|could|may|might|will|would|does|do|cannot|can't|"
+        rf"^(?:can|could|may|might|will|would|must|should|shall|does|do|cannot|can't|"
         rf"does\s+not|do\s+not|did\s+not|will\s+not|would\s+not|should\s+not|"
-        rf"may\s+not|must\s+not|automatically|independently|directly|"
+        rf"may\s+not|must\s+not|shall\s+not|has\s+to|have\s+to|needs?\s+to|ought\s+to|"
+        rf"automatically|independently|directly|"
         rf"is|are|has|have|holds?|receives?|becomes?|serves?|acts?|owns?|defines?|determines?|"
         rf"proves?|confirms?|establishes?|satisfies?|passes?|grants?|achieves?|"
         rf"certifies?|validates?|delivers?|enables?|provides?|"

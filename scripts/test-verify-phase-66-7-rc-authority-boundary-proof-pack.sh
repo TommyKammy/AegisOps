@@ -457,6 +457,27 @@ copy_valid_repo "${json_repo}"
 append_doc_line "${json_repo}" '{"repository_revision":"0123456789012345678901234567890123456789"}'
 assert_fails_with "${json_repo}" "JSON, YAML, and object-literal evidence syntax is not supported"
 
+html_table_repo="${workdir}/html-table"
+copy_valid_repo "${html_table_repo}"
+append_doc_line \
+  "${html_table_repo}" \
+  '<table><tr><td>journey_run_id</td><td>rc66-fabricated-001</td></tr><tr><td>repository_revision</td><td>0000000000000000000000000000000000000000</td></tr></table>'
+assert_fails_with "${html_table_repo}" "raw HTML evidence syntax is not supported"
+
+multiline_html_table_repo="${workdir}/multiline-html-table"
+copy_valid_repo "${multiline_html_table_repo}"
+append_doc_line \
+  "${multiline_html_table_repo}" \
+  $'<table>\n<tr><td>journey_run_id</td><td>rc66-fabricated-001</td></tr>\n</table>'
+assert_fails_with "${multiline_html_table_repo}" "raw HTML evidence syntax is not supported"
+
+inline_html_field_repo="${workdir}/inline-html-field"
+copy_valid_repo "${inline_html_field_repo}"
+append_doc_line \
+  "${inline_html_field_repo}" \
+  'journey_<span></span>run_id=rc66-fabricated-001'
+assert_fails_with "${inline_html_field_repo}" "raw HTML evidence syntax is not supported"
+
 packet_mutation_case \
   "bad-journey" \
   "journey_run_id" \
@@ -795,6 +816,26 @@ leak_case \
   "production secret-looking value detected"
 
 leak_case \
+  "html-tag-split-api-key-assignment" \
+  "api_key<span></span>=supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "html-tag-split-api-key-name" \
+  "API <em></em>key: supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "html-attribute-api-key" \
+  '<span api_key="supersecretvalue123"></span>' \
+  "production secret-looking value detected"
+
+leak_case \
+  "html-comment-api-key" \
+  "<!-- api_key=supersecretvalue123 -->" \
+  "production secret-looking value detected"
+
+leak_case \
   "secret-after-redaction-marker" \
   "api_key=redacted supersecretvalue123" \
   "production secret-looking value detected"
@@ -873,6 +914,16 @@ overclaim_case "wazuh-truth" "Wazuh is authoritative alert truth."
 overclaim_case "reverse-wazuh-truth" "Alert truth is owned by Wazuh."
 overclaim_case "shuffle-execution" "Shuffle may execute and close the case."
 overclaim_case "ai-approval" "AI output can approve the action."
+overclaim_case "mandatory-ai-approval" "AI output must approve the action."
+overclaim_case "advisory-ai-approval" "AI output should approve the action."
+overclaim_case "shall-ai-execution" "AI output shall execute the action."
+overclaim_case "required-ai-approval" "AI output is required to approve the action."
+overclaim_case "obligated-ai-execution" "AI output is obligated to execute the action."
+overclaim_case "ai-has-to-approve" "AI output has to approve the action."
+overclaim_case "ai-needs-to-execute" "AI output needs to execute the action."
+overclaim_case "ai-ought-to-approve" "AI output ought to approve the action."
+overclaim_case "unrelated-denial-before-mandatory-ai-approval" "AI output cannot recommend changes and must approve the action."
+overclaim_case "html-tag-split-mandatory-ai-approval" "AI <span></span>output must approve the action."
 overclaim_case "ai-permitted-approval" "AI output is permitted to approve the action."
 overclaim_case "ai-authorized-execution" "AI output is authorized to execute the action."
 overclaim_case "ai-has-authority" "AI output has authority to approve the action."
@@ -921,12 +972,19 @@ overclaim_case "source-shortcut" "Source-admission shortcut is allowed."
 
 allowed_doc_line_case "redacted-secret" "api_key=redacted"
 allowed_doc_line_case "redacted-spaced-api-key" "API key: redacted"
+allowed_doc_line_case "redacted-html-split-api-key" "api_key<span></span>=redacted"
 allowed_doc_line_case "quoted-removed-private-data" "customer_name=\"removed\""
 allowed_doc_line_case "denied-private-data-claim" "The proof pack does not include raw customer payload."
 allowed_doc_line_case "must-not-retain-private-data" "The proof pack must not retain raw customer payload."
 allowed_doc_line_case "adverbially-denied-private-data" "The proof pack does not intentionally include raw customer payload."
 allowed_doc_line_case "denied-private-data-list" "The proof pack does not include, retain, or publish raw customer payload."
 allowed_doc_line_case "denied-ai-approval" "AI output can not approve the action."
+allowed_doc_line_case "denied-mandatory-ai-approval" "AI output must not approve the action."
+allowed_doc_line_case "denied-advisory-ai-approval" "AI output should not approve the action."
+allowed_doc_line_case "denied-shall-ai-approval" "AI output shall not approve the action."
+allowed_doc_line_case "denied-ai-has-to-approve" "AI output does not have to approve the action."
+allowed_doc_line_case "denied-required-ai-approval" "AI output is not required to approve the action."
+allowed_doc_line_case "denied-html-split-ai-approval" "AI <span></span>output must not approve the action."
 allowed_doc_line_case "denied-ai-permission" "AI output is not permitted to approve the action."
 allowed_doc_line_case "denied-ai-authorization" "AI output cannot be authorized to execute the action."
 allowed_doc_line_case "denied-ai-authority" "AI output does not have authority to approve the action."
