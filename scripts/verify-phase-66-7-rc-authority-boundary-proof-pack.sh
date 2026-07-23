@@ -139,6 +139,9 @@ required_phrases = (
     "Packet labels or a declared `result=passed` cannot substitute for resolved proof surfaces and successful verifier execution.",
     "The same isolated worktree must resolve the negative-observation manifest, bind its exact bytes to every negative `evidence_id`, and match every packet observation to one manifest record.",
     "A syntactically valid negative observation without that immutable record fails closed.",
+    "Every `limitation_references` value must record `evidence_id`, `evidence_reference`, `ids`, `owner`, `decision_at`, and `follow_up_at`.",
+    "The limitation manifest uses `schema_version=phase-66-7-limitations/v1` and a `limitations` array.",
+    "The isolated worktree must resolve the limitation manifest and match every packet limitation to an accepted repository-owned record.",
     "All materialized timestamps must be no more than 24 hours old at verification time and must not be more than five minutes in the future.",
     "AegisOps records remain authoritative for alert, case, evidence, recommendation, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, restore acceptance, and closeout truth.",
     "Wazuh, Shuffle, AI, tickets, evidence systems, browser state, UI cache, demo data, reports, support bundles, release artifacts, verifier output, issue-lint output, and optional evidence remain subordinate evidence or context only.",
@@ -532,6 +535,38 @@ if materialized_fields:
             fail(f"invalid {field}: mixed repository_revision")
         negative_evidence_parts[field] = parts
 
+    limitation_manifest_reference = "evidence/phase-66-7/limitations.json"
+    limitations = require_components(
+        "limitation_references",
+        ("evidence_id", "evidence_reference", "ids", "owner", "decision_at", "follow_up_at"),
+    )
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", limitations["evidence_id"], re.IGNORECASE):
+        fail("invalid limitation_references: evidence_id must be sha256:<digest>")
+    if limitations["evidence_reference"] != limitation_manifest_reference:
+        fail("invalid limitation_references: unexpected evidence reference")
+    if not re.fullmatch(r"lim-[a-z0-9._-]+(?:,lim-[a-z0-9._-]+)*", limitations["ids"]):
+        fail("invalid limitation_references: ids must be explicit lim-* identifiers")
+    limitation_ids = limitations["ids"].split(",")
+    if len(set(limitation_ids)) != len(limitation_ids):
+        fail("invalid limitation_references: ids must not contain duplicates")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._@-]{2,80}", limitations["owner"], re.IGNORECASE):
+        fail("invalid limitation_references: owner must be accountable")
+    if re.search(
+        r"\b(?:artifact|verifier|issue-lint|bot|automation)\b",
+        limitations["owner"],
+        re.IGNORECASE,
+    ):
+        fail("invalid limitation_references: owner must be accountable")
+    decision_at = parse_timestamp("limitation_references", limitations["decision_at"])
+    follow_up_at = parse_timestamp(
+        "limitation_references",
+        limitations["follow_up_at"],
+        fresh=False,
+        allow_future=True,
+    )
+    if follow_up_at <= decision_at:
+        fail("invalid limitation_references: follow_up_at must be after decision_at")
+
     evidence_worktree = Path(tempfile.mkdtemp(prefix="phase66-7-evidence-"))
     worktree_added = False
     try:
@@ -630,6 +665,85 @@ if materialized_fields:
             }
             if records_by_field[field] != expected_record:
                 fail(f"invalid {field}: resolved negative evidence record does not match packet")
+
+        limitation_manifest_path = evidence_worktree / limitation_manifest_reference
+        if not limitation_manifest_path.is_file() or limitation_manifest_path.stat().st_size == 0:
+            fail("limitation evidence reference does not resolve at repository_revision")
+        resolved_limitation_evidence_id = (
+            "sha256:" + hashlib.sha256(limitation_manifest_path.read_bytes()).hexdigest()
+        )
+        if limitations["evidence_id"].lower() != resolved_limitation_evidence_id:
+            fail("invalid limitation_references: evidence_id does not match resolved evidence reference")
+        try:
+            limitation_manifest = json.loads(limitation_manifest_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            fail("limitation evidence reference must contain valid UTF-8 JSON")
+        if not isinstance(limitation_manifest, dict) or set(limitation_manifest) != {
+            "schema_version",
+            "limitations",
+        }:
+            fail("limitation manifest must contain only schema_version and limitations")
+        if limitation_manifest["schema_version"] != "phase-66-7-limitations/v1":
+            fail("limitation manifest has unsupported schema_version")
+        limitation_records = limitation_manifest["limitations"]
+        if not isinstance(limitation_records, list):
+            fail("limitation manifest limitations must be an array")
+        limitations_by_id: dict[str, dict[str, str]] = {}
+        limitation_record_keys = {
+            "id",
+            "owner",
+            "disposition",
+            "decision_at",
+            "follow_up_at",
+        }
+        for record in limitation_records:
+            if not isinstance(record, dict) or set(record) != limitation_record_keys:
+                fail("limitation manifest record has invalid fields")
+            if not all(isinstance(value, str) for value in record.values()):
+                fail("limitation manifest records must contain string values")
+            limitation_id = record["id"]
+            if (
+                not re.fullmatch(r"lim-[a-z0-9._-]+", limitation_id)
+                or limitation_id in limitations_by_id
+            ):
+                fail("limitation manifest contains invalid or duplicate id")
+            if record["disposition"].lower() != "accepted":
+                fail(f"limitation manifest record {limitation_id} must be accepted")
+            record_decision_at = parse_timestamp(
+                f"limitation manifest record {limitation_id}",
+                record["decision_at"],
+            )
+            record_follow_up_at = parse_timestamp(
+                f"limitation manifest record {limitation_id}",
+                record["follow_up_at"],
+                fresh=False,
+                allow_future=True,
+            )
+            if record_follow_up_at <= record_decision_at:
+                fail(
+                    f"limitation manifest record {limitation_id} follow_up_at "
+                    "must be after decision_at"
+                )
+            limitations_by_id[limitation_id] = record
+        for limitation_id in limitation_ids:
+            record = limitations_by_id.get(limitation_id)
+            if record is None:
+                fail(
+                    f"invalid limitation_references: limitation {limitation_id} "
+                    "does not resolve at repository_revision"
+                )
+            expected_record = {
+                "id": limitation_id,
+                "owner": limitations["owner"],
+                "disposition": "accepted",
+                "decision_at": limitations["decision_at"],
+                "follow_up_at": limitations["follow_up_at"],
+            }
+            if record != expected_record:
+                fail(
+                    f"invalid limitation_references: resolved limitation record "
+                    f"{limitation_id} does not match packet"
+                )
     except subprocess.CalledProcessError as error:
         diagnostic = (error.stderr or "").strip().splitlines()
         detail = diagnostic[-1] if diagnostic else "unable to create evidence worktree"
@@ -657,24 +771,6 @@ if materialized_fields:
     if owner_review["disposition"].lower() != "accepted":
         fail("invalid owner_review: disposition must be accepted")
     parse_timestamp("owner_review", owner_review["reviewed_at"])
-
-    limitations = require_components(
-        "limitation_references",
-        ("ids", "owner", "decision_at", "follow_up_at"),
-    )
-    if not re.fullmatch(r"lim-[a-z0-9._-]+(?:,lim-[a-z0-9._-]+)*", limitations["ids"], re.IGNORECASE):
-        fail("invalid limitation_references: ids must be explicit lim-* identifiers")
-    if not re.fullmatch(r"[a-z0-9][a-z0-9._@-]{2,80}", limitations["owner"], re.IGNORECASE):
-        fail("invalid limitation_references: owner must be accountable")
-    decision_at = parse_timestamp("limitation_references", limitations["decision_at"])
-    follow_up_at = parse_timestamp(
-        "limitation_references",
-        limitations["follow_up_at"],
-        fresh=False,
-        allow_future=True,
-    )
-    if follow_up_at <= decision_at:
-        fail("invalid limitation_references: follow_up_at must be after decision_at")
 
     required_non_claims = {
         "rc-evidence-only",
@@ -811,6 +907,27 @@ claim_patterns = (
         re.IGNORECASE,
     ),
     re.compile(
+        rf"\b{subordinate_subject}\b.{{0,80}}\b"
+        rf"(?:is|are|was|were|has\s+been|have\s+been|becomes?|remains?|can(?:not)?\s+be|"
+        rf"could(?:\s+not)?\s+be|may(?:\s+not)?\s+be|might(?:\s+not)?\s+be|"
+        rf"will(?:\s+not)?\s+be|would(?:\s+not)?\s+be|must(?:\s+not)?\s+be|"
+        rf"should(?:\s+not)?\s+be)\s+"
+        rf"(?:(?:not|never|fully|explicitly|independently|directly)\s+)*"
+        rf"(?:permitted|allowed|authorized|empowered|entitled)\s+"
+        rf"(?:by\s+[a-z0-9._@/-]+\s+)?to\s+"
+        rf"(?:(?:automatically|independently|directly)\s+)?{authority_action}\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b{subordinate_subject}\b.{{0,80}}\b"
+        rf"(?:has|have|holds?|receives?|possesses?|is\s+granted|are\s+granted|"
+        rf"was\s+granted|were\s+granted)\s+"
+        rf"(?:(?:the|full|explicit|independent|direct|delegated)\s+)*"
+        rf"(?:permission|authorization|authority|power|right)\s+to\s+"
+        rf"(?:(?:automatically|independently|directly)\s+)?{authority_action}\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b{subordinate_subject}\b.{{0,100}}\b(?:proves?|confirms?|establishes?|satisfies?|passes?|grants?|achieves?|certifies?|validates?)\b.{{0,100}}\b{readiness_outcome}\b",
         re.IGNORECASE,
     ),
@@ -838,7 +955,8 @@ claim_patterns = (
 denial_scope_boundary = (
     rf"(?:[,;]|\b(?:and|or|but|however|yet|although|though|while|whereas|because|since)\b)\s*"
     rf"(?:(?:{subordinate_subject}|it|they|this)\b\s*)?"
-    r"(?:can|could|may|might|will|would|does|do|is|are|automatically|independently|directly|"
+    r"(?:can|could|may|might|will|would|does|do|is|are|has|have|holds?|receives?|"
+    r"automatically|independently|directly|"
     r"becomes?|serves?|acts?|"
     r"owns?|defines?|determines?|proves?|confirms?|establishes?|satisfies?|passes?|"
     r"grants?|achieves?|certifies?|validates?|delivers?|enables?|provides?)\b"
@@ -871,7 +989,7 @@ def claim_clauses(text: str):
         rf"^(?:can|could|may|might|will|would|does|do|cannot|can't|"
         rf"does\s+not|do\s+not|did\s+not|will\s+not|would\s+not|should\s+not|"
         rf"may\s+not|must\s+not|automatically|independently|directly|"
-        rf"is|are|becomes?|serves?|acts?|owns?|defines?|determines?|"
+        rf"is|are|has|have|holds?|receives?|becomes?|serves?|acts?|owns?|defines?|determines?|"
         rf"proves?|confirms?|establishes?|satisfies?|passes?|grants?|achieves?|"
         rf"certifies?|validates?|delivers?|enables?|provides?|"
         rf"{direct_authority_action})\b",

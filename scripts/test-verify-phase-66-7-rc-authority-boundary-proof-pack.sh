@@ -76,7 +76,7 @@ packet_lines=(
   "verifier_output_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=verifier-output; attempt=rc-gate-promotion; result=rejected; authoritative_record=aegisops://gates/rc-gate-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
   "issue_lint_output_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=issue-lint-output; attempt=rc-gate-promotion; result=rejected; authoritative_record=aegisops://gates/rc-gate-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
   "owner_review=reviewer=security-reviewer; reviewed_at=${observed_at}; disposition=accepted; follow_up_owner=release-owner"
-  "limitation_references=ids=lim-66-7-001; owner=release-owner; decision_at=${observed_at}; follow_up_at=${follow_up_at}"
+  "limitation_references=evidence_id=sha256:__LIMITATION_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/limitations.json; ids=lim-66-7-001; owner=release-owner; decision_at=${observed_at}; follow_up_at=${follow_up_at}"
   "non_claims=rc-evidence-only,not-rc-gate-pass,not-ga,not-production-operations,not-commercial-replacement,not-broad-siem-parity,not-broad-soar-parity,not-subordinate-truth"
 )
 
@@ -123,6 +123,32 @@ path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding=
 PY
 }
 
+write_limitation_manifest() {
+  local target="$1"
+
+  mkdir -p "${target}/evidence/phase-66-7"
+  TARGET="${target}" OBSERVED_AT="${observed_at}" FOLLOW_UP_AT="${follow_up_at}" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+manifest = {
+    "schema_version": "phase-66-7-limitations/v1",
+    "limitations": [
+        {
+            "id": "lim-66-7-001",
+            "owner": "release-owner",
+            "disposition": "accepted",
+            "decision_at": os.environ["OBSERVED_AT"],
+            "follow_up_at": os.environ["FOLLOW_UP_AT"],
+        }
+    ],
+}
+path = Path(os.environ["TARGET"]) / "evidence/phase-66-7/limitations.json"
+path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+}
+
 copy_valid_repo() {
   local target="$1"
   local path
@@ -140,6 +166,7 @@ copy_valid_repo() {
     chmod +x "${path}"
   done
   write_negative_evidence_manifest "${target}"
+  write_limitation_manifest "${target}"
   git -C "${target}" init -q
   git -C "${target}" config user.name "Phase 66.7 Self Test"
   git -C "${target}" config user.email "phase-66-7-self-test@invalid.example"
@@ -239,6 +266,19 @@ materialize_packet_line() {
       digest="0000000000000000000000000000000000000000000000000000000000000000"
     fi
     line="${line//__NEGATIVE_EVIDENCE_DIGEST__/${digest}}"
+  fi
+  if [[ "${line}" == *"__LIMITATION_EVIDENCE_DIGEST__"* ]]; then
+    reference="evidence/phase-66-7/limitations.json"
+    if git -C "${target}" cat-file -e "${repository_revision}:${reference}" 2>/dev/null; then
+      digest="$(
+        git -C "${target}" show "${repository_revision}:${reference}" |
+          shasum -a 256 |
+          awk '{print $1}'
+      )"
+    else
+      digest="0000000000000000000000000000000000000000000000000000000000000000"
+    fi
+    line="${line//__LIMITATION_EVIDENCE_DIGEST__/${digest}}"
   fi
   printf '%s\n' "${line}"
 }
@@ -582,8 +622,85 @@ packet_mutation_case \
 packet_mutation_case \
   "invalid-follow-up" \
   "limitation_references" \
-  "ids=lim-66-7-001; owner=release-owner; decision_at=${observed_at}; follow_up_at=2000-01-01T00:00:00Z" \
+  "evidence_id=sha256:__LIMITATION_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/limitations.json; ids=lim-66-7-001; owner=release-owner; decision_at=${observed_at}; follow_up_at=2000-01-01T00:00:00Z" \
   "follow_up_at must be after decision_at"
+
+packet_mutation_case \
+  "fabricated-limitation-evidence-id" \
+  "limitation_references" \
+  "evidence_id=sha256:0000000000000000000000000000000000000000000000000000000000000000; evidence_reference=evidence/phase-66-7/limitations.json; ids=lim-66-7-001; owner=release-owner; decision_at=${observed_at}; follow_up_at=${follow_up_at}" \
+  "evidence_id does not match resolved evidence reference"
+
+packet_mutation_case \
+  "wrong-limitation-evidence-reference" \
+  "limitation_references" \
+  "evidence_id=sha256:__LIMITATION_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/invented-limitations.json; ids=lim-66-7-001; owner=release-owner; decision_at=${observed_at}; follow_up_at=${follow_up_at}" \
+  "unexpected evidence reference"
+
+packet_mutation_case \
+  "invented-limitation-id" \
+  "limitation_references" \
+  "evidence_id=sha256:__LIMITATION_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/limitations.json; ids=lim-invented-999; owner=release-owner; decision_at=${observed_at}; follow_up_at=${follow_up_at}" \
+  "limitation lim-invented-999 does not resolve at repository_revision"
+
+packet_mutation_case \
+  "invented-limitation-owner" \
+  "limitation_references" \
+  "evidence_id=sha256:__LIMITATION_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/limitations.json; ids=lim-66-7-001; owner=imaginary-owner; decision_at=${observed_at}; follow_up_at=${follow_up_at}" \
+  "resolved limitation record lim-66-7-001 does not match packet"
+
+packet_mutation_case \
+  "automated-limitation-owner" \
+  "limitation_references" \
+  "evidence_id=sha256:__LIMITATION_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/limitations.json; ids=lim-66-7-001; owner=verifier-bot; decision_at=${observed_at}; follow_up_at=${follow_up_at}" \
+  "owner must be accountable"
+
+packet_mutation_case \
+  "noncanonical-limitation-id" \
+  "limitation_references" \
+  "evidence_id=sha256:__LIMITATION_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/limitations.json; ids=LIM-66-7-001; owner=release-owner; decision_at=${observed_at}; follow_up_at=${follow_up_at}" \
+  "ids must be explicit lim-* identifiers"
+
+missing_limitation_manifest_repo="${workdir}/missing-limitation-manifest"
+copy_valid_repo "${missing_limitation_manifest_repo}"
+rm "${missing_limitation_manifest_repo}/evidence/phase-66-7/limitations.json"
+git -C "${missing_limitation_manifest_repo}" add -u
+git -C "${missing_limitation_manifest_repo}" commit -qm "remove limitation manifest"
+append_complete_packet "${missing_limitation_manifest_repo}"
+assert_fails_with \
+  "${missing_limitation_manifest_repo}" \
+  "limitation evidence reference does not resolve at repository_revision"
+
+malformed_limitation_manifest_repo="${workdir}/malformed-limitation-manifest"
+copy_valid_repo "${malformed_limitation_manifest_repo}"
+printf '{invalid-json\n' \
+  >"${malformed_limitation_manifest_repo}/evidence/phase-66-7/limitations.json"
+git -C "${malformed_limitation_manifest_repo}" add evidence/phase-66-7/limitations.json
+git -C "${malformed_limitation_manifest_repo}" commit -qm "malform limitation manifest"
+append_complete_packet "${malformed_limitation_manifest_repo}"
+assert_fails_with \
+  "${malformed_limitation_manifest_repo}" \
+  "limitation evidence reference must contain valid UTF-8 JSON"
+
+unaccepted_limitation_repo="${workdir}/unaccepted-limitation"
+copy_valid_repo "${unaccepted_limitation_repo}"
+MANIFEST="${unaccepted_limitation_repo}/evidence/phase-66-7/limitations.json" \
+  python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+path = Path(os.environ["MANIFEST"])
+manifest = json.loads(path.read_text(encoding="utf-8"))
+manifest["limitations"][0]["disposition"] = "proposed"
+path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+git -C "${unaccepted_limitation_repo}" add evidence/phase-66-7/limitations.json
+git -C "${unaccepted_limitation_repo}" commit -qm "mark limitation proposed"
+append_complete_packet "${unaccepted_limitation_repo}"
+assert_fails_with \
+  "${unaccepted_limitation_repo}" \
+  "limitation manifest record lim-66-7-001 must be accepted"
 
 packet_mutation_case \
   "missing-non-claim" \
@@ -706,6 +823,16 @@ overclaim_case "wazuh-truth" "Wazuh is authoritative alert truth."
 overclaim_case "reverse-wazuh-truth" "Alert truth is owned by Wazuh."
 overclaim_case "shuffle-execution" "Shuffle may execute and close the case."
 overclaim_case "ai-approval" "AI output can approve the action."
+overclaim_case "ai-permitted-approval" "AI output is permitted to approve the action."
+overclaim_case "ai-authorized-execution" "AI output is authorized to execute the action."
+overclaim_case "ai-has-authority" "AI output has authority to approve the action."
+overclaim_case "ai-granted-permission" "AI output is granted permission to execute the action."
+overclaim_case "ai-granted-explicit-permission" "AI output is granted explicit permission to execute the action."
+overclaim_case "ai-empowered-closure" "AI output is empowered to close the case."
+overclaim_case "ai-has-been-authorized" "AI output has been authorized to execute the action."
+overclaim_case "ai-policy-permission" "AI output is permitted by policy to approve the action."
+overclaim_case "ai-authorized-direct-execution" "AI output is authorized to directly execute the action."
+overclaim_case "unrelated-negation-before-ai-permission" "AI output is not advisory but is permitted to approve the action."
 overclaim_case "html-entity-ai-approval" "AI&nbsp;output can approve the action."
 overclaim_case "numeric-html-entity-ai-approval" "AI&#32;output can approve the action."
 overclaim_case "html-entity-ai-subject" "A&#73;&nbsp;output can approve the action."
@@ -744,6 +871,10 @@ allowed_doc_line_case "must-not-retain-private-data" "The proof pack must not re
 allowed_doc_line_case "adverbially-denied-private-data" "The proof pack does not intentionally include raw customer payload."
 allowed_doc_line_case "denied-private-data-list" "The proof pack does not include, retain, or publish raw customer payload."
 allowed_doc_line_case "denied-ai-approval" "AI output can not approve the action."
+allowed_doc_line_case "denied-ai-permission" "AI output is not permitted to approve the action."
+allowed_doc_line_case "denied-ai-authorization" "AI output cannot be authorized to execute the action."
+allowed_doc_line_case "denied-ai-authority" "AI output does not have authority to approve the action."
+allowed_doc_line_case "denied-granted-ai-authority" "AI output is granted no authority to approve the action."
 allowed_doc_line_case "denied-elided-ai-execution" "AI output cannot approve the action; cannot execute the action."
 allowed_doc_line_case "sentence-boundary-no-elision" "AI output cannot approve the action. Can operators execute the action?"
 allowed_doc_line_case "denied-ai-truth" "AI output is not approval truth."
@@ -754,6 +885,7 @@ git -C "${repo_root}" worktree add --detach --quiet "${real_worktree}" HEAD
 git -C "${real_worktree}" config user.name "Phase 66.7 Self Test"
 git -C "${real_worktree}" config user.email "phase-66-7-self-test@invalid.example"
 write_negative_evidence_manifest "${real_worktree}"
+write_limitation_manifest "${real_worktree}"
 cp "${repo_root}/${doc_rel}" "${real_worktree}/${doc_rel}"
 cp \
   "${repo_root}/scripts/verify-phase-66-7-rc-authority-boundary-proof-pack.sh" \
@@ -761,12 +893,13 @@ cp \
 cp \
   "${repo_root}/scripts/test-verify-phase-66-7-rc-authority-boundary-proof-pack.sh" \
   "${real_worktree}/scripts/test-verify-phase-66-7-rc-authority-boundary-proof-pack.sh"
-if ! git -C "${real_worktree}" diff --quiet; then
-  git -C "${real_worktree}" add \
-    "${doc_rel}" \
-    evidence/phase-66-7/negative-observations.json \
-    scripts/verify-phase-66-7-rc-authority-boundary-proof-pack.sh \
-    scripts/test-verify-phase-66-7-rc-authority-boundary-proof-pack.sh
+git -C "${real_worktree}" add \
+  "${doc_rel}" \
+  evidence/phase-66-7/negative-observations.json \
+  evidence/phase-66-7/limitations.json \
+  scripts/verify-phase-66-7-rc-authority-boundary-proof-pack.sh \
+  scripts/test-verify-phase-66-7-rc-authority-boundary-proof-pack.sh
+if ! git -C "${real_worktree}" diff --cached --quiet; then
   git -C "${real_worktree}" commit -qm "materialized prerequisite integration fixture"
 fi
 append_complete_packet "${real_worktree}"

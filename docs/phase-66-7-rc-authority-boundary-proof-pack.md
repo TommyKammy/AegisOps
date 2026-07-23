@@ -53,7 +53,7 @@ Every materialized Phase 66.7 proof packet must include exactly one value for ev
 | `verifier_output_negative_evidence` | Rejected verifier-output RC-gate-promotion attempt with authoritative AegisOps record linkage. | Verifier output is test evidence, not a release or readiness decision. |
 | `issue_lint_output_negative_evidence` | Rejected issue-lint-output RC-gate-promotion attempt with authoritative AegisOps record linkage. | Issue-lint output is planning evidence, not a release or readiness decision. |
 | `owner_review` | Accountable reviewer, review timestamp, accepted disposition, and follow-up owner. | Artifact self-approval, rejected review, missing ownership, or stale review fails the packet. |
-| `limitation_references` | Reviewed limitation ids, owner, decision timestamp, and follow-up timestamp. | Hidden, unowned, placeholder, or undated limitations fail the packet. |
+| `limitation_references` | Repository-owned limitation-manifest digest and reference, reviewed limitation ids, owner, decision timestamp, and follow-up timestamp. | Unresolved, invented, unaccepted, unowned, placeholder, or undated limitations fail the packet. |
 | `non_claims` | All required RC, GA, production, commercial, parity, and subordinate-truth non-claim labels. | Missing non-claims or positive readiness claims fail the packet. |
 
 A proof packet is fail-closed: once any required field is materialized, every required field must be present, non-placeholder, internally complete, and bound to the same journey run and immutable repository revision.
@@ -95,6 +95,10 @@ The top-level `repository_revision` identifies the evidence-producing commit, no
 
 The same isolated worktree must resolve the negative-observation manifest, bind its exact bytes to every negative `evidence_id`, and match every packet observation to one manifest record. A syntactically valid negative observation without that immutable record fails closed.
 
+Every `limitation_references` value must record `evidence_id`, `evidence_reference`, `ids`, `owner`, `decision_at`, and `follow_up_at`. Its `evidence_id` is `sha256:<digest>` for the exact repository-owned manifest bytes at `evidence/phase-66-7/limitations.json` and `repository_revision`.
+
+The limitation manifest uses `schema_version=phase-66-7-limitations/v1` and a `limitations` array. Every limitation record contains exactly `id`, `owner`, `disposition`, `decision_at`, and `follow_up_at`. The isolated worktree must resolve the limitation manifest and match every packet limitation to an accepted repository-owned record. Missing, duplicate, malformed, unaccepted, invented, or packet-mismatched limitation records fail closed.
+
 All materialized timestamps must be no more than 24 hours old at verification time and must not be more than five minutes in the future. The owner review and every negative observation must satisfy this freshness window.
 
 The proof pack must not contain production secrets, credentials, authorization material, certificates, key material, raw customer-private data, ticket-private content, customer identifiers, email addresses, or workstation-local paths. Redaction assertions do not permit retaining the forbidden value beside the assertion.
@@ -115,6 +119,7 @@ The focused verifier rejects:
 
 - missing Phase 66.1-66.6 references, focused verifiers, proof fields, negative surfaces, or README linkage;
 - partial, duplicate, cross-section, mixed-run, mixed-revision, stale, future-dated, failed, unresolved, or placeholder-backed proof packets;
+- unresolved, invented, unaccepted, duplicate, or packet-mismatched limitation records;
 - JSON, YAML, or object-literal evidence syntax that could be silently ignored or ambiguously parsed;
 - Wazuh, Shuffle, AI, ticket, evidence-system, UI-cache, demo-data, report, support-bundle, release-artifact, verifier-output, or issue-lint-output truth promotion;
 - approval, execution, reconciliation, source-admission, or case-closure bypasses;
