@@ -38,6 +38,8 @@ A proof packet is fail-closed: once any required field is materialized, every re
 
 ## 3. Evidence Binding And Secret Hygiene
 
+Materialized proof packets are accepted only as `field=value` assignment lines or Markdown `Field | Value` rows; JSON, YAML, and object-literal evidence syntax is rejected rather than ignored.
+
 Every structured evidence value must include the packet's exact `journey_run_id` and `repository_revision`; implicit binding through names, paths, or ticket context is not accepted.
 
 The `backup_evidence` value must include `journey_run_id`, `repository_revision`, `manifest_id`, `custody_reference`, `created_at`, `owner`, and `status=completed`. Accountable people and groups must use explicit `person:<id>` or `group:<id>` identities; broad operator labels and automated identities are not accepted. The backup manifest remains subordinate custody evidence and cannot prove restore success.

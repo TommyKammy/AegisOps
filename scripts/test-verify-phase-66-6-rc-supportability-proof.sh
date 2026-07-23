@@ -347,6 +347,31 @@ copy_valid_repo "${missing_binding_repo}"
 remove_doc_text "${missing_binding_repo}" 'The `redaction_manifest` value must include `journey_run_id`, `repository_revision`, `manifest_id`, `evidence_reference`, `bundle_reference`, `scan_result=passed`, `secret_values`, `workstation_paths`, `private_payloads`, `ticket_private_content`, `tokens_and_headers`, `certs_and_keys`, `credentials`, `customer_identifiers`, and `authority_boundary=subordinate-evidence-only`.'
 assert_fails_with "${missing_binding_repo}" "Missing Phase 66.6 evidence binding statement"
 
+leak_case \
+  "json-evidence-packet" \
+  '{"journey_run_id":"unknown","repository_revision":"not-a-commit"}' \
+  "JSON, YAML, and object-literal evidence syntax is not supported"
+leak_case \
+  "nested-json-evidence-packet" \
+  '{"proof":{"journey_run_id":"journey-66-1-0007"}}' \
+  "JSON, YAML, and object-literal evidence syntax is not supported"
+leak_case \
+  "escaped-json-evidence-key" \
+  '{"journey\u005frun\u005fid":"journey-66-1-0007"}' \
+  "JSON, YAML, and object-literal evidence syntax is not supported"
+leak_case \
+  "escaped-object-evidence-key" \
+  "{'repository\\u005frevision':'not-a-commit'}" \
+  "JSON, YAML, and object-literal evidence syntax is not supported"
+leak_case \
+  "yaml-evidence-packet" \
+  $'proof:\n  journey_run_id: journey-66-1-0007' \
+  "JSON, YAML, and object-literal evidence syntax is not supported"
+leak_case \
+  "fenced-object-evidence-packet" \
+  $'```javascript\n{repository_revision: "not-a-commit"}\n```' \
+  "JSON, YAML, and object-literal evidence syntax is not supported"
+
 partial_packet_repo="${workdir}/partial-packet"
 copy_valid_repo "${partial_packet_repo}"
 append_doc_line "${partial_packet_repo}" "journey_run_id=journey-66-1-partial"
@@ -669,6 +694,8 @@ leak_case "markdown-table-without-outer-pipes-leak" 'support_token | SuperSecret
 
 safe_redaction_repo="${workdir}/safe-redaction-marker"
 copy_valid_repo "${safe_redaction_repo}"
+append_doc_line "${safe_redaction_repo}" '["journey_run_id: documentation label"]'
+append_doc_line "${safe_redaction_repo}" '{"note":"repository_revision: documentation label"}'
 append_doc_line "${safe_redaction_repo}" "password=[REDACTED:secret]"
 append_doc_line "${safe_redaction_repo}" "client_secret=[REDACTED]."
 append_doc_line "${safe_redaction_repo}" 'api_key="[REDACTED:secret]"'
@@ -696,6 +723,10 @@ leak_case "customer-email-leak" "customer_email=alice@example.com" "customer-pri
 leak_case "tenant-id-leak" "tenant_id=tenant-acme-001" "customer-private or ticket-private data detected"
 leak_case "customer-account-name-leak" "customer_account_name=Acme" "customer-private or ticket-private data detected"
 leak_case "account-name-leak" "account_name=Acme" "customer-private or ticket-private data detected"
+leak_case "markdown-table-customer-name-leak" "| customer_name | Acme |" "customer-private or ticket-private data detected"
+leak_case "markdown-table-tenant-id-leak" "| tenant_id | tenant-acme-001 |" "customer-private or ticket-private data detected"
+leak_case "markdown-table-decorated-customer-leak" "| Context | **customer_email** | Acme support contact |" "customer-private or ticket-private data detected"
+leak_case "markdown-table-account-name-leak" "account_name | Acme" "customer-private or ticket-private data detected"
 leak_case "bare-email-leak" "Contact alice@example.com for the retained case." "customer-private or ticket-private data detected"
 leak_case "comment-tenant-id-leak" "<!-- tenant_id=tenant-acme-001 -->" "customer-private or ticket-private data detected"
 leak_case "customer-name-prose-leak" "Customer Acme is included in the bundle." "customer-private or ticket-private data detected"
@@ -717,6 +748,9 @@ append_doc_line "${safe_redaction_repo}" "customer_email=[REDACTED:customer-iden
 append_doc_line "${safe_redaction_repo}" "tenant_id=redacted"
 append_doc_line "${safe_redaction_repo}" "customer_account_name=removed"
 append_doc_line "${safe_redaction_repo}" "account_name=absent"
+append_doc_line "${safe_redaction_repo}" "| customer_name | [REDACTED:customer-identifier] |"
+append_doc_line "${safe_redaction_repo}" "| Context | **tenant_id** | redacted |"
+append_doc_line "${safe_redaction_repo}" "account_name | absent"
 append_doc_line "${safe_redaction_repo}" "Customer identifiers are redacted before retention."
 append_doc_line "${safe_redaction_repo}" "The bundle does not include customer Acme."
 append_doc_line "${safe_redaction_repo}" "Customer Support is included only as a generic capability label."

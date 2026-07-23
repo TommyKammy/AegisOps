@@ -171,6 +171,7 @@ binding_section = section(
 )
 
 binding_phrases = (
+    "Materialized proof packets are accepted only as `field=value` assignment lines or Markdown `Field | Value` rows; JSON, YAML, and object-literal evidence syntax is rejected rather than ignored.",
     "Every structured evidence value must include the packet's exact `journey_run_id` and `repository_revision`; implicit binding through names, paths, or ticket context is not accepted.",
     "The `backup_evidence` value must include `journey_run_id`, `repository_revision`, `manifest_id`, `custody_reference`, `created_at`, `owner`, and `status=completed`.",
     "Accountable people and groups must use explicit `person:<id>` or `group:<id>` identities; broad operator labels and automated identities are not accepted.",
@@ -205,17 +206,55 @@ required_fields = (
 )
 
 required_field_set = set(required_fields)
+required_field_alternation = "|".join(map(re.escape, required_fields))
 field_values: dict[str, list[str]] = {field: [] for field in required_fields}
 section_field_values: dict[str, dict[str, list[str]]] = {}
 current_section = "document-preamble"
 section_index = 0
 in_fence = False
 assignment_pattern = re.compile(
-    r"^\s*(?:[-*>]\s*)?`?(" + "|".join(map(re.escape, required_fields)) + r")`?\s*[:=]\s*(.*?)\s*$",
+    r"^\s*(?:[-*>]\s*)?`?(" + required_field_alternation + r")`?\s*=\s*(.*?)\s*$",
     re.IGNORECASE,
 )
 table_pattern = re.compile(r"^\s*\|\s*`?([a-z0-9_]+)`?\s*\|\s*(.*?)\s*\|", re.IGNORECASE)
 canonical_evidence_rows = {row.strip() for row in evidence_rows}
+structured_evidence_key_pattern = re.compile(
+    r"(?m)(?:^[ \t]*(?:-\s+)?|[\{\[,][ \t\r\n]*)"
+    r"(?:(?P<quote>[\"'`])(?:"
+    + required_field_alternation
+    + r")(?P=quote)|(?:"
+    + required_field_alternation
+    + r"))\s*:",
+    re.IGNORECASE,
+)
+quoted_mapping_key_patterns = (
+    re.compile(r'"(?P<key>(?:\\.|[^"\\])*)"\s*:'),
+    re.compile(r"'(?P<key>(?:\\.|[^'\\])*)'\s*:"),
+)
+
+
+def fail_structured_evidence_syntax() -> None:
+    print(
+        "Forbidden Phase 66.6 RC supportability proof: JSON, YAML, and object-literal evidence syntax is not supported; use field=value assignments or Markdown Field | Value rows",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+
+def reject_structured_evidence_syntax() -> None:
+    if structured_evidence_key_pattern.search(doc_raw):
+        fail_structured_evidence_syntax()
+    for quoted_key_pattern in quoted_mapping_key_patterns:
+        for quoted_key in quoted_key_pattern.finditer(doc_raw):
+            try:
+                decoded_key = json.loads('"' + quoted_key.group("key") + '"')
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if isinstance(decoded_key, str) and decoded_key.lower() in required_field_set:
+                fail_structured_evidence_syntax()
+
+
+reject_structured_evidence_syntax()
 
 
 def record_field(section_name: str, field: str, value: str) -> None:
@@ -772,9 +811,29 @@ safe_redaction_value_pattern = re.compile(
     rf"^(?:{redaction_marker}|`{redaction_marker}`|\"{redaction_marker}\"|'{redaction_marker}')[.,;:]?$",
     re.IGNORECASE,
 )
+customer_identifier_key = (
+    r"(?:(?:customer|tenant)(?:(?:[_ -]?account)?[_ -]?(?:id|identifier|name|email|host(?:name)?))?|"
+    r"account[_ -]?(?:id|identifier|name)|email(?:[_ -]?address)?)"
+)
+customer_identifier_key_pattern = re.compile(rf"^{customer_identifier_key}$", re.IGNORECASE)
+safe_private_value_pattern = re.compile(
+    rf"^(?:{redaction_marker}|`{redaction_marker}`|\"{redaction_marker}\"|'{redaction_marker}'|redacted|absent|rejected|forbidden|removed|none)[.,;:]?$",
+    re.IGNORECASE,
+)
+
+
 def reject_sensitive_value(value: object) -> None:
     if not isinstance(value, str) or not safe_redaction_value_pattern.fullmatch(value.strip()):
         print("Forbidden Phase 66.6 RC supportability proof: production secret-looking value detected", file=sys.stderr)
+        raise SystemExit(1)
+
+
+def reject_private_identifier_value(value: object) -> None:
+    if not isinstance(value, str) or not safe_private_value_pattern.fullmatch(value.strip()):
+        print(
+            "Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected",
+            file=sys.stderr,
+        )
         raise SystemExit(1)
 
 
@@ -837,8 +896,11 @@ for sensitive_line in doc_raw.splitlines():
         reject_sensitive_value(assignment.group("value"))
     table_cells = markdown_table_cells(line_to_scan)
     for index, table_cell in enumerate(table_cells[:-1]):
-        if is_sensitive_key(markdown_cell_key(table_cell)):
+        table_key = markdown_cell_key(table_cell)
+        if is_sensitive_key(table_key):
             reject_sensitive_value(table_cells[index + 1])
+        if customer_identifier_key_pattern.fullmatch(table_key):
+            reject_private_identifier_value(table_cells[index + 1])
     if scan_json_fragment:
         for json_assignment in json_sensitive_assignment_pattern.finditer(sensitive_line):
             json_value = json_assignment.group("value").strip()
@@ -885,11 +947,7 @@ private_assignment_pattern = re.compile(
     re.IGNORECASE,
 )
 customer_identifier_assignment_pattern = re.compile(
-    r"^\s*(?:<!--\s*)?(?:[-*>]\s*)?`?(?:(?:customer|tenant)(?:(?:[_ -]?account)?[_ -]?(?:id|identifier|name|email|host(?:name)?))?|account[_ -]?(?:id|identifier|name)|email(?:[_ -]?address)?)`?\s*[:=|]\s*(?P<value>.*?)(?:\s*-->)?\s*$",
-    re.IGNORECASE,
-)
-safe_private_value_pattern = re.compile(
-    rf"^(?:{redaction_marker}|`{redaction_marker}`|\"{redaction_marker}\"|'{redaction_marker}'|redacted|absent|rejected|forbidden|removed|none)[.,;:]?$",
+    rf"^\s*(?:<!--\s*)?(?:[-*>]\s*)?`?{customer_identifier_key}`?\s*[:=|]\s*(?P<value>.*?)(?:\s*-->)?\s*$",
     re.IGNORECASE,
 )
 email_value_pattern = re.compile(r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9.-])")
@@ -954,9 +1012,8 @@ for line in doc_raw.splitlines():
         print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
         raise SystemExit(1)
     identifier_assignment = customer_identifier_assignment_pattern.search(line)
-    if identifier_assignment and not safe_private_value_pattern.fullmatch(identifier_assignment.group("value").strip()):
-        print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
-        raise SystemExit(1)
+    if identifier_assignment:
+        reject_private_identifier_value(identifier_assignment.group("value"))
     if email_value_pattern.search(line):
         print("Forbidden Phase 66.6 RC supportability proof: customer-private or ticket-private data detected", file=sys.stderr)
         raise SystemExit(1)
