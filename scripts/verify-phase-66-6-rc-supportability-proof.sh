@@ -812,8 +812,8 @@ safe_redaction_value_pattern = re.compile(
     re.IGNORECASE,
 )
 customer_identifier_key = (
-    r"(?:(?:customer|tenant)(?:(?:[_ -]?account)?[_ -]?(?:id|identifier|name|email|host(?:name)?))?|"
-    r"account[_ -]?(?:id|identifier|name)|email(?:[_ -]?address)?)"
+    r"(?:(?:customers?|tenants?)(?:(?:[_ -]?accounts?)?[_ -]?(?:ids?|identifiers?|names?|emails?(?:[_ -]?address(?:es)?)?|hosts?|hostnames?)|"
+    r"[_ -]?accounts?)?|accounts?[_ -]?(?:ids?|identifiers?|names?)|emails?(?:[_ -]?address(?:es)?)?)"
 )
 customer_identifier_key_pattern = re.compile(rf"^{customer_identifier_key}$", re.IGNORECASE)
 safe_private_value_pattern = re.compile(
@@ -847,6 +847,8 @@ def reject_unsafe_structured_values(value: object) -> None:
         for key, item in value.items():
             if is_sensitive_key(key):
                 reject_sensitive_value(item)
+            if customer_identifier_key_pattern.fullmatch(str(key).strip()):
+                reject_private_identifier_value(item)
             reject_unsafe_structured_values(item)
     elif isinstance(value, list):
         for item in value:
@@ -1051,10 +1053,13 @@ truth_outcome = (
     r"(?:(?:workflow|release|gate|restore|limitation|audit|readiness|closeout|approval|execution|reconciliation)\s+truth|"
     r"source\s+of\s+(?:workflow|release|gate|restore|limitation|audit|readiness|closeout)\s+truth|release\s+gate)"
 )
-authority_action = r"(?:approves?|executes?|reconciles?|closes?|releases?|gates?|restores?|mutates?|promotes?|overrides?|replaces?)"
-authority_object = r"(?:aegisops\s+records?|workflows?|releases?|gates?|restore\s+acceptance|limitations?|audits?|actions?|cases?|closeout)"
+authority_action = (
+    r"(?:approv(?:e|es|ed|ing)|execut(?:e|es|ed|ing)|reconcil(?:e|es|ed|ing)|clos(?:e|es|ed|ing)|"
+    r"releas(?:e|es|ed|ing)|gat(?:e|es|ed|ing)|restor(?:e|es|ed|ing)|mutat(?:e|es|ed|ing)|"
+    r"promot(?:e|es|ed|ing)|overrid(?:e|es|den|ing)|replac(?:e|es|ed|ing))"
+)
 authority_predicate_prefix = (
-    r"(?:(?:(?:can|may|will|does)\s+)|"
+    r"(?:(?:(?:can|could|may|might|must|shall|should|will|would|do|does|did|is|are|was|were|has|have|had)\s+)|"
     r"(?:(?:has|have|had|holds?|held|possess(?:es|ed)?|receiv(?:e|es|ed)|obtain(?:s|ed)?|(?:does|do|did)\s+have)\s+(?:the\s+)?authority\s+to\s+)|"
     r"(?:(?:is|are|was|were|has\s+been|have\s+been|had\s+been)\s+"
     r"(?:(?:authorized|empowered|permitted)|(?:(?:assigned|granted|given|delegated)\s+(?:the\s+)?authority))\s+to\s+))?"
@@ -1133,8 +1138,7 @@ claim_patterns = (
         + r"(?:(?:now|already|independently|directly|automatically|effectively|itself)\s+){0,4}"
         + authority_predicate_prefix
         + authority_action
-        + r"\b.{0,100}"
-        + authority_object,
+        + r"\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -1166,9 +1170,7 @@ claim_patterns = (
     re.compile(
         r"(?:authority|permission)\s+to\s+"
         + authority_action
-        + r"\b.{0,100}"
-        + authority_object
-        + r"\s+(?:is|are|was|were|has\s+been|have\s+been|had\s+been)\s+"
+        + r"\b.{0,140}?\s+(?:is|are|was|were|has\s+been|have\s+been|had\s+been)\s+"
         + r"(?:assigned|granted|given|delegated)\s+to\s+(?:the\s+|a\s+)?"
         + subordinate_subject,
         re.IGNORECASE,
@@ -1191,8 +1193,7 @@ support_authority_patterns = (
         + r"(?:(?:now|already|independently|directly|automatically|effectively|itself)\s+){0,4}"
         + authority_predicate_prefix
         + authority_action
-        + r"\b.{0,100}"
-        + authority_object,
+        + r"\b",
         re.IGNORECASE,
     ),
 )

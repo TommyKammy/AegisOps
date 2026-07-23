@@ -598,6 +598,15 @@ forbidden_claim_case "bundle-was-authorized" "Support bundle was authorized to e
 forbidden_claim_case "bundle-has-been-empowered" "Support bundle has been empowered to close cases."
 forbidden_claim_case "bundle-receives-authority" "Support bundle receives authority to approve actions."
 forbidden_claim_case "reverse-delegated-authority" "Authority to approve actions is delegated to the support bundle."
+forbidden_claim_case "bundle-approves-deployment" "Support bundle can approve deployment."
+forbidden_claim_case "bundle-executes-upgrade" "Support bundle may execute upgrade."
+forbidden_claim_case "dry-run-mutates-substrate" "Restore dry-run output mutates substrate."
+forbidden_claim_case "support-role-approves-deployment" "Support operator can approve deployment."
+forbidden_claim_case "reverse-deployment-authority" "Authority to approve deployment is delegated to the support bundle."
+forbidden_claim_case "bundle-should-approve-deployment" "Support bundle should approve deployment."
+forbidden_claim_case "bundle-approved-deployment" "Support bundle approved deployment."
+forbidden_claim_case "bundle-is-executing-upgrade" "Support bundle is executing upgrade."
+forbidden_claim_case "support-role-has-executed-upgrade" "Support operator has executed upgrade."
 forbidden_claim_case "adversative-overclaim" "Support bundle cannot prove RC readiness but proves GA readiness."
 forbidden_claim_case "unrelated-without-overclaim" "Support bundle proves GA readiness without a manual review."
 forbidden_claim_case "pre-predicate-without-overclaim" "Support bundle without a manual review proves GA readiness."
@@ -639,6 +648,14 @@ append_doc_line "${safe_non_claim_repo}" "Support bundle is not authorized to ex
 append_doc_line "${safe_non_claim_repo}" "Support bundle had no authority to approve actions."
 append_doc_line "${safe_non_claim_repo}" "Support bundle has not been empowered to close cases."
 append_doc_line "${safe_non_claim_repo}" "Authority to approve actions is not delegated to the support bundle."
+append_doc_line "${safe_non_claim_repo}" "Support bundle cannot approve deployment."
+append_doc_line "${safe_non_claim_repo}" "Support bundle may not execute upgrade."
+append_doc_line "${safe_non_claim_repo}" "Support operator does not approve deployment."
+append_doc_line "${safe_non_claim_repo}" "Authority to approve deployment is not delegated to the support bundle."
+append_doc_line "${safe_non_claim_repo}" "Support bundle should not approve deployment."
+append_doc_line "${safe_non_claim_repo}" "Support bundle did not approve deployment."
+append_doc_line "${safe_non_claim_repo}" "Support bundle is not executing upgrade."
+append_doc_line "${safe_non_claim_repo}" "Support operator has not executed upgrade."
 assert_passes "${safe_non_claim_repo}"
 
 leak_case "password-leak" "support_password=SuperSecretValue123" "production secret-looking value detected"
@@ -723,6 +740,13 @@ leak_case "customer-email-leak" "customer_email=alice@example.com" "customer-pri
 leak_case "tenant-id-leak" "tenant_id=tenant-acme-001" "customer-private or ticket-private data detected"
 leak_case "customer-account-name-leak" "customer_account_name=Acme" "customer-private or ticket-private data detected"
 leak_case "account-name-leak" "account_name=Acme" "customer-private or ticket-private data detected"
+leak_case "json-customer-name-leak" '{"customer_name":"Acme"}' "customer-private or ticket-private data detected"
+leak_case "nested-json-tenant-id-leak" '{"diagnostics":{"tenant_id":"tenant-acme-001"}}' "customer-private or ticket-private data detected"
+leak_case "array-json-customer-id-leak" '{"records":[{"customer_id":12345}]}' "customer-private or ticket-private data detected"
+leak_case "escaped-json-customer-key-leak" '{"customer\u005fname":"Acme"}' "customer-private or ticket-private data detected"
+leak_case "json-customer-identifiers-leak" '{"customer_identifiers":["Acme"]}' "customer-private or ticket-private data detected"
+leak_case "json-tenant-account-leak" '{"tenant_account":"tenant-acme-001"}' "customer-private or ticket-private data detected"
+leak_case "json-customer-email-address-leak" '{"customer_email_address":"Acme support contact"}' "customer-private or ticket-private data detected"
 leak_case "markdown-table-customer-name-leak" "| customer_name | Acme |" "customer-private or ticket-private data detected"
 leak_case "markdown-table-tenant-id-leak" "| tenant_id | tenant-acme-001 |" "customer-private or ticket-private data detected"
 leak_case "markdown-table-decorated-customer-leak" "| Context | **customer_email** | Acme support contact |" "customer-private or ticket-private data detected"
@@ -748,6 +772,12 @@ append_doc_line "${safe_redaction_repo}" "customer_email=[REDACTED:customer-iden
 append_doc_line "${safe_redaction_repo}" "tenant_id=redacted"
 append_doc_line "${safe_redaction_repo}" "customer_account_name=removed"
 append_doc_line "${safe_redaction_repo}" "account_name=absent"
+append_doc_line "${safe_redaction_repo}" '{"customer_name":"[REDACTED:customer-identifier]"}'
+append_doc_line "${safe_redaction_repo}" '{"diagnostics":{"tenant_id":"redacted"}}'
+append_doc_line "${safe_redaction_repo}" '{"records":[{"customer_id":"absent"}]}'
+append_doc_line "${safe_redaction_repo}" '{"customer_identifiers":"redacted"}'
+append_doc_line "${safe_redaction_repo}" '{"tenant_account":"removed"}'
+append_doc_line "${safe_redaction_repo}" '{"customer_email_address":"[REDACTED:customer-identifier]"}'
 append_doc_line "${safe_redaction_repo}" "| customer_name | [REDACTED:customer-identifier] |"
 append_doc_line "${safe_redaction_repo}" "| Context | **tenant_id** | redacted |"
 append_doc_line "${safe_redaction_repo}" "account_name | absent"
