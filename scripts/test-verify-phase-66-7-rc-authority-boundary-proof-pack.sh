@@ -63,22 +63,65 @@ packet_lines=(
   "phase_66_4_evidence=evidence_id=sha256:__PHASE_66_4_DIGEST__; evidence_reference=docs/phase-66-4-ai-assisted-triage-rc-proof.md; verifier=scripts/verify-phase-66-4-ai-assisted-triage-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
   "phase_66_5_evidence=evidence_id=sha256:__PHASE_66_5_DIGEST__; evidence_reference=docs/phase-66-5-report-export-rc-proof.md; verifier=scripts/verify-phase-66-5-report-export-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
   "phase_66_6_evidence=evidence_id=sha256:__PHASE_66_6_DIGEST__; evidence_reference=docs/phase-66-6-rc-supportability-proof.md; verifier=scripts/verify-phase-66-6-rc-supportability-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "wazuh_negative_evidence=evidence_id=negative:wazuh:001; surface=wazuh; attempt=source-truth-promotion; result=rejected; authoritative_record=aegisops://alerts/alert-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "shuffle_negative_evidence=evidence_id=negative:shuffle:001; surface=shuffle; attempt=execution-receipt-promotion; result=rejected; authoritative_record=aegisops://reconciliation/rec-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "ai_negative_evidence=evidence_id=negative:ai:001; surface=ai; attempt=approval-bypass; result=rejected; authoritative_record=aegisops://approvals/approval-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "ticket_negative_evidence=evidence_id=negative:tickets:001; surface=tickets; attempt=case-closure-shortcut; result=rejected; authoritative_record=aegisops://cases/case-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "evidence_system_negative_evidence=evidence_id=negative:evidence:001; surface=evidence-systems; attempt=external-evidence-truth-promotion; result=rejected; authoritative_record=aegisops://evidence/evidence-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "ui_cache_negative_evidence=evidence_id=negative:ui-cache:001; surface=ui-cache; attempt=workflow-truth-promotion; result=rejected; authoritative_record=aegisops://audit/audit-ui-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "demo_data_negative_evidence=evidence_id=negative:demo-data:001; surface=demo-data; attempt=release-truth-promotion; result=rejected; authoritative_record=aegisops://releases/release-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "report_negative_evidence=evidence_id=negative:reports:001; surface=reports; attempt=gate-truth-promotion; result=rejected; authoritative_record=aegisops://gates/rc-gate-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "support_bundle_negative_evidence=evidence_id=negative:support-bundle:001; surface=support-bundle; attempt=limitation-truth-promotion; result=rejected; authoritative_record=aegisops://limitations/lim-66-7-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "release_artifact_negative_evidence=evidence_id=negative:release-artifacts:001; surface=release-artifacts; attempt=readiness-truth-promotion; result=rejected; authoritative_record=aegisops://releases/release-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "verifier_output_negative_evidence=evidence_id=negative:verifier-output:001; surface=verifier-output; attempt=rc-gate-promotion; result=rejected; authoritative_record=aegisops://gates/rc-gate-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "issue_lint_output_negative_evidence=evidence_id=negative:issue-lint:001; surface=issue-lint-output; attempt=rc-gate-promotion; result=rejected; authoritative_record=aegisops://gates/rc-gate-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "wazuh_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=wazuh; attempt=source-truth-promotion; result=rejected; authoritative_record=aegisops://alerts/alert-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "shuffle_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=shuffle; attempt=execution-receipt-promotion; result=rejected; authoritative_record=aegisops://reconciliation/rec-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "ai_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=ai; attempt=approval-bypass; result=rejected; authoritative_record=aegisops://approvals/approval-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "ticket_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=tickets; attempt=case-closure-shortcut; result=rejected; authoritative_record=aegisops://cases/case-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "evidence_system_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=evidence-systems; attempt=external-evidence-truth-promotion; result=rejected; authoritative_record=aegisops://evidence/evidence-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "ui_cache_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=ui-cache; attempt=workflow-truth-promotion; result=rejected; authoritative_record=aegisops://audit/audit-ui-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "demo_data_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=demo-data; attempt=release-truth-promotion; result=rejected; authoritative_record=aegisops://releases/release-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "report_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=reports; attempt=gate-truth-promotion; result=rejected; authoritative_record=aegisops://gates/rc-gate-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "support_bundle_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=support-bundle; attempt=limitation-truth-promotion; result=rejected; authoritative_record=aegisops://limitations/lim-66-7-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "release_artifact_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=release-artifacts; attempt=readiness-truth-promotion; result=rejected; authoritative_record=aegisops://releases/release-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "verifier_output_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=verifier-output; attempt=rc-gate-promotion; result=rejected; authoritative_record=aegisops://gates/rc-gate-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "issue_lint_output_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=issue-lint-output; attempt=rc-gate-promotion; result=rejected; authoritative_record=aegisops://gates/rc-gate-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
   "owner_review=reviewer=security-reviewer; reviewed_at=${observed_at}; disposition=accepted; follow_up_owner=release-owner"
   "limitation_references=ids=lim-66-7-001; owner=release-owner; decision_at=${observed_at}; follow_up_at=${follow_up_at}"
   "non_claims=rc-evidence-only,not-rc-gate-pass,not-ga,not-production-operations,not-commercial-replacement,not-broad-siem-parity,not-broad-soar-parity,not-subordinate-truth"
 )
+
+write_negative_evidence_manifest() {
+  local target="$1"
+
+  mkdir -p "${target}/evidence/phase-66-7"
+  TARGET="${target}" OBSERVED_AT="${observed_at}" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+records = [
+    ("wazuh_negative_evidence", "wazuh", "source-truth-promotion", "aegisops://alerts/alert-001"),
+    ("shuffle_negative_evidence", "shuffle", "execution-receipt-promotion", "aegisops://reconciliation/rec-001"),
+    ("ai_negative_evidence", "ai", "approval-bypass", "aegisops://approvals/approval-001"),
+    ("ticket_negative_evidence", "tickets", "case-closure-shortcut", "aegisops://cases/case-001"),
+    ("evidence_system_negative_evidence", "evidence-systems", "external-evidence-truth-promotion", "aegisops://evidence/evidence-001"),
+    ("ui_cache_negative_evidence", "ui-cache", "workflow-truth-promotion", "aegisops://audit/audit-ui-001"),
+    ("demo_data_negative_evidence", "demo-data", "release-truth-promotion", "aegisops://releases/release-001"),
+    ("report_negative_evidence", "reports", "gate-truth-promotion", "aegisops://gates/rc-gate-001"),
+    ("support_bundle_negative_evidence", "support-bundle", "limitation-truth-promotion", "aegisops://limitations/lim-66-7-001"),
+    ("release_artifact_negative_evidence", "release-artifacts", "readiness-truth-promotion", "aegisops://releases/release-001"),
+    ("verifier_output_negative_evidence", "verifier-output", "rc-gate-promotion", "aegisops://gates/rc-gate-001"),
+    ("issue_lint_output_negative_evidence", "issue-lint-output", "rc-gate-promotion", "aegisops://gates/rc-gate-001"),
+]
+manifest = {
+    "schema_version": "phase-66-7-negative-evidence/v1",
+    "records": [
+        {
+            "field": field,
+            "surface": surface,
+            "attempt": attempt,
+            "result": "rejected",
+            "authoritative_record": authoritative_record,
+            "observed_at": os.environ["OBSERVED_AT"],
+            "journey_run_id": "rc66-authority-001",
+        }
+        for field, surface, attempt, authoritative_record in records
+    ],
+}
+path = Path(os.environ["TARGET"]) / "evidence/phase-66-7/negative-observations.json"
+path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+}
 
 copy_valid_repo() {
   local target="$1"
@@ -96,6 +139,7 @@ copy_valid_repo() {
       'exit 0' >"${path}"
     chmod +x "${path}"
   done
+  write_negative_evidence_manifest "${target}"
   git -C "${target}" init -q
   git -C "${target}" config user.name "Phase 66.7 Self Test"
   git -C "${target}" config user.email "phase-66-7-self-test@invalid.example"
@@ -183,6 +227,19 @@ materialize_packet_line() {
     )"
     line="${line//${placeholder}/${digest}}"
   done
+  if [[ "${line}" == *"__NEGATIVE_EVIDENCE_DIGEST__"* ]]; then
+    reference="evidence/phase-66-7/negative-observations.json"
+    if git -C "${target}" cat-file -e "${repository_revision}:${reference}" 2>/dev/null; then
+      digest="$(
+        git -C "${target}" show "${repository_revision}:${reference}" |
+          shasum -a 256 |
+          awk '{print $1}'
+      )"
+    else
+      digest="0000000000000000000000000000000000000000000000000000000000000000"
+    fi
+    line="${line//__NEGATIVE_EVIDENCE_DIGEST__/${digest}}"
+  fi
   printf '%s\n' "${line}"
 }
 
@@ -415,41 +472,100 @@ git -C "${failing_prerequisite_repo}" commit -qm "fail prerequisite verifier"
 append_complete_packet "${failing_prerequisite_repo}"
 assert_fails_with "${failing_prerequisite_repo}" "prerequisite verifier failed: simulated prerequisite failure"
 
+missing_negative_manifest_repo="${workdir}/missing-negative-manifest"
+copy_valid_repo "${missing_negative_manifest_repo}"
+rm "${missing_negative_manifest_repo}/evidence/phase-66-7/negative-observations.json"
+git -C "${missing_negative_manifest_repo}" add -u
+git -C "${missing_negative_manifest_repo}" commit -qm "remove negative evidence manifest"
+append_complete_packet "${missing_negative_manifest_repo}"
+assert_fails_with \
+  "${missing_negative_manifest_repo}" \
+  "negative evidence reference does not resolve at repository_revision"
+
+malformed_negative_manifest_repo="${workdir}/malformed-negative-manifest"
+copy_valid_repo "${malformed_negative_manifest_repo}"
+printf '{invalid-json\n' \
+  >"${malformed_negative_manifest_repo}/evidence/phase-66-7/negative-observations.json"
+git -C "${malformed_negative_manifest_repo}" add evidence/phase-66-7/negative-observations.json
+git -C "${malformed_negative_manifest_repo}" commit -qm "malform negative evidence manifest"
+append_complete_packet "${malformed_negative_manifest_repo}"
+assert_fails_with \
+  "${malformed_negative_manifest_repo}" \
+  "negative evidence reference must contain valid UTF-8 JSON"
+
+incomplete_negative_manifest_repo="${workdir}/incomplete-negative-manifest"
+copy_valid_repo "${incomplete_negative_manifest_repo}"
+MANIFEST="${incomplete_negative_manifest_repo}/evidence/phase-66-7/negative-observations.json" \
+  python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+path = Path(os.environ["MANIFEST"])
+manifest = json.loads(path.read_text(encoding="utf-8"))
+manifest["records"].pop()
+path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+git -C "${incomplete_negative_manifest_repo}" add evidence/phase-66-7/negative-observations.json
+git -C "${incomplete_negative_manifest_repo}" commit -qm "drop negative evidence record"
+append_complete_packet "${incomplete_negative_manifest_repo}"
+assert_fails_with \
+  "${incomplete_negative_manifest_repo}" \
+  "negative evidence manifest must contain exactly one record for every required surface"
+
 packet_mutation_case \
   "wrong-surface" \
   "ai_negative_evidence" \
-  "evidence_id=negative:ai:001; surface=wazuh; attempt=approval-bypass; result=rejected; authoritative_record=aegisops://approvals/approval-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=wazuh; attempt=approval-bypass; result=rejected; authoritative_record=aegisops://approvals/approval-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
   "expected surface ai"
 
 packet_mutation_case \
   "wrong-attempt" \
   "ticket_negative_evidence" \
-  "evidence_id=negative:tickets:001; surface=tickets; attempt=workflow-truth-promotion; result=rejected; authoritative_record=aegisops://cases/case-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=tickets; attempt=workflow-truth-promotion; result=rejected; authoritative_record=aegisops://cases/case-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
   "expected rejected attempt case-closure-shortcut"
 
 packet_mutation_case \
   "non-rejected-result" \
   "shuffle_negative_evidence" \
-  "evidence_id=negative:shuffle:001; surface=shuffle; attempt=execution-receipt-promotion; result=accepted; authoritative_record=aegisops://reconciliation/rec-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=shuffle; attempt=execution-receipt-promotion; result=accepted; authoritative_record=aegisops://reconciliation/rec-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
   "result must be rejected"
 
 packet_mutation_case \
   "invalid-authority-record" \
   "report_negative_evidence" \
-  "evidence_id=negative:reports:001; surface=reports; attempt=gate-truth-promotion; result=rejected; authoritative_record=report-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=reports; attempt=gate-truth-promotion; result=rejected; authoritative_record=report-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
   "must be a specific aegisops:// reference"
 
 packet_mutation_case \
   "stale-observation" \
   "wazuh_negative_evidence" \
-  "evidence_id=negative:wazuh:001; surface=wazuh; attempt=source-truth-promotion; result=rejected; authoritative_record=aegisops://alerts/alert-001; observed_at=2000-01-01T00:00:00Z; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=wazuh; attempt=source-truth-promotion; result=rejected; authoritative_record=aegisops://alerts/alert-001; observed_at=2000-01-01T00:00:00Z; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
   "timestamp is stale"
 
 packet_mutation_case \
   "future-observation" \
   "wazuh_negative_evidence" \
-  "evidence_id=negative:wazuh:001; surface=wazuh; attempt=source-truth-promotion; result=rejected; authoritative_record=aegisops://alerts/alert-001; observed_at=2999-01-01T00:00:00Z; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=wazuh; attempt=source-truth-promotion; result=rejected; authoritative_record=aegisops://alerts/alert-001; observed_at=2999-01-01T00:00:00Z; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
   "timestamp is too far in the future"
+
+packet_mutation_case \
+  "fabricated-negative-evidence-id" \
+  "ai_negative_evidence" \
+  "evidence_id=sha256:0000000000000000000000000000000000000000000000000000000000000000; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=ai; attempt=approval-bypass; result=rejected; authoritative_record=aegisops://approvals/approval-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "evidence_id does not match resolved evidence reference"
+
+packet_mutation_case \
+  "wrong-negative-evidence-reference" \
+  "ai_negative_evidence" \
+  "evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/invented.json; surface=ai; attempt=approval-bypass; result=rejected; authoritative_record=aegisops://approvals/approval-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "unexpected evidence reference"
+
+packet_mutation_case \
+  "invented-authoritative-record" \
+  "wazuh_negative_evidence" \
+  "evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=wazuh; attempt=source-truth-promotion; result=rejected; authoritative_record=aegisops://alerts/invented-999; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "resolved negative evidence record does not match packet"
 
 packet_mutation_case \
   "rejected-owner-review" \
@@ -534,6 +650,10 @@ overclaim_case "direct-ai-approval" "AI output approves the action."
 overclaim_case "unrelated-negation-before-ai-approval" "AI output is not advisory and can approve the action."
 overclaim_case "unrelated-negation-before-pronoun-approval" "AI output is not advisory, but it can approve the action."
 overclaim_case "unrelated-negation-before-direct-approval" "AI output is not advisory and independently approves the action."
+overclaim_case "elided-ai-execution" "AI output cannot approve the action; can execute the action."
+overclaim_case "elided-direct-ai-execution" "AI output cannot approve the action; independently executes the action."
+overclaim_case "adversative-elided-ai-execution" "AI output cannot approve the action but can execute the action."
+overclaim_case "elided-ai-truth" "AI output is not authoritative; is approval truth."
 overclaim_case "ai-plural-case-closure" "AI output can close cases."
 overclaim_case "ticket-closure" "Tickets can close the case."
 overclaim_case "external-evidence-truth" "External evidence is evidence truth."
@@ -557,6 +677,8 @@ overclaim_case "source-shortcut" "Source-admission shortcut is allowed."
 allowed_doc_line_case "redacted-secret" "api_key=redacted"
 allowed_doc_line_case "quoted-removed-private-data" "customer_name=\"removed\""
 allowed_doc_line_case "denied-ai-approval" "AI output can not approve the action."
+allowed_doc_line_case "denied-elided-ai-execution" "AI output cannot approve the action; cannot execute the action."
+allowed_doc_line_case "sentence-boundary-no-elision" "AI output cannot approve the action. Can operators execute the action?"
 allowed_doc_line_case "denied-ai-truth" "AI output is not approval truth."
 allowed_doc_line_case "denied-release-readiness" "Release artifacts do not prove RC readiness."
 
@@ -564,6 +686,7 @@ real_worktree="${workdir}/real-prerequisite-worktree"
 git -C "${repo_root}" worktree add --detach --quiet "${real_worktree}" HEAD
 git -C "${real_worktree}" config user.name "Phase 66.7 Self Test"
 git -C "${real_worktree}" config user.email "phase-66-7-self-test@invalid.example"
+write_negative_evidence_manifest "${real_worktree}"
 cp "${repo_root}/${doc_rel}" "${real_worktree}/${doc_rel}"
 cp \
   "${repo_root}/scripts/verify-phase-66-7-rc-authority-boundary-proof-pack.sh" \
@@ -574,6 +697,7 @@ cp \
 if ! git -C "${real_worktree}" diff --quiet; then
   git -C "${real_worktree}" add \
     "${doc_rel}" \
+    evidence/phase-66-7/negative-observations.json \
     scripts/verify-phase-66-7-rc-authority-boundary-proof-pack.sh \
     scripts/test-verify-phase-66-7-rc-authority-boundary-proof-pack.sh
   git -C "${real_worktree}" commit -qm "materialized prerequisite integration fixture"

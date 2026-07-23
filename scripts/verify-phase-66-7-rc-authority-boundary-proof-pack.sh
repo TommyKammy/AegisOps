@@ -117,13 +117,19 @@ required_phrases = (
     "This proof pack is RC evidence only.",
     "A proof packet is fail-closed: once any required field is materialized, every required field must be present, non-placeholder, internally complete, and bound to the same journey run and immutable repository revision.",
     "Materialized proof packets are accepted only as `field=value` assignment lines or Markdown `Field | Value` rows.",
-    "Every negative observation must record `evidence_id`, `surface`, `attempt`, `result=rejected`, `authoritative_record`, `observed_at`, `journey_run_id`, and `repository_revision`.",
+    "Every negative observation must record `evidence_id`, `evidence_reference`, `surface`, `attempt`, `result=rejected`, `authoritative_record`, `observed_at`, `journey_run_id`, and `repository_revision`.",
+    "Every negative-observation `evidence_id` must be `sha256:<digest>` for the exact repository-owned JSON manifest bytes at `evidence_reference` and `repository_revision`.",
+    "The manifest must contain exactly one matching immutable record for every required negative surface; packet labels, invented AegisOps URIs, or declared rejection results cannot substitute for a resolved record.",
+    "The negative-observation manifest uses `schema_version=phase-66-7-negative-evidence/v1` and a `records` array.",
+    "Every record contains exactly `field`, `surface`, `attempt`, `result`, `authoritative_record`, `observed_at`, and `journey_run_id`; missing, duplicate, extra, non-string, or packet-mismatched values fail closed.",
     "Passing one negative observation cannot compensate for a missing surface.",
     "Each Phase 66.1-66.6 evidence value must record `evidence_id`, `evidence_reference`, `verifier`, `result=passed`, `journey_run_id`, and `repository_revision`.",
     "Each Phase 66.1-66.6 `evidence_id` must be `sha256:<digest>` for the exact referenced proof document bytes at `repository_revision`.",
     "The top-level `repository_revision` identifies the evidence-producing commit, not the commit that later stores the proof packet.",
     "The verifier must check out that exact revision in an isolated worktree, resolve each required evidence reference there, and execute every Phase 66.1-66.6 focused verifier there.",
     "Packet labels or a declared `result=passed` cannot substitute for resolved proof surfaces and successful verifier execution.",
+    "The same isolated worktree must resolve the negative-observation manifest, bind its exact bytes to every negative `evidence_id`, and match every packet observation to one manifest record.",
+    "A syntactically valid negative observation without that immutable record fails closed.",
     "All materialized timestamps must be no more than 24 hours old at verification time and must not be more than five minutes in the future.",
     "AegisOps records remain authoritative for alert, case, evidence, recommendation, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, restore acceptance, and closeout truth.",
     "Wazuh, Shuffle, AI, tickets, evidence systems, browser state, UI cache, demo data, reports, support bundles, release artifacts, verifier output, issue-lint output, and optional evidence remain subordinate evidence or context only.",
@@ -467,6 +473,56 @@ if materialized_fields:
             fail(f"invalid {field}: mixed repository_revision")
         phase_evidence_parts[field] = parts
 
+    negative_manifest_reference = "evidence/phase-66-7/negative-observations.json"
+    negative_expectations = {
+        "wazuh_negative_evidence": ("wazuh", "source-truth-promotion"),
+        "shuffle_negative_evidence": ("shuffle", "execution-receipt-promotion"),
+        "ai_negative_evidence": ("ai", "approval-bypass"),
+        "ticket_negative_evidence": ("tickets", "case-closure-shortcut"),
+        "evidence_system_negative_evidence": ("evidence-systems", "external-evidence-truth-promotion"),
+        "ui_cache_negative_evidence": ("ui-cache", "workflow-truth-promotion"),
+        "demo_data_negative_evidence": ("demo-data", "release-truth-promotion"),
+        "report_negative_evidence": ("reports", "gate-truth-promotion"),
+        "support_bundle_negative_evidence": ("support-bundle", "limitation-truth-promotion"),
+        "release_artifact_negative_evidence": ("release-artifacts", "readiness-truth-promotion"),
+        "verifier_output_negative_evidence": ("verifier-output", "rc-gate-promotion"),
+        "issue_lint_output_negative_evidence": ("issue-lint-output", "rc-gate-promotion"),
+    }
+    negative_evidence_parts: dict[str, dict[str, str]] = {}
+    for field, (expected_surface, expected_attempt) in negative_expectations.items():
+        parts = require_components(
+            field,
+            (
+                "evidence_id",
+                "evidence_reference",
+                "surface",
+                "attempt",
+                "result",
+                "authoritative_record",
+                "observed_at",
+                "journey_run_id",
+                "repository_revision",
+            ),
+        )
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", parts["evidence_id"], re.IGNORECASE):
+            fail(f"invalid {field}: evidence_id must be sha256:<digest>")
+        if parts["evidence_reference"] != negative_manifest_reference:
+            fail(f"invalid {field}: unexpected evidence reference")
+        if parts["surface"].lower() != expected_surface:
+            fail(f"invalid {field}: expected surface {expected_surface}")
+        if parts["attempt"].lower() != expected_attempt:
+            fail(f"invalid {field}: expected rejected attempt {expected_attempt}")
+        if parts["result"].lower() != "rejected":
+            fail(f"invalid {field}: result must be rejected")
+        if not re.fullmatch(r"aegisops://[a-z0-9][a-z0-9._/-]{5,180}", parts["authoritative_record"], re.IGNORECASE):
+            fail(f"invalid {field}: authoritative_record must be a specific aegisops:// reference")
+        parse_timestamp(field, parts["observed_at"])
+        if parts["journey_run_id"] != journey_run_id:
+            fail(f"invalid {field}: mixed journey_run_id")
+        if parts["repository_revision"].lower() != repository_revision:
+            fail(f"invalid {field}: mixed repository_revision")
+        negative_evidence_parts[field] = parts
+
     evidence_worktree = Path(tempfile.mkdtemp(prefix="phase66-7-evidence-"))
     worktree_added = False
     try:
@@ -508,6 +564,63 @@ if materialized_fields:
                 detail = verifier_result.stderr.strip().splitlines()
                 diagnostic = detail[-1] if detail else "no diagnostic"
                 fail(f"invalid {field}: prerequisite verifier failed: {diagnostic}")
+
+        negative_manifest_path = evidence_worktree / negative_manifest_reference
+        if not negative_manifest_path.is_file() or negative_manifest_path.stat().st_size == 0:
+            fail("negative evidence reference does not resolve at repository_revision")
+        resolved_negative_evidence_id = (
+            "sha256:" + hashlib.sha256(negative_manifest_path.read_bytes()).hexdigest()
+        )
+        for field, parts in negative_evidence_parts.items():
+            if parts["evidence_id"].lower() != resolved_negative_evidence_id:
+                fail(f"invalid {field}: evidence_id does not match resolved evidence reference")
+        try:
+            negative_manifest = json.loads(negative_manifest_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            fail("negative evidence reference must contain valid UTF-8 JSON")
+        if not isinstance(negative_manifest, dict) or set(negative_manifest) != {
+            "schema_version",
+            "records",
+        }:
+            fail("negative evidence manifest must contain only schema_version and records")
+        if negative_manifest["schema_version"] != "phase-66-7-negative-evidence/v1":
+            fail("negative evidence manifest has unsupported schema_version")
+        records = negative_manifest["records"]
+        if not isinstance(records, list):
+            fail("negative evidence manifest records must be an array")
+        records_by_field: dict[str, dict[str, str]] = {}
+        record_keys = {
+            "field",
+            "surface",
+            "attempt",
+            "result",
+            "authoritative_record",
+            "observed_at",
+            "journey_run_id",
+        }
+        for record in records:
+            if not isinstance(record, dict) or set(record) != record_keys:
+                fail("negative evidence manifest record has invalid fields")
+            field = record["field"]
+            if not isinstance(field, str) or field in records_by_field:
+                fail("negative evidence manifest contains invalid or duplicate field")
+            if not all(isinstance(value, str) for value in record.values()):
+                fail(f"negative evidence manifest record {field} must contain string values")
+            records_by_field[field] = record
+        if set(records_by_field) != set(negative_expectations):
+            fail("negative evidence manifest must contain exactly one record for every required surface")
+        for field, parts in negative_evidence_parts.items():
+            expected_record = {
+                "field": field,
+                "surface": parts["surface"],
+                "attempt": parts["attempt"],
+                "result": parts["result"],
+                "authoritative_record": parts["authoritative_record"],
+                "observed_at": parts["observed_at"],
+                "journey_run_id": parts["journey_run_id"],
+            }
+            if records_by_field[field] != expected_record:
+                fail(f"invalid {field}: resolved negative evidence record does not match packet")
     except subprocess.CalledProcessError as error:
         diagnostic = (error.stderr or "").strip().splitlines()
         detail = diagnostic[-1] if diagnostic else "unable to create evidence worktree"
@@ -521,50 +634,6 @@ if materialized_fields:
             )
         else:
             shutil.rmtree(evidence_worktree, ignore_errors=True)
-
-    negative_expectations = {
-        "wazuh_negative_evidence": ("wazuh", "source-truth-promotion"),
-        "shuffle_negative_evidence": ("shuffle", "execution-receipt-promotion"),
-        "ai_negative_evidence": ("ai", "approval-bypass"),
-        "ticket_negative_evidence": ("tickets", "case-closure-shortcut"),
-        "evidence_system_negative_evidence": ("evidence-systems", "external-evidence-truth-promotion"),
-        "ui_cache_negative_evidence": ("ui-cache", "workflow-truth-promotion"),
-        "demo_data_negative_evidence": ("demo-data", "release-truth-promotion"),
-        "report_negative_evidence": ("reports", "gate-truth-promotion"),
-        "support_bundle_negative_evidence": ("support-bundle", "limitation-truth-promotion"),
-        "release_artifact_negative_evidence": ("release-artifacts", "readiness-truth-promotion"),
-        "verifier_output_negative_evidence": ("verifier-output", "rc-gate-promotion"),
-        "issue_lint_output_negative_evidence": ("issue-lint-output", "rc-gate-promotion"),
-    }
-    for field, (expected_surface, expected_attempt) in negative_expectations.items():
-        parts = require_components(
-            field,
-            (
-                "evidence_id",
-                "surface",
-                "attempt",
-                "result",
-                "authoritative_record",
-                "observed_at",
-                "journey_run_id",
-                "repository_revision",
-            ),
-        )
-        if not re.fullmatch(r"[a-z0-9][a-z0-9._:-]{5,120}", parts["evidence_id"], re.IGNORECASE):
-            fail(f"invalid {field}: malformed evidence_id")
-        if parts["surface"].lower() != expected_surface:
-            fail(f"invalid {field}: expected surface {expected_surface}")
-        if parts["attempt"].lower() != expected_attempt:
-            fail(f"invalid {field}: expected rejected attempt {expected_attempt}")
-        if parts["result"].lower() != "rejected":
-            fail(f"invalid {field}: result must be rejected")
-        if not re.fullmatch(r"aegisops://[a-z0-9][a-z0-9._/-]{5,180}", parts["authoritative_record"], re.IGNORECASE):
-            fail(f"invalid {field}: authoritative_record must be a specific aegisops:// reference")
-        parse_timestamp(field, parts["observed_at"])
-        if parts["journey_run_id"] != journey_run_id:
-            fail(f"invalid {field}: mixed journey_run_id")
-        if parts["repository_revision"].lower() != repository_revision:
-            fail(f"invalid {field}: mixed repository_revision")
 
     owner_review = require_components(
         "owner_review",
@@ -773,11 +842,25 @@ def claim_clauses(text: str):
     normalized = re.sub(r"[`*_#|]", " ", text)
     normalized = re.sub(r"\s+", " ", normalized)
     inherited_subject = ""
-    for clause in re.split(
-        r"\s*(?:(?<!\d)[.!?](?!\d)|;|\bbut\b|\bhowever\b|\byet\b|\balthough\b|\bthough\b)\s*",
+    parts = re.split(
+        r"\s*((?<!\d)[.!?](?!\d)|;|\bbut\b|\bhowever\b|\byet\b|\balthough\b|\bthough\b)\s*",
         normalized,
         flags=re.IGNORECASE,
-    ):
+    )
+    elision_boundaries = {";", "but", "however", "yet", "although", "though"}
+    verb_led_continuation = re.compile(
+        rf"^(?:can|could|may|might|will|would|does|do|cannot|can't|"
+        rf"does\s+not|do\s+not|did\s+not|will\s+not|would\s+not|should\s+not|"
+        rf"may\s+not|must\s+not|automatically|independently|directly|"
+        rf"is|are|becomes?|serves?|acts?|owns?|defines?|determines?|"
+        rf"proves?|confirms?|establishes?|satisfies?|passes?|grants?|achieves?|"
+        rf"certifies?|validates?|delivers?|enables?|provides?|"
+        rf"{direct_authority_action})\b",
+        re.IGNORECASE,
+    )
+    for index in range(0, len(parts), 2):
+        clause = parts[index]
+        boundary = parts[index - 1].lower() if index else ""
         clause = clause.strip()
         if not clause:
             continue
@@ -786,6 +869,12 @@ def claim_clauses(text: str):
             inherited_subject = subject_match.group(0)
         elif inherited_subject and re.match(r"^(?:it|they|this)\b", clause, re.IGNORECASE):
             clause = re.sub(r"^(?:it|they|this)\b", inherited_subject, clause, flags=re.IGNORECASE)
+        elif (
+            inherited_subject
+            and boundary in elision_boundaries
+            and verb_led_continuation.match(clause)
+        ):
+            clause = f"{inherited_subject} {clause}"
         yield clause
 
 

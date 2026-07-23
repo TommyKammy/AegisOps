@@ -62,7 +62,11 @@ Materialized proof packets are accepted only as `field=value` assignment lines o
 
 ## 3. Negative Evidence Matrix
 
-Every negative observation must record `evidence_id`, `surface`, `attempt`, `result=rejected`, `authoritative_record`, `observed_at`, `journey_run_id`, and `repository_revision`.
+Every negative observation must record `evidence_id`, `evidence_reference`, `surface`, `attempt`, `result=rejected`, `authoritative_record`, `observed_at`, `journey_run_id`, and `repository_revision`.
+
+Every negative-observation `evidence_id` must be `sha256:<digest>` for the exact repository-owned JSON manifest bytes at `evidence_reference` and `repository_revision`. The manifest must contain exactly one matching immutable record for every required negative surface; packet labels, invented AegisOps URIs, or declared rejection results cannot substitute for a resolved record.
+
+The negative-observation manifest uses `schema_version=phase-66-7-negative-evidence/v1` and a `records` array. Every record contains exactly `field`, `surface`, `attempt`, `result`, `authoritative_record`, `observed_at`, and `journey_run_id`; missing, duplicate, extra, non-string, or packet-mismatched values fail closed.
 
 | Surface | Required rejected attempt | Authoritative fallback |
 | --- | --- | --- |
@@ -89,6 +93,8 @@ Each Phase 66.1-66.6 `evidence_id` must be `sha256:<digest>` for the exact refer
 
 The top-level `repository_revision` identifies the evidence-producing commit, not the commit that later stores the proof packet. It must resolve to a commit that is an ancestor of the checkout being verified. The verifier must check out that exact revision in an isolated worktree, resolve each required evidence reference there, and execute every Phase 66.1-66.6 focused verifier there. Packet labels or a declared `result=passed` cannot substitute for resolved proof surfaces and successful verifier execution.
 
+The same isolated worktree must resolve the negative-observation manifest, bind its exact bytes to every negative `evidence_id`, and match every packet observation to one manifest record. A syntactically valid negative observation without that immutable record fails closed.
+
 All materialized timestamps must be no more than 24 hours old at verification time and must not be more than five minutes in the future. The owner review and every negative observation must satisfy this freshness window.
 
 The proof pack must not contain production secrets, credentials, authorization material, certificates, key material, raw customer-private data, ticket-private content, customer identifiers, email addresses, or workstation-local paths. Redaction assertions do not permit retaining the forbidden value beside the assertion.
@@ -108,7 +114,7 @@ An accepted owner review records a human disposition; it does not itself grant r
 The focused verifier rejects:
 
 - missing Phase 66.1-66.6 references, focused verifiers, proof fields, negative surfaces, or README linkage;
-- partial, duplicate, cross-section, mixed-run, mixed-revision, stale, future-dated, failed, or placeholder-backed proof packets;
+- partial, duplicate, cross-section, mixed-run, mixed-revision, stale, future-dated, failed, unresolved, or placeholder-backed proof packets;
 - JSON, YAML, or object-literal evidence syntax that could be silently ignored or ambiguously parsed;
 - Wazuh, Shuffle, AI, ticket, evidence-system, UI-cache, demo-data, report, support-bundle, release-artifact, verifier-output, or issue-lint-output truth promotion;
 - approval, execution, reconciliation, source-admission, or case-closure bypasses;
