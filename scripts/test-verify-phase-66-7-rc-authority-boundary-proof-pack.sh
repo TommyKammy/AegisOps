@@ -7,7 +7,15 @@ verifier="${repo_root}/scripts/verify-phase-66-7-rc-authority-boundary-proof-pac
 doc_rel="docs/phase-66-7-rc-authority-boundary-proof-pack.md"
 
 workdir="$(mktemp -d)"
-trap 'rm -rf "${workdir}"' EXIT
+real_worktree=""
+
+cleanup() {
+  if [[ -n "${real_worktree}" ]]; then
+    git -C "${repo_root}" worktree remove --force "${real_worktree}" >/dev/null 2>&1 || true
+  fi
+  rm -rf "${workdir}"
+}
+trap cleanup EXIT
 
 pass_stdout="${workdir}/pass.out"
 pass_stderr="${workdir}/pass.err"
@@ -49,12 +57,12 @@ local_user_home="$(printf '/%s/%s/' 'Users' 'example')"
 packet_lines=(
   "journey_run_id=rc66-authority-001"
   "repository_revision=__REPOSITORY_REVISION__"
-  "phase_66_1_evidence=evidence_id=proof:66.1:001; verifier=scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "phase_66_2_evidence=evidence_id=proof:66.2:001; verifier=scripts/verify-phase-66-2-wazuh-sample-signal-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "phase_66_3_evidence=evidence_id=proof:66.3:001; verifier=scripts/verify-phase-66-3-shuffle-sample-execution-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "phase_66_4_evidence=evidence_id=proof:66.4:001; verifier=scripts/verify-phase-66-4-ai-assisted-triage-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "phase_66_5_evidence=evidence_id=proof:66.5:001; verifier=scripts/verify-phase-66-5-report-export-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "phase_66_6_evidence=evidence_id=proof:66.6:001; verifier=scripts/verify-phase-66-6-rc-supportability-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "phase_66_1_evidence=evidence_id=sha256:__PHASE_66_1_DIGEST__; evidence_reference=docs/phase-66-1-clean-host-rc-e2e-harness.md; verifier=scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "phase_66_2_evidence=evidence_id=sha256:__PHASE_66_2_DIGEST__; evidence_reference=docs/phase-66-2-wazuh-sample-signal-rc-proof.md; verifier=scripts/verify-phase-66-2-wazuh-sample-signal-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "phase_66_3_evidence=evidence_id=sha256:__PHASE_66_3_DIGEST__; evidence_reference=docs/phase-66-3-shuffle-sample-execution-rc-proof.md; verifier=scripts/verify-phase-66-3-shuffle-sample-execution-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "phase_66_4_evidence=evidence_id=sha256:__PHASE_66_4_DIGEST__; evidence_reference=docs/phase-66-4-ai-assisted-triage-rc-proof.md; verifier=scripts/verify-phase-66-4-ai-assisted-triage-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "phase_66_5_evidence=evidence_id=sha256:__PHASE_66_5_DIGEST__; evidence_reference=docs/phase-66-5-report-export-rc-proof.md; verifier=scripts/verify-phase-66-5-report-export-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
+  "phase_66_6_evidence=evidence_id=sha256:__PHASE_66_6_DIGEST__; evidence_reference=docs/phase-66-6-rc-supportability-proof.md; verifier=scripts/verify-phase-66-6-rc-supportability-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
   "wazuh_negative_evidence=evidence_id=negative:wazuh:001; surface=wazuh; attempt=source-truth-promotion; result=rejected; authoritative_record=aegisops://alerts/alert-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
   "shuffle_negative_evidence=evidence_id=negative:shuffle:001; surface=shuffle; attempt=execution-receipt-promotion; result=rejected; authoritative_record=aegisops://reconciliation/rec-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
   "ai_negative_evidence=evidence_id=negative:ai:001; surface=ai; attempt=approval-bypass; result=rejected; authoritative_record=aegisops://approvals/approval-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
@@ -80,6 +88,13 @@ copy_valid_repo() {
   for path in "${fixture_paths[@]}"; do
     mkdir -p "${target}/$(dirname "${path}")"
     cp "${repo_root}/${path}" "${target}/${path}"
+  done
+  for path in "${target}"/scripts/verify-phase-66-[1-6]-*.sh; do
+    printf '%s\n' \
+      '#!/usr/bin/env bash' \
+      'set -euo pipefail' \
+      'exit 0' >"${path}"
+    chmod +x "${path}"
   done
   git -C "${target}" init -q
   git -C "${target}" config user.name "Phase 66.7 Self Test"
@@ -137,6 +152,40 @@ replace_packet_field() {
     "${target}/${doc_rel}"
 }
 
+materialize_packet_line() {
+  local target="$1"
+  local repository_revision="$2"
+  local line="$3"
+  local phase
+  local placeholder
+  local reference
+  local digest
+
+  line="${line//__REPOSITORY_REVISION__/${repository_revision}}"
+  line="${line//__TARGET_REVISION__/${repository_revision}}"
+  for phase in 1 2 3 4 5 6; do
+    placeholder="__PHASE_66_${phase}_DIGEST__"
+    if [[ "${line}" != *"${placeholder}"* ]]; then
+      continue
+    fi
+    case "${phase}" in
+      1) reference="docs/phase-66-1-clean-host-rc-e2e-harness.md" ;;
+      2) reference="docs/phase-66-2-wazuh-sample-signal-rc-proof.md" ;;
+      3) reference="docs/phase-66-3-shuffle-sample-execution-rc-proof.md" ;;
+      4) reference="docs/phase-66-4-ai-assisted-triage-rc-proof.md" ;;
+      5) reference="docs/phase-66-5-report-export-rc-proof.md" ;;
+      6) reference="docs/phase-66-6-rc-supportability-proof.md" ;;
+    esac
+    digest="$(
+      git -C "${target}" show "${repository_revision}:${reference}" |
+        shasum -a 256 |
+        awk '{print $1}'
+    )"
+    line="${line//${placeholder}/${digest}}"
+  done
+  printf '%s\n' "${line}"
+}
+
 append_complete_packet() {
   local target="$1"
   local repository_revision
@@ -145,7 +194,7 @@ append_complete_packet() {
   repository_revision="$(git -C "${target}" rev-parse HEAD)"
   printf '\n## Test Evidence Packet\n\n' >>"${target}/${doc_rel}"
   for line in "${packet_lines[@]}"; do
-    printf '%s\n' "${line//__REPOSITORY_REVISION__/${repository_revision}}" >>"${target}/${doc_rel}"
+    materialize_packet_line "${target}" "${repository_revision}" "${line}" >>"${target}/${doc_rel}"
   done
 }
 
@@ -159,7 +208,7 @@ append_complete_table_packet() {
   repository_revision="$(git -C "${target}" rev-parse HEAD)"
   printf '\n## Test Table Evidence Packet\n\n| Field | Value |\n| --- | --- |\n' >>"${target}/${doc_rel}"
   for line in "${packet_lines[@]}"; do
-    line="${line//__REPOSITORY_REVISION__/${repository_revision}}"
+    line="$(materialize_packet_line "${target}" "${repository_revision}" "${line}")"
     field="${line%%=*}"
     value="${line#*=}"
     printf '| `%s` | %s |\n' "${field}" "${value}" >>"${target}/${doc_rel}"
@@ -177,7 +226,8 @@ packet_mutation_case() {
   copy_valid_repo "${target}"
   append_complete_packet "${target}"
   target_revision="$(git -C "${target}" rev-parse HEAD)"
-  value="${value//__TARGET_REVISION__/${target_revision}}"
+  value="$(materialize_packet_line "${target}" "${target_revision}" "${field}=${value}")"
+  value="${value#*=}"
   replace_packet_field "${target}" "${field}" "${value}"
   assert_fails_with "${target}" "${expected}"
 }
@@ -216,6 +266,13 @@ table_repo="${workdir}/table"
 copy_valid_repo "${table_repo}"
 append_complete_table_packet "${table_repo}"
 assert_passes "${table_repo}"
+
+committed_packet_repo="${workdir}/committed-packet"
+copy_valid_repo "${committed_packet_repo}"
+append_complete_packet "${committed_packet_repo}"
+git -C "${committed_packet_repo}" add "${doc_rel}"
+git -C "${committed_packet_repo}" commit -qm "store proof packet"
+assert_passes "${committed_packet_repo}"
 
 missing_doc_repo="${workdir}/missing-doc"
 copy_valid_repo "${missing_doc_repo}"
@@ -303,25 +360,50 @@ packet_mutation_case \
   "bad-revision" \
   "repository_revision" \
   "0123456789012345678901234567890123456789" \
-  "does not match repository HEAD"
+  "evidence-producing revision is not a commit in this repository"
 
 packet_mutation_case \
   "mixed-phase-run" \
   "phase_66_2_evidence" \
-  "evidence_id=proof:66.2:001; verifier=scripts/verify-phase-66-2-wazuh-sample-signal-rc-proof.sh; result=passed; journey_run_id=rc66-other-001; repository_revision=__TARGET_REVISION__" \
+  "evidence_id=sha256:__PHASE_66_2_DIGEST__; evidence_reference=docs/phase-66-2-wazuh-sample-signal-rc-proof.md; verifier=scripts/verify-phase-66-2-wazuh-sample-signal-rc-proof.sh; result=passed; journey_run_id=rc66-other-001; repository_revision=__TARGET_REVISION__" \
   "mixed journey_run_id"
 
 packet_mutation_case \
   "wrong-phase-verifier" \
   "phase_66_4_evidence" \
-  "evidence_id=proof:66.4:001; verifier=scripts/verify-phase-66-3-shuffle-sample-execution-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "evidence_id=sha256:__PHASE_66_4_DIGEST__; evidence_reference=docs/phase-66-4-ai-assisted-triage-rc-proof.md; verifier=scripts/verify-phase-66-3-shuffle-sample-execution-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
   "unexpected verifier path"
 
 packet_mutation_case \
   "failed-phase-result" \
   "phase_66_5_evidence" \
-  "evidence_id=proof:66.5:001; verifier=scripts/verify-phase-66-5-report-export-rc-proof.sh; result=failed; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "evidence_id=sha256:__PHASE_66_5_DIGEST__; evidence_reference=docs/phase-66-5-report-export-rc-proof.md; verifier=scripts/verify-phase-66-5-report-export-rc-proof.sh; result=failed; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
   "verifier result must be passed"
+
+packet_mutation_case \
+  "wrong-evidence-reference" \
+  "phase_66_3_evidence" \
+  "evidence_id=sha256:__PHASE_66_3_DIGEST__; evidence_reference=docs/phase-66-2-wazuh-sample-signal-rc-proof.md; verifier=scripts/verify-phase-66-3-shuffle-sample-execution-rc-proof.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "unexpected evidence reference"
+
+packet_mutation_case \
+  "fabricated-evidence-id" \
+  "phase_66_1_evidence" \
+  "evidence_id=sha256:0000000000000000000000000000000000000000000000000000000000000000; evidence_reference=docs/phase-66-1-clean-host-rc-e2e-harness.md; verifier=scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh; result=passed; journey_run_id=rc66-authority-001; repository_revision=__TARGET_REVISION__" \
+  "evidence_id does not match resolved evidence reference"
+
+failing_prerequisite_repo="${workdir}/failing-prerequisite"
+copy_valid_repo "${failing_prerequisite_repo}"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'echo "simulated prerequisite failure" >&2' \
+  'exit 1' \
+  >"${failing_prerequisite_repo}/scripts/verify-phase-66-4-ai-assisted-triage-rc-proof.sh"
+chmod +x "${failing_prerequisite_repo}/scripts/verify-phase-66-4-ai-assisted-triage-rc-proof.sh"
+git -C "${failing_prerequisite_repo}" add scripts/verify-phase-66-4-ai-assisted-triage-rc-proof.sh
+git -C "${failing_prerequisite_repo}" commit -qm "fail prerequisite verifier"
+append_complete_packet "${failing_prerequisite_repo}"
+assert_fails_with "${failing_prerequisite_repo}" "prerequisite verifier failed: simulated prerequisite failure"
 
 packet_mutation_case \
   "wrong-surface" \
@@ -428,6 +510,7 @@ overclaim_case "wazuh-truth" "Wazuh is authoritative alert truth."
 overclaim_case "reverse-wazuh-truth" "Alert truth is owned by Wazuh."
 overclaim_case "shuffle-execution" "Shuffle may execute and close the case."
 overclaim_case "ai-approval" "AI output can approve the action."
+overclaim_case "ai-plural-case-closure" "AI output can close cases."
 overclaim_case "ticket-closure" "Tickets can close the case."
 overclaim_case "external-evidence-truth" "External evidence is evidence truth."
 overclaim_case "ui-cache-truth" "UI cache is workflow truth."
@@ -446,5 +529,28 @@ overclaim_case "execution-bypass" "Execution bypass is supported."
 overclaim_case "reconciliation-bypass" "Reconciliation bypass is valid."
 overclaim_case "case-shortcut" "Case-closure shortcut is accepted."
 overclaim_case "source-shortcut" "Source-admission shortcut is allowed."
+
+real_worktree="${workdir}/real-prerequisite-worktree"
+git -C "${repo_root}" worktree add --detach --quiet "${real_worktree}" HEAD
+git -C "${real_worktree}" config user.name "Phase 66.7 Self Test"
+git -C "${real_worktree}" config user.email "phase-66-7-self-test@invalid.example"
+cp "${repo_root}/${doc_rel}" "${real_worktree}/${doc_rel}"
+cp \
+  "${repo_root}/scripts/verify-phase-66-7-rc-authority-boundary-proof-pack.sh" \
+  "${real_worktree}/scripts/verify-phase-66-7-rc-authority-boundary-proof-pack.sh"
+cp \
+  "${repo_root}/scripts/test-verify-phase-66-7-rc-authority-boundary-proof-pack.sh" \
+  "${real_worktree}/scripts/test-verify-phase-66-7-rc-authority-boundary-proof-pack.sh"
+if ! git -C "${real_worktree}" diff --quiet; then
+  git -C "${real_worktree}" add \
+    "${doc_rel}" \
+    scripts/verify-phase-66-7-rc-authority-boundary-proof-pack.sh \
+    scripts/test-verify-phase-66-7-rc-authority-boundary-proof-pack.sh
+  git -C "${real_worktree}" commit -qm "materialized prerequisite integration fixture"
+fi
+append_complete_packet "${real_worktree}"
+assert_passes "${real_worktree}"
+git -C "${repo_root}" worktree remove --force "${real_worktree}"
+real_worktree=""
 
 echo "Phase 66.7 RC authority-boundary proof-pack verifier self-test passes."

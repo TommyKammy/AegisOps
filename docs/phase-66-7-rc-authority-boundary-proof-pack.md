@@ -33,13 +33,13 @@ Every materialized Phase 66.7 proof packet must include exactly one value for ev
 | Field | Required evidence | Fail-closed rule |
 | --- | --- | --- |
 | `journey_run_id` | The Phase 66.1 journey run shared by every collected proof and negative observation. | Missing, placeholder, or mixed journey identifiers fail the packet. |
-| `repository_revision` | One immutable 40-character repository revision shared by every collected proof and negative observation. | Mutable, abbreviated, missing, or mixed revisions fail the packet. |
-| `phase_66_1_evidence` | Phase 66.1 evidence id, verifier path, passed result, journey run, and repository revision. | Missing, failed, or unbound clean-host journey evidence fails the packet. |
-| `phase_66_2_evidence` | Phase 66.2 evidence id, verifier path, passed result, journey run, and repository revision. | Missing, failed, or unbound Wazuh proof evidence fails the packet. |
-| `phase_66_3_evidence` | Phase 66.3 evidence id, verifier path, passed result, journey run, and repository revision. | Missing, failed, or unbound Shuffle proof evidence fails the packet. |
-| `phase_66_4_evidence` | Phase 66.4 evidence id, verifier path, passed result, journey run, and repository revision. | Missing, failed, or unbound AI proof evidence fails the packet. |
-| `phase_66_5_evidence` | Phase 66.5 evidence id, verifier path, passed result, journey run, and repository revision. | Missing, failed, or unbound report-export proof evidence fails the packet. |
-| `phase_66_6_evidence` | Phase 66.6 evidence id, verifier path, passed result, journey run, and repository revision. | Missing, failed, or unbound supportability proof evidence fails the packet. |
+| `repository_revision` | One immutable 40-character evidence-producing repository revision shared by every collected proof and negative observation. | Mutable, abbreviated, missing, mixed, unknown, or non-ancestor revisions fail the packet. The revision need not equal the later commit that stores the packet. |
+| `phase_66_1_evidence` | Phase 66.1 evidence id, proof-document reference, verifier path, passed result, journey run, and repository revision. | Missing, failed, unresolved, or unbound clean-host journey evidence fails the packet. |
+| `phase_66_2_evidence` | Phase 66.2 evidence id, proof-document reference, verifier path, passed result, journey run, and repository revision. | Missing, failed, unresolved, or unbound Wazuh proof evidence fails the packet. |
+| `phase_66_3_evidence` | Phase 66.3 evidence id, proof-document reference, verifier path, passed result, journey run, and repository revision. | Missing, failed, unresolved, or unbound Shuffle proof evidence fails the packet. |
+| `phase_66_4_evidence` | Phase 66.4 evidence id, proof-document reference, verifier path, passed result, journey run, and repository revision. | Missing, failed, unresolved, or unbound AI proof evidence fails the packet. |
+| `phase_66_5_evidence` | Phase 66.5 evidence id, proof-document reference, verifier path, passed result, journey run, and repository revision. | Missing, failed, unresolved, or unbound report-export proof evidence fails the packet. |
+| `phase_66_6_evidence` | Phase 66.6 evidence id, proof-document reference, verifier path, passed result, journey run, and repository revision. | Missing, failed, unresolved, or unbound supportability proof evidence fails the packet. |
 | `wazuh_negative_evidence` | Rejected Wazuh source-truth-promotion attempt with authoritative AegisOps record linkage. | Wazuh state cannot become alert, case, evidence, release, or gate truth. |
 | `shuffle_negative_evidence` | Rejected Shuffle execution-receipt-promotion attempt with authoritative AegisOps record linkage. | Workflow status cannot bypass approval, action request, receipt, or reconciliation. |
 | `ai_negative_evidence` | Rejected AI approval-bypass attempt with authoritative AegisOps record linkage. | AI output cannot approve, execute, reconcile, or close a case. |
@@ -83,7 +83,11 @@ Passing one negative observation cannot compensate for a missing surface. Missin
 
 ## 4. Evidence Binding And Secret Hygiene
 
-Each Phase 66.1-66.6 evidence value must record `evidence_id`, `verifier`, `result=passed`, `journey_run_id`, and `repository_revision`. The verifier path must be the repository-owned focused verifier for that phase slice.
+Each Phase 66.1-66.6 evidence value must record `evidence_id`, `evidence_reference`, `verifier`, `result=passed`, `journey_run_id`, and `repository_revision`. The evidence reference and verifier path must be the repository-owned proof document and focused verifier for that phase slice.
+
+Each Phase 66.1-66.6 `evidence_id` must be `sha256:<digest>` for the exact referenced proof document bytes at `repository_revision`. A caller-supplied label, mutable path content, or digest from the packet-storing commit is not a resolved evidence identity.
+
+The top-level `repository_revision` identifies the evidence-producing commit, not the commit that later stores the proof packet. It must resolve to a commit that is an ancestor of the checkout being verified. The verifier must check out that exact revision in an isolated worktree, resolve each required evidence reference there, and execute every Phase 66.1-66.6 focused verifier there. Packet labels or a declared `result=passed` cannot substitute for resolved proof surfaces and successful verifier execution.
 
 All materialized timestamps must be no more than 24 hours old at verification time and must not be more than five minutes in the future. The owner review and every negative observation must satisfy this freshness window.
 
@@ -128,4 +132,3 @@ Run `node <codex-supervisor-root>/dist/index.js issue-lint 1404 --config <superv
 ## 8. Non-Goals
 
 Phase 66.7 does not add runtime feature breadth, execute production operations, grant new AI or integration authority, prove real design-partner outcomes, complete production rollout, implement commercial billing or entitlement enforcement, prove Phase 67 GA readiness, or claim broad enterprise SIEM/SOAR parity.
-

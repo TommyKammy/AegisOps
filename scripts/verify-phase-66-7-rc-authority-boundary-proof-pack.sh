@@ -58,11 +58,14 @@ done
 python3 - "${doc_path}" "${readme_path}" "${repo_root}" <<'PY'
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -116,7 +119,11 @@ required_phrases = (
     "Materialized proof packets are accepted only as `field=value` assignment lines or Markdown `Field | Value` rows.",
     "Every negative observation must record `evidence_id`, `surface`, `attempt`, `result=rejected`, `authoritative_record`, `observed_at`, `journey_run_id`, and `repository_revision`.",
     "Passing one negative observation cannot compensate for a missing surface.",
-    "Each Phase 66.1-66.6 evidence value must record `evidence_id`, `verifier`, `result=passed`, `journey_run_id`, and `repository_revision`.",
+    "Each Phase 66.1-66.6 evidence value must record `evidence_id`, `evidence_reference`, `verifier`, `result=passed`, `journey_run_id`, and `repository_revision`.",
+    "Each Phase 66.1-66.6 `evidence_id` must be `sha256:<digest>` for the exact referenced proof document bytes at `repository_revision`.",
+    "The top-level `repository_revision` identifies the evidence-producing commit, not the commit that later stores the proof packet.",
+    "The verifier must check out that exact revision in an isolated worktree, resolve each required evidence reference there, and execute every Phase 66.1-66.6 focused verifier there.",
+    "Packet labels or a declared `result=passed` cannot substitute for resolved proof surfaces and successful verifier execution.",
     "All materialized timestamps must be no more than 24 hours old at verification time and must not be more than five minutes in the future.",
     "AegisOps records remain authoritative for alert, case, evidence, recommendation, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, restore acceptance, and closeout truth.",
     "Wazuh, Shuffle, AI, tickets, evidence systems, browser state, UI cache, demo data, reports, support bundles, release artifacts, verifier output, issue-lint output, and optional evidence remain subordinate evidence or context only.",
@@ -388,32 +395,68 @@ if materialized_fields:
         fail("invalid journey_run_id: expected rc66-* identifier")
     if not re.fullmatch(r"[0-9a-f]{40}", repository_revision):
         fail("invalid repository_revision: expected immutable 40-character revision")
-    try:
-        head_revision = subprocess.check_output(
-            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        ).strip().lower()
-    except (OSError, subprocess.CalledProcessError):
-        fail("cannot resolve repository HEAD for evidence binding")
-    if repository_revision != head_revision:
-        fail("invalid repository_revision: does not match repository HEAD")
-
     phase_verifiers = {
-        "phase_66_1_evidence": "scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh",
-        "phase_66_2_evidence": "scripts/verify-phase-66-2-wazuh-sample-signal-rc-proof.sh",
-        "phase_66_3_evidence": "scripts/verify-phase-66-3-shuffle-sample-execution-rc-proof.sh",
-        "phase_66_4_evidence": "scripts/verify-phase-66-4-ai-assisted-triage-rc-proof.sh",
-        "phase_66_5_evidence": "scripts/verify-phase-66-5-report-export-rc-proof.sh",
-        "phase_66_6_evidence": "scripts/verify-phase-66-6-rc-supportability-proof.sh",
+        "phase_66_1_evidence": (
+            "docs/phase-66-1-clean-host-rc-e2e-harness.md",
+            "scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh",
+        ),
+        "phase_66_2_evidence": (
+            "docs/phase-66-2-wazuh-sample-signal-rc-proof.md",
+            "scripts/verify-phase-66-2-wazuh-sample-signal-rc-proof.sh",
+        ),
+        "phase_66_3_evidence": (
+            "docs/phase-66-3-shuffle-sample-execution-rc-proof.md",
+            "scripts/verify-phase-66-3-shuffle-sample-execution-rc-proof.sh",
+        ),
+        "phase_66_4_evidence": (
+            "docs/phase-66-4-ai-assisted-triage-rc-proof.md",
+            "scripts/verify-phase-66-4-ai-assisted-triage-rc-proof.sh",
+        ),
+        "phase_66_5_evidence": (
+            "docs/phase-66-5-report-export-rc-proof.md",
+            "scripts/verify-phase-66-5-report-export-rc-proof.sh",
+        ),
+        "phase_66_6_evidence": (
+            "docs/phase-66-6-rc-supportability-proof.md",
+            "scripts/verify-phase-66-6-rc-supportability-proof.sh",
+        ),
     }
-    for field, expected_verifier in phase_verifiers.items():
+    try:
+        subprocess.run(
+            ["git", "-C", str(repo_root), "cat-file", "-e", f"{repository_revision}^{{commit}}"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        fail("invalid repository_revision: evidence-producing revision is not a commit in this repository")
+    try:
+        subprocess.run(
+            ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", repository_revision, "HEAD"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        fail("invalid repository_revision: evidence-producing revision is not an ancestor of repository HEAD")
+
+    phase_evidence_parts: dict[str, dict[str, str]] = {}
+    for field, (expected_reference, expected_verifier) in phase_verifiers.items():
         parts = require_components(
             field,
-            ("evidence_id", "verifier", "result", "journey_run_id", "repository_revision"),
+            (
+                "evidence_id",
+                "evidence_reference",
+                "verifier",
+                "result",
+                "journey_run_id",
+                "repository_revision",
+            ),
         )
         if not re.fullmatch(r"[a-z0-9][a-z0-9._:-]{5,120}", parts["evidence_id"], re.IGNORECASE):
             fail(f"invalid {field}: malformed evidence_id")
+        if parts["evidence_reference"] != expected_reference:
+            fail(f"invalid {field}: unexpected evidence reference")
         if parts["verifier"] != expected_verifier:
             fail(f"invalid {field}: unexpected verifier path")
         if parts["result"].lower() != "passed":
@@ -422,6 +465,62 @@ if materialized_fields:
             fail(f"invalid {field}: mixed journey_run_id")
         if parts["repository_revision"].lower() != repository_revision:
             fail(f"invalid {field}: mixed repository_revision")
+        phase_evidence_parts[field] = parts
+
+    evidence_worktree = Path(tempfile.mkdtemp(prefix="phase66-7-evidence-"))
+    worktree_added = False
+    try:
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "worktree",
+                "add",
+                "--detach",
+                "--quiet",
+                str(evidence_worktree),
+                repository_revision,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        worktree_added = True
+        for field, (expected_reference, expected_verifier) in phase_verifiers.items():
+            reference_path = evidence_worktree / expected_reference
+            verifier_path = evidence_worktree / expected_verifier
+            if not reference_path.is_file() or reference_path.stat().st_size == 0:
+                fail(f"invalid {field}: evidence reference does not resolve at repository_revision")
+            resolved_evidence_id = "sha256:" + hashlib.sha256(reference_path.read_bytes()).hexdigest()
+            if phase_evidence_parts[field]["evidence_id"].lower() != resolved_evidence_id:
+                fail(f"invalid {field}: evidence_id does not match resolved evidence reference")
+            if not verifier_path.is_file() or verifier_path.stat().st_size == 0:
+                fail(f"invalid {field}: verifier does not resolve at repository_revision")
+            verifier_result = subprocess.run(
+                ["bash", str(verifier_path), str(evidence_worktree)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if verifier_result.returncode != 0:
+                detail = verifier_result.stderr.strip().splitlines()
+                diagnostic = detail[-1] if detail else "no diagnostic"
+                fail(f"invalid {field}: prerequisite verifier failed: {diagnostic}")
+    except subprocess.CalledProcessError as error:
+        diagnostic = (error.stderr or "").strip().splitlines()
+        detail = diagnostic[-1] if diagnostic else "unable to create evidence worktree"
+        fail(f"cannot resolve evidence-producing revision: {detail}")
+    finally:
+        if worktree_added:
+            subprocess.run(
+                ["git", "-C", str(repo_root), "worktree", "remove", "--force", str(evidence_worktree)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            shutil.rmtree(evidence_worktree, ignore_errors=True)
 
     negative_expectations = {
         "wazuh_negative_evidence": ("wazuh", "source-truth-promotion"),
@@ -585,7 +684,7 @@ readiness_outcome = (
 )
 authority_action = (
     r"(?:approv(?:e|es|ed|ing)|execut(?:e|es|ed|ing)|reconcil(?:e|es|ed|ing)|"
-    r"clos(?:e|es|ed|ing)(?:\s+the)?\s+case|admit(?:s|ted|ting)?|"
+    r"clos(?:e|es|ed|ing)(?:\s+the)?\s+cases?|admit(?:s|ted|ting)?|"
     r"releas(?:e|es|ed|ing)|gat(?:e|es|ed|ing)|overrid(?:e|es|den|ing))"
 )
 claim_patterns = (
