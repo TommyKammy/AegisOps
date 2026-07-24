@@ -93,6 +93,8 @@ Each Phase 66.1-66.6 `evidence_id` must be `sha256:<digest>` for the exact refer
 
 The top-level `repository_revision` identifies the evidence-producing commit, not the commit that later stores the proof packet. It must resolve to a commit that is an ancestor of the checkout being verified. The verifier must check out that exact revision in an isolated worktree, resolve each required evidence reference there, and execute every Phase 66.1-66.6 focused verifier there. Packet labels or a declared `result=passed` cannot substitute for resolved proof surfaces and successful verifier execution.
 
+Each prerequisite verifier must leave the isolated worktree at `repository_revision` with no tracked or untracked changes. A verifier that changes the worktree revision or mutates any worktree content fails closed.
+
 The same isolated worktree must resolve the negative-observation manifest, bind its exact bytes to every negative `evidence_id`, and match every packet observation to one manifest record. A syntactically valid negative observation without that immutable record fails closed.
 
 Every `owner_review` value must record `artifact_owner`, `reviewer`, `reviewed_at`, `disposition`, and `follow_up_owner`. Artifact owner and reviewer must be distinct accountable identities. A self-declared review where those identities are equal fails closed.

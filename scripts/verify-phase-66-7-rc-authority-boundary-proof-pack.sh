@@ -242,6 +242,8 @@ required_phrases = (
     "The top-level `repository_revision` identifies the evidence-producing commit, not the commit that later stores the proof packet.",
     "The verifier must check out that exact revision in an isolated worktree, resolve each required evidence reference there, and execute every Phase 66.1-66.6 focused verifier there.",
     "Packet labels or a declared `result=passed` cannot substitute for resolved proof surfaces and successful verifier execution.",
+    "Each prerequisite verifier must leave the isolated worktree at `repository_revision` with no tracked or untracked changes.",
+    "A verifier that changes the worktree revision or mutates any worktree content fails closed.",
     "The same isolated worktree must resolve the negative-observation manifest, bind its exact bytes to every negative `evidence_id`, and match every packet observation to one manifest record.",
     "A syntactically valid negative observation without that immutable record fails closed.",
     "Every `owner_review` value must record `artifact_owner`, `reviewer`, `reviewed_at`, `disposition`, and `follow_up_owner`.",
@@ -440,6 +442,15 @@ for raw_line in html_detection_raw.splitlines():
     ):
         fail("raw HTML evidence syntax is not supported")
 
+markdown_evidence_link = re.compile(
+    r"!?\[(?P<label>[^\]\n]+)\](?:\([^)\n]*\)|\[[^\]\n]*\])",
+)
+for markdown_link in markdown_evidence_link.finditer(html_detection_raw):
+    if proof_field_pattern.search(
+        normalize_inline_markdown(markdown_link.group("label"))
+    ):
+        fail("Markdown link evidence syntax is not supported")
+
 
 def markdown_cells(line: str) -> list[str]:
     cells = re.split(r"(?<!\\)\|", line.strip())
@@ -459,7 +470,7 @@ assignment_pattern = re.compile(
 current_section = "document-preamble"
 section_index = 0
 in_fence = False
-for raw_line in rendered_doc_raw.splitlines():
+for raw_line in normalize_inline_markdown(rendered_doc_raw).splitlines():
     stripped = raw_line.strip()
     if re.match(r"^(```|~~~)", stripped):
         in_fence = not in_fence
@@ -782,7 +793,43 @@ if materialized_fields:
             text=True,
         )
         worktree_added = True
+
+        def assert_evidence_worktree_immutable(field: str) -> None:
+            head_result = subprocess.run(
+                ["git", "-C", str(evidence_worktree), "rev-parse", "HEAD"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if (
+                head_result.returncode != 0
+                or head_result.stdout.strip().lower() != repository_revision
+            ):
+                fail(
+                    f"invalid {field}: prerequisite verifier changed isolated "
+                    "worktree revision"
+                )
+            status_result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(evidence_worktree),
+                    "status",
+                    "--porcelain=v1",
+                    "--untracked-files=all",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if status_result.returncode != 0 or status_result.stdout.strip():
+                fail(
+                    f"invalid {field}: prerequisite verifier modified isolated "
+                    "worktree"
+                )
+
         for field, (expected_reference, expected_verifier) in phase_verifiers.items():
+            assert_evidence_worktree_immutable(field)
             reference_path = evidence_worktree / expected_reference
             verifier_path = evidence_worktree / expected_verifier
             if not reference_path.is_file() or reference_path.stat().st_size == 0:
@@ -802,6 +849,7 @@ if materialized_fields:
                 detail = verifier_result.stderr.strip().splitlines()
                 diagnostic = detail[-1] if detail else "no diagnostic"
                 fail(f"invalid {field}: prerequisite verifier failed: {diagnostic}")
+            assert_evidence_worktree_immutable(field)
 
         negative_manifest_path = evidence_worktree / negative_manifest_reference
         if not negative_manifest_path.is_file() or negative_manifest_path.stat().st_size == 0:
@@ -1067,7 +1115,7 @@ email_pattern = re.compile(
     r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9.-])"
 )
 private_assignment = re.compile(
-    r"(?:^|[;,\s{|])`?(?:customer[_ -]?(?:name|identifier|private_data|private_payload)|tenant[_ -]?(?:name|identifier)|ticket[_ -]?private[_ -]?content|raw[_ -]?(?:customer|ticket)[_ -]?(?:data|payload|content))`?\s*[:=]\s*(?P<value>[^;,|}\r\n]+)",
+    r"(?:^|[;,\s{|])`?(?:customer[_ -]?(?:name|id(?:entifier)?s?|private_data|private_payload)|tenant[_ -]?(?:name|id(?:entifier)?s?)|ticket[_ -]?private[_ -]?content|raw[_ -]?(?:customer|ticket)[_ -]?(?:data|payload|content))`?\s*[:=]\s*(?P<value>[^;,|}\r\n]+)",
     re.IGNORECASE,
 )
 private_data_object = (

@@ -296,6 +296,19 @@ append_complete_packet() {
   done
 }
 
+append_complete_link_packet() {
+  local target="$1"
+  local repository_revision
+  local line
+
+  repository_revision="$(git -C "${target}" rev-parse HEAD)"
+  printf '\n## Test Markdown Link Evidence Packet\n\n' >>"${target}/${doc_rel}"
+  for line in "${packet_lines[@]}"; do
+    line="$(materialize_packet_line "${target}" "${repository_revision}" "${line}")"
+    printf '[%s](https://example.invalid/proof)\n' "${line}" >>"${target}/${doc_rel}"
+  done
+}
+
 append_complete_table_packet() {
   local target="$1"
   local repository_revision
@@ -493,6 +506,31 @@ append_doc_line \
   'journey_<span></span>run_id=rc66-fabricated-001'
 assert_fails_with "${inline_html_field_repo}" "raw HTML evidence syntax is not supported"
 
+markdown_link_field_repo="${workdir}/markdown-link-field"
+copy_valid_repo "${markdown_link_field_repo}"
+append_doc_line \
+  "${markdown_link_field_repo}" \
+  '[journey_run_id=rc66-fabricated-001](https://example.invalid/proof)'
+assert_fails_with \
+  "${markdown_link_field_repo}" \
+  "Markdown link evidence syntax is not supported"
+
+complete_markdown_link_packet_repo="${workdir}/complete-markdown-link-packet"
+copy_valid_repo "${complete_markdown_link_packet_repo}"
+append_complete_link_packet "${complete_markdown_link_packet_repo}"
+assert_fails_with \
+  "${complete_markdown_link_packet_repo}" \
+  "Markdown link evidence syntax is not supported"
+
+markdown_emphasis_field_repo="${workdir}/markdown-emphasis-field"
+copy_valid_repo "${markdown_emphasis_field_repo}"
+append_doc_line \
+  "${markdown_emphasis_field_repo}" \
+  'journey_*run_id*=rc66-fabricated-001'
+assert_fails_with \
+  "${markdown_emphasis_field_repo}" \
+  "partial evidence packet"
+
 details_html_field_repo="${workdir}/details-html-field"
 copy_valid_repo "${details_html_field_repo}"
 append_doc_line \
@@ -581,6 +619,36 @@ git -C "${failing_prerequisite_repo}" add scripts/verify-phase-66-4-ai-assisted-
 git -C "${failing_prerequisite_repo}" commit -qm "fail prerequisite verifier"
 append_complete_packet "${failing_prerequisite_repo}"
 assert_fails_with "${failing_prerequisite_repo}" "prerequisite verifier failed: simulated prerequisite failure"
+
+mutating_prerequisite_repo="${workdir}/mutating-prerequisite"
+copy_valid_repo "${mutating_prerequisite_repo}"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'printf "mutated evidence\n" >"$1/docs/phase-66-2-wazuh-sample-signal-rc-proof.md"' \
+  >"${mutating_prerequisite_repo}/scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh"
+chmod +x "${mutating_prerequisite_repo}/scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh"
+git -C "${mutating_prerequisite_repo}" add scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh
+git -C "${mutating_prerequisite_repo}" commit -qm "mutate later prerequisite evidence"
+append_complete_packet "${mutating_prerequisite_repo}"
+assert_fails_with \
+  "${mutating_prerequisite_repo}" \
+  "prerequisite verifier modified isolated worktree"
+
+committing_prerequisite_repo="${workdir}/committing-prerequisite"
+copy_valid_repo "${committing_prerequisite_repo}"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'git -C "$1" commit --allow-empty -qm "mutate evidence revision"' \
+  >"${committing_prerequisite_repo}/scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh"
+chmod +x "${committing_prerequisite_repo}/scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh"
+git -C "${committing_prerequisite_repo}" add scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh
+git -C "${committing_prerequisite_repo}" commit -qm "commit from prerequisite verifier"
+append_complete_packet "${committing_prerequisite_repo}"
+assert_fails_with \
+  "${committing_prerequisite_repo}" \
+  "prerequisite verifier changed isolated worktree revision"
 
 missing_negative_manifest_repo="${workdir}/missing-negative-manifest"
 copy_valid_repo "${missing_negative_manifest_repo}"
@@ -1033,6 +1101,26 @@ leak_case \
   "customer-private or ticket-private data detected"
 
 leak_case \
+  "customer-id-assignment" \
+  "customer_id=cust-123456" \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "spaced-customer-id-assignment" \
+  "customer ID: cust-123456" \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "customer-identifiers-assignment" \
+  "customer_identifiers=cust-123456" \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "tenant-id-assignment" \
+  "tenant-id=tenant-123456" \
+  "customer-private or ticket-private data detected"
+
+leak_case \
   "multiline-html-private-assignment" \
   $'<span>customer_name</span>\n<span>=AcmeCorp</span>' \
   "customer-private or ticket-private data detected"
@@ -1163,6 +1251,9 @@ allowed_doc_line_case \
   "redacted-multiline-html-api-key" \
   $'<span>api_key</span>\n<span>=redacted</span>'
 allowed_doc_line_case "quoted-removed-private-data" "customer_name=\"removed\""
+allowed_doc_line_case "redacted-customer-id" "customer_id=redacted"
+allowed_doc_line_case "redacted-customer-identifiers" "customer identifiers: redacted"
+allowed_doc_line_case "removed-tenant-id" "tenant ID: removed"
 allowed_doc_line_case "redacted-markdown-emphasis-private-data" "customer_*name*=redacted"
 allowed_doc_line_case "redacted-customer-data-claim" "The proof pack includes redacted customer data."
 allowed_doc_line_case "absent-customer-data-claim" "The proof pack contains no customer data."
