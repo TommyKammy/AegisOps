@@ -19,6 +19,11 @@ _WSL_WINDOWS_USER_PATH_IN_TEXT_RE = re.compile(
     + _WINDOWS_HOME_SEGMENT_PATTERN
     + r"/[^/\s]+(?:/[^\s]*)?"
 )
+_WSL_WINDOWS_USER_FILE_URI_RE = re.compile(
+    r"(?i)file:(?://(?:localhost)?/|/+)mnt/[a-z]/"
+    + _WINDOWS_HOME_SEGMENT_PATTERN
+    + r"/[^/\s]+(?:/[^\s]*)?"
+)
 _WINDOWS_USER_PATH_IN_TEXT_RE = re.compile(
     r"(?i)[A-Z]:[\\/]+Users[\\/]+[^\\/\s]+(?:[\\/][^\s]*)?"
 )
@@ -51,6 +56,9 @@ def is_workstation_local_path(text: str) -> bool:
         candidates.append(json_unescaped_slashes)
 
     for candidate in candidates:
+        if _WSL_WINDOWS_USER_FILE_URI_RE.search(candidate):
+            return True
+
         for match in _WSL_WINDOWS_USER_PATH_IN_TEXT_RE.finditer(candidate):
             if _has_text_path_boundary(candidate, match.start()):
                 return True

@@ -91,6 +91,14 @@ create_repo \
   "control-plane/tests/test_docs.py" "EXPECTED_PATH = 'docs/phase-25.md'"
 assert_fails_with "${wsl_failing_repo}" "docs/phase-25.md:1:"
 
+wsl_uri_failing_repo="${workdir}/wsl-uri-failing"
+create_repo \
+  "${wsl_uri_failing_repo}" \
+  "README.md" "# WSL URI failing fixture" \
+  "docs/phase-25.md" "Leaked path: file:///mnt/c/Users""/alice/private/project" \
+  "control-plane/tests/test_docs.py" "EXPECTED_PATH = 'docs/phase-25.md'"
+assert_fails_with "${wsl_uri_failing_repo}" "docs/phase-25.md:1:"
+
 script_failing_repo="${workdir}/script-failing"
 create_repo \
   "${script_failing_repo}" \

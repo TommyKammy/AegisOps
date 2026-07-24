@@ -82,6 +82,16 @@ def visible_text(text: str) -> str:
     return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
 
 
+markdown_escapable_punctuation = r"""!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"""
+markdown_escape_pattern = re.compile(
+    rf"\\([{re.escape(markdown_escapable_punctuation)}])"
+)
+
+
+def normalize_markdown_escapes(text: str) -> str:
+    return markdown_escape_pattern.sub(r"\1", text)
+
+
 class VisibleHTMLTextRenderer(HTMLParser):
     block_tags = {
         "address",
@@ -155,12 +165,15 @@ def rendered_text(text: str) -> str:
     parser = VisibleHTMLTextRenderer()
     parser.feed(visible_text(text))
     parser.close()
-    return re.sub(r"[^\S\r\n]", " ", html.unescape("".join(parser.parts)))
+    rendered = re.sub(r"[^\S\r\n]", " ", html.unescape("".join(parser.parts)))
+    return normalize_markdown_escapes(rendered)
 
 
 rendered_doc_raw = rendered_text(doc_raw)
 rendered_readme_raw = rendered_text(readme_raw)
-rendered_source_doc_raw = re.sub(r"[^\S\r\n]", " ", html.unescape(doc_raw))
+rendered_source_doc_raw = normalize_markdown_escapes(
+    re.sub(r"[^\S\r\n]", " ", html.unescape(doc_raw))
+)
 
 
 def semantic_text(text: str) -> str:
@@ -327,7 +340,7 @@ structured_key_pattern = re.compile(
     rf"(?m)(?:^[ \t]*(?:-\s+)?|[\{{\[,]?\s*)[\"'`]?(?:{field_alternation})[\"'`]?\s*:",
     re.IGNORECASE,
 )
-if structured_key_pattern.search(doc_raw):
+if structured_key_pattern.search(normalize_markdown_escapes(doc_raw)):
     fail("JSON, YAML, and object-literal evidence syntax is not supported")
 
 unsupported_structural_html = re.compile(
@@ -342,7 +355,7 @@ inline_html_tag = re.compile(
     r"<\s*/?\s*(?:b|code|em|i|mark|small|span|strong|sub|sup)\b[^>]*>",
     re.IGNORECASE,
 )
-for raw_line in visible_text(doc_raw).splitlines():
+for raw_line in normalize_markdown_escapes(visible_text(doc_raw)).splitlines():
     if not inline_html_tag.search(raw_line):
         continue
     rendered_line = rendered_text(raw_line)
@@ -368,7 +381,7 @@ assignment_pattern = re.compile(
 current_section = "document-preamble"
 section_index = 0
 in_fence = False
-for raw_line in visible_text(doc_raw).splitlines():
+for raw_line in normalize_markdown_escapes(visible_text(doc_raw)).splitlines():
     stripped = raw_line.strip()
     if re.match(r"^(```|~~~)", stripped):
         in_fence = not in_fence
@@ -941,6 +954,12 @@ workstation_patterns = (
         + r"/[^\s`\"'()<>/]+/",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"file:(?://(?:localhost)?/|/+)mnt/[a-z]/"
+        + wsl_windows_home_segment
+        + r"/[^\s`\"'()<>/]+/",
+        re.IGNORECASE,
+    ),
     re.compile(r"(?:^|[\s`\"'(<:=])~/(?:[^\s`\"'()<>]+)", re.IGNORECASE),
     re.compile(r"(?:^|[\s`\"'(<:=])[A-Za-z]:[\\/]Users[\\/][^\s`\"'()<>\\/]+[\\/]", re.IGNORECASE),
     re.compile(r"file://(?:[^\s`\"'()<>]*/)?(?:(?:Users|home)/[^\s`\"'()<>/]+|root)/", re.IGNORECASE),
@@ -1025,7 +1044,10 @@ truth_outcome = (
 )
 readiness_outcome = (
     r"(?:rc\s+(?:gate\s+pass|readiness)|release[- ]candidate\s+readiness|ga(?:\s+readiness|\s+gate\s+pass)?|"
-    r"general\s+availability|production\s+(?:readiness|rollout|operations)|commercial\s+replacement|"
+    r"general\s+availability|production(?:\s+(?:readiness|rollout|operations)|[- ](?:ready|grade|capable))|"
+    r"(?:ready|fit|suitable)\s+for\s+production|"
+    r"ready\s+to\s+(?:deploy|operate|run|ship)\s+(?:in|to)\s+production|"
+    r"commercial\s+replacement|"
     r"broad\s+(?:enterprise\s+)?(?:siem|soar)(?:\s+parity)?)"
 )
 authority_action = (

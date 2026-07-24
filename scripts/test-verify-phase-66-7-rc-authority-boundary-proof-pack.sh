@@ -437,6 +437,13 @@ copy_valid_repo "${partial_repo}"
 append_doc_line "${partial_repo}" $'## Partial Evidence Packet\n\njourney_run_id=rc66-authority-001'
 assert_fails_with "${partial_repo}" "partial evidence packet"
 
+markdown_escaped_partial_repo="${workdir}/markdown-escaped-partial"
+copy_valid_repo "${markdown_escaped_partial_repo}"
+append_doc_line \
+  "${markdown_escaped_partial_repo}" \
+  'journey\_run\_id=rc66-authority-001'
+assert_fails_with "${markdown_escaped_partial_repo}" "partial evidence packet"
+
 cross_section_repo="${workdir}/cross-section"
 copy_valid_repo "${cross_section_repo}"
 append_doc_line "${cross_section_repo}" $'## Packet A\n\njourney_run_id=rc66-authority-001\n\n## Packet B\n\nrepository_revision=0123456789012345678901234567890123456789'
@@ -452,6 +459,13 @@ yaml_repo="${workdir}/yaml"
 copy_valid_repo "${yaml_repo}"
 append_doc_line "${yaml_repo}" "journey_run_id: rc66-authority-001"
 assert_fails_with "${yaml_repo}" "JSON, YAML, and object-literal evidence syntax is not supported"
+
+markdown_escaped_yaml_repo="${workdir}/markdown-escaped-yaml"
+copy_valid_repo "${markdown_escaped_yaml_repo}"
+append_doc_line "${markdown_escaped_yaml_repo}" 'journey\_run\_id: rc66-authority-001'
+assert_fails_with \
+  "${markdown_escaped_yaml_repo}" \
+  "JSON, YAML, and object-literal evidence syntax is not supported"
 
 json_repo="${workdir}/json"
 copy_valid_repo "${json_repo}"
@@ -769,6 +783,11 @@ leak_case \
   "workstation-local path detected"
 
 leak_case \
+  "wsl-file-uri" \
+  "artifact=file://${wsl_user_home}proof.json" \
+  "workstation-local path detected"
+
+leak_case \
   "email" \
   "customer_contact=analyst@example.com" \
   "customer-private or ticket-private data detected"
@@ -821,6 +840,16 @@ leak_case \
 leak_case \
   "hyphenated-api-key" \
   "api-key=supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "markdown-escaped-api-key" \
+  'api\_key=supersecretvalue123' \
+  "production secret-looking value detected"
+
+leak_case \
+  "markdown-escaped-client-secret" \
+  'client\-secret=supersecretvalue123' \
   "production secret-looking value detected"
 
 leak_case \
@@ -1015,6 +1044,13 @@ overclaim_case "verifier-readiness" "Verifier output confirms RC readiness."
 overclaim_case "issue-lint-truth" "Issue-lint output is release truth."
 overclaim_case "ga-overclaim" "Phase 66.7 proves GA readiness."
 overclaim_case "production-overclaim" "Phase 66.7 enables production rollout."
+overclaim_case "production-ready-overclaim" "This proof pack is production-ready."
+overclaim_case "production-ready-spaced-overclaim" "This proof pack is production ready."
+overclaim_case "ready-for-production-overclaim" "This proof pack is ready for production."
+overclaim_case "fit-for-production-overclaim" "This proof pack is fit for production."
+overclaim_case "deploy-in-production-overclaim" "This proof pack is ready to deploy in production."
+overclaim_case "production-grade-overclaim" "This proof pack is production-grade."
+overclaim_case "markdown-escaped-production-ready-overclaim" 'This proof pack is production\-ready.'
 overclaim_case "broad-siem" "Phase 66.7 achieves broad enterprise SIEM parity."
 overclaim_case "broad-soar" "Phase 66.7 achieves broad enterprise SOAR parity."
 overclaim_case "approval-bypass" "Approval bypass is allowed."
@@ -1024,6 +1060,7 @@ overclaim_case "case-shortcut" "Case-closure shortcut is accepted."
 overclaim_case "source-shortcut" "Source-admission shortcut is allowed."
 
 allowed_doc_line_case "redacted-secret" "api_key=redacted"
+allowed_doc_line_case "redacted-markdown-escaped-secret" 'api\_key=redacted'
 allowed_doc_line_case "redacted-spaced-api-key" "API key: redacted"
 allowed_doc_line_case "redacted-html-split-api-key" "api_key<span></span>=redacted"
 allowed_doc_line_case "quoted-removed-private-data" "customer_name=\"removed\""
@@ -1054,6 +1091,8 @@ allowed_doc_line_case "denied-elided-ai-execution" "AI output cannot approve the
 allowed_doc_line_case "sentence-boundary-no-elision" "AI output cannot approve the action. Can operators execute the action?"
 allowed_doc_line_case "denied-ai-truth" "AI output is not approval truth."
 allowed_doc_line_case "denied-release-readiness" "Release artifacts do not prove RC readiness."
+allowed_doc_line_case "denied-production-ready" "This proof pack is not production-ready."
+allowed_doc_line_case "denied-ready-for-production" "This proof pack is not ready for production."
 
 real_worktree="${workdir}/real-prerequisite-worktree"
 git -C "${repo_root}" worktree add --detach --quiet "${real_worktree}" HEAD
