@@ -52,7 +52,7 @@ Every materialized Phase 66.7 proof packet must include exactly one value for ev
 | `release_artifact_negative_evidence` | Rejected release-artifact readiness-truth-promotion attempt with authoritative AegisOps record linkage. | Packaging, integrity, signing, or channel artifacts cannot prove RC or GA readiness. |
 | `verifier_output_negative_evidence` | Rejected verifier-output RC-gate-promotion attempt with authoritative AegisOps record linkage. | Verifier output is test evidence, not a release or readiness decision. |
 | `issue_lint_output_negative_evidence` | Rejected issue-lint-output RC-gate-promotion attempt with authoritative AegisOps record linkage. | Issue-lint output is planning evidence, not a release or readiness decision. |
-| `owner_review` | Accountable reviewer, review timestamp, accepted disposition, and follow-up owner. | Artifact self-approval, rejected review, missing ownership, or stale review fails the packet. |
+| `owner_review` | Artifact owner, independent accountable reviewer, review timestamp, accepted disposition, and follow-up owner. | Artifact self-approval, rejected review, missing ownership, or stale review fails the packet. |
 | `limitation_references` | Repository-owned limitation-manifest digest and reference, reviewed limitation ids, owner, decision timestamp, and follow-up timestamp. | Unresolved, invented, unaccepted, unowned, placeholder, or undated limitations fail the packet. |
 | `non_claims` | All required RC, GA, production, commercial, parity, and subordinate-truth non-claim labels. | Missing non-claims or positive readiness claims fail the packet. |
 
@@ -94,6 +94,8 @@ Each Phase 66.1-66.6 `evidence_id` must be `sha256:<digest>` for the exact refer
 The top-level `repository_revision` identifies the evidence-producing commit, not the commit that later stores the proof packet. It must resolve to a commit that is an ancestor of the checkout being verified. The verifier must check out that exact revision in an isolated worktree, resolve each required evidence reference there, and execute every Phase 66.1-66.6 focused verifier there. Packet labels or a declared `result=passed` cannot substitute for resolved proof surfaces and successful verifier execution.
 
 The same isolated worktree must resolve the negative-observation manifest, bind its exact bytes to every negative `evidence_id`, and match every packet observation to one manifest record. A syntactically valid negative observation without that immutable record fails closed.
+
+Every `owner_review` value must record `artifact_owner`, `reviewer`, `reviewed_at`, `disposition`, and `follow_up_owner`. Artifact owner and reviewer must be distinct accountable identities. A self-declared review where those identities are equal fails closed.
 
 Every `limitation_references` value must record `evidence_id`, `evidence_reference`, `ids`, `owner`, `decision_at`, and `follow_up_at`. Its `evidence_id` is `sha256:<digest>` for the exact repository-owned manifest bytes at `evidence/phase-66-7/limitations.json` and `repository_revision`.
 

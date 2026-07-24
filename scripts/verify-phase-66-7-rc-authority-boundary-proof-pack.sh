@@ -213,6 +213,8 @@ required_phrases = (
     "Packet labels or a declared `result=passed` cannot substitute for resolved proof surfaces and successful verifier execution.",
     "The same isolated worktree must resolve the negative-observation manifest, bind its exact bytes to every negative `evidence_id`, and match every packet observation to one manifest record.",
     "A syntactically valid negative observation without that immutable record fails closed.",
+    "Every `owner_review` value must record `artifact_owner`, `reviewer`, `reviewed_at`, `disposition`, and `follow_up_owner`.",
+    "Artifact owner and reviewer must be distinct accountable identities.",
     "Every `limitation_references` value must record `evidence_id`, `evidence_reference`, `ids`, `owner`, `decision_at`, and `follow_up_at`.",
     "The limitation manifest uses `schema_version=phase-66-7-limitations/v1` and a `limitations` array.",
     "The isolated worktree must resolve the limitation manifest and match every packet limitation to an accepted repository-owned record.",
@@ -853,14 +855,16 @@ if materialized_fields:
 
     owner_review = require_components(
         "owner_review",
-        ("reviewer", "reviewed_at", "disposition", "follow_up_owner"),
+        ("artifact_owner", "reviewer", "reviewed_at", "disposition", "follow_up_owner"),
     )
-    for identity_field in ("reviewer", "follow_up_owner"):
+    for identity_field in ("artifact_owner", "reviewer", "follow_up_owner"):
         identity = owner_review[identity_field]
         if not re.fullmatch(r"[a-z0-9][a-z0-9._@-]{2,80}", identity, re.IGNORECASE):
             fail(f"invalid owner_review: malformed {identity_field}")
         if re.search(r"\b(?:artifact|verifier|issue-lint|bot|automation)\b", identity, re.IGNORECASE):
             fail(f"invalid owner_review: {identity_field} must be accountable")
+    if owner_review["artifact_owner"].casefold() == owner_review["reviewer"].casefold():
+        fail("invalid owner_review: artifact_owner and reviewer must be distinct")
     if owner_review["disposition"].lower() != "accepted":
         fail("invalid owner_review: disposition must be accepted")
     parse_timestamp("owner_review", owner_review["reviewed_at"])
@@ -927,9 +931,16 @@ if any(
 ):
     fail("production secret-looking value detected")
 
+wsl_windows_home_segment = "Users"
 workstation_patterns = (
     re.compile(r"(?:^|[\s`\"'(<:=])/(?:Users|home)/[^\s`\"'()<>/]+/", re.IGNORECASE),
     re.compile(r"(?:^|[\s`\"'(<:=])/(?:root)(?:/|$)", re.IGNORECASE),
+    re.compile(
+        r"(?:^|[\s`\"'(<:=])/mnt/[a-z]/"
+        + wsl_windows_home_segment
+        + r"/[^\s`\"'()<>/]+/",
+        re.IGNORECASE,
+    ),
     re.compile(r"(?:^|[\s`\"'(<:=])~/(?:[^\s`\"'()<>]+)", re.IGNORECASE),
     re.compile(r"(?:^|[\s`\"'(<:=])[A-Za-z]:[\\/]Users[\\/][^\s`\"'()<>\\/]+[\\/]", re.IGNORECASE),
     re.compile(r"file://(?:[^\s`\"'()<>]*/)?(?:(?:Users|home)/[^\s`\"'()<>/]+|root)/", re.IGNORECASE),
@@ -948,8 +959,27 @@ private_assignment = re.compile(
     r"(?:^|[;,\s{|])`?(?:customer[_ -]?(?:name|identifier|private_data|private_payload)|tenant[_ -]?(?:name|identifier)|ticket[_ -]?private[_ -]?content|raw[_ -]?(?:customer|ticket)[_ -]?(?:data|payload|content))`?\s*[:=]\s*(?P<value>[^;,|}\r\n]+)",
     re.IGNORECASE,
 )
+private_data_object = (
+    r"(?:(?:unredacted|raw|private)\s+(?:customer|ticket)\s+"
+    r"(?:data|payload|content|information|records?)|"
+    r"(?:customer|ticket)(?:[- ]private)?\s+"
+    r"(?:data|payload|content|information|records?|identifiers?)|"
+    r"raw\s+payload|customer\s+identifier)"
+)
 private_data_claim = re.compile(
-    r"\b(?:includes?|contains?|retains?|stores?|embeds?|exports?|captures?|publishes?)\b.{0,60}?\b(?:raw customer|customer[- ]private|private ticket|raw ticket|raw payload|customer identifier)",
+    r"\b(?:includes?|contains?|retains?|stores?|embeds?|exports?|captures?|publishes?)\b"
+    rf".{{0,60}}?\b(?P<object>{private_data_object})",
+    re.IGNORECASE,
+)
+private_data_passive_claim = re.compile(
+    rf"\b(?P<object>{private_data_object})\b.{{0,40}}?\b"
+    r"(?:is|are|was|were|has\s+been|have\s+been)\s+"
+    r"(?P<negated>not\s+)?"
+    r"(?:included|contained|retained|stored|embedded|exported|captured|published)\b",
+    re.IGNORECASE,
+)
+private_claim_safe_qualifier = re.compile(
+    r"\b(?:absent|no|redacted|removed)\s*$",
     re.IGNORECASE,
 )
 if any(
@@ -973,8 +1003,16 @@ private_claim_denial = re.compile(
 )
 for line in rendered_doc_raw.splitlines():
     for match in private_data_claim.finditer(line):
+        claim_prefix = line[match.start() : match.start("object")]
+        if private_claim_safe_qualifier.search(claim_prefix):
+            continue
         if not private_claim_denial.search(line[: match.start()]):
             fail("customer-private or ticket-private data detected")
+    for match in private_data_passive_claim.finditer(line):
+        qualifier_prefix = line[max(0, match.start("object") - 30) : match.start("object")]
+        if private_claim_safe_qualifier.search(qualifier_prefix) or match.group("negated"):
+            continue
+        fail("customer-private or ticket-private data detected")
 
 subordinate_subject = (
     r"(?:this\s+proof(?:\s+pack)?|phase\s+66\.7|proof\s+pack|wazuh|shuffle|ai(?:\s+output)?|tickets?|"
@@ -1003,6 +1041,13 @@ direct_authority_action = (
     r"(?:(?:single|individual|specific|given|open|selected|current)\s+)?cases?|"
     r"admit(?:s|ted|ting)|"
     r"releas(?:es|ed|ing)|gat(?:es|ed|ing)|overrid(?:es|den|ing))"
+)
+authority_possession_verb = (
+    r"(?:has|have|had|holds?|held|receives?|received|possesses?|possessed|"
+    r"retains?|retained|retaining|keeps?|kept|maintains?|maintained|"
+    r"obtains?|obtained|acquires?|acquired|"
+    r"is\s+granted|are\s+granted|was\s+granted|were\s+granted|"
+    r"is\s+given|are\s+given|was\s+given|were\s+given)"
 )
 claim_patterns = (
     re.compile(
@@ -1034,8 +1079,7 @@ claim_patterns = (
     ),
     re.compile(
         rf"\b{subordinate_subject}\b.{{0,80}}\b"
-        rf"(?:has|have|holds?|receives?|possesses?|is\s+granted|are\s+granted|"
-        rf"was\s+granted|were\s+granted)\s+"
+        rf"{authority_possession_verb}\s+"
         rf"(?:(?:the|full|explicit|independent|direct|delegated)\s+)*"
         rf"(?:permission|authorization|authority|power|right)\s+to\s+"
         rf"(?:(?:automatically|independently|directly)\s+)?{authority_action}\b",
@@ -1071,7 +1115,7 @@ denial_scope_boundary = (
     rf"(?:(?:{subordinate_subject}|it|they|this)\b\s*)?"
     r"(?:can|could|may|might|will|would|must|should|shall|does|do|"
     r"has\s+to|have\s+to|needs?\s+to|ought\s+to|"
-    r"is|are|has|have|holds?|receives?|"
+    rf"is|are|{authority_possession_verb}|"
     r"automatically|independently|directly|"
     r"becomes?|serves?|acts?|"
     r"owns?|defines?|determines?|proves?|confirms?|establishes?|satisfies?|passes?|"
@@ -1107,7 +1151,7 @@ def claim_clauses(text: str):
         rf"does\s+not|do\s+not|did\s+not|will\s+not|would\s+not|should\s+not|"
         rf"may\s+not|must\s+not|shall\s+not|has\s+to|have\s+to|needs?\s+to|ought\s+to|"
         rf"automatically|independently|directly|"
-        rf"is|are|has|have|holds?|receives?|becomes?|serves?|acts?|owns?|defines?|determines?|"
+        rf"is|are|{authority_possession_verb}|becomes?|serves?|acts?|owns?|defines?|determines?|"
         rf"proves?|confirms?|establishes?|satisfies?|passes?|grants?|achieves?|"
         rf"certifies?|validates?|delivers?|enables?|provides?|"
         rf"{direct_authority_action})\b",

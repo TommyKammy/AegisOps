@@ -53,6 +53,7 @@ print((datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:
 PY
 )"
 local_user_home="$(printf '/%s/%s/' 'Users' 'example')"
+wsl_user_home="$(printf '/mnt/%s/%s/%s/' 'c' 'Users' 'alice')"
 
 packet_lines=(
   "journey_run_id=rc66-authority-001"
@@ -75,7 +76,7 @@ packet_lines=(
   "release_artifact_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=release-artifacts; attempt=readiness-truth-promotion; result=rejected; authoritative_record=aegisops://releases/release-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
   "verifier_output_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=verifier-output; attempt=rc-gate-promotion; result=rejected; authoritative_record=aegisops://gates/rc-gate-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
   "issue_lint_output_negative_evidence=evidence_id=sha256:__NEGATIVE_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/negative-observations.json; surface=issue-lint-output; attempt=rc-gate-promotion; result=rejected; authoritative_record=aegisops://gates/rc-gate-001; observed_at=${observed_at}; journey_run_id=rc66-authority-001; repository_revision=__REPOSITORY_REVISION__"
-  "owner_review=reviewer=security-reviewer; reviewed_at=${observed_at}; disposition=accepted; follow_up_owner=release-owner"
+  "owner_review=artifact_owner=proof-author; reviewer=security-reviewer; reviewed_at=${observed_at}; disposition=accepted; follow_up_owner=release-owner"
   "limitation_references=evidence_id=sha256:__LIMITATION_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/limitations.json; ids=lim-66-7-001; owner=release-owner; decision_at=${observed_at}; follow_up_at=${follow_up_at}"
   "non_claims=rc-evidence-only,not-rc-gate-pass,not-ga,not-production-operations,not-commercial-replacement,not-broad-siem-parity,not-broad-soar-parity,not-subordinate-truth"
 )
@@ -631,14 +632,26 @@ packet_mutation_case \
 packet_mutation_case \
   "rejected-owner-review" \
   "owner_review" \
-  "reviewer=security-reviewer; reviewed_at=${observed_at}; disposition=rejected; follow_up_owner=release-owner" \
+  "artifact_owner=proof-author; reviewer=security-reviewer; reviewed_at=${observed_at}; disposition=rejected; follow_up_owner=release-owner" \
   "disposition must be accepted"
 
 packet_mutation_case \
   "artifact-reviewer" \
   "owner_review" \
-  "reviewer=verifier-bot; reviewed_at=${observed_at}; disposition=accepted; follow_up_owner=release-owner" \
+  "artifact_owner=proof-author; reviewer=verifier-bot; reviewed_at=${observed_at}; disposition=accepted; follow_up_owner=release-owner" \
   "reviewer must be accountable"
+
+packet_mutation_case \
+  "self-owner-review" \
+  "owner_review" \
+  "artifact_owner=security-reviewer; reviewer=Security-Reviewer; reviewed_at=${observed_at}; disposition=accepted; follow_up_owner=release-owner" \
+  "artifact_owner and reviewer must be distinct"
+
+packet_mutation_case \
+  "missing-artifact-owner" \
+  "owner_review" \
+  "reviewer=security-reviewer; reviewed_at=${observed_at}; disposition=accepted; follow_up_owner=release-owner" \
+  "missing components artifact_owner"
 
 packet_mutation_case \
   "invalid-follow-up" \
@@ -751,6 +764,11 @@ leak_case \
   "workstation-local path detected"
 
 leak_case \
+  "wsl-local-path" \
+  "artifact=${wsl_user_home}proof.json" \
+  "workstation-local path detected"
+
+leak_case \
   "email" \
   "customer_contact=analyst@example.com" \
   "customer-private or ticket-private data detected"
@@ -758,6 +776,36 @@ leak_case \
 leak_case \
   "private-ticket" \
   "ticket_private_content=customer-payload" \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "unredacted-customer-data-claim" \
+  "The proof pack includes unredacted customer data." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "ordinary-customer-data-claim" \
+  "The proof pack retains customer data." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "private-customer-information-claim" \
+  "The proof pack stores private customer information." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "ticket-data-claim" \
+  "The proof pack exports ticket data." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "passive-customer-data-claim" \
+  "Customer data is retained in the proof pack." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "passive-private-ticket-data-claim" \
+  "Private ticket information was published by the proof pack." \
   "customer-private or ticket-private data detected"
 
 leak_case \
@@ -927,6 +975,11 @@ overclaim_case "html-tag-split-mandatory-ai-approval" "AI <span></span>output mu
 overclaim_case "ai-permitted-approval" "AI output is permitted to approve the action."
 overclaim_case "ai-authorized-execution" "AI output is authorized to execute the action."
 overclaim_case "ai-has-authority" "AI output has authority to approve the action."
+overclaim_case "ai-retains-authority" "AI output retains authority to approve the action."
+overclaim_case "ai-retained-authority" "AI output retained authority to approve the action."
+overclaim_case "ai-held-authority" "AI output held authority to approve the action."
+overclaim_case "ai-was-given-permission" "AI output was given permission to execute the action."
+overclaim_case "ai-maintains-power" "AI output maintains power to close the case."
 overclaim_case "ai-granted-permission" "AI output is granted permission to execute the action."
 overclaim_case "ai-granted-explicit-permission" "AI output is granted explicit permission to execute the action."
 overclaim_case "ai-empowered-closure" "AI output is empowered to close the case."
@@ -974,6 +1027,11 @@ allowed_doc_line_case "redacted-secret" "api_key=redacted"
 allowed_doc_line_case "redacted-spaced-api-key" "API key: redacted"
 allowed_doc_line_case "redacted-html-split-api-key" "api_key<span></span>=redacted"
 allowed_doc_line_case "quoted-removed-private-data" "customer_name=\"removed\""
+allowed_doc_line_case "redacted-customer-data-claim" "The proof pack includes redacted customer data."
+allowed_doc_line_case "absent-customer-data-claim" "The proof pack contains no customer data."
+allowed_doc_line_case "denied-unredacted-customer-data-claim" "The proof pack does not include unredacted customer data."
+allowed_doc_line_case "denied-passive-customer-data-claim" "Customer data is not retained in the proof pack."
+allowed_doc_line_case "redacted-passive-customer-data-claim" "Redacted customer data is included in the proof pack."
 allowed_doc_line_case "denied-private-data-claim" "The proof pack does not include raw customer payload."
 allowed_doc_line_case "must-not-retain-private-data" "The proof pack must not retain raw customer payload."
 allowed_doc_line_case "adverbially-denied-private-data" "The proof pack does not intentionally include raw customer payload."
@@ -988,6 +1046,7 @@ allowed_doc_line_case "denied-html-split-ai-approval" "AI <span></span>output mu
 allowed_doc_line_case "denied-ai-permission" "AI output is not permitted to approve the action."
 allowed_doc_line_case "denied-ai-authorization" "AI output cannot be authorized to execute the action."
 allowed_doc_line_case "denied-ai-authority" "AI output does not have authority to approve the action."
+allowed_doc_line_case "denied-retained-ai-authority" "AI output does not retain authority to approve the action."
 allowed_doc_line_case "denied-granted-ai-authority" "AI output is granted no authority to approve the action."
 allowed_doc_line_case "denied-ai-article-case-closure" "AI output cannot close a case."
 allowed_doc_line_case "denied-ai-individual-case-closure" "AI output cannot close an individual case."

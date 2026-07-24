@@ -8,10 +8,16 @@ from pathlib import PureWindowsPath
 REDACTED_LOCAL_PATH_TOKEN = "<redacted-local-path>"
 ALLOWLIST_MARKER = "publishable-path-hygiene: allowlist"
 _MAC_HOME_PREFIX = "/" + "Users" + "/"
+_WINDOWS_HOME_SEGMENT_PATTERN = "Users"
 
 _WINDOWS_USER_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]+Users[\\/]+[^\\/]+(?:[\\/](?P<rest>.*))?$")
 _UNIX_USER_PATH_IN_TEXT_RE = re.compile(
     r"(?:/(?:Users|home)/[^/\s]+(?:/[^\s]*)?|/root/[^\s]*)"
+)
+_WSL_WINDOWS_USER_PATH_IN_TEXT_RE = re.compile(
+    r"(?i)/mnt/[a-z]/"
+    + _WINDOWS_HOME_SEGMENT_PATTERN
+    + r"/[^/\s]+(?:/[^\s]*)?"
 )
 _WINDOWS_USER_PATH_IN_TEXT_RE = re.compile(
     r"(?i)[A-Z]:[\\/]+Users[\\/]+[^\\/\s]+(?:[\\/][^\s]*)?"
@@ -45,6 +51,10 @@ def is_workstation_local_path(text: str) -> bool:
         candidates.append(json_unescaped_slashes)
 
     for candidate in candidates:
+        for match in _WSL_WINDOWS_USER_PATH_IN_TEXT_RE.finditer(candidate):
+            if _has_text_path_boundary(candidate, match.start()):
+                return True
+
         for match in _WINDOWS_USER_PATH_IN_TEXT_RE.finditer(candidate):
             if _has_text_path_boundary(candidate, match.start()):
                 return True
