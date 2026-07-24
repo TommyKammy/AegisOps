@@ -64,6 +64,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -451,6 +452,23 @@ for markdown_link in markdown_evidence_link.finditer(html_detection_raw):
     ):
         fail("Markdown link evidence syntax is not supported")
 
+normalized_markdown_doc = normalize_inline_markdown(rendered_doc_raw)
+markdown_heading_evidence = re.compile(
+    rf"(?m)^[ \t]*(?:(?:>[ \t]*)|(?:[-+*][ \t]+))*"
+    rf"#{{1,6}}[ \t]+.*\b(?:{field_alternation})\b",
+    re.IGNORECASE,
+)
+markdown_setext_evidence = re.compile(
+    rf"(?m)^[^\n]*\b(?:{field_alternation})\b[^\n]*"
+    rf"\n[ \t]*(?:=+|-+)[ \t]*$",
+    re.IGNORECASE,
+)
+if (
+    markdown_heading_evidence.search(normalized_markdown_doc)
+    or markdown_setext_evidence.search(normalized_markdown_doc)
+):
+    fail("Markdown heading evidence syntax is not supported")
+
 
 def markdown_cells(line: str) -> list[str]:
     cells = re.split(r"(?<!\\)\|", line.strip())
@@ -470,7 +488,7 @@ assignment_pattern = re.compile(
 current_section = "document-preamble"
 section_index = 0
 in_fence = False
-for raw_line in normalize_inline_markdown(rendered_doc_raw).splitlines():
+for raw_line in normalized_markdown_doc.splitlines():
     stripped = raw_line.strip()
     if re.match(r"^(```|~~~)", stripped):
         in_fence = not in_fence
@@ -794,6 +812,60 @@ if materialized_fields:
         )
         worktree_added = True
 
+        def evidence_worktree_snapshot() -> dict[str, tuple[int, int, int, int, int, str]]:
+            snapshot: dict[str, tuple[int, int, int, int, int, str]] = {}
+            for current_root, directory_names, file_names in os.walk(
+                evidence_worktree,
+                topdown=True,
+                followlinks=False,
+            ):
+                if Path(current_root) == evidence_worktree and ".git" in directory_names:
+                    directory_names.remove(".git")
+                directory_names.sort()
+                file_names.sort()
+                for name in directory_names + file_names:
+                    path = Path(current_root) / name
+                    relative_path = path.relative_to(evidence_worktree).as_posix()
+                    if relative_path == ".git":
+                        continue
+                    path_stat = path.lstat()
+                    file_type = stat.S_IFMT(path_stat.st_mode)
+                    permissions = stat.S_IMODE(path_stat.st_mode)
+                    if stat.S_ISREG(path_stat.st_mode):
+                        content_identity = hashlib.sha256(path.read_bytes()).hexdigest()
+                    elif stat.S_ISLNK(path_stat.st_mode):
+                        content_identity = os.readlink(path)
+                    else:
+                        content_identity = ""
+                    snapshot[relative_path] = (
+                        file_type,
+                        permissions,
+                        path_stat.st_dev,
+                        path_stat.st_ino,
+                        path_stat.st_nlink,
+                        content_identity,
+                    )
+            return snapshot
+
+        def evidence_index_snapshot() -> tuple[bytes, bytes]:
+            outputs: list[bytes] = []
+            for arguments in (
+                ("ls-files", "--stage", "-z"),
+                ("ls-files", "-v", "-z"),
+            ):
+                result = subprocess.run(
+                    ["git", "-C", str(evidence_worktree), *arguments],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                if result.returncode != 0:
+                    fail("cannot inspect isolated evidence worktree index")
+                outputs.append(result.stdout)
+            return outputs[0], outputs[1]
+
+        evidence_worktree_baseline = evidence_worktree_snapshot()
+        evidence_index_baseline = evidence_index_snapshot()
+
         def resolve_regular_git_blob(reference: str, description: str) -> bytes:
             tree_result = subprocess.run(
                 [
@@ -871,6 +943,20 @@ if materialized_fields:
                 text=True,
             )
             if status_result.returncode != 0 or status_result.stdout.strip():
+                fail(
+                    f"invalid {field}: prerequisite verifier modified isolated "
+                    "worktree"
+                )
+            try:
+                worktree_matches_baseline = (
+                    evidence_worktree_snapshot() == evidence_worktree_baseline
+                )
+            except OSError:
+                worktree_matches_baseline = False
+            if (
+                not worktree_matches_baseline
+                or evidence_index_snapshot() != evidence_index_baseline
+            ):
                 fail(
                     f"invalid {field}: prerequisite verifier modified isolated "
                     "worktree"
@@ -1179,7 +1265,9 @@ if any(
     fail("workstation-local path detected")
 
 email_pattern = re.compile(
-    r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9.-])"
+    r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@"
+    r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+"
+    r"[A-Za-z]{2,63}(?![A-Za-z0-9_-])"
 )
 private_assignment = re.compile(
     r"(?:^|[;,\s{|])`?(?:customer[_ -]?(?:name|id(?:entifier)?s?|private_data|private_payload)|tenant[_ -]?(?:name|id(?:entifier)?s?)|ticket[_ -]?private[_ -]?content|raw[_ -]?(?:customer|ticket)[_ -]?(?:data|payload|content))`?\s*[:=]\s*(?P<value>[^;,|}\r\n]+)",
@@ -1272,8 +1360,9 @@ authority_possession_verb = (
     r"(?:has|have|had|holds?|held|receives?|received|possesses?|possessed|"
     r"retains?|retained|retaining|keeps?|kept|maintains?|maintained|"
     r"obtains?|obtained|acquires?|acquired|"
-    r"is\s+granted|are\s+granted|was\s+granted|were\s+granted|"
-    r"is\s+given|are\s+given|was\s+given|were\s+given)"
+    r"(?:(?:is|are|was|were|has\s+been|have\s+been|had\s+been)\s+"
+    r"(?:granted|given|delegated|assigned|entrusted|awarded|accorded|"
+    r"conferred|vested|endowed)(?:\s+with)?))"
 )
 claim_patterns = (
     re.compile(

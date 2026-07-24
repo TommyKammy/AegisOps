@@ -93,7 +93,7 @@ Each Phase 66.1-66.6 `evidence_id` must be `sha256:<digest>` for the exact refer
 
 The top-level `repository_revision` identifies the evidence-producing commit, not the commit that later stores the proof packet. It must resolve to a commit that is an ancestor of the checkout being verified. The verifier must check out that exact revision in an isolated worktree, require every referenced proof surface and prerequisite verifier to be a regular Git blob in that commit, bind evidence digests to those Git blob bytes, and execute every Phase 66.1-66.6 focused verifier there. Packet labels, symlink targets, or a declared `result=passed` cannot substitute for repository-owned proof surfaces and successful verifier execution.
 
-Each prerequisite verifier must leave the isolated worktree at `repository_revision` with no tracked, untracked, or ignored changes. A verifier that changes the worktree revision or leaves any worktree content behind fails closed.
+Each prerequisite verifier must leave the isolated worktree at `repository_revision` with no tracked, untracked, or ignored changes. The verifier compares both filesystem content and index semantics with the pristine checkout baseline, so index flags cannot conceal a mutation. A verifier that changes the worktree revision or leaves any worktree content behind fails closed.
 
 The same isolated worktree must resolve the negative-observation manifest, bind its exact bytes to every negative `evidence_id`, and match every packet observation to one manifest record. A syntactically valid negative observation without that immutable record fails closed.
 

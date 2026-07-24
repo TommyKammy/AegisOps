@@ -536,6 +536,42 @@ assert_fails_with \
   "${markdown_emphasis_field_repo}" \
   "partial evidence packet"
 
+heading_field_repo="${workdir}/heading-field"
+copy_valid_repo "${heading_field_repo}"
+append_doc_line \
+  "${heading_field_repo}" \
+  "### journey_run_id=rc66-fabricated-001"
+assert_fails_with \
+  "${heading_field_repo}" \
+  "Markdown heading evidence syntax is not supported"
+
+heading_field_name_repo="${workdir}/heading-field-name"
+copy_valid_repo "${heading_field_name_repo}"
+append_doc_line \
+  "${heading_field_name_repo}" \
+  "### journey_run_id format"
+assert_fails_with \
+  "${heading_field_name_repo}" \
+  "Markdown heading evidence syntax is not supported"
+
+emphasized_heading_field_repo="${workdir}/emphasized-heading-field"
+copy_valid_repo "${emphasized_heading_field_repo}"
+append_doc_line \
+  "${emphasized_heading_field_repo}" \
+  "### **journey_run_id**: rc66-fabricated-001"
+assert_fails_with \
+  "${emphasized_heading_field_repo}" \
+  "Markdown heading evidence syntax is not supported"
+
+setext_heading_field_repo="${workdir}/setext-heading-field"
+copy_valid_repo "${setext_heading_field_repo}"
+append_doc_line \
+  "${setext_heading_field_repo}" \
+  $'journey_run_id=rc66-fabricated-001\n---'
+assert_fails_with \
+  "${setext_heading_field_repo}" \
+  "Markdown heading evidence syntax is not supported"
+
 details_html_field_repo="${workdir}/details-html-field"
 copy_valid_repo "${details_html_field_repo}"
 append_doc_line \
@@ -671,6 +707,42 @@ git -C "${ignored_prerequisite_repo}" commit -qm "leave ignored prerequisite sta
 append_complete_packet "${ignored_prerequisite_repo}"
 assert_fails_with \
   "${ignored_prerequisite_repo}" \
+  "prerequisite verifier modified isolated worktree"
+
+assume_unchanged_prerequisite_repo="${workdir}/assume-unchanged-prerequisite"
+copy_valid_repo "${assume_unchanged_prerequisite_repo}"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'path="docs/phase-66-2-wazuh-sample-signal-rc-proof.md"' \
+  'git -C "$1" update-index --assume-unchanged -- "$path"' \
+  'printf "index-hidden evidence\n" >"$1/$path"' \
+  >"${assume_unchanged_prerequisite_repo}/scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh"
+chmod +x "${assume_unchanged_prerequisite_repo}/scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh"
+git -C "${assume_unchanged_prerequisite_repo}" add \
+  scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh
+git -C "${assume_unchanged_prerequisite_repo}" commit -qm "hide prerequisite mutation from index"
+append_complete_packet "${assume_unchanged_prerequisite_repo}"
+assert_fails_with \
+  "${assume_unchanged_prerequisite_repo}" \
+  "prerequisite verifier modified isolated worktree"
+
+skip_worktree_prerequisite_repo="${workdir}/skip-worktree-prerequisite"
+copy_valid_repo "${skip_worktree_prerequisite_repo}"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'path="docs/phase-66-2-wazuh-sample-signal-rc-proof.md"' \
+  'git -C "$1" update-index --skip-worktree -- "$path"' \
+  'printf "skip-worktree evidence\n" >"$1/$path"' \
+  >"${skip_worktree_prerequisite_repo}/scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh"
+chmod +x "${skip_worktree_prerequisite_repo}/scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh"
+git -C "${skip_worktree_prerequisite_repo}" add \
+  scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh
+git -C "${skip_worktree_prerequisite_repo}" commit -qm "hide prerequisite mutation with skip-worktree"
+append_complete_packet "${skip_worktree_prerequisite_repo}"
+assert_fails_with \
+  "${skip_worktree_prerequisite_repo}" \
   "prerequisite verifier modified isolated worktree"
 
 symlinked_phase_reference_repo="${workdir}/symlinked-phase-reference"
@@ -1029,6 +1101,21 @@ leak_case \
   "customer-private or ticket-private data detected"
 
 leak_case \
+  "sentence-final-email" \
+  "This packet includes customer email analyst@example.com." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "comma-terminated-email" \
+  "Contact analyst@example.com, then remove the address." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "parenthesized-email" \
+  "Customer contact (analyst@example.com)." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
   "private-ticket" \
   "ticket_private_content=customer-payload" \
   "customer-private or ticket-private data detected"
@@ -1335,6 +1422,13 @@ overclaim_case "ai-retains-authority" "AI output retains authority to approve th
 overclaim_case "ai-retained-authority" "AI output retained authority to approve the action."
 overclaim_case "ai-held-authority" "AI output held authority to approve the action."
 overclaim_case "ai-was-given-permission" "AI output was given permission to execute the action."
+overclaim_case "ai-has-been-given-authority" "AI output has been given authority to approve the action."
+overclaim_case "ai-had-been-granted-permission" "AI output had been granted permission to execute the action."
+overclaim_case "ai-has-been-delegated-authority" "AI output has been delegated authority to approve the action."
+overclaim_case "ai-was-assigned-authority" "AI output was assigned authority to close the case."
+overclaim_case "ai-has-been-entrusted-with-authority" "AI output has been entrusted with authority to reconcile the action."
+overclaim_case "ai-has-been-vested-with-power" "AI output has been vested with power to approve the action."
+overclaim_case "ai-was-accorded-the-right" "AI output was accorded the right to execute the action."
 overclaim_case "ai-maintains-power" "AI output maintains power to close the case."
 overclaim_case "ai-granted-permission" "AI output is granted permission to execute the action."
 overclaim_case "ai-granted-explicit-permission" "AI output is granted explicit permission to execute the action."
@@ -1424,6 +1518,9 @@ allowed_doc_line_case "denied-required-ai-approval" "AI output is not required t
 allowed_doc_line_case "denied-html-split-ai-approval" "AI <span></span>output must not approve the action."
 allowed_doc_line_case "denied-ai-permission" "AI output is not permitted to approve the action."
 allowed_doc_line_case "denied-ai-authorization" "AI output cannot be authorized to execute the action."
+allowed_doc_line_case "denied-completed-ai-delegation" "AI output has not been given authority to approve the action."
+allowed_doc_line_case "no-completed-ai-delegation" "AI output has been given no authority to approve the action."
+allowed_doc_line_case "denied-ai-delegation-record" "AI output has been denied authority to approve the action."
 allowed_doc_line_case "denied-ai-capability" "AI output is not capable of approving the action."
 allowed_doc_line_case "denied-ai-ability" "AI output is unable to approve the action."
 allowed_doc_line_case "denied-ai-possessed-ability" "AI output does not have the ability to approve the action."
