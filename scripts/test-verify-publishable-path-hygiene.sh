@@ -66,6 +66,13 @@ create_repo \
   "control-plane/tests/test_docs.py" "EXPECTED_PATH = 'docs/phase-25.md'"
 assert_passes "${clean_repo}"
 
+embedded_wsl_uri_repo="${workdir}/embedded-wsl-uri"
+create_repo \
+  "${embedded_wsl_uri_repo}" \
+  "README.md" "# Embedded WSL URI fixture" \
+  "docs/phase-25.md" "Reference URL: https://example.com/file:///mnt/c/Users""/alice/project"
+assert_passes "${embedded_wsl_uri_repo}"
+
 allowlisted_repo="${workdir}/allowlisted"
 macos_user_segment="Users"
 create_repo \

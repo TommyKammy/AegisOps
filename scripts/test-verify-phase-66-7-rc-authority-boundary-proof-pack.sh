@@ -24,6 +24,8 @@ fail_stderr="${workdir}/fail.err"
 
 fixture_paths=(
   "README.md"
+  "control-plane/aegisops/__init__.py"
+  "control-plane/aegisops/control_plane/publishable_paths.py"
   "docs/phase-66-7-rc-authority-boundary-proof-pack.md"
   "docs/phase-66-1-clean-host-rc-e2e-harness.md"
   "docs/phase-66-2-wazuh-sample-signal-rc-proof.md"
@@ -54,6 +56,7 @@ PY
 )"
 local_user_home="$(printf '/%s/%s/' 'Users' 'example')"
 wsl_user_home="$(printf '/mnt/%s/%s/%s/' 'c' 'Users' 'alice')"
+embedded_wsl_file_uri="https://example.com/file://${wsl_user_home}project"
 
 packet_lines=(
   "journey_run_id=rc66-authority-001"
@@ -159,6 +162,8 @@ copy_valid_repo() {
     mkdir -p "${target}/$(dirname "${path}")"
     cp "${repo_root}/${path}" "${target}/${path}"
   done
+  printf '%s\n' '"""Minimal control-plane test fixture."""' \
+    >"${target}/control-plane/aegisops/control_plane/__init__.py"
   for path in "${target}"/scripts/verify-phase-66-[1-6]-*.sh; do
     printf '%s\n' \
       '#!/usr/bin/env bash' \
@@ -178,7 +183,7 @@ copy_valid_repo() {
 assert_passes() {
   local target="$1"
 
-  if ! PHASE66_7_SKIP_PATH_HYGIENE=1 bash "${verifier}" "${target}" >"${pass_stdout}" 2>"${pass_stderr}"; then
+  if ! bash "${verifier}" "${target}" >"${pass_stdout}" 2>"${pass_stderr}"; then
     echo "Expected verifier to pass for ${target}" >&2
     cat "${pass_stderr}" >&2
     exit 1
@@ -189,7 +194,7 @@ assert_fails_with() {
   local target="$1"
   local expected="$2"
 
-  if PHASE66_7_SKIP_PATH_HYGIENE=1 bash "${verifier}" "${target}" >"${fail_stdout}" 2>"${fail_stderr}"; then
+  if bash "${verifier}" "${target}" >"${fail_stdout}" 2>"${fail_stderr}"; then
     echo "Expected verifier to fail for ${target}" >&2
     exit 1
   fi
@@ -650,6 +655,57 @@ assert_fails_with \
   "${committing_prerequisite_repo}" \
   "prerequisite verifier changed isolated worktree revision"
 
+ignored_prerequisite_repo="${workdir}/ignored-prerequisite"
+copy_valid_repo "${ignored_prerequisite_repo}"
+printf '.phase66-7-prerequisite-cache\n' >"${ignored_prerequisite_repo}/.gitignore"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'printf "hidden prerequisite state\n" >"$1/.phase66-7-prerequisite-cache"' \
+  >"${ignored_prerequisite_repo}/scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh"
+chmod +x "${ignored_prerequisite_repo}/scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh"
+git -C "${ignored_prerequisite_repo}" add \
+  .gitignore \
+  scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh
+git -C "${ignored_prerequisite_repo}" commit -qm "leave ignored prerequisite state"
+append_complete_packet "${ignored_prerequisite_repo}"
+assert_fails_with \
+  "${ignored_prerequisite_repo}" \
+  "prerequisite verifier modified isolated worktree"
+
+symlinked_phase_reference_repo="${workdir}/symlinked-phase-reference"
+copy_valid_repo "${symlinked_phase_reference_repo}"
+outside_phase_reference="${workdir}/outside-phase-reference.md"
+printf 'mutable external proof\n' >"${outside_phase_reference}"
+rm "${symlinked_phase_reference_repo}/docs/phase-66-1-clean-host-rc-e2e-harness.md"
+ln -s \
+  "${outside_phase_reference}" \
+  "${symlinked_phase_reference_repo}/docs/phase-66-1-clean-host-rc-e2e-harness.md"
+git -C "${symlinked_phase_reference_repo}" add \
+  docs/phase-66-1-clean-host-rc-e2e-harness.md
+git -C "${symlinked_phase_reference_repo}" commit -qm "symlink phase evidence"
+append_complete_packet "${symlinked_phase_reference_repo}"
+assert_fails_with \
+  "${symlinked_phase_reference_repo}" \
+  "evidence reference must resolve to a regular Git blob"
+
+symlinked_phase_verifier_repo="${workdir}/symlinked-phase-verifier"
+copy_valid_repo "${symlinked_phase_verifier_repo}"
+outside_phase_verifier="${workdir}/outside-phase-verifier.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"${outside_phase_verifier}"
+chmod +x "${outside_phase_verifier}"
+rm "${symlinked_phase_verifier_repo}/scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh"
+ln -s \
+  "${outside_phase_verifier}" \
+  "${symlinked_phase_verifier_repo}/scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh"
+git -C "${symlinked_phase_verifier_repo}" add \
+  scripts/verify-phase-66-1-clean-host-rc-e2e-harness.sh
+git -C "${symlinked_phase_verifier_repo}" commit -qm "symlink prerequisite verifier"
+append_complete_packet "${symlinked_phase_verifier_repo}"
+assert_fails_with \
+  "${symlinked_phase_verifier_repo}" \
+  "verifier must resolve to a regular Git blob"
+
 missing_negative_manifest_repo="${workdir}/missing-negative-manifest"
 copy_valid_repo "${missing_negative_manifest_repo}"
 rm "${missing_negative_manifest_repo}/evidence/phase-66-7/negative-observations.json"
@@ -659,6 +715,24 @@ append_complete_packet "${missing_negative_manifest_repo}"
 assert_fails_with \
   "${missing_negative_manifest_repo}" \
   "negative evidence reference does not resolve at repository_revision"
+
+symlinked_negative_manifest_repo="${workdir}/symlinked-negative-manifest"
+copy_valid_repo "${symlinked_negative_manifest_repo}"
+outside_negative_manifest="${workdir}/outside-negative-observations.json"
+cp \
+  "${symlinked_negative_manifest_repo}/evidence/phase-66-7/negative-observations.json" \
+  "${outside_negative_manifest}"
+rm "${symlinked_negative_manifest_repo}/evidence/phase-66-7/negative-observations.json"
+ln -s \
+  "${outside_negative_manifest}" \
+  "${symlinked_negative_manifest_repo}/evidence/phase-66-7/negative-observations.json"
+git -C "${symlinked_negative_manifest_repo}" add \
+  evidence/phase-66-7/negative-observations.json
+git -C "${symlinked_negative_manifest_repo}" commit -qm "symlink negative evidence manifest"
+append_complete_packet "${symlinked_negative_manifest_repo}"
+assert_fails_with \
+  "${symlinked_negative_manifest_repo}" \
+  "negative evidence reference must resolve to a regular Git blob"
 
 malformed_negative_manifest_repo="${workdir}/malformed-negative-manifest"
 copy_valid_repo "${malformed_negative_manifest_repo}"
@@ -827,6 +901,24 @@ assert_fails_with \
   "${missing_limitation_manifest_repo}" \
   "limitation evidence reference does not resolve at repository_revision"
 
+symlinked_limitation_manifest_repo="${workdir}/symlinked-limitation-manifest"
+copy_valid_repo "${symlinked_limitation_manifest_repo}"
+outside_limitation_manifest="${workdir}/outside-limitations.json"
+cp \
+  "${symlinked_limitation_manifest_repo}/evidence/phase-66-7/limitations.json" \
+  "${outside_limitation_manifest}"
+rm "${symlinked_limitation_manifest_repo}/evidence/phase-66-7/limitations.json"
+ln -s \
+  "${outside_limitation_manifest}" \
+  "${symlinked_limitation_manifest_repo}/evidence/phase-66-7/limitations.json"
+git -C "${symlinked_limitation_manifest_repo}" add \
+  evidence/phase-66-7/limitations.json
+git -C "${symlinked_limitation_manifest_repo}" commit -qm "symlink limitation manifest"
+append_complete_packet "${symlinked_limitation_manifest_repo}"
+assert_fails_with \
+  "${symlinked_limitation_manifest_repo}" \
+  "limitation evidence reference must resolve to a regular Git blob"
+
 malformed_limitation_manifest_repo="${workdir}/malformed-limitation-manifest"
 copy_valid_repo "${malformed_limitation_manifest_repo}"
 printf '{invalid-json\n' \
@@ -914,6 +1006,22 @@ leak_case \
   "wsl-file-uri" \
   "artifact=file://${wsl_user_home}proof.json" \
   "workstation-local path detected"
+
+path_hygiene_bypass_repo="${workdir}/path-hygiene-bypass"
+copy_valid_repo "${path_hygiene_bypass_repo}"
+printf '\nExternal note: %s\n' \
+  "${local_user_home}operator/private.txt" \
+  >>"${path_hygiene_bypass_repo}/README.md"
+if PHASE66_7_SKIP_PATH_HYGIENE=1 \
+  bash "${verifier}" "${path_hygiene_bypass_repo}" >"${fail_stdout}" 2>"${fail_stderr}"; then
+  echo "Expected path hygiene to remain mandatory" >&2
+  exit 1
+fi
+if ! grep -Fq -- "publishable path hygiene failed" "${fail_stderr}"; then
+  echo "Expected mandatory path-hygiene failure" >&2
+  cat "${fail_stderr}" >&2
+  exit 1
+fi
 
 leak_case \
   "email" \
@@ -1003,6 +1111,26 @@ leak_case \
 leak_case \
   "spaced-refresh-token" \
   "refresh token: supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "session-token" \
+  "session_token=abcdefghijklmnopqrstuvwxyz123456" \
+  "production secret-looking value detected"
+
+leak_case \
+  "session-id" \
+  "session-id=abcdefghijklmnopqrstuvwxyz123456" \
+  "production secret-looking value detected"
+
+leak_case \
+  "cookie-header" \
+  "Cookie: session=abcdefghijklmnopqrstuvwxyz123456" \
+  "production secret-looking value detected"
+
+leak_case \
+  "cookie-token" \
+  "cookie_token=abcdefghijklmnopqrstuvwxyz123456" \
   "production secret-looking value detected"
 
 leak_case \
@@ -1146,6 +1274,16 @@ leak_case \
   "customer-private or ticket-private data detected"
 
 leak_case \
+  "markdown-emphasis-private-data-claim" \
+  "The proof pack includes raw **customer** data." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "markdown-link-private-data-claim" \
+  "The proof pack includes [raw customer](https://invalid.example) data." \
+  "customer-private or ticket-private data detected"
+
+leak_case \
   "html-entity-email" \
   "customer_contact=analyst&#64;example.com" \
   "customer-private or ticket-private data detected"
@@ -1186,6 +1324,12 @@ overclaim_case "unrelated-denial-before-mandatory-ai-approval" "AI output cannot
 overclaim_case "html-tag-split-mandatory-ai-approval" "AI <span></span>output must approve the action."
 overclaim_case "ai-permitted-approval" "AI output is permitted to approve the action."
 overclaim_case "ai-authorized-execution" "AI output is authorized to execute the action."
+overclaim_case "ai-capable-of-approval" "AI output is capable of approving the action."
+overclaim_case "ai-able-to-approve" "AI output is able to approve the action."
+overclaim_case "ai-has-ability-to-approve" "AI output has the ability to approve the action."
+overclaim_case "ai-possesses-capability-to-close" "AI output possesses capability to close the case."
+overclaim_case "elided-ai-capability" "AI output cannot approve the action but able to execute the action."
+overclaim_case "unrelated-denial-before-ai-capability" "AI output cannot recommend changes and capable of approving the action."
 overclaim_case "ai-has-authority" "AI output has authority to approve the action."
 overclaim_case "ai-retains-authority" "AI output retains authority to approve the action."
 overclaim_case "ai-retained-authority" "AI output retained authority to approve the action."
@@ -1246,6 +1390,10 @@ allowed_doc_line_case "redacted-secret" "api_key=redacted"
 allowed_doc_line_case "redacted-markdown-escaped-secret" 'api\_key=redacted'
 allowed_doc_line_case "redacted-markdown-emphasis-secret" "api_*key*=redacted"
 allowed_doc_line_case "redacted-spaced-api-key" "API key: redacted"
+allowed_doc_line_case "redacted-session-token" "session_token=redacted"
+allowed_doc_line_case "absent-session-id" "session-id=absent"
+allowed_doc_line_case "redacted-cookie" "Cookie: redacted"
+allowed_doc_line_case "removed-cookie-token" "cookie_token=removed"
 allowed_doc_line_case "redacted-html-split-api-key" "api_key<span></span>=redacted"
 allowed_doc_line_case \
   "redacted-multiline-html-api-key" \
@@ -1256,11 +1404,13 @@ allowed_doc_line_case "redacted-customer-identifiers" "customer identifiers: red
 allowed_doc_line_case "removed-tenant-id" "tenant ID: removed"
 allowed_doc_line_case "redacted-markdown-emphasis-private-data" "customer_*name*=redacted"
 allowed_doc_line_case "redacted-customer-data-claim" "The proof pack includes redacted customer data."
+allowed_doc_line_case "redacted-markdown-customer-data-claim" "The proof pack includes redacted **customer** data."
 allowed_doc_line_case "absent-customer-data-claim" "The proof pack contains no customer data."
 allowed_doc_line_case "denied-unredacted-customer-data-claim" "The proof pack does not include unredacted customer data."
 allowed_doc_line_case "denied-passive-customer-data-claim" "Customer data is not retained in the proof pack."
 allowed_doc_line_case "redacted-passive-customer-data-claim" "Redacted customer data is included in the proof pack."
 allowed_doc_line_case "denied-private-data-claim" "The proof pack does not include raw customer payload."
+allowed_doc_line_case "denied-markdown-private-data-claim" "The proof pack does not include raw **customer** data."
 allowed_doc_line_case "must-not-retain-private-data" "The proof pack must not retain raw customer payload."
 allowed_doc_line_case "adverbially-denied-private-data" "The proof pack does not intentionally include raw customer payload."
 allowed_doc_line_case "denied-private-data-list" "The proof pack does not include, retain, or publish raw customer payload."
@@ -1274,6 +1424,9 @@ allowed_doc_line_case "denied-required-ai-approval" "AI output is not required t
 allowed_doc_line_case "denied-html-split-ai-approval" "AI <span></span>output must not approve the action."
 allowed_doc_line_case "denied-ai-permission" "AI output is not permitted to approve the action."
 allowed_doc_line_case "denied-ai-authorization" "AI output cannot be authorized to execute the action."
+allowed_doc_line_case "denied-ai-capability" "AI output is not capable of approving the action."
+allowed_doc_line_case "denied-ai-ability" "AI output is unable to approve the action."
+allowed_doc_line_case "denied-ai-possessed-ability" "AI output does not have the ability to approve the action."
 allowed_doc_line_case "denied-ai-authority" "AI output does not have authority to approve the action."
 allowed_doc_line_case "denied-retained-ai-authority" "AI output does not retain authority to approve the action."
 allowed_doc_line_case "denied-granted-ai-authority" "AI output is granted no authority to approve the action."
@@ -1285,6 +1438,7 @@ allowed_doc_line_case "denied-ai-truth" "AI output is not approval truth."
 allowed_doc_line_case "denied-release-readiness" "Release artifacts do not prove RC readiness."
 allowed_doc_line_case "denied-production-ready" "This proof pack is not production-ready."
 allowed_doc_line_case "denied-ready-for-production" "This proof pack is not ready for production."
+allowed_doc_line_case "embedded-wsl-file-uri-url" "Reference: ${embedded_wsl_file_uri}"
 
 real_worktree="${workdir}/real-prerequisite-worktree"
 git -C "${repo_root}" worktree add --detach --quiet "${real_worktree}" HEAD

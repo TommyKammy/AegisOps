@@ -56,8 +56,9 @@ def is_workstation_local_path(text: str) -> bool:
         candidates.append(json_unescaped_slashes)
 
     for candidate in candidates:
-        if _WSL_WINDOWS_USER_FILE_URI_RE.search(candidate):
-            return True
+        for match in _WSL_WINDOWS_USER_FILE_URI_RE.finditer(candidate):
+            if _has_text_path_boundary(candidate, match.start()):
+                return True
 
         for match in _WSL_WINDOWS_USER_PATH_IN_TEXT_RE.finditer(candidate):
             if _has_text_path_boundary(candidate, match.start()):

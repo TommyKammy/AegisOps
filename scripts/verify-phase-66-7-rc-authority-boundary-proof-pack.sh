@@ -238,12 +238,12 @@ required_phrases = (
     "Every record contains exactly `field`, `surface`, `attempt`, `result`, `authoritative_record`, `observed_at`, and `journey_run_id`; missing, duplicate, extra, non-string, or packet-mismatched values fail closed.",
     "Passing one negative observation cannot compensate for a missing surface.",
     "Each Phase 66.1-66.6 evidence value must record `evidence_id`, `evidence_reference`, `verifier`, `result=passed`, `journey_run_id`, and `repository_revision`.",
-    "Each Phase 66.1-66.6 `evidence_id` must be `sha256:<digest>` for the exact referenced proof document bytes at `repository_revision`.",
+    "Each Phase 66.1-66.6 `evidence_id` must be `sha256:<digest>` for the exact referenced proof document Git blob bytes at `repository_revision`.",
     "The top-level `repository_revision` identifies the evidence-producing commit, not the commit that later stores the proof packet.",
-    "The verifier must check out that exact revision in an isolated worktree, resolve each required evidence reference there, and execute every Phase 66.1-66.6 focused verifier there.",
-    "Packet labels or a declared `result=passed` cannot substitute for resolved proof surfaces and successful verifier execution.",
-    "Each prerequisite verifier must leave the isolated worktree at `repository_revision` with no tracked or untracked changes.",
-    "A verifier that changes the worktree revision or mutates any worktree content fails closed.",
+    "The verifier must check out that exact revision in an isolated worktree, require every referenced proof surface and prerequisite verifier to be a regular Git blob in that commit, bind evidence digests to those Git blob bytes, and execute every Phase 66.1-66.6 focused verifier there.",
+    "Packet labels, symlink targets, or a declared `result=passed` cannot substitute for repository-owned proof surfaces and successful verifier execution.",
+    "Each prerequisite verifier must leave the isolated worktree at `repository_revision` with no tracked, untracked, or ignored changes.",
+    "A verifier that changes the worktree revision or leaves any worktree content behind fails closed.",
     "The same isolated worktree must resolve the negative-observation manifest, bind its exact bytes to every negative `evidence_id`, and match every packet observation to one manifest record.",
     "A syntactically valid negative observation without that immutable record fails closed.",
     "Every `owner_review` value must record `artifact_owner`, `reviewer`, `reviewed_at`, `disposition`, and `follow_up_owner`.",
@@ -794,6 +794,53 @@ if materialized_fields:
         )
         worktree_added = True
 
+        def resolve_regular_git_blob(reference: str, description: str) -> bytes:
+            tree_result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo_root),
+                    "ls-tree",
+                    "-z",
+                    "--full-tree",
+                    repository_revision,
+                    "--",
+                    reference,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            entries = [entry for entry in tree_result.stdout.split(b"\0") if entry]
+            if tree_result.returncode != 0 or len(entries) != 1:
+                fail(f"{description} does not resolve at repository_revision")
+            try:
+                metadata, resolved_path = entries[0].split(b"\t", 1)
+                mode, object_type, object_id = metadata.split()
+            except ValueError:
+                fail(f"{description} does not resolve at repository_revision")
+            if resolved_path != reference.encode("utf-8"):
+                fail(f"{description} does not resolve at repository_revision")
+            if mode not in {b"100644", b"100755"} or object_type != b"blob":
+                fail(
+                    f"{description} must resolve to a regular Git blob at "
+                    "repository_revision"
+                )
+            blob_result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo_root),
+                    "cat-file",
+                    "blob",
+                    object_id.decode("ascii"),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            if blob_result.returncode != 0 or not blob_result.stdout:
+                fail(f"{description} does not resolve at repository_revision")
+            return blob_result.stdout
+
         def assert_evidence_worktree_immutable(field: str) -> None:
             head_result = subprocess.run(
                 ["git", "-C", str(evidence_worktree), "rev-parse", "HEAD"],
@@ -817,6 +864,7 @@ if materialized_fields:
                     "status",
                     "--porcelain=v1",
                     "--untracked-files=all",
+                    "--ignored=matching",
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -830,15 +878,26 @@ if materialized_fields:
 
         for field, (expected_reference, expected_verifier) in phase_verifiers.items():
             assert_evidence_worktree_immutable(field)
-            reference_path = evidence_worktree / expected_reference
+            reference_bytes = resolve_regular_git_blob(
+                expected_reference,
+                f"invalid {field}: evidence reference",
+            )
+            verifier_bytes = resolve_regular_git_blob(
+                expected_verifier,
+                f"invalid {field}: verifier",
+            )
             verifier_path = evidence_worktree / expected_verifier
-            if not reference_path.is_file() or reference_path.stat().st_size == 0:
-                fail(f"invalid {field}: evidence reference does not resolve at repository_revision")
-            resolved_evidence_id = "sha256:" + hashlib.sha256(reference_path.read_bytes()).hexdigest()
+            resolved_evidence_id = "sha256:" + hashlib.sha256(reference_bytes).hexdigest()
             if phase_evidence_parts[field]["evidence_id"].lower() != resolved_evidence_id:
                 fail(f"invalid {field}: evidence_id does not match resolved evidence reference")
-            if not verifier_path.is_file() or verifier_path.stat().st_size == 0:
+            if verifier_path.is_symlink() or not verifier_path.is_file():
                 fail(f"invalid {field}: verifier does not resolve at repository_revision")
+            try:
+                checked_out_verifier_bytes = verifier_path.read_bytes()
+            except OSError:
+                fail(f"invalid {field}: verifier does not resolve at repository_revision")
+            if checked_out_verifier_bytes != verifier_bytes:
+                fail(f"invalid {field}: verifier does not match repository_revision")
             verifier_result = subprocess.run(
                 ["bash", str(verifier_path), str(evidence_worktree)],
                 stdout=subprocess.PIPE,
@@ -851,18 +910,19 @@ if materialized_fields:
                 fail(f"invalid {field}: prerequisite verifier failed: {diagnostic}")
             assert_evidence_worktree_immutable(field)
 
-        negative_manifest_path = evidence_worktree / negative_manifest_reference
-        if not negative_manifest_path.is_file() or negative_manifest_path.stat().st_size == 0:
-            fail("negative evidence reference does not resolve at repository_revision")
+        negative_manifest_bytes = resolve_regular_git_blob(
+            negative_manifest_reference,
+            "negative evidence reference",
+        )
         resolved_negative_evidence_id = (
-            "sha256:" + hashlib.sha256(negative_manifest_path.read_bytes()).hexdigest()
+            "sha256:" + hashlib.sha256(negative_manifest_bytes).hexdigest()
         )
         for field, parts in negative_evidence_parts.items():
             if parts["evidence_id"].lower() != resolved_negative_evidence_id:
                 fail(f"invalid {field}: evidence_id does not match resolved evidence reference")
         try:
-            negative_manifest = json.loads(negative_manifest_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
+            negative_manifest = json.loads(negative_manifest_bytes.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError):
             fail("negative evidence reference must contain valid UTF-8 JSON")
         if not isinstance(negative_manifest, dict) or set(negative_manifest) != {
             "schema_version",
@@ -908,17 +968,18 @@ if materialized_fields:
             if records_by_field[field] != expected_record:
                 fail(f"invalid {field}: resolved negative evidence record does not match packet")
 
-        limitation_manifest_path = evidence_worktree / limitation_manifest_reference
-        if not limitation_manifest_path.is_file() or limitation_manifest_path.stat().st_size == 0:
-            fail("limitation evidence reference does not resolve at repository_revision")
+        limitation_manifest_bytes = resolve_regular_git_blob(
+            limitation_manifest_reference,
+            "limitation evidence reference",
+        )
         resolved_limitation_evidence_id = (
-            "sha256:" + hashlib.sha256(limitation_manifest_path.read_bytes()).hexdigest()
+            "sha256:" + hashlib.sha256(limitation_manifest_bytes).hexdigest()
         )
         if limitations["evidence_id"].lower() != resolved_limitation_evidence_id:
             fail("invalid limitation_references: evidence_id does not match resolved evidence reference")
         try:
-            limitation_manifest = json.loads(limitation_manifest_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
+            limitation_manifest = json.loads(limitation_manifest_bytes.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError):
             fail("limitation evidence reference must contain valid UTF-8 JSON")
         if not isinstance(limitation_manifest, dict) or set(limitation_manifest) != {
             "schema_version",
@@ -1045,8 +1106,10 @@ if materialized_fields:
 redaction_marker = re.compile(r"(?:redacted|absent|rejected|forbidden|removed)", re.IGNORECASE)
 sensitive_assignment = re.compile(
     r"(?:^|[;,\s{|])`?(?:password|passwd|secret(?:[ _-]*key)?|client[ _-]*secret|"
-    r"x[ _-]*api[ _-]*key|api[ _-]*key|access[ _-]*token|refresh[ _-]*token|"
-    r"private[ _-]*key|"
+    r"x[ _-]*api[ _-]*key|api[ _-]*key|"
+    r"(?:access|refresh|session|auth|bearer|csrf|id)[ _-]*token|"
+    r"session[ _-]*id|(?:session|auth)[ _-]*cookie|"
+    r"cookie(?:[ _-]*(?:token|value))?|private[ _-]*key|"
     r"authorization)`?\s*[:=]\s*(?P<value>[^;,|}\r\n]+)",
     re.IGNORECASE,
 )
@@ -1095,14 +1158,18 @@ workstation_patterns = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"file:(?://(?:localhost)?/|/+)mnt/[a-z]/"
+        r"(?<![A-Za-z0-9_./\\-])file:(?://(?:localhost)?/|/+)mnt/[a-z]/"
         + wsl_windows_home_segment
         + r"/[^\s`\"'()<>/]+/",
         re.IGNORECASE,
     ),
     re.compile(r"(?:^|[\s`\"'(<:=])~/(?:[^\s`\"'()<>]+)", re.IGNORECASE),
     re.compile(r"(?:^|[\s`\"'(<:=])[A-Za-z]:[\\/]Users[\\/][^\s`\"'()<>\\/]+[\\/]", re.IGNORECASE),
-    re.compile(r"file://(?:[^\s`\"'()<>]*/)?(?:(?:Users|home)/[^\s`\"'()<>/]+|root)/", re.IGNORECASE),
+    re.compile(
+        r"(?<![A-Za-z0-9_./\\-])file://(?:[^\s`\"'()<>]*/)?"
+        r"(?:(?:Users|home)/[^\s`\"'()<>/]+|root)/",
+        re.IGNORECASE,
+    ),
 )
 if any(
     pattern.search(hygiene_input)
@@ -1157,7 +1224,7 @@ private_claim_denial = re.compile(
     rf"(?:(?!{private_denial_boundary}).){{0,60}}$",
     re.IGNORECASE,
 )
-for line in rendered_doc_raw.splitlines():
+for line in normalize_inline_markdown(rendered_doc_raw).splitlines():
     for match in private_data_claim.finditer(line):
         claim_prefix = line[match.start() : match.start("object")]
         if private_claim_safe_qualifier.search(claim_prefix):
@@ -1245,6 +1312,17 @@ claim_patterns = (
         re.IGNORECASE,
     ),
     re.compile(
+        rf"\b{subordinate_subject}\b.{{0,80}}\b"
+        rf"(?:(?:(?:is|are|was|were|becomes?|remains?)\s+"
+        rf"(?:(?:not|never|fully|explicitly|independently|directly)\s+)*"
+        rf")?(?:capable\s+of|able\s+to)|"
+        rf"{authority_possession_verb}\s+"
+        rf"(?:(?:the|full|explicit|independent|direct|delegated)\s+)*"
+        rf"(?:ability|capability)\s+(?:to|of))\s+"
+        rf"(?:(?:automatically|independently|directly)\s+)?{authority_action}\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b{subordinate_subject}\b.{{0,100}}\b(?:proves?|confirms?|establishes?|satisfies?|passes?|grants?|achieves?|certifies?|validates?)\b.{{0,100}}\b{readiness_outcome}\b",
         re.IGNORECASE,
     ),
@@ -1274,7 +1352,7 @@ denial_scope_boundary = (
     rf"(?:(?:{subordinate_subject}|it|they|this)\b\s*)?"
     r"(?:can|could|may|might|will|would|must|should|shall|does|do|"
     r"has\s+to|have\s+to|needs?\s+to|ought\s+to|"
-    rf"is|are|{authority_possession_verb}|"
+    rf"is|are|capable|able|{authority_possession_verb}|"
     r"automatically|independently|directly|"
     r"becomes?|serves?|acts?|"
     r"owns?|defines?|determines?|proves?|confirms?|establishes?|satisfies?|passes?|"
@@ -1310,7 +1388,7 @@ def claim_clauses(text: str):
         rf"does\s+not|do\s+not|did\s+not|will\s+not|would\s+not|should\s+not|"
         rf"may\s+not|must\s+not|shall\s+not|has\s+to|have\s+to|needs?\s+to|ought\s+to|"
         rf"automatically|independently|directly|"
-        rf"is|are|{authority_possession_verb}|becomes?|serves?|acts?|owns?|defines?|determines?|"
+        rf"is|are|capable|able|{authority_possession_verb}|becomes?|serves?|acts?|owns?|defines?|determines?|"
         rf"proves?|confirms?|establishes?|satisfies?|passes?|grants?|achieves?|"
         rf"certifies?|validates?|delivers?|enables?|provides?|"
         rf"{direct_authority_action})\b",
@@ -1360,15 +1438,13 @@ for claim_input in claim_inputs:
 print("Phase 66.7 proof-pack document, evidence schema, secret hygiene, and authority checks pass.")
 PY
 
-if [[ "${PHASE66_7_SKIP_PATH_HYGIENE:-0}" != "1" ]]; then
-  tmp_dir="$(mktemp -d)"
-  trap 'rm -rf "${tmp_dir}"' EXIT
-  path_hygiene_stderr="${tmp_dir}/path-hygiene.err"
-  if ! bash "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${repo_root}" >/dev/null 2>"${path_hygiene_stderr}"; then
-    cat "${path_hygiene_stderr}" >&2
-    echo "Forbidden Phase 66.7 RC authority-boundary proof pack: publishable path hygiene failed" >&2
-    exit 1
-  fi
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "${tmp_dir}"' EXIT
+path_hygiene_stderr="${tmp_dir}/path-hygiene.err"
+if ! bash "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${repo_root}" >/dev/null 2>"${path_hygiene_stderr}"; then
+  cat "${path_hygiene_stderr}" >&2
+  echo "Forbidden Phase 66.7 RC authority-boundary proof pack: publishable path hygiene failed" >&2
+  exit 1
 fi
 
 echo "Phase 66.7 RC authority-boundary proof-pack contract and focused negative checks pass."

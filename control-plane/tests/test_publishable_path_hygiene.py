@@ -45,6 +45,7 @@ class PublishablePathHygieneTests(unittest.TestCase):
         self.assertTrue(is_workstation_local_path(WSL_USERS_PATH))
         self.assertTrue(is_workstation_local_path(f"artifact={WSL_USERS_PATH}"))
         self.assertTrue(is_workstation_local_path(WSL_USERS_FILE_URI))
+        self.assertTrue(is_workstation_local_path(f"artifact={WSL_USERS_FILE_URI}"))
         self.assertTrue(
             is_workstation_local_path(
                 f"file://localhost{WSL_USERS_PATH}"
@@ -101,6 +102,16 @@ class PublishablePathHygieneTests(unittest.TestCase):
         self.assertFalse(
             is_workstation_local_path(
                 f"https://example.com/mnt/c/{WINDOWS_HOME_SEGMENT}/alice/project/docs"
+            )
+        )
+        self.assertFalse(
+            is_workstation_local_path(
+                f"https://example.com/{WSL_USERS_FILE_URI}"
+            )
+        )
+        self.assertFalse(
+            is_workstation_local_path(
+                f"prefix{WSL_USERS_FILE_URI}"
             )
         )
         self.assertFalse(is_workstation_local_path(r"D:\Program Files\AegisOps"))
