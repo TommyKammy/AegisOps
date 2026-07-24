@@ -66,6 +66,13 @@ create_repo \
   "control-plane/tests/test_docs.py" "EXPECTED_PATH = 'docs/phase-25.md'"
 assert_passes "${clean_repo}"
 
+embedded_wsl_uri_repo="${workdir}/embedded-wsl-uri"
+create_repo \
+  "${embedded_wsl_uri_repo}" \
+  "README.md" "# Embedded WSL URI fixture" \
+  "docs/phase-25.md" "Reference URL: https://example.com/file:///mnt/c/Users""/alice/project"
+assert_passes "${embedded_wsl_uri_repo}"
+
 allowlisted_repo="${workdir}/allowlisted"
 macos_user_segment="Users"
 create_repo \
@@ -82,6 +89,22 @@ create_repo \
   "docs/phase-25.md" "Leaked path: /Users""/jp.infra/Library/Mobile Documents/com~apple~CloudDocs/ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md" \
   "control-plane/tests/test_docs.py" "EXPECTED_PATH = 'docs/phase-25.md'"
 assert_fails_with "${failing_repo}" "docs/phase-25.md:1:"
+
+wsl_failing_repo="${workdir}/wsl-failing"
+create_repo \
+  "${wsl_failing_repo}" \
+  "README.md" "# WSL failing fixture" \
+  "docs/phase-25.md" "Leaked path: /mnt/c/Users""/alice/private/project" \
+  "control-plane/tests/test_docs.py" "EXPECTED_PATH = 'docs/phase-25.md'"
+assert_fails_with "${wsl_failing_repo}" "docs/phase-25.md:1:"
+
+wsl_uri_failing_repo="${workdir}/wsl-uri-failing"
+create_repo \
+  "${wsl_uri_failing_repo}" \
+  "README.md" "# WSL URI failing fixture" \
+  "docs/phase-25.md" "Leaked path: file:///mnt/c/Users""/alice/private/project" \
+  "control-plane/tests/test_docs.py" "EXPECTED_PATH = 'docs/phase-25.md'"
+assert_fails_with "${wsl_uri_failing_repo}" "docs/phase-25.md:1:"
 
 script_failing_repo="${workdir}/script-failing"
 create_repo \

@@ -24,6 +24,8 @@ UNIX_USERS_PATH = f"/{MACOS_HOME_SEGMENT}/alice/project/docs"
 UNIX_HOME_PATH = f"/{LINUX_HOME_SEGMENT}/alice/project/docs"
 WINDOWS_USERS_PATH = rf"C:\{WINDOWS_HOME_SEGMENT}\alice\project\docs"
 WINDOWS_USERS_PATH_POSIX = f"C:/{WINDOWS_HOME_SEGMENT}/alice/project/docs"
+WSL_USERS_PATH = f"/mnt/c/{WINDOWS_HOME_SEGMENT}/alice/project/docs"
+WSL_USERS_FILE_URI = f"file://{WSL_USERS_PATH}"
 OFFENDER_PATH = f"/{MACOS_HOME_SEGMENT}/alice/private/project"
 ROOT_SEGMENT = "root"
 ROOT_PATH = f"/{ROOT_SEGMENT}/private/project"
@@ -40,6 +42,15 @@ class PublishablePathHygieneTests(unittest.TestCase):
         self.assertTrue(is_workstation_local_path(WINDOWS_USERS_PATH))
         self.assertTrue(is_workstation_local_path(f"path={WINDOWS_USERS_PATH_POSIX}"))
         self.assertTrue(is_workstation_local_path(f"path:{WINDOWS_USERS_PATH_POSIX}"))
+        self.assertTrue(is_workstation_local_path(WSL_USERS_PATH))
+        self.assertTrue(is_workstation_local_path(f"artifact={WSL_USERS_PATH}"))
+        self.assertTrue(is_workstation_local_path(WSL_USERS_FILE_URI))
+        self.assertTrue(is_workstation_local_path(f"artifact={WSL_USERS_FILE_URI}"))
+        self.assertTrue(
+            is_workstation_local_path(
+                f"file://localhost{WSL_USERS_PATH}"
+            )
+        )
         self.assertTrue(
             is_workstation_local_path(
                 f"path:{escaped_slash}Users{escaped_slash}alice"
@@ -63,6 +74,19 @@ class PublishablePathHygieneTests(unittest.TestCase):
                 f"{escaped_slash}project{escaped_slash}docs"
             )
         )
+        self.assertTrue(
+            is_workstation_local_path(
+                f"artifact={escaped_slash}mnt{escaped_slash}c{escaped_slash}Users"
+                f"{escaped_slash}alice{escaped_slash}project{escaped_slash}docs"
+            )
+        )
+        self.assertTrue(
+            is_workstation_local_path(
+                f"file:{escaped_slash}{escaped_slash}{escaped_slash}mnt"
+                f"{escaped_slash}c{escaped_slash}Users{escaped_slash}alice"
+                f"{escaped_slash}project{escaped_slash}docs"
+            )
+        )
 
     def test_ignores_urls_and_non_user_windows_paths(self) -> None:
         self.assertFalse(
@@ -73,6 +97,21 @@ class PublishablePathHygieneTests(unittest.TestCase):
         self.assertFalse(
             is_workstation_local_path(
                 f"https://example.com/C:/{WINDOWS_HOME_SEGMENT}/alice/project/docs"
+            )
+        )
+        self.assertFalse(
+            is_workstation_local_path(
+                f"https://example.com/mnt/c/{WINDOWS_HOME_SEGMENT}/alice/project/docs"
+            )
+        )
+        self.assertFalse(
+            is_workstation_local_path(
+                f"https://example.com/{WSL_USERS_FILE_URI}"
+            )
+        )
+        self.assertFalse(
+            is_workstation_local_path(
+                f"prefix{WSL_USERS_FILE_URI}"
             )
         )
         self.assertFalse(is_workstation_local_path(r"D:\Program Files\AegisOps"))
