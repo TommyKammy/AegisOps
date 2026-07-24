@@ -963,6 +963,31 @@ leak_case \
   "production secret-looking value detected"
 
 leak_case \
+  "multiline-html-api-key-assignment" \
+  $'<span>api_key</span>\n<span>=supersecretvalue123</span>' \
+  "production secret-looking value detected"
+
+leak_case \
+  "markdown-emphasis-api-key" \
+  "api_*key*=supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "markdown-underscore-emphasis-api-key" \
+  "_API_ key: supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "markdown-link-api-key" \
+  "[API](https://invalid.example) key: supersecretvalue123" \
+  "production secret-looking value detected"
+
+leak_case \
+  "markdown-link-uri-credentials" \
+  "[support](https://operator:supersecretvalue123@invalid.example)" \
+  "production secret-looking value detected"
+
+leak_case \
   "html-attribute-api-key" \
   '<span api_key="supersecretvalue123"></span>' \
   "production secret-looking value detected"
@@ -1005,6 +1030,16 @@ leak_case \
 leak_case \
   "html-entity-private-assignment" \
   "customer_name&#61;AcmeCorp" \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "multiline-html-private-assignment" \
+  $'<span>customer_name</span>\n<span>=AcmeCorp</span>' \
+  "customer-private or ticket-private data detected"
+
+leak_case \
+  "markdown-emphasis-private-assignment" \
+  "customer_*name*=AcmeCorp" \
   "customer-private or ticket-private data detected"
 
 leak_case \
@@ -1121,9 +1156,14 @@ overclaim_case "source-shortcut" "Source-admission shortcut is allowed."
 
 allowed_doc_line_case "redacted-secret" "api_key=redacted"
 allowed_doc_line_case "redacted-markdown-escaped-secret" 'api\_key=redacted'
+allowed_doc_line_case "redacted-markdown-emphasis-secret" "api_*key*=redacted"
 allowed_doc_line_case "redacted-spaced-api-key" "API key: redacted"
 allowed_doc_line_case "redacted-html-split-api-key" "api_key<span></span>=redacted"
+allowed_doc_line_case \
+  "redacted-multiline-html-api-key" \
+  $'<span>api_key</span>\n<span>=redacted</span>'
 allowed_doc_line_case "quoted-removed-private-data" "customer_name=\"removed\""
+allowed_doc_line_case "redacted-markdown-emphasis-private-data" "customer_*name*=redacted"
 allowed_doc_line_case "redacted-customer-data-claim" "The proof pack includes redacted customer data."
 allowed_doc_line_case "absent-customer-data-claim" "The proof pack contains no customer data."
 allowed_doc_line_case "denied-unredacted-customer-data-claim" "The proof pack does not include unredacted customer data."
@@ -1134,6 +1174,7 @@ allowed_doc_line_case "must-not-retain-private-data" "The proof pack must not re
 allowed_doc_line_case "adverbially-denied-private-data" "The proof pack does not intentionally include raw customer payload."
 allowed_doc_line_case "denied-private-data-list" "The proof pack does not include, retain, or publish raw customer payload."
 allowed_doc_line_case "denied-ai-approval" "AI output can not approve the action."
+allowed_doc_line_case "denied-nor-ai-execution" "AI output cannot approve the action, nor can execute the action."
 allowed_doc_line_case "denied-mandatory-ai-approval" "AI output must not approve the action."
 allowed_doc_line_case "denied-advisory-ai-approval" "AI output should not approve the action."
 allowed_doc_line_case "denied-shall-ai-approval" "AI output shall not approve the action."

@@ -92,6 +92,24 @@ def normalize_markdown_escapes(text: str) -> str:
     return markdown_escape_pattern.sub(r"\1", text)
 
 
+def normalize_inline_markdown(text: str) -> str:
+    replacements = (
+        (r"!\[([^\]\n]*)\]\([^)\n]*\)", r"\1"),
+        (r"\[([^\]\n]+)\]\([^)\n]*\)", r"\1"),
+        (r"\[([^\]\n]+)\]\[[^\]\n]*\]", r"\1"),
+        (r"(`+)([^`\n]*?)\1", r"\2"),
+        (r"(\*{1,3})(?=\S)(.+?)(?<=\S)\1", r"\2"),
+        (r"(?<!\w)(_{1,3})(?=\S)(.+?)(?<=\S)\1(?!\w)", r"\2"),
+        (r"(~~)(?=\S)(.+?)(?<=\S)\1", r"\2"),
+    )
+    for pattern, replacement in replacements:
+        previous = ""
+        while previous != text:
+            previous = text
+            text = re.sub(pattern, replacement, text)
+    return text
+
+
 class VisibleHTMLTextRenderer(HTMLParser):
     block_tags = {
         "address",
@@ -1006,12 +1024,13 @@ def assignment_contains_forbidden_value(pattern: re.Pattern, line: str) -> bool:
     return False
 
 
-secret_hygiene_inputs = (rendered_doc_raw, rendered_source_doc_raw)
+base_hygiene_inputs = (rendered_doc_raw, rendered_source_doc_raw)
+secret_hygiene_inputs = base_hygiene_inputs + tuple(
+    normalize_inline_markdown(hygiene_input)
+    for hygiene_input in base_hygiene_inputs
+)
 if any(
-    any(
-        assignment_contains_forbidden_value(sensitive_assignment, line)
-        for line in hygiene_input.splitlines()
-    )
+    assignment_contains_forbidden_value(sensitive_assignment, hygiene_input)
     or any(pattern.search(hygiene_input) for pattern in secret_patterns)
     for hygiene_input in secret_hygiene_inputs
 ):
@@ -1076,10 +1095,7 @@ private_claim_safe_qualifier = re.compile(
 )
 if any(
     email_pattern.search(hygiene_input)
-    or any(
-        assignment_contains_forbidden_value(private_assignment, line)
-        for line in hygiene_input.splitlines()
-    )
+    or assignment_contains_forbidden_value(private_assignment, hygiene_input)
     for hygiene_input in secret_hygiene_inputs
 ):
     fail("customer-private or ticket-private data detected")
