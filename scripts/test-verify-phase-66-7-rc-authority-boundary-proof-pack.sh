@@ -493,6 +493,40 @@ append_doc_line \
   'journey_<span></span>run_id=rc66-fabricated-001'
 assert_fails_with "${inline_html_field_repo}" "raw HTML evidence syntax is not supported"
 
+details_html_field_repo="${workdir}/details-html-field"
+copy_valid_repo "${details_html_field_repo}"
+append_doc_line \
+  "${details_html_field_repo}" \
+  '<details>journey_run_id=rc66-fabricated-001</details>'
+assert_fails_with "${details_html_field_repo}" "raw HTML evidence syntax is not supported"
+
+multiline_details_html_field_repo="${workdir}/multiline-details-html-field"
+copy_valid_repo "${multiline_details_html_field_repo}"
+append_doc_line \
+  "${multiline_details_html_field_repo}" \
+  $'<details>\nrepository_revision=0000000000000000000000000000000000000000\n</details>'
+assert_fails_with \
+  "${multiline_details_html_field_repo}" \
+  "raw HTML evidence syntax is not supported"
+
+unclosed_details_html_field_repo="${workdir}/unclosed-details-html-field"
+copy_valid_repo "${unclosed_details_html_field_repo}"
+append_doc_line \
+  "${unclosed_details_html_field_repo}" \
+  $'<details>\njourney_run_id=rc66-fabricated-001'
+assert_fails_with \
+  "${unclosed_details_html_field_repo}" \
+  "raw HTML evidence syntax is not supported"
+
+escaped_details_html_field_repo="${workdir}/escaped-details-html-field"
+copy_valid_repo "${escaped_details_html_field_repo}"
+append_doc_line \
+  "${escaped_details_html_field_repo}" \
+  $'<details>\njourney\\_run\\_id=rc66-fabricated-001\n</details>'
+assert_fails_with \
+  "${escaped_details_html_field_repo}" \
+  "raw HTML evidence syntax is not supported"
+
 packet_mutation_case \
   "bad-journey" \
   "journey_run_id" \
@@ -674,6 +708,12 @@ packet_mutation_case \
   "follow_up_at must be after decision_at"
 
 packet_mutation_case \
+  "far-future-follow-up" \
+  "limitation_references" \
+  "evidence_id=sha256:__LIMITATION_EVIDENCE_DIGEST__; evidence_reference=evidence/phase-66-7/limitations.json; ids=lim-66-7-001; owner=release-owner; decision_at=${observed_at}; follow_up_at=2999-01-01T00:00:00Z" \
+  "follow_up_at must be no more than 90 days after decision_at"
+
+packet_mutation_case \
   "fabricated-limitation-evidence-id" \
   "limitation_references" \
   "evidence_id=sha256:0000000000000000000000000000000000000000000000000000000000000000; evidence_reference=evidence/phase-66-7/limitations.json; ids=lim-66-7-001; owner=release-owner; decision_at=${observed_at}; follow_up_at=${follow_up_at}" \
@@ -749,6 +789,26 @@ append_complete_packet "${unaccepted_limitation_repo}"
 assert_fails_with \
   "${unaccepted_limitation_repo}" \
   "limitation manifest record lim-66-7-001 must be accepted"
+
+far_future_limitation_manifest_repo="${workdir}/far-future-limitation-manifest"
+copy_valid_repo "${far_future_limitation_manifest_repo}"
+MANIFEST="${far_future_limitation_manifest_repo}/evidence/phase-66-7/limitations.json" \
+  python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+path = Path(os.environ["MANIFEST"])
+manifest = json.loads(path.read_text(encoding="utf-8"))
+manifest["limitations"][0]["follow_up_at"] = "2999-01-01T00:00:00Z"
+path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+git -C "${far_future_limitation_manifest_repo}" add evidence/phase-66-7/limitations.json
+git -C "${far_future_limitation_manifest_repo}" commit -qm "set far-future limitation follow-up"
+append_complete_packet "${far_future_limitation_manifest_repo}"
+assert_fails_with \
+  "${far_future_limitation_manifest_repo}" \
+  "limitation manifest record lim-66-7-001 follow_up_at must be no more than 90 days after decision_at"
 
 packet_mutation_case \
   "missing-non-claim" \

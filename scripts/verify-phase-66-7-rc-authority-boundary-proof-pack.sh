@@ -231,7 +231,8 @@ required_phrases = (
     "Every `limitation_references` value must record `evidence_id`, `evidence_reference`, `ids`, `owner`, `decision_at`, and `follow_up_at`.",
     "The limitation manifest uses `schema_version=phase-66-7-limitations/v1` and a `limitations` array.",
     "The isolated worktree must resolve the limitation manifest and match every packet limitation to an accepted repository-owned record.",
-    "All materialized timestamps must be no more than 24 hours old at verification time and must not be more than five minutes in the future.",
+    "Observation, review, and decision timestamps must be no more than 24 hours old at verification time and must not be more than five minutes in the future.",
+    "Scheduled limitation follow-up timestamps are exempt from the five-minute future-skew limit, but must be after `decision_at` and no more than 90 days after it.",
     "AegisOps records remain authoritative for alert, case, evidence, recommendation, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, restore acceptance, and closeout truth.",
     "Wazuh, Shuffle, AI, tickets, evidence systems, browser state, UI cache, demo data, reports, support bundles, release artifacts, verifier output, issue-lint output, and optional evidence remain subordinate evidence or context only.",
     "The proof pack must reject subordinate-truth promotion, approval bypass, execution bypass, reconciliation bypass, case-closure shortcuts, source-admission shortcuts, inferred RC pass, inferred GA pass, and artifact-driven limitation or closeout decisions.",
@@ -343,23 +344,82 @@ structured_key_pattern = re.compile(
 if structured_key_pattern.search(normalize_markdown_escapes(doc_raw)):
     fail("JSON, YAML, and object-literal evidence syntax is not supported")
 
-unsupported_structural_html = re.compile(
-    r"<\s*/?\s*(?:article|aside|dd|div|dl|dt|li|ol|p|pre|section|table|tbody|td|"
-    r"tfoot|th|thead|tr|ul)\b",
+proof_field_pattern = re.compile(
+    rf"\b(?:{field_alternation})\b",
     re.IGNORECASE,
 )
-if unsupported_structural_html.search(visible_text(doc_raw)):
-    fail("raw HTML evidence syntax is not supported")
+raw_html_tag = re.compile(
+    r"<\s*/?\s*[a-z][a-z0-9:-]*(?:\s+[^<>]*?)?\s*/?\s*>",
+    re.IGNORECASE,
+)
 
-inline_html_tag = re.compile(
-    r"<\s*/?\s*(?:b|code|em|i|mark|small|span|strong|sub|sup)\b[^>]*>",
-    re.IGNORECASE,
+
+class RawHTMLProofFieldDetector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.frames: list[tuple[str, list[str]]] = []
+        self.found = False
+        self.suppressed_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
+        tag = tag.lower()
+        if tag in {"script", "style"}:
+            self.suppressed_depth += 1
+        self.frames.append((tag, []))
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del tag, attrs
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        matching_index = next(
+            (
+                index
+                for index in range(len(self.frames) - 1, -1, -1)
+                if self.frames[index][0] == tag
+            ),
+            None,
+        )
+        if matching_index is not None:
+            for _, parts in self.frames[matching_index:]:
+                if proof_field_pattern.search(
+                    normalize_markdown_escapes("".join(parts))
+                ):
+                    self.found = True
+            del self.frames[matching_index:]
+        if tag in {"script", "style"} and self.suppressed_depth:
+            self.suppressed_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self.suppressed_depth:
+            return
+        for _, parts in self.frames:
+            parts.append(data)
+
+    def contains_proof_field(self) -> bool:
+        return self.found or any(
+            proof_field_pattern.search(normalize_markdown_escapes("".join(parts)))
+            for _, parts in self.frames
+        )
+
+
+visible_doc_raw = normalize_markdown_escapes(visible_text(doc_raw))
+html_detection_raw = re.sub(
+    r"(?P<ticks>`+)[^`\n]*?(?P=ticks)",
+    "",
+    visible_doc_raw,
 )
-for raw_line in normalize_markdown_escapes(visible_text(doc_raw)).splitlines():
-    if not inline_html_tag.search(raw_line):
-        continue
-    rendered_line = rendered_text(raw_line)
-    if re.search(rf"\b(?:{field_alternation})\b", rendered_line, re.IGNORECASE):
+html_detector = RawHTMLProofFieldDetector()
+html_detector.feed(html_detection_raw)
+html_detector.close()
+if html_detector.contains_proof_field():
+    fail("raw HTML evidence syntax is not supported")
+for raw_line in html_detection_raw.splitlines():
+    if (
+        raw_html_tag.search(raw_line)
+        and proof_field_pattern.search(rendered_text(raw_line))
+    ):
         fail("raw HTML evidence syntax is not supported")
 
 
@@ -381,7 +441,7 @@ assignment_pattern = re.compile(
 current_section = "document-preamble"
 section_index = 0
 in_fence = False
-for raw_line in normalize_markdown_escapes(visible_text(doc_raw)).splitlines():
+for raw_line in rendered_doc_raw.splitlines():
     stripped = raw_line.strip()
     if re.match(r"^(```|~~~)", stripped):
         in_fence = not in_fence
@@ -511,6 +571,9 @@ def parse_timestamp(
     if fresh and parsed < now - timedelta(hours=24):
         fail(f"invalid {field}: timestamp is stale")
     return parsed
+
+
+max_follow_up_horizon = timedelta(days=90)
 
 
 if materialized_fields:
@@ -674,6 +737,11 @@ if materialized_fields:
     )
     if follow_up_at <= decision_at:
         fail("invalid limitation_references: follow_up_at must be after decision_at")
+    if follow_up_at > decision_at + max_follow_up_horizon:
+        fail(
+            "invalid limitation_references: follow_up_at must be no more than "
+            "90 days after decision_at"
+        )
 
     evidence_worktree = Path(tempfile.mkdtemp(prefix="phase66-7-evidence-"))
     worktree_added = False
@@ -831,6 +899,11 @@ if materialized_fields:
                 fail(
                     f"limitation manifest record {limitation_id} follow_up_at "
                     "must be after decision_at"
+                )
+            if record_follow_up_at > record_decision_at + max_follow_up_horizon:
+                fail(
+                    f"limitation manifest record {limitation_id} follow_up_at "
+                    "must be no more than 90 days after decision_at"
                 )
             limitations_by_id[limitation_id] = record
         for limitation_id in limitation_ids:

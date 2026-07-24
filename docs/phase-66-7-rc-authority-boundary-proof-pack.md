@@ -101,7 +101,7 @@ Every `limitation_references` value must record `evidence_id`, `evidence_referen
 
 The limitation manifest uses `schema_version=phase-66-7-limitations/v1` and a `limitations` array. Every limitation record contains exactly `id`, `owner`, `disposition`, `decision_at`, and `follow_up_at`. The isolated worktree must resolve the limitation manifest and match every packet limitation to an accepted repository-owned record. Missing, duplicate, malformed, unaccepted, invented, or packet-mismatched limitation records fail closed.
 
-All materialized timestamps must be no more than 24 hours old at verification time and must not be more than five minutes in the future. The owner review and every negative observation must satisfy this freshness window.
+Observation, review, and decision timestamps must be no more than 24 hours old at verification time and must not be more than five minutes in the future. The owner review and every negative observation must satisfy this freshness window. Scheduled limitation follow-up timestamps are exempt from the five-minute future-skew limit, but must be after `decision_at` and no more than 90 days after it.
 
 The proof pack must not contain production secrets, credentials, authorization material, certificates, key material, raw customer-private data, ticket-private content, customer identifiers, email addresses, or workstation-local paths. Redaction assertions do not permit retaining the forbidden value beside the assertion.
 
