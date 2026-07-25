@@ -1,6 +1,6 @@
 # Repository Skeleton Validation
 
-- Validation date: 2026-04-20
+- Validation date: 2026-07-26
 - Validation timezone: Asia/Tokyo (UTC+09:00)
 - Baseline reference: `docs/repository-structure-baseline.md`
 - Verification command: `bash scripts/verify-repository-skeleton.sh`
@@ -13,6 +13,7 @@ The approved top-level repository baseline allows these tracked entries:
 - `.codex-supervisor/`
 - `.env.sample`
 - `.github/`
+- `.dockerignore`
 - `.gitignore`
 - `LICENSE.txt`
 - `README.md`
@@ -38,6 +39,7 @@ The repository currently tracks these top-level entries in the verified pull req
 - `.codex-supervisor/`
 - `.env.sample`
 - `.github/`
+- `.dockerignore`
 - `.gitignore`
 - `LICENSE.txt`
 - `README.md`
@@ -63,6 +65,7 @@ The current repository skeleton matches the approved baseline, including the ded
 Disposition decisions:
 
 - `.codex-supervisor/` is an approved tracked top-level directory for intentionally versioned repository hygiene guidance; supervisor-local journals and transient execution state under that path must remain untracked.
+- `.dockerignore` is an approved tracked top-level metadata file that limits local integration image build contexts to reviewed control-plane and migration assets.
 - `.gitignore` is an approved tracked top-level metadata file because the repository baseline depends on committed ignore rules for transient local and supervisor artifacts.
 - `LICENSE.txt` and `README.md` are approved tracked top-level files and are part of the documented baseline.
 - `apps/`, `package.json`, and `package-lock.json` are approved Phase 30 operator-console baseline entries that support the dedicated frontend workspace while preserving backend authority.

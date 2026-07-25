@@ -59,6 +59,7 @@ create_repo() {
     "${target}/scripts/.gitkeep" \
     "${target}/sigma/.gitkeep"
   printf '# fixture\n' > "${target}/.env.sample"
+  printf '# fixture Docker build context\n' > "${target}/.dockerignore"
   printf '# fixture ignore\n' > "${target}/.gitignore"
   printf 'fixture license\n' > "${target}/LICENSE.txt"
   printf '{\"name\":\"fixture-root-workspace\",\"private\":true}\n' > "${target}/package.json"
@@ -67,7 +68,7 @@ create_repo() {
   git -C "${target}" add .codex-supervisor/.gitkeep .github/workflows/.gitkeep \
     apps/operator-ui/.gitkeep \
     config/.gitkeep ingest/.gitkeep n8n/.gitkeep opensearch/.gitkeep \
-    proxy/.gitkeep scripts/.gitkeep sigma/.gitkeep .env.sample .gitignore LICENSE.txt \
+    proxy/.gitkeep scripts/.gitkeep sigma/.gitkeep .env.sample .dockerignore .gitignore LICENSE.txt \
     package.json package-lock.json playwright.config.ts
 }
 

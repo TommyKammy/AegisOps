@@ -24,6 +24,7 @@ Until a later ADR approves a repository rebaseline, contributors must treat the 
 | `config/` | Shared non-secret configuration artifacts and parameter files referenced by the platform components. |
 | `.codex-supervisor/` | Tracked repository hygiene guidance for codex-supervisor; supervisor-local runtime state under this path must remain untracked. |
 | `.github/` | Repository automation definitions such as GitHub Actions workflows used for baseline verification. |
+| `.dockerignore` | Repository-level Docker build-context rules that admit only reviewed control-plane runtime and migration assets to local image builds. |
 | `.gitignore` | Repository-level ignore rules that keep transient local and supervisor execution artifacts out of the tracked baseline. |
 | `.env.sample` | Sample environment variables for documentation and structure only; never real secrets or active environment state. |
 | `LICENSE.txt` | Repository license text tracked as a stable project-level metadata file. |

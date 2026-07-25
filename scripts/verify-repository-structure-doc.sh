@@ -8,6 +8,7 @@ doc_path="${repo_root}/docs/repository-structure-baseline.md"
 required_entries=(
   ".codex-supervisor/"
   ".github/"
+  ".dockerignore"
   ".gitignore"
   "LICENSE.txt"
   "README.md"

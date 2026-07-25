@@ -69,6 +69,7 @@ create_repo \
   ".codex-supervisor/README.md" \
   ".env.sample" \
   ".github/workflows/ci.yml" \
+  ".dockerignore" \
   ".gitignore" \
   "LICENSE.txt" \
   "README.md" \
@@ -95,6 +96,7 @@ create_repo \
   ".codex-supervisor/issues/94/issue-journal.md" \
   ".env.sample" \
   ".github/workflows/ci.yml" \
+  ".dockerignore" \
   ".gitignore" \
   "LICENSE.txt" \
   "README.md" \
@@ -121,6 +123,7 @@ create_repo \
   ".codex-supervisor/README.md" \
   ".env.sample" \
   ".github/workflows/ci.yml" \
+  ".dockerignore" \
   ".gitignore" \
   "LICENSE.txt" \
   "README.md" \
