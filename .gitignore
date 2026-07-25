@@ -60,6 +60,12 @@ control-plane/deployment/first-boot/generated/
 control-plane/deployment/first-boot/runtime/
 control-plane/deployment/first-boot/secrets/
 control-plane/deployment/first-boot/certs/
+control-plane/deployment/phase-67-integration-lab/runtime.env
+control-plane/deployment/phase-67-integration-lab/runtime/
+control-plane/deployment/phase-67-integration-lab/secrets/
+control-plane/deployment/phase-67-integration-lab/certs/
+control-plane/deployment/phase-67-integration-lab/evidence/
+control-plane/deployment/phase-67-integration-lab/substrates/
 
 # Rendered Wazuh integration artifacts may contain live bearer material
 ossec.integration.rendered.xml

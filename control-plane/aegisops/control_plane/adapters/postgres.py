@@ -1019,12 +1019,15 @@ class PostgresControlPlaneStore:
             try:
                 cursor.execute(query, params)
                 row = cursor.fetchone()
+                record_count = (
+                    0
+                    if row is None
+                    else int(_row_to_mapping(cursor, row)["record_count"])
+                )
             finally:
                 cursor.close()
 
-        if row is None:
-            return 0
-        return int(_row_to_mapping(cursor, row)["record_count"])
+        return record_count
 
     def _count_distinct_matched_execution_runs_for_action_type(
         self,
@@ -1047,9 +1050,12 @@ class PostgresControlPlaneStore:
             try:
                 cursor.execute(query, (action_type,))
                 row = cursor.fetchone()
+                record_count = (
+                    0
+                    if row is None
+                    else int(_row_to_mapping(cursor, row)["record_count"])
+                )
             finally:
                 cursor.close()
 
-        if row is None:
-            return 0
-        return int(_row_to_mapping(cursor, row)["record_count"])
+        return record_count

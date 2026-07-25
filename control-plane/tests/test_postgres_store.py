@@ -1961,6 +1961,17 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             (action_request.action_request_id,),
         )
 
+    def test_readiness_aggregate_counts_map_tuple_rows_before_cursor_close(
+        self,
+    ) -> None:
+        store, _ = make_store(_TupleRowClosingBackend())
+
+        aggregates = store.inspect_readiness_aggregates()
+
+        self.assertEqual(aggregates.phase20_requested_action_requests, 0)
+        self.assertEqual(aggregates.phase20_approved_action_requests, 0)
+        self.assertEqual(aggregates.phase20_reconciled_executions, 0)
+
     def test_store_rejects_schema_invalid_records_before_persistence(self) -> None:
         store, _ = make_store()
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)

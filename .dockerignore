@@ -1,0 +1,10 @@
+**
+!control-plane/
+!control-plane/**
+!postgres/
+!postgres/control-plane/
+!postgres/control-plane/migrations/
+!postgres/control-plane/migrations/**
+control-plane/**/__pycache__/
+control-plane/**/*.pyc
+control-plane/.pytest_cache/
