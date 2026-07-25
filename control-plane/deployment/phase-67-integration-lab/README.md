@@ -15,7 +15,7 @@ This is not a production deployment, a GA proof, or broad SIEM/SOAR replacement 
 
 ## Runtime Shape
 
-The default `core` scope starts PostgreSQL, applies the reviewed first-boot migrations plus current runtime migrations through `0015`, starts the AegisOps control plane, and starts the TLS reverse proxy. Later migration checksums are recorded in the same bootstrap metadata table and fail closed on drift. Wazuh and Shuffle are opt-in Compose profiles:
+The default `core` scope starts PostgreSQL, applies the reviewed first-boot migrations plus current runtime migrations through `0015`, starts the AegisOps control plane, and starts the TLS reverse proxy. Later migration checksums are recorded in the same bootstrap metadata table and fail closed on checksum or recorded-schema drift. Wazuh and Shuffle are opt-in Compose profiles:
 
 | Scope | Services | Host access |
 | --- | --- | --- |
@@ -56,11 +56,11 @@ AEGISOPS_LAB_BOOTSTRAP_ENV=/absolute/path/to/lab-bootstrap.env \
   control-plane/deployment/phase-67-integration-lab/init.sh
 ```
 
-If the subnet changes, update every `AEGISOPS_LAB_*_IPV4` value to a unique address in that subnet. Preflight rejects overlapping Docker networks, out-of-subnet or duplicate service addresses, and host-port ownership conflicts.
+Rerun `init.sh` after changing the untracked bootstrap file; bootstrap values replace the previously generated runtime values while existing secrets remain stable. If the subnet changes, update every `AEGISOPS_LAB_*_IPV4` value to a unique address in that subnet. Preflight rejects overlapping Docker networks, out-of-subnet or duplicate service addresses, and host-port ownership conflicts for the selected scope.
 
 Use `preflight.sh --scope full --write-evidence` before a complete lab start. On Apple Silicon, `shuffle` and `full` additionally require the selected Colima profile to expose Rosetta or an x86_64 binfmt handler. Preflight reports the exact profile-preserving Colima restart command when that host capability is absent; it never restarts Colima itself.
 
-The generated proxy certificate is valid for 30 days and only for `localhost` and `127.0.0.1`. `init.sh` is idempotent and does not overwrite existing secret values or a still-present certificate pair.
+The generated proxy certificate is valid for 30 days and only for `localhost` and `127.0.0.1`. `init.sh` preserves a valid matching certificate pair, but replaces it when less than seven days of validity remain. Existing secret values remain stable.
 
 ## Verification
 

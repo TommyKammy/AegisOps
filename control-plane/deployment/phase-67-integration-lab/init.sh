@@ -8,7 +8,7 @@ LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${LAB_DIR}/lab-common.sh"
 
 [[ "$#" -eq 0 ]] || fail "usage: $0"
-load_lab_environment
+load_bootstrap_environment
 assert_safe_runtime_root "${AEGISOPS_LAB_RUNTIME_ROOT}"
 require_command openssl
 
@@ -66,16 +66,52 @@ printf 'postgresql://aegisops_control_plane:%s@postgres:5432/aegisops_control_pl
   "${postgres_password}" >"${secret_dir}/control-plane-postgres-dsn"
 chmod 600 "${secret_dir}/control-plane-postgres-dsn"
 
+generate_proxy_certificate() {
+  local staging_dir
+
+  staging_dir="$(mktemp -d "${cert_dir}/.proxy-certificate.XXXXXX")"
+  if ! openssl req -x509 -newkey rsa:3072 -sha256 -nodes \
+    -keyout "${staging_dir}/lab.key" \
+    -out "${staging_dir}/lab.crt" \
+    -days 30 \
+    -subj "/CN=localhost" \
+    -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" >/dev/null 2>&1; then
+    rm -rf "${staging_dir}"
+    fail "failed to generate the proxy TLS certificate"
+  fi
+  chmod 600 "${staging_dir}/lab.key" "${staging_dir}/lab.crt"
+  mv "${staging_dir}/lab.key" "${cert_dir}/lab.key"
+  mv "${staging_dir}/lab.crt" "${cert_dir}/lab.crt"
+  rmdir "${staging_dir}"
+}
+
+rotate_proxy_certificate=false
 if [[ -e "${cert_dir}/lab.key" || -e "${cert_dir}/lab.crt" ]]; then
   [[ -s "${cert_dir}/lab.key" && -s "${cert_dir}/lab.crt" ]] \
     || fail "proxy TLS state is partial; restore or remove both lab.key and lab.crt before rerunning init"
+  openssl pkey -in "${cert_dir}/lab.key" -noout >/dev/null 2>&1 \
+    || fail "proxy TLS private key is invalid; restore or remove the certificate pair before rerunning init"
+  openssl x509 -in "${cert_dir}/lab.crt" -noout >/dev/null 2>&1 \
+    || fail "proxy TLS certificate is invalid; restore or remove the certificate pair before rerunning init"
+  key_public_digest="$(
+    openssl pkey -in "${cert_dir}/lab.key" -pubout -outform DER 2>/dev/null |
+      openssl sha256
+  )"
+  certificate_public_digest="$(
+    openssl x509 -in "${cert_dir}/lab.crt" -pubkey -noout 2>/dev/null |
+      openssl pkey -pubin -outform DER 2>/dev/null |
+      openssl sha256
+  )"
+  [[ "${key_public_digest}" == "${certificate_public_digest}" ]] \
+    || fail "proxy TLS key and certificate do not match; restore or remove the pair before rerunning init"
+  if ! openssl x509 -checkend 604800 -noout -in "${cert_dir}/lab.crt" >/dev/null 2>&1; then
+    rotate_proxy_certificate=true
+  fi
 else
-  openssl req -x509 -newkey rsa:3072 -sha256 -nodes \
-    -keyout "${cert_dir}/lab.key" \
-    -out "${cert_dir}/lab.crt" \
-    -days 30 \
-    -subj "/CN=localhost" \
-    -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" >/dev/null 2>&1
+  rotate_proxy_certificate=true
+fi
+if [[ "${rotate_proxy_certificate}" == "true" ]]; then
+  generate_proxy_certificate
 fi
 chmod 600 "${cert_dir}/lab.key" "${cert_dir}/lab.crt"
 

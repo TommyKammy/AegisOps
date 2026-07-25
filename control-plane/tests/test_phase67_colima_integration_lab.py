@@ -13,6 +13,20 @@ LAB_DIR = REPO_ROOT / "control-plane" / "deployment" / "phase-67-integration-lab
 
 
 class Phase67ColimaIntegrationLabTests(unittest.TestCase):
+    def _run_init(
+        self, home: pathlib.Path, bootstrap: pathlib.Path
+    ) -> subprocess.CompletedProcess[str]:
+        env = os.environ.copy()
+        env["HOME"] = str(home)
+        env["AEGISOPS_LAB_BOOTSTRAP_ENV"] = str(bootstrap)
+        return subprocess.run(
+            ["bash", str(LAB_DIR / "init.sh")],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
     def test_required_lab_commands_are_executable(self) -> None:
         for name in (
             "preflight.sh",
@@ -44,17 +58,7 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
     def test_init_generates_untracked_runtime_secrets_and_tls(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = pathlib.Path(tmpdir)
-            env = os.environ.copy()
-            env["HOME"] = str(home)
-            env["AEGISOPS_LAB_BOOTSTRAP_ENV"] = str(LAB_DIR / "bootstrap.env.sample")
-
-            result = subprocess.run(
-                ["bash", str(LAB_DIR / "init.sh")],
-                check=False,
-                capture_output=True,
-                text=True,
-                env=env,
-            )
+            result = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
             self.assertEqual(result.returncode, 0, result.stderr)
 
             runtime_root = (
@@ -99,6 +103,173 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
 
             self.assertTrue((runtime_root / "proxy-certs" / "lab.crt").is_file())
             self.assertTrue((runtime_root / "proxy-certs" / "lab.key").is_file())
+
+    def test_init_reapplies_bootstrap_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            bootstrap = home / "bootstrap.env"
+            bootstrap_text = (LAB_DIR / "bootstrap.env.sample").read_text(
+                encoding="utf-8"
+            )
+            bootstrap.write_text(
+                bootstrap_text.replace(
+                    "AEGISOPS_LAB_PROXY_PORT=18443",
+                    "AEGISOPS_LAB_PROXY_PORT=19443",
+                ),
+                encoding="utf-8",
+            )
+
+            first = self._run_init(home, bootstrap)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            runtime_root = (
+                home / ".local" / "share" / "aegisops" / "phase-67-integration-lab"
+            )
+            runtime_env = runtime_root / "runtime.env"
+            postgres_secret = (
+                runtime_root / "secrets" / "postgres-password"
+            ).read_text(encoding="utf-8")
+            self.assertIn(
+                "AEGISOPS_LAB_PROXY_PORT=19443",
+                runtime_env.read_text(encoding="utf-8"),
+            )
+
+            bootstrap.write_text(
+                bootstrap.read_text(encoding="utf-8").replace(
+                    "AEGISOPS_LAB_PROXY_PORT=19443",
+                    "AEGISOPS_LAB_PROXY_PORT=29443",
+                ),
+                encoding="utf-8",
+            )
+            second = self._run_init(home, bootstrap)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertIn(
+                "AEGISOPS_LAB_PROXY_PORT=29443",
+                runtime_env.read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                (
+                    runtime_root / "secrets" / "postgres-password"
+                ).read_text(encoding="utf-8"),
+                postgres_secret,
+            )
+
+    def test_init_rotates_proxy_certificate_near_expiry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            first = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(first.returncode, 0, first.stderr)
+            cert_dir = (
+                home
+                / ".local"
+                / "share"
+                / "aegisops"
+                / "phase-67-integration-lab"
+                / "proxy-certs"
+            )
+            key_path = cert_dir / "lab.key"
+            cert_path = cert_dir / "lab.crt"
+            subprocess.run(
+                [
+                    "openssl",
+                    "req",
+                    "-x509",
+                    "-newkey",
+                    "rsa:2048",
+                    "-sha256",
+                    "-nodes",
+                    "-keyout",
+                    str(key_path),
+                    "-out",
+                    str(cert_path),
+                    "-days",
+                    "1",
+                    "-subj",
+                    "/CN=localhost",
+                    "-addext",
+                    "subjectAltName=DNS:localhost,IP:127.0.0.1",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            near_expiry_fingerprint = subprocess.run(
+                ["openssl", "x509", "-in", str(cert_path), "-noout", "-fingerprint"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+
+            second = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(second.returncode, 0, second.stderr)
+            renewed_fingerprint = subprocess.run(
+                ["openssl", "x509", "-in", str(cert_path), "-noout", "-fingerprint"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+            self.assertNotEqual(renewed_fingerprint, near_expiry_fingerprint)
+            subprocess.run(
+                [
+                    "openssl",
+                    "x509",
+                    "-checkend",
+                    "604800",
+                    "-noout",
+                    "-in",
+                    str(cert_path),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+    def test_selected_scope_checks_only_published_ports(self) -> None:
+        expected = {
+            "core": ["PROXY"],
+            "wazuh": ["PROXY", "WAZUH_DASHBOARD"],
+            "shuffle": ["PROXY", "SHUFFLE_FRONTEND"],
+            "full": ["PROXY", "WAZUH_DASHBOARD", "SHUFFLE_FRONTEND"],
+        }
+        for scope, port_names in expected.items():
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'source "$1"; selected_port_names "$2"',
+                    "phase67-port-test",
+                    str(LAB_DIR / "lab-common.sh"),
+                    scope,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.splitlines(), port_names)
+
+    def test_current_runtime_migrations_require_schema_readiness(self) -> None:
+        entrypoint = (LAB_DIR / "control-plane-entrypoint.sh").read_text(
+            encoding="utf-8"
+        )
+        for migration_name in (
+            "0008_phase_25_osquery_host_context_columns.sql",
+            "0009_phase_26_external_ticket_reference_columns.sql",
+            "0010_phase_28_action_request_idempotency_key_unique_index.sql",
+            "0011_phase_28_reconciliation_correlation_lookup_index.sql",
+            "0012_phase_32_ai_trace_latest_lookup_index.sql",
+            "0013_phase_61_detector_lifecycle_records.sql",
+            "0014_phase_61_source_health_records.sql",
+            "0015_phase_64_known_limitation_ownership_records.sql",
+        ):
+            self.assertIn(migration_name, entrypoint)
+        self.assertGreaterEqual(
+            entrypoint.count('prove_migration_state "${migration_name}"'),
+            2,
+        )
+        self.assertIn(
+            "could not prove reviewed schema state for recorded migration",
+            entrypoint,
+        )
 
     def test_normal_cleanup_and_destroy_boundaries_are_distinct(self) -> None:
         down = (LAB_DIR / "down.sh").read_text(encoding="utf-8")

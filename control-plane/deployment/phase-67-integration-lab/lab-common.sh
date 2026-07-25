@@ -16,7 +16,7 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "required command is unavailable: $1"
 }
 
-load_lab_environment() {
+load_bootstrap_environment() {
   [[ -f "${BOOTSTRAP_ENV}" ]] || fail "bootstrap environment file not found: ${BOOTSTRAP_ENV}"
 
   # shellcheck disable=SC1090
@@ -25,6 +25,12 @@ load_lab_environment() {
 
   AEGISOPS_LAB_RUNTIME_ROOT="${AEGISOPS_LAB_RUNTIME_ROOT/#\~/${HOME}}"
   RUNTIME_ENV="${AEGISOPS_LAB_RUNTIME_ENV:-${AEGISOPS_LAB_RUNTIME_ROOT}/runtime.env}"
+  export AEGISOPS_LAB_RUNTIME_ROOT
+  export RUNTIME_ENV
+}
+
+load_lab_environment() {
+  load_bootstrap_environment
   if [[ -f "${RUNTIME_ENV}" ]]; then
     # shellcheck disable=SC1090
     source "${RUNTIME_ENV}"
@@ -77,6 +83,28 @@ compose_scope() {
     shuffle) compose_lab --profile shuffle "$@" ;;
     full) compose_lab --profile wazuh --profile shuffle "$@" ;;
     *) fail "unknown lab scope '${scope}'; expected core, wazuh, shuffle, or full" ;;
+  esac
+}
+
+selected_port_names() {
+  local scope="${1:-core}"
+
+  case "${scope}" in
+    core)
+      printf '%s\n' PROXY
+      ;;
+    wazuh)
+      printf '%s\n' PROXY WAZUH_DASHBOARD
+      ;;
+    shuffle)
+      printf '%s\n' PROXY SHUFFLE_FRONTEND
+      ;;
+    full)
+      printf '%s\n' PROXY WAZUH_DASHBOARD SHUFFLE_FRONTEND
+      ;;
+    *)
+      fail "unknown lab scope '${scope}'; expected core, wazuh, shuffle, or full"
+      ;;
   esac
 }
 

@@ -3,7 +3,7 @@
 ## Preconditions
 
 1. Review `bootstrap.env.sample`, especially the Colima profile, Docker context, resource minimums, loopback ports, subnet, architecture, and emulation acceptance.
-2. Run `init.sh`. It creates an untracked runtime env, mounted AegisOps secrets, Shuffle/Wazuh bootstrap values, and a 30-day localhost TLS certificate.
+2. Run `init.sh`. It creates an untracked runtime env, mounted AegisOps secrets, Shuffle/Wazuh bootstrap values, and a 30-day localhost TLS certificate. Rerunning it reapplies bootstrap settings and renews the certificate when less than seven days remain.
 3. Run `preflight.sh --scope core --write-evidence`, or select `wazuh`, `shuffle`, or `full` for the intended start. Do not continue past a `BLOCKED:` result.
 
 Preflight is read-only with respect to Colima and Docker. It never starts or reconfigures Colima, changes Docker's active context, removes a container, or creates a Compose resource. With `--write-evidence`, it writes only a timestamped report below the dedicated runtime evidence directory.

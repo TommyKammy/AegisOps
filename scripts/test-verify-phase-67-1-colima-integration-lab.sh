@@ -75,4 +75,16 @@ copy_fixture "${latest_image}"
 printf '\n# image: example.invalid/lab:latest\n' >>"${latest_image}/control-plane/deployment/phase-67-integration-lab/docker-compose.yml"
 assert_fails_with "${latest_image}" 'must not use latest tags'
 
-echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, and image drift."
+migration_proof_drift="${workdir}/migration-proof-drift"
+copy_fixture "${migration_proof_drift}"
+perl -0pi -e 's/prove_migration_state/prove_removed_migration_state/g' \
+  "${migration_proof_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
+assert_fails_with "${migration_proof_drift}" 'prove_migration_state'
+
+certificate_renewal_drift="${workdir}/certificate-renewal-drift"
+copy_fixture "${certificate_renewal_drift}"
+perl -0pi -e 's/openssl x509 -checkend 604800/openssl x509 -noout/' \
+  "${certificate_renewal_drift}/control-plane/deployment/phase-67-integration-lab/init.sh"
+assert_fails_with "${certificate_renewal_drift}" 'openssl x509 -checkend 604800'
+
+echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof, and certificate-renewal drift."

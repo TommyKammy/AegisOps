@@ -104,14 +104,14 @@ if [[ "${scope}" == "shuffle" || "${scope}" == "full" ]]; then
   fi
 fi
 
-for port_name in PROXY WAZUH_DASHBOARD SHUFFLE_FRONTEND; do
+while IFS= read -r port_name; do
   variable="AEGISOPS_LAB_${port_name}_PORT"
   port="${!variable}"
   if port_is_listening "${port}"; then
     lab_binding="$(docker_lab ps --filter "label=com.docker.compose.project=${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}" --format '{{.Ports}}' | grep -F "127.0.0.1:${port}->" || true)"
     [[ -n "${lab_binding}" ]] || fail "host port ${port} (${port_name}) is already in use outside project '${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}'"
   fi
-done
+done < <(selected_port_names "${scope}")
 
 network_name="${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}-network"
 if docker_lab network inspect "${network_name}" >/dev/null 2>&1; then
