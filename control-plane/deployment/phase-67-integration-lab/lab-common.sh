@@ -50,6 +50,80 @@ require_runtime_environment() {
   [[ -d "${AEGISOPS_LAB_SECRET_DIR:-}" ]] || fail "runtime secret directory is missing; rerun ${LAB_DIR}/init.sh"
 }
 
+validate_wazuh_certificate_bundle() {
+  local cert_dir="$1"
+  local certificate
+  local certificate_digest
+  local key
+  local key_digest
+  local required_files=(
+    root-ca.pem
+    root-ca-manager.pem
+    wazuh.indexer-key.pem
+    wazuh.indexer.pem
+    admin.pem
+    admin-key.pem
+    wazuh.manager.pem
+    wazuh.manager-key.pem
+    wazuh.dashboard.pem
+    wazuh.dashboard-key.pem
+  )
+
+  for certificate in "${required_files[@]}"; do
+    [[ -s "${cert_dir}/${certificate}" ]] || return 1
+  done
+  for certificate in \
+    root-ca.pem \
+    root-ca-manager.pem \
+    wazuh.indexer.pem \
+    admin.pem \
+    wazuh.manager.pem \
+    wazuh.dashboard.pem
+  do
+    openssl x509 -checkend 604800 -noout -in "${cert_dir}/${certificate}" \
+      >/dev/null 2>&1 || return 1
+  done
+  for key in \
+    wazuh.indexer-key.pem \
+    admin-key.pem \
+    wazuh.manager-key.pem \
+    wazuh.dashboard-key.pem
+  do
+    openssl pkey -in "${cert_dir}/${key}" -noout >/dev/null 2>&1 || return 1
+  done
+
+  while IFS='|' read -r certificate key; do
+    certificate_digest="$(
+      openssl x509 -in "${cert_dir}/${certificate}" -pubkey -noout 2>/dev/null |
+        openssl pkey -pubin -outform DER 2>/dev/null |
+        openssl sha256
+    )" || return 1
+    key_digest="$(
+      openssl pkey -in "${cert_dir}/${key}" -pubout -outform DER 2>/dev/null |
+        openssl sha256
+    )" || return 1
+    [[ "${certificate_digest}" == "${key_digest}" ]] || return 1
+  done <<'EOF'
+wazuh.indexer.pem|wazuh.indexer-key.pem
+admin.pem|admin-key.pem
+wazuh.manager.pem|wazuh.manager-key.pem
+wazuh.dashboard.pem|wazuh.dashboard-key.pem
+EOF
+
+  openssl verify -CAfile "${cert_dir}/root-ca.pem" "${cert_dir}/root-ca.pem" \
+    >/dev/null 2>&1 || return 1
+  openssl verify -CAfile "${cert_dir}/root-ca-manager.pem" "${cert_dir}/root-ca-manager.pem" \
+    >/dev/null 2>&1 || return 1
+  for certificate in wazuh.indexer.pem admin.pem wazuh.dashboard.pem; do
+    openssl verify -CAfile "${cert_dir}/root-ca.pem" "${cert_dir}/${certificate}" \
+      >/dev/null 2>&1 || return 1
+  done
+  openssl verify \
+    -CAfile "${cert_dir}/root-ca-manager.pem" \
+    "${cert_dir}/wazuh.manager.pem" \
+    >/dev/null 2>&1 || return 1
+}
+
 assert_safe_runtime_root() {
   local candidate="${1:-}"
 

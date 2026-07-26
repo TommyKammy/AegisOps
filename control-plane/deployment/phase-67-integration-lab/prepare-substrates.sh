@@ -9,7 +9,6 @@ source "${LAB_DIR}/lab-common.sh"
 [[ "$#" -eq 0 ]] || fail "usage: $0"
 require_runtime_environment
 assert_safe_runtime_root "${AEGISOPS_LAB_RUNTIME_ROOT}"
-require_command docker
 require_command git
 require_command python3
 
@@ -38,6 +37,8 @@ if ! git -C "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}" diff --quiet HEAD -- \
   . ":(exclude)${wazuh_internal_users_relative_path}"; then
   fail "Wazuh substrate has unreviewed tracked changes outside ${wazuh_internal_users_relative_path}"
 fi
+require_command docker
+require_command openssl
 
 cert_dir="${AEGISOPS_LAB_WAZUH_CONFIG_DIR}/wazuh_indexer_ssl_certs"
 required_certificates="
@@ -52,13 +53,12 @@ wazuh.manager-key.pem
 wazuh.dashboard.pem
 wazuh.dashboard-key.pem
 "
-certificates_complete=true
+certificate_state_existed=false
 for certificate in ${required_certificates}; do
-  if [[ ! -s "${cert_dir}/${certificate}" ]]; then
-    certificates_complete=false
-    break
-  fi
+  [[ ! -e "${cert_dir}/${certificate}" ]] || certificate_state_existed=true
 done
+certificates_complete=true
+validate_wazuh_certificate_bundle "${cert_dir}" || certificates_complete=false
 
 if [[ "${certificates_complete}" != true ]]; then
   cert_volume="${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}-cert-staging-$$"
@@ -91,12 +91,17 @@ if [[ "${certificates_complete}" != true ]]; then
   docker_lab cp "${cert_container}:/certificates/." "${cert_dir}"
   cleanup_cert_staging
   trap - EXIT
+  validate_wazuh_certificate_bundle "${cert_dir}" \
+    || fail "regenerated Wazuh certificate bundle failed validity, chain, or key-pair validation"
+  if [[ "${certificate_state_existed}" == "true" ]]; then
+    wazuh_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-certificate-recreate-required"
+    : >"${wazuh_recreate_marker}"
+    chmod 600 "${wazuh_recreate_marker}"
+  fi
 fi
 
-for certificate in ${required_certificates}; do
-  [[ -s "${cert_dir}/${certificate}" ]] \
-    || fail "Wazuh certificate generation is incomplete; missing ${certificate}"
-done
+validate_wazuh_certificate_bundle "${cert_dir}" \
+  || fail "Wazuh certificate bundle failed validity, chain, or key-pair validation"
 
 indexer_image="wazuh/wazuh-indexer:${AEGISOPS_LAB_WAZUH_VERSION}@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5"
 admin_hash="$(
@@ -187,4 +192,7 @@ PY
 chmod 600 "${internal_users}"
 
 echo "Prepared Wazuh ${AEGISOPS_LAB_WAZUH_VERSION} substrate at ${AEGISOPS_LAB_WAZUH_SOURCE_DIR}"
+if [[ -f "${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-certificate-recreate-required" ]]; then
+  echo "Wazuh certificates regenerated; the next wazuh/full up.sh run will force service recreation."
+fi
 echo "Shuffle images remain execution-disabled; Docker socket mounting is deferred to Phase 67.3."

@@ -6,13 +6,28 @@ LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lab-common.sh
 source "${LAB_DIR}/lab-common.sh"
 
-scope="${1:-full}"
+scope="full"
+scope_selected=false
 write_evidence=false
-if [[ "$#" -eq 2 ]]; then
-  [[ "$2" == "--write-evidence" ]] || fail "usage: $0 [core|wazuh|shuffle|full] [--write-evidence]"
-  write_evidence=true
-fi
-[[ "$#" -le 2 ]] || fail "usage: $0 [core|wazuh|shuffle|full] [--write-evidence]"
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    core|wazuh|shuffle|full)
+      [[ "${scope_selected}" == false ]] \
+        || fail "usage: $0 [core|wazuh|shuffle|full] [--write-evidence]"
+      scope="$1"
+      scope_selected=true
+      ;;
+    --write-evidence)
+      [[ "${write_evidence}" == false ]] \
+        || fail "usage: $0 [core|wazuh|shuffle|full] [--write-evidence]"
+      write_evidence=true
+      ;;
+    *)
+      fail "usage: $0 [core|wazuh|shuffle|full] [--write-evidence]"
+      ;;
+  esac
+  shift
+done
 require_runtime_environment
 
 case "${scope}" in

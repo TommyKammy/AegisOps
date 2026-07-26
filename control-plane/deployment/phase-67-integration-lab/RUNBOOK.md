@@ -3,7 +3,7 @@
 ## Preconditions
 
 1. Review `bootstrap.env.sample`, especially the Colima profile, Docker context, resource minimums, loopback ports, subnet, architecture, and emulation acceptance. If using an untracked custom copy, export `AEGISOPS_LAB_BOOTSTRAP_ENV` for the lifetime of the lab shell.
-2. Run `init.sh`. It creates an untracked runtime env, mounted AegisOps secrets, Shuffle/Wazuh bootstrap values, and a 30-day localhost TLS certificate. Rerunning it reapplies bootstrap settings and renews the certificate when less than seven days remain.
+2. Run `init.sh`. It creates an untracked runtime env, mounted AegisOps secrets, Shuffle/Wazuh bootstrap values, and a 30-day localhost TLS certificate. Rerunning it reapplies bootstrap settings and renews the certificate when less than seven days remain; rotating an existing certificate marks the next `up.sh` for forced recreation.
 3. Run `preflight.sh --scope core --write-evidence`, or select `wazuh`, `shuffle`, or `full` for the intended start. Do not continue past a `BLOCKED:` result.
 
 Preflight is read-only with respect to Colima and Docker. It never starts or reconfigures Colima, changes Docker's active context, removes a container, or creates a Compose resource. With `--write-evidence`, it writes only a timestamped report below the dedicated runtime evidence directory.
@@ -17,9 +17,9 @@ control-plane/deployment/phase-67-integration-lab/up.sh core
 control-plane/deployment/phase-67-integration-lab/smoke-core.sh
 ```
 
-`up.sh` renders the complete Compose model, builds the AegisOps image, waits for service health, and records status evidence. PostgreSQL must become healthy before AegisOps, and AegisOps must become healthy before the proxy.
+`up.sh` renders the complete Compose model, builds the AegisOps image, waits for service health, and records status evidence. PostgreSQL must become healthy before AegisOps, and AegisOps must become healthy before the proxy. A pending proxy or Wazuh certificate marker forces recreation of the selected scope and is cleared only after Compose succeeds.
 
-For Wazuh, first run `prepare-substrates.sh`. The command clones exactly the configured upstream tag, verifies its commit, generates indexer certificates through the official Wazuh generator in an isolated temporary Docker volume, verifies the complete certificate set, and updates the upstream `admin` bcrypt entry to match the generated lab password. The temporary volume and copy container are removed before the command returns.
+For Wazuh, first run `prepare-substrates.sh`. The command clones exactly the configured upstream tag, verifies its commit and tracked working tree, validates cached certificate expiry, chains, and key pairs, regenerates an invalid bundle through the official Wazuh generator in an isolated temporary Docker volume, and updates the upstream `admin` bcrypt entry to match the generated lab password. Regeneration marks the next Wazuh/full start for forced recreation. The temporary volume and copy container are removed before the command returns.
 
 ```bash
 control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh

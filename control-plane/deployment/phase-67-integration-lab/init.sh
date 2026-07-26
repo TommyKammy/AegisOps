@@ -86,7 +86,9 @@ generate_proxy_certificate() {
 }
 
 rotate_proxy_certificate=false
+proxy_certificate_state_existed=false
 if [[ -e "${cert_dir}/lab.key" || -e "${cert_dir}/lab.crt" ]]; then
+  proxy_certificate_state_existed=true
   [[ -s "${cert_dir}/lab.key" && -s "${cert_dir}/lab.crt" ]] \
     || fail "proxy TLS state is partial; restore or remove both lab.key and lab.crt before rerunning init"
   openssl pkey -in "${cert_dir}/lab.key" -noout >/dev/null 2>&1 \
@@ -112,6 +114,11 @@ else
 fi
 if [[ "${rotate_proxy_certificate}" == "true" ]]; then
   generate_proxy_certificate
+  if [[ "${proxy_certificate_state_existed}" == "true" ]]; then
+    proxy_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/proxy-certificate-recreate-required"
+    : >"${proxy_recreate_marker}"
+    chmod 600 "${proxy_recreate_marker}"
+  fi
 fi
 chmod 600 "${cert_dir}/lab.key" "${cert_dir}/lab.crt"
 
@@ -182,4 +189,7 @@ runtime_env_staging=""
 trap - EXIT
 
 echo "Initialized Phase 67.1 runtime at ${AEGISOPS_LAB_RUNTIME_ROOT}"
+if [[ -f "${AEGISOPS_LAB_RUNTIME_ROOT}/proxy-certificate-recreate-required" ]]; then
+  echo "Proxy certificate rotated; the next up.sh run will force service recreation."
+fi
 echo "Next: ${LAB_DIR}/preflight.sh --write-evidence"

@@ -261,6 +261,11 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
 
             second = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
             self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertTrue(
+                (
+                    cert_dir.parent / "proxy-certificate-recreate-required"
+                ).is_file()
+            )
             renewed_fingerprint = subprocess.run(
                 ["openssl", "x509", "-in", str(cert_path), "-noout", "-fingerprint"],
                 check=True,
@@ -406,11 +411,141 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
     def test_wazuh_substrate_rejects_unreviewed_tracked_changes(self) -> None:
         prepare = (LAB_DIR / "prepare-substrates.sh").read_text(encoding="utf-8")
         self.assertIn('diff --quiet HEAD -- \\\n  . ":(exclude)', prepare)
+        self.assertLess(
+            prepare.index("diff --quiet HEAD --"),
+            prepare.index("require_command docker"),
+        )
         self.assertIn("replace_admin_hash(current, placeholder)", prepare)
         self.assertIn(
             "unreviewed changes outside the managed admin hash",
             prepare,
         )
+
+    def test_wazuh_certificate_bundle_requires_valid_chains_and_key_pairs(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_dir = pathlib.Path(tmpdir)
+            ca_key = cert_dir / "ca.key"
+            ca_cert = cert_dir / "ca.pem"
+            leaf_key = cert_dir / "leaf.key"
+            leaf_request = cert_dir / "leaf.csr"
+            leaf_cert = cert_dir / "leaf.pem"
+            subprocess.run(
+                [
+                    "openssl",
+                    "req",
+                    "-x509",
+                    "-newkey",
+                    "rsa:2048",
+                    "-nodes",
+                    "-keyout",
+                    str(ca_key),
+                    "-out",
+                    str(ca_cert),
+                    "-days",
+                    "30",
+                    "-subj",
+                    "/CN=Phase67 Test CA",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                [
+                    "openssl",
+                    "req",
+                    "-newkey",
+                    "rsa:2048",
+                    "-nodes",
+                    "-keyout",
+                    str(leaf_key),
+                    "-out",
+                    str(leaf_request),
+                    "-subj",
+                    "/CN=wazuh.indexer",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                [
+                    "openssl",
+                    "x509",
+                    "-req",
+                    "-in",
+                    str(leaf_request),
+                    "-CA",
+                    str(ca_cert),
+                    "-CAkey",
+                    str(ca_key),
+                    "-CAcreateserial",
+                    "-out",
+                    str(leaf_cert),
+                    "-days",
+                    "30",
+                    "-sha256",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            for root_name in ("root-ca.pem", "root-ca-manager.pem"):
+                shutil.copy2(ca_cert, cert_dir / root_name)
+            for certificate_name, key_name in (
+                ("wazuh.indexer.pem", "wazuh.indexer-key.pem"),
+                ("admin.pem", "admin-key.pem"),
+                ("wazuh.manager.pem", "wazuh.manager-key.pem"),
+                ("wazuh.dashboard.pem", "wazuh.dashboard-key.pem"),
+            ):
+                shutil.copy2(leaf_cert, cert_dir / certificate_name)
+                shutil.copy2(leaf_key, cert_dir / key_name)
+
+            validation_command = (
+                'source "$1"; validate_wazuh_certificate_bundle "$2"'
+            )
+            valid = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    validation_command,
+                    "phase67-wazuh-cert-test",
+                    str(LAB_DIR / "lab-common.sh"),
+                    str(cert_dir),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(valid.returncode, 0, valid.stderr)
+
+            (cert_dir / "wazuh.dashboard.pem").write_text(
+                "corrupt certificate\n",
+                encoding="utf-8",
+            )
+            invalid = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    validation_command,
+                    "phase67-wazuh-cert-test",
+                    str(LAB_DIR / "lab-common.sh"),
+                    str(cert_dir),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(invalid.returncode, 0)
+
+    def test_up_recreates_services_after_certificate_rotation(self) -> None:
+        up = (LAB_DIR / "up.sh").read_text(encoding="utf-8")
+        self.assertIn("proxy-certificate-recreate-required", up)
+        self.assertIn("wazuh-certificate-recreate-required", up)
+        self.assertIn("--force-recreate", up)
+        self.assertIn('rm -f "${proxy_recreate_marker}"', up)
 
     def test_prepare_substrates_blocks_dirty_tracked_wazuh_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -541,6 +676,49 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             invocation = docker_log.read_text(encoding="utf-8")
             self.assertIn("--context colima-mac-studio-solo compose", invocation)
             self.assertIn("down --remove-orphans", invocation)
+
+    def test_status_accepts_evidence_flag_without_explicit_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            init_result = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(init_result.returncode, 0, init_result.stderr)
+            fake_bin = home / "bin"
+            fake_bin.mkdir()
+            fake_docker = fake_bin / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                'printf "phase67-status\\n"\n',
+                encoding="utf-8",
+            )
+            fake_docker.chmod(0o755)
+            env = os.environ.copy()
+            env["HOME"] = str(home)
+            env["PATH"] = f"{fake_bin}:{env['PATH']}"
+
+            result = subprocess.run(
+                ["bash", str(LAB_DIR / "status.sh"), "--write-evidence"],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("phase67-status", result.stdout)
+            self.assertIn("evidence=", result.stdout)
+            evidence_dir = (
+                home
+                / ".local"
+                / "share"
+                / "aegisops"
+                / "phase-67-integration-lab"
+                / "evidence"
+            )
+            evidence_files = list(evidence_dir.glob("status-full-*.txt"))
+            self.assertEqual(len(evidence_files), 1)
+            self.assertIn(
+                "phase67-status",
+                evidence_files[0].read_text(encoding="utf-8"),
+            )
 
     def test_normal_cleanup_and_destroy_boundaries_are_distinct(self) -> None:
         down = (LAB_DIR / "down.sh").read_text(encoding="utf-8")

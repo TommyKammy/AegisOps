@@ -45,7 +45,7 @@ control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh
 control-plane/deployment/phase-67-integration-lab/up.sh wazuh
 ```
 
-Use `status.sh`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
+Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 
 ## Configuration
 
@@ -61,7 +61,7 @@ Keep `AEGISOPS_LAB_BOOTSTRAP_ENV` exported for every lab command in that shell. 
 
 Use `preflight.sh --scope full --write-evidence` before a complete lab start. On Apple Silicon, `shuffle` and `full` additionally require the selected Colima profile to expose Rosetta or an x86_64 binfmt handler. Preflight reports the exact profile-preserving Colima restart command when that host capability is absent; it never restarts Colima itself.
 
-The generated proxy certificate is valid for 30 days and only for `localhost` and `127.0.0.1`. `init.sh` preserves a valid matching certificate pair, but replaces it when less than seven days of validity remain. Existing secret values remain stable.
+The generated proxy certificate is valid for 30 days and only for `localhost` and `127.0.0.1`. `init.sh` preserves a valid matching certificate pair, but replaces it when less than seven days of validity remain. When it rotates an existing pair, it records a marker that makes the next `up.sh` force service recreation before clearing the marker. Existing secret values remain stable.
 
 ## Verification
 

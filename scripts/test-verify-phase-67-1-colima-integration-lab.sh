@@ -124,6 +124,26 @@ perl -0pi -e 's/require_runtime_configuration/require_runtime_environment/' \
   "${teardown_recovery_drift}/control-plane/deployment/phase-67-integration-lab/down.sh"
 assert_fails_with "${teardown_recovery_drift}" 'require_runtime_configuration'
 
+proxy_recreate_drift="${workdir}/proxy-recreate-drift"
+copy_fixture "${proxy_recreate_drift}"
+perl -0pi -e 's/proxy-certificate-recreate-required/proxy-certificate-recreate-removed/g' \
+  "${proxy_recreate_drift}/control-plane/deployment/phase-67-integration-lab/init.sh" \
+  "${proxy_recreate_drift}/control-plane/deployment/phase-67-integration-lab/up.sh"
+assert_fails_with "${proxy_recreate_drift}" 'proxy-certificate-recreate-required'
+
+wazuh_certificate_drift="${workdir}/wazuh-certificate-drift"
+copy_fixture "${wazuh_certificate_drift}"
+perl -0pi -e 's/validate_wazuh_certificate_bundle/validate_removed_wazuh_certificate_bundle/g' \
+  "${wazuh_certificate_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh" \
+  "${wazuh_certificate_drift}/control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh"
+assert_fails_with "${wazuh_certificate_drift}" 'validate_wazuh_certificate_bundle'
+
+status_evidence_drift="${workdir}/status-evidence-drift"
+copy_fixture "${status_evidence_drift}"
+perl -0pi -e 's/scope="full"/scope="invalid"/' \
+  "${status_evidence_drift}/control-plane/deployment/phase-67-integration-lab/status.sh"
+assert_fails_with "${status_evidence_drift}" 'scope="full"'
+
 echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof," \
   "certificate-renewal, network-host, duplicate-port, runtime-quoting, bounded-logs," \
-  "Wazuh-checkout, and teardown-recovery drift."
+  "Wazuh-checkout, teardown-recovery, proxy-recreate, Wazuh-certificate, and status-evidence drift."
