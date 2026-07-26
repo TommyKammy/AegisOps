@@ -3,7 +3,7 @@
 ## Preconditions
 
 1. Review `bootstrap.env.sample`, especially the Colima profile, Docker context, resource minimums, loopback ports, subnet, architecture, and emulation acceptance. If using an untracked custom copy, export `AEGISOPS_LAB_BOOTSTRAP_ENV` for the lifetime of the lab shell.
-2. Run `init.sh`. It creates an untracked runtime env, mounted AegisOps secrets, Shuffle/Wazuh bootstrap values, and a 30-day localhost TLS certificate. Rerunning it reapplies bootstrap settings and renews the certificate when less than seven days remain; rotating an existing certificate marks the next `up.sh` for forced recreation.
+2. Run `init.sh`. It creates an untracked runtime env, mounted AegisOps secrets, Shuffle/Wazuh bootstrap values, and a 30-day localhost TLS certificate. Rerunning it reapplies bootstrap settings and renews the certificate when less than seven days remain; rotating an existing certificate marks the next `up.sh` for forced recreation. An initialized runtime with a missing credential fails closed because preserved volumes retain the original credential.
 3. Run `preflight.sh --scope core --write-evidence`, or select `wazuh`, `shuffle`, or `full` for the intended start. Do not continue past a `BLOCKED:` result.
 
 Preflight is read-only with respect to Colima and Docker. It never starts or reconfigures Colima, changes Docker's active context, removes a container, or creates a Compose resource. With `--write-evidence`, it writes only a timestamped report below the dedicated runtime evidence directory.
@@ -26,7 +26,7 @@ control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh
 control-plane/deployment/phase-67-integration-lab/up.sh wazuh
 ```
 
-Shuffle startup is available for substrate inspection, but workflow execution is intentionally disabled. Do not add a Docker socket mount locally. Phase 67.3 must add the reviewed execution boundary.
+Shuffle startup is available for substrate inspection, but workflow execution is intentionally disabled. The tracked bootstrap keeps emulation disabled; set `AEGISOPS_LAB_ALLOW_EMULATION=yes` only in an untracked bootstrap after accepting the architecture boundary. Do not add a Docker socket mount locally. Phase 67.3 must add the reviewed execution boundary.
 
 ```bash
 control-plane/deployment/phase-67-integration-lab/up.sh shuffle
@@ -69,6 +69,8 @@ That command deletes only volumes attached to the configured Compose project. It
 - resource minimum failure: stop the profile and resize it outside this lab, then rerun preflight.
 - host port in use or duplicated in the selected scope: choose distinct unused high loopback ports in an untracked bootstrap env.
 - subnet collision or unusable network/broadcast service address: choose a dedicated subnet and update all service IPv4 variables to unique host addresses.
+- owned project network subnet mismatch: stop the lab and remove the existing project network through normal teardown before applying the new subnet.
+- initialized runtime credential missing: restore the original credential; if the preserved data is disposable, run the confirmed `destroy-data.sh` path and remove the stale runtime environment before initializing new credentials.
 - Wazuh substrate missing: run `prepare-substrates.sh`; do not substitute an unreviewed checkout.
 - Shuffle amd64 execution unavailable: preserve the profile settings and use the exact `colima stop` plus `colima start --vm-type vz --vz-rosetta ... --activate=false` command printed by `preflight.sh --scope shuffle`. This host-level change interrupts every workload in that Colima profile, so the lab reports it as a blocker and never applies it automatically. Do not remove the explicit `linux/amd64` platform.
 

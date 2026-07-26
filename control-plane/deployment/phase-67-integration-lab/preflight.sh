@@ -30,6 +30,7 @@ case "${scope}" in
 esac
 
 load_lab_environment
+assert_reviewed_lab_pins
 require_command colima
 require_command docker
 require_command jq
@@ -88,19 +89,45 @@ server_arch="$(docker_lab info --format '{{.Architecture}}' 2>/dev/null)" \
 docker_lab compose version >/dev/null 2>&1 \
   || fail "Docker Compose plugin is unavailable for context '${AEGISOPS_LAB_DOCKER_CONTEXT}'"
 
-[[ "${server_arch}" == "${arch}" ]] \
+case "${arch}" in
+  arm64|aarch64) colima_arch_family=arm64 ;;
+  amd64|x86_64) colima_arch_family=amd64 ;;
+  *) fail "unsupported Colima architecture '${arch}'" ;;
+esac
+case "${server_arch}" in
+  arm64|aarch64)
+    server_arch_family=arm64
+    arm64_execution=native
+    amd64_execution=emulated
+    ;;
+  amd64|x86_64)
+    server_arch_family=amd64
+    arm64_execution=emulated
+    amd64_execution=native
+    ;;
+  *)
+    fail "unsupported Docker server architecture '${server_arch}'"
+    ;;
+esac
+[[ "${server_arch_family}" == "${colima_arch_family}" ]] \
   || fail "Docker server architecture '${server_arch}' differs from Colima architecture '${arch}'"
-[[ "${AEGISOPS_LAB_WAZUH_PLATFORM:-}" == "linux/arm64" ]] \
-  || fail "Wazuh platform must remain explicit linux/arm64 for this host"
+if [[ "${scope}" != "core" && "${arm64_execution}" == "emulated" ]]; then
+  [[ "${AEGISOPS_LAB_ALLOW_EMULATION:-no}" == "yes" ]] \
+    || fail "selected scope '${scope}' requires ARM64 service emulation; set AEGISOPS_LAB_ALLOW_EMULATION=yes only after accepting emulation"
+  if ! colima ssh --profile "${AEGISOPS_LAB_COLIMA_PROFILE}" -- sh -c \
+    'test -e /proc/sys/fs/binfmt_misc/qemu-aarch64' >/dev/null 2>&1; then
+    fail "ARM64 service execution is unavailable in Colima profile '${AEGISOPS_LAB_COLIMA_PROFILE}'"
+  fi
+fi
 if [[ "${scope}" == "shuffle" || "${scope}" == "full" ]]; then
-  [[ "${AEGISOPS_LAB_SHUFFLE_PLATFORM:-}" == "linux/amd64" ]] \
-    || fail "Shuffle 2.2.1 platform must remain explicit linux/amd64"
   [[ "${AEGISOPS_LAB_ALLOW_EMULATION:-no}" == "yes" ]] \
     || fail "Shuffle 2.2.1 is amd64-only; set AEGISOPS_LAB_ALLOW_EMULATION=yes only after accepting emulation"
-  if ! colima ssh --profile "${AEGISOPS_LAB_COLIMA_PROFILE}" -- sh -c \
-    'test -e /mnt/lima-rosetta/rosetta || test -e /proc/sys/fs/binfmt_misc/qemu-x86_64' \
-    >/dev/null 2>&1; then
-    fail "Shuffle amd64 execution is unavailable in Colima profile '${AEGISOPS_LAB_COLIMA_PROFILE}'. Preserve the profile settings, then run: colima stop --profile ${AEGISOPS_LAB_COLIMA_PROFILE} && colima start --profile ${AEGISOPS_LAB_COLIMA_PROFILE} --vm-type vz --vz-rosetta --arch aarch64 --cpus ${cpus} --memory ${memory_gib} --disk ${disk_gib} --runtime docker --kubernetes --activate=false"
+  if [[ "${amd64_execution}" == "emulated" ]]; then
+    if ! colima ssh --profile "${AEGISOPS_LAB_COLIMA_PROFILE}" -- sh -c \
+      'test -e /mnt/lima-rosetta/rosetta || test -e /proc/sys/fs/binfmt_misc/qemu-x86_64' \
+      >/dev/null 2>&1; then
+      fail "Shuffle amd64 execution is unavailable in Colima profile '${AEGISOPS_LAB_COLIMA_PROFILE}'. Preserve the profile settings, then run: colima stop --profile ${AEGISOPS_LAB_COLIMA_PROFILE} && colima start --profile ${AEGISOPS_LAB_COLIMA_PROFILE} --vm-type vz --vz-rosetta --arch aarch64 --cpus ${cpus} --memory ${memory_gib} --disk ${disk_gib} --runtime docker --kubernetes --activate=false"
+    fi
   fi
 fi
 
@@ -121,6 +148,13 @@ if docker_lab network inspect "${network_name}" >/dev/null 2>&1; then
   [[ "${phase_label}" == "67.1" ]] || fail "network '${network_name}' exists without the Phase 67.1 ownership label"
   [[ "${project_label}" == "${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}" ]] \
     || fail "network '${network_name}' is not owned by Compose project '${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}'"
+  project_network_subnets="$(
+    docker_lab network inspect "${network_name}" \
+      --format '{{range .IPAM.Config}}{{println .Subnet}}{{end}}' |
+      awk 'NF'
+  )"
+  [[ "${project_network_subnets}" == "${AEGISOPS_LAB_NETWORK_SUBNET}" ]] \
+    || fail "network '${network_name}' uses subnet '${project_network_subnets}', not requested '${AEGISOPS_LAB_NETWORK_SUBNET}'"
 fi
 
 volume_suffixes="
@@ -156,16 +190,10 @@ network_subnets="$(
 )"
 
 service_addresses="$(
-  printf '%s\n' \
-    "${AEGISOPS_LAB_PROXY_IPV4}" \
-    "${AEGISOPS_LAB_CONTROL_PLANE_IPV4}" \
-    "${AEGISOPS_LAB_POSTGRES_IPV4}" \
-    "${AEGISOPS_LAB_WAZUH_MANAGER_IPV4}" \
-    "${AEGISOPS_LAB_WAZUH_INDEXER_IPV4}" \
-    "${AEGISOPS_LAB_WAZUH_DASHBOARD_IPV4}" \
-    "${AEGISOPS_LAB_SHUFFLE_BACKEND_IPV4}" \
-    "${AEGISOPS_LAB_SHUFFLE_OPENSEARCH_IPV4}" \
-    "${AEGISOPS_LAB_SHUFFLE_FRONTEND_IPV4}"
+  while IFS= read -r address_name; do
+    variable="AEGISOPS_LAB_${address_name}_IPV4"
+    printf '%s\n' "${!variable}"
+  done < <(selected_address_names "${scope}")
 )"
 
 overlap="$(
@@ -226,7 +254,13 @@ record "PASS architecture=${server_arch}"
 record "PASS resources=cpu:${cpus},memory_gib:${memory_gib},disk_gib:${disk_gib}"
 record "PASS compose_project=${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}"
 record "PASS network_subnet=${AEGISOPS_LAB_NETWORK_SUBNET}"
-record "PASS published_ports=127.0.0.1:${AEGISOPS_LAB_PROXY_PORT},127.0.0.1:${AEGISOPS_LAB_WAZUH_DASHBOARD_PORT},127.0.0.1:${AEGISOPS_LAB_SHUFFLE_FRONTEND_PORT}"
+published_ports=""
+while IFS= read -r port_name; do
+  variable="AEGISOPS_LAB_${port_name}_PORT"
+  [[ -z "${published_ports}" ]] || published_ports+=","
+  published_ports+="127.0.0.1:${!variable}"
+done < <(selected_port_names "${scope}")
+record "PASS published_ports=${published_ports}"
 if [[ "${scope}" == "shuffle" || "${scope}" == "full" ]]; then
   record "PASS shuffle_emulation=available-and-explicitly-accepted"
 else
@@ -237,7 +271,9 @@ if [[ "${write_evidence}" == true ]]; then
   assert_safe_runtime_root "${AEGISOPS_LAB_RUNTIME_ROOT}"
   evidence_dir="${AEGISOPS_LAB_EVIDENCE_DIR:-${AEGISOPS_LAB_RUNTIME_ROOT}/evidence}"
   mkdir -p "${evidence_dir}"
-  evidence_file="${evidence_dir}/preflight-$(date -u '+%Y%m%dT%H%M%SZ').txt"
+  evidence_file="$(
+    mktemp "${evidence_dir}/preflight-${scope}-$(date -u '+%Y%m%dT%H%M%SZ').XXXXXX"
+  )"
   write_evidence_header "${evidence_file}"
   cat "${report}" >>"${evidence_file}"
   chmod 600 "${evidence_file}"

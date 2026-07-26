@@ -40,7 +40,9 @@ status_output="$(compose_scope "${scope}" ps --all)"
 printf '%s\n' "${status_output}"
 
 if [[ "${write_evidence}" == true ]]; then
-  evidence_file="${AEGISOPS_LAB_EVIDENCE_DIR}/status-${scope}-$(date -u '+%Y%m%dT%H%M%SZ').txt"
+  evidence_file="$(
+    mktemp "${AEGISOPS_LAB_EVIDENCE_DIR}/status-${scope}-$(date -u '+%Y%m%dT%H%M%SZ').XXXXXX"
+  )"
   write_evidence_header "${evidence_file}"
   printf '%s\n' "${status_output}" >>"${evidence_file}"
   chmod 600 "${evidence_file}"

@@ -9,6 +9,7 @@ source "${LAB_DIR}/lab-common.sh"
 [[ "$#" -eq 0 ]] || fail "usage: $0"
 require_runtime_environment
 assert_safe_runtime_root "${AEGISOPS_LAB_RUNTIME_ROOT}"
+assert_reviewed_lab_pins
 require_command git
 require_command python3
 
@@ -29,14 +30,11 @@ if [[ ! -d "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}/.git" ]]; then
     "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}"
 fi
 
-actual_commit="$(git -C "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}" rev-parse HEAD)"
-[[ "${actual_commit}" == "${AEGISOPS_LAB_WAZUH_DOCKER_COMMIT}" ]] \
-  || fail "Wazuh substrate commit is ${actual_commit}; expected ${AEGISOPS_LAB_WAZUH_DOCKER_COMMIT}"
 wazuh_internal_users_relative_path="single-node/config/wazuh_indexer/internal_users.yml"
-if ! git -C "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}" diff --quiet HEAD -- \
-  . ":(exclude)${wazuh_internal_users_relative_path}"; then
-  fail "Wazuh substrate has unreviewed tracked changes outside ${wazuh_internal_users_relative_path}"
-fi
+assert_reviewed_wazuh_checkout \
+  "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}" \
+  "${AEGISOPS_LAB_WAZUH_DOCKER_COMMIT}" \
+  "${wazuh_internal_users_relative_path}"
 require_command docker
 require_command openssl
 

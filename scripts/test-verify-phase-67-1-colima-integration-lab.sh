@@ -66,9 +66,9 @@ assert_fails_with "${destructive_cleanup}" 'must preserve named volumes'
 
 emulation_drift="${workdir}/emulation-drift"
 copy_fixture "${emulation_drift}"
-perl -0pi -e 's/AEGISOPS_LAB_ALLOW_EMULATION=yes/AEGISOPS_LAB_ALLOW_EMULATION=no/' \
+perl -0pi -e 's/AEGISOPS_LAB_ALLOW_EMULATION=no/AEGISOPS_LAB_ALLOW_EMULATION=yes/' \
   "${emulation_drift}/control-plane/deployment/phase-67-integration-lab/bootstrap.env.sample"
-assert_fails_with "${emulation_drift}" 'AEGISOPS_LAB_ALLOW_EMULATION=yes'
+assert_fails_with "${emulation_drift}" 'AEGISOPS_LAB_ALLOW_EMULATION=no'
 
 latest_image="${workdir}/latest-image"
 copy_fixture "${latest_image}"
@@ -115,7 +115,7 @@ assert_fails_with "${bounded_logs_drift}" 'for log_argument in "$@"; do'
 wazuh_checkout_drift="${workdir}/wazuh-checkout-drift"
 copy_fixture "${wazuh_checkout_drift}"
 perl -0pi -e 's/diff --quiet HEAD --/diff --quiet HEAD^ --/' \
-  "${wazuh_checkout_drift}/control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh"
+  "${wazuh_checkout_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh"
 assert_fails_with "${wazuh_checkout_drift}" 'diff --quiet HEAD --'
 
 teardown_recovery_drift="${workdir}/teardown-recovery-drift"
@@ -144,6 +144,54 @@ perl -0pi -e 's/scope="full"/scope="invalid"/' \
   "${status_evidence_drift}/control-plane/deployment/phase-67-integration-lab/status.sh"
 assert_fails_with "${status_evidence_drift}" 'scope="full"'
 
+selected_address_drift="${workdir}/selected-address-drift"
+copy_fixture "${selected_address_drift}"
+perl -0pi -e 's/selected_address_names/scope_address_list/g' \
+  "${selected_address_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh" \
+  "${selected_address_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh"
+assert_fails_with "${selected_address_drift}" 'selected_address_names'
+
+published_port_evidence_drift="${workdir}/published-port-evidence-drift"
+copy_fixture "${published_port_evidence_drift}"
+perl -0pi -e 's/PASS published_ports=\$\{published_ports\}/PASS published_ports=all/' \
+  "${published_port_evidence_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh"
+assert_fails_with "${published_port_evidence_drift}" 'record "PASS published_ports=${published_ports}"'
+
+reviewed_pin_drift="${workdir}/reviewed-pin-drift"
+copy_fixture "${reviewed_pin_drift}"
+perl -0pi -e 's/assert_reviewed_lab_pins/assert_removed_reviewed_lab_pins/g' \
+  "${reviewed_pin_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh" \
+  "${reviewed_pin_drift}/control-plane/deployment/phase-67-integration-lab/init.sh" \
+  "${reviewed_pin_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh" \
+  "${reviewed_pin_drift}/control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh"
+assert_fails_with "${reviewed_pin_drift}" 'assert_reviewed_lab_pins'
+
+architecture_drift="${workdir}/architecture-drift"
+copy_fixture "${architecture_drift}"
+perl -0pi -e 's/ARM64 service execution is unavailable/ARM64 service execution unchecked/' \
+  "${architecture_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh"
+assert_fails_with "${architecture_drift}" 'ARM64 service execution is unavailable'
+
+evidence_collision_drift="${workdir}/evidence-collision-drift"
+copy_fixture "${evidence_collision_drift}"
+perl -0pi -e 's/mktemp/printf/g' \
+  "${evidence_collision_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh"
+assert_fails_with "${evidence_collision_drift}" 'mktemp "${evidence_dir}/preflight-${scope}-'
+
+credential_guard_drift="${workdir}/credential-guard-drift"
+copy_fixture "${credential_guard_drift}"
+perl -0pi -e 's/initialized runtime is missing credential/initialized runtime regenerated credential/' \
+  "${credential_guard_drift}/control-plane/deployment/phase-67-integration-lab/init.sh"
+assert_fails_with "${credential_guard_drift}" 'initialized runtime is missing credential'
+
+project_subnet_drift="${workdir}/project-subnet-drift"
+copy_fixture "${project_subnet_drift}"
+perl -0pi -e 's/project_network_subnets/owned_network_cidrs/g' \
+  "${project_subnet_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh"
+assert_fails_with "${project_subnet_drift}" 'project_network_subnets'
+
 echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof," \
   "certificate-renewal, network-host, duplicate-port, runtime-quoting, bounded-logs," \
-  "Wazuh-checkout, teardown-recovery, proxy-recreate, Wazuh-certificate, and status-evidence drift."
+  "Wazuh-checkout, teardown-recovery, proxy-recreate, Wazuh-certificate, status-evidence," \
+  "selected-address, published-port-evidence, reviewed-pin, architecture, evidence-collision," \
+  "credential-guard, and project-subnet drift."

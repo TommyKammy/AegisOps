@@ -10,6 +10,7 @@ source "${LAB_DIR}/lab-common.sh"
 [[ "$#" -eq 0 ]] || fail "usage: $0"
 load_bootstrap_environment
 assert_safe_runtime_root "${AEGISOPS_LAB_RUNTIME_ROOT}"
+assert_reviewed_lab_pins
 require_command openssl
 
 secret_dir="${AEGISOPS_LAB_RUNTIME_ROOT}/secrets"
@@ -19,6 +20,25 @@ wazuh_source_dir="${AEGISOPS_LAB_RUNTIME_ROOT}/substrates/wazuh-docker"
 wazuh_config_dir="${wazuh_source_dir}/single-node/config"
 shuffle_app_dir="${AEGISOPS_LAB_RUNTIME_ROOT}/shuffle/apps"
 shuffle_file_dir="${AEGISOPS_LAB_RUNTIME_ROOT}/shuffle/files"
+runtime_previously_initialized=false
+if [[ -f "${RUNTIME_ENV}" ]]; then
+  runtime_previously_initialized=true
+  for credential in \
+    postgres-password \
+    wazuh-ingest-shared-secret \
+    wazuh-ingest-proxy-secret \
+    protected-surface-proxy-secret \
+    admin-bootstrap-token \
+    break-glass-token \
+    wazuh-indexer-password \
+    wazuh-api-password \
+    shuffle-opensearch-password \
+    shuffle-encryption-modifier
+  do
+    [[ -s "${secret_dir}/${credential}" ]] \
+      || fail "initialized runtime is missing credential ${credential}; restore it before reuse, or destroy preserved lab volumes and remove ${RUNTIME_ENV} before reinitializing"
+  done
+fi
 
 mkdir -p \
   "${secret_dir}" \
@@ -44,7 +64,9 @@ write_strong_secret_once() {
   if [[ -s "${path}" ]]; then
     existing="$(<"${path}")"
   fi
-  if [[ -z "${existing}" || "${existing}" =~ ^[0-9a-f]{48}$ ]]; then
+  if [[ -z "${existing}" ]]; then
+    printf 'Aa1!%sZz9!\n' "$(openssl rand -hex 24)" >"${path}"
+  elif [[ "${runtime_previously_initialized}" == false && "${existing}" =~ ^[0-9a-f]{48}$ ]]; then
     printf 'Aa1!%sZz9!\n' "$(openssl rand -hex 24)" >"${path}"
   fi
   chmod 600 "${path}"

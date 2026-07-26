@@ -337,6 +337,54 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("assigns duplicate host port 18443", result.stderr)
 
+    def test_selected_scope_checks_only_active_service_addresses(self) -> None:
+        expected = {
+            "core": ["PROXY", "CONTROL_PLANE", "POSTGRES"],
+            "wazuh": [
+                "PROXY",
+                "CONTROL_PLANE",
+                "POSTGRES",
+                "WAZUH_MANAGER",
+                "WAZUH_INDEXER",
+                "WAZUH_DASHBOARD",
+            ],
+            "shuffle": [
+                "PROXY",
+                "CONTROL_PLANE",
+                "POSTGRES",
+                "SHUFFLE_BACKEND",
+                "SHUFFLE_OPENSEARCH",
+                "SHUFFLE_FRONTEND",
+            ],
+            "full": [
+                "PROXY",
+                "CONTROL_PLANE",
+                "POSTGRES",
+                "WAZUH_MANAGER",
+                "WAZUH_INDEXER",
+                "WAZUH_DASHBOARD",
+                "SHUFFLE_BACKEND",
+                "SHUFFLE_OPENSEARCH",
+                "SHUFFLE_FRONTEND",
+            ],
+        }
+        for scope, address_names in expected.items():
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'source "$1"; selected_address_names "$2"',
+                    "phase67-address-test",
+                    str(LAB_DIR / "lab-common.sh"),
+                    scope,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.splitlines(), address_names)
+
     def test_current_runtime_migrations_require_schema_readiness(self) -> None:
         entrypoint = (LAB_DIR / "control-plane-entrypoint.sh").read_text(
             encoding="utf-8"
@@ -409,10 +457,11 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                     )
 
     def test_wazuh_substrate_rejects_unreviewed_tracked_changes(self) -> None:
+        common = (LAB_DIR / "lab-common.sh").read_text(encoding="utf-8")
         prepare = (LAB_DIR / "prepare-substrates.sh").read_text(encoding="utf-8")
-        self.assertIn('diff --quiet HEAD -- \\\n  . ":(exclude)', prepare)
+        self.assertIn('diff --quiet HEAD -- \\\n    . ":(exclude)', common)
         self.assertLess(
-            prepare.index("diff --quiet HEAD --"),
+            prepare.index("assert_reviewed_wazuh_checkout"),
             prepare.index("require_command docker"),
         )
         self.assertIn("replace_admin_hash(current, placeholder)", prepare)
@@ -549,11 +598,7 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
 
     def test_prepare_substrates_blocks_dirty_tracked_wazuh_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            home = pathlib.Path(tmpdir)
-            runtime_root = (
-                home / ".local" / "share" / "aegisops" / "phase-67-integration-lab"
-            )
-            wazuh_source = runtime_root / "substrates" / "wazuh-docker"
+            wazuh_source = pathlib.Path(tmpdir) / "wazuh-docker"
             internal_users = (
                 wazuh_source
                 / "single-node"
@@ -610,35 +655,74 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
             ).stdout.strip()
-            bootstrap = home / "bootstrap.env"
-            bootstrap.write_text(
-                (LAB_DIR / "bootstrap.env.sample")
-                .read_text(encoding="utf-8")
-                .replace(
-                    "499184cbeb44fc1086791d11ad4b9bdcb77a9bb9",
-                    pinned_commit,
-                ),
-                encoding="utf-8",
-            )
-            init_result = self._run_init(home, bootstrap)
-            self.assertEqual(init_result.returncode, 0, init_result.stderr)
             manager_config.write_text("<unreviewed />\n", encoding="utf-8")
-            env = os.environ.copy()
-            env["HOME"] = str(home)
-            env["AEGISOPS_LAB_BOOTSTRAP_ENV"] = str(bootstrap)
 
             result = subprocess.run(
-                ["bash", str(LAB_DIR / "prepare-substrates.sh")],
+                [
+                    "bash",
+                    "-c",
+                    'source "$1"; assert_reviewed_wazuh_checkout "$2" "$3" "$4"',
+                    "phase67-wazuh-checkout-test",
+                    str(LAB_DIR / "lab-common.sh"),
+                    str(wazuh_source),
+                    pinned_commit,
+                    "single-node/config/wazuh_indexer/internal_users.yml",
+                ],
                 check=False,
                 capture_output=True,
                 text=True,
-                env=env,
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(
                 "Wazuh substrate has unreviewed tracked changes outside",
                 result.stderr,
             )
+
+    def test_init_rejects_unreviewed_runtime_pins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            bootstrap = home / "bootstrap.env"
+            bootstrap.write_text(
+                (LAB_DIR / "bootstrap.env.sample")
+                .read_text(encoding="utf-8")
+                .replace("AEGISOPS_LAB_WAZUH_VERSION=4.14.6", "AEGISOPS_LAB_WAZUH_VERSION=4.15.0"),
+                encoding="utf-8",
+            )
+            result = self._run_init(home, bootstrap)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "must remain at reviewed version 4.14.6",
+                result.stderr,
+            )
+
+    def test_init_refuses_to_replace_missing_initialized_credential(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            first = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(first.returncode, 0, first.stderr)
+            runtime_root = (
+                home / ".local" / "share" / "aegisops" / "phase-67-integration-lab"
+            )
+            missing_credential = runtime_root / "secrets" / "postgres-password"
+            missing_credential.unlink()
+
+            second = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertNotEqual(second.returncode, 0)
+            self.assertIn(
+                "initialized runtime is missing credential postgres-password",
+                second.stderr,
+            )
+            self.assertFalse(missing_credential.exists())
+
+    def test_preflight_scope_and_evidence_contracts_are_explicit(self) -> None:
+        preflight = (LAB_DIR / "preflight.sh").read_text(encoding="utf-8")
+        bootstrap = (LAB_DIR / "bootstrap.env.sample").read_text(encoding="utf-8")
+        self.assertIn('selected_address_names "${scope}"', preflight)
+        self.assertIn('selected_port_names "${scope}"', preflight)
+        self.assertIn("project_network_subnets", preflight)
+        self.assertIn("ARM64 service execution is unavailable", preflight)
+        self.assertIn('mktemp "${evidence_dir}/preflight-${scope}-', preflight)
+        self.assertIn("AEGISOPS_LAB_ALLOW_EMULATION=no", bootstrap)
 
     def test_down_works_when_generated_secrets_are_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -695,16 +779,17 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             env["HOME"] = str(home)
             env["PATH"] = f"{fake_bin}:{env['PATH']}"
 
-            result = subprocess.run(
-                ["bash", str(LAB_DIR / "status.sh"), "--write-evidence"],
-                check=False,
-                capture_output=True,
-                text=True,
-                env=env,
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("phase67-status", result.stdout)
-            self.assertIn("evidence=", result.stdout)
+            for _ in range(2):
+                result = subprocess.run(
+                    ["bash", str(LAB_DIR / "status.sh"), "--write-evidence"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("phase67-status", result.stdout)
+                self.assertIn("evidence=", result.stdout)
             evidence_dir = (
                 home
                 / ".local"
@@ -713,12 +798,13 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 / "phase-67-integration-lab"
                 / "evidence"
             )
-            evidence_files = list(evidence_dir.glob("status-full-*.txt"))
-            self.assertEqual(len(evidence_files), 1)
-            self.assertIn(
-                "phase67-status",
-                evidence_files[0].read_text(encoding="utf-8"),
-            )
+            evidence_files = list(evidence_dir.glob("status-full-*"))
+            self.assertEqual(len(evidence_files), 2)
+            for evidence_file in evidence_files:
+                self.assertIn(
+                    "phase67-status",
+                    evidence_file.read_text(encoding="utf-8"),
+                )
 
     def test_normal_cleanup_and_destroy_boundaries_are_distinct(self) -> None:
         down = (LAB_DIR / "down.sh").read_text(encoding="utf-8")

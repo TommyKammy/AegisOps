@@ -50,6 +50,36 @@ require_runtime_environment() {
   [[ -d "${AEGISOPS_LAB_SECRET_DIR:-}" ]] || fail "runtime secret directory is missing; rerun ${LAB_DIR}/init.sh"
 }
 
+assert_reviewed_lab_pins() {
+  [[ "${AEGISOPS_LAB_WAZUH_VERSION:-}" == "4.14.6" ]] \
+    || fail "AEGISOPS_LAB_WAZUH_VERSION must remain at reviewed version 4.14.6"
+  [[ "${AEGISOPS_LAB_WAZUH_DOCKER_COMMIT:-}" == "499184cbeb44fc1086791d11ad4b9bdcb77a9bb9" ]] \
+    || fail "AEGISOPS_LAB_WAZUH_DOCKER_COMMIT must remain at the reviewed Wazuh 4.14.6 commit"
+  [[ "${AEGISOPS_LAB_SHUFFLE_VERSION:-}" == "2.2.1" ]] \
+    || fail "AEGISOPS_LAB_SHUFFLE_VERSION must remain at reviewed version 2.2.1"
+  [[ "${AEGISOPS_LAB_WAZUH_PLATFORM:-}" == "linux/arm64" ]] \
+    || fail "AEGISOPS_LAB_WAZUH_PLATFORM must remain explicit linux/arm64"
+  [[ "${AEGISOPS_LAB_SHUFFLE_PLATFORM:-}" == "linux/amd64" ]] \
+    || fail "AEGISOPS_LAB_SHUFFLE_PLATFORM must remain explicit linux/amd64"
+}
+
+assert_reviewed_wazuh_checkout() {
+  local source_dir="$1"
+  local expected_commit="$2"
+  local managed_relative_path="$3"
+  local actual_commit
+
+  [[ -d "${source_dir}/.git" ]] \
+    || fail "Wazuh substrate path is not a Git checkout: ${source_dir}"
+  actual_commit="$(git -C "${source_dir}" rev-parse HEAD)"
+  [[ "${actual_commit}" == "${expected_commit}" ]] \
+    || fail "Wazuh substrate commit is ${actual_commit}; expected ${expected_commit}"
+  if ! git -C "${source_dir}" diff --quiet HEAD -- \
+    . ":(exclude)${managed_relative_path}"; then
+    fail "Wazuh substrate has unreviewed tracked changes outside ${managed_relative_path}"
+  fi
+}
+
 validate_wazuh_certificate_bundle() {
   local cert_dir="$1"
   local certificate
@@ -183,6 +213,31 @@ selected_port_names() {
     *)
       fail "unknown lab scope '${scope}'; expected core, wazuh, shuffle, or full"
       ;;
+  esac
+}
+
+selected_address_names() {
+  local scope="${1:-core}"
+
+  printf '%s\n' PROXY CONTROL_PLANE POSTGRES
+  case "${scope}" in
+    core) ;;
+    wazuh)
+      printf '%s\n' WAZUH_MANAGER WAZUH_INDEXER WAZUH_DASHBOARD
+      ;;
+    shuffle)
+      printf '%s\n' SHUFFLE_BACKEND SHUFFLE_OPENSEARCH SHUFFLE_FRONTEND
+      ;;
+    full)
+      printf '%s\n' \
+        WAZUH_MANAGER \
+        WAZUH_INDEXER \
+        WAZUH_DASHBOARD \
+        SHUFFLE_BACKEND \
+        SHUFFLE_OPENSEARCH \
+        SHUFFLE_FRONTEND
+      ;;
+    *) fail "unknown lab scope '${scope}'; expected core, wazuh, shuffle, or full" ;;
   esac
 }
 
