@@ -136,7 +136,10 @@ else
 fi
 if [[ "${rotate_proxy_certificate}" == "true" ]]; then
   generate_proxy_certificate
-  if [[ "${proxy_certificate_state_existed}" == "true" ]]; then
+  if [[
+    "${proxy_certificate_state_existed}" == "true" ||
+      "${runtime_previously_initialized}" == "true"
+  ]]; then
     proxy_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/proxy-certificate-recreate-required"
     : >"${proxy_recreate_marker}"
     chmod 600 "${proxy_recreate_marker}"

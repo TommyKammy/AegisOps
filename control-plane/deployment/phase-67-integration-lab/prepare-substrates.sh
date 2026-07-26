@@ -51,10 +51,6 @@ wazuh.manager-key.pem
 wazuh.dashboard.pem
 wazuh.dashboard-key.pem
 "
-certificate_state_existed=false
-for certificate in ${required_certificates}; do
-  [[ ! -e "${cert_dir}/${certificate}" ]] || certificate_state_existed=true
-done
 certificates_complete=true
 validate_wazuh_certificate_bundle "${cert_dir}" || certificates_complete=false
 
@@ -91,11 +87,6 @@ if [[ "${certificates_complete}" != true ]]; then
   trap - EXIT
   validate_wazuh_certificate_bundle "${cert_dir}" \
     || fail "regenerated Wazuh certificate bundle failed validity, chain, or key-pair validation"
-  if [[ "${certificate_state_existed}" == "true" ]]; then
-    wazuh_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-certificate-recreate-required"
-    : >"${wazuh_recreate_marker}"
-    chmod 600 "${wazuh_recreate_marker}"
-  fi
 fi
 
 validate_wazuh_certificate_bundle "${cert_dir}" \
@@ -188,9 +179,13 @@ finally:
     temporary_path.unlink(missing_ok=True)
 PY
 chmod 600 "${internal_users}"
+record_reviewed_file_digest \
+  "${internal_users}" \
+  "${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-internal-users.sha256"
+wazuh_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-certificate-recreate-required"
+: >"${wazuh_recreate_marker}"
+chmod 600 "${wazuh_recreate_marker}"
 
 echo "Prepared Wazuh ${AEGISOPS_LAB_WAZUH_VERSION} substrate at ${AEGISOPS_LAB_WAZUH_SOURCE_DIR}"
-if [[ -f "${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-certificate-recreate-required" ]]; then
-  echo "Wazuh certificates regenerated; the next wazuh/full up.sh run will force service recreation."
-fi
+echo "The next wazuh/full up.sh run will force service recreation."
 echo "Shuffle images remain execution-disabled; Docker socket mounting is deferred to Phase 67.3."

@@ -101,6 +101,11 @@ SELECT CASE
       AND indrelid = 'aegisops_control.action_request_records'::regclass
       AND indisvalid
       AND indisunique
+      AND indnkeyatts = 1
+      AND indnatts = 1
+      AND indexprs IS NULL
+      AND indpred IS NULL
+      AND pg_get_indexdef(indexrelid, 1, true) = 'idempotency_key'
   )
   THEN 'ready' ELSE 'not-ready'
 END;

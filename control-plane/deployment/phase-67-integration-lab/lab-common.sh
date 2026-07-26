@@ -24,17 +24,24 @@ load_bootstrap_environment() {
   : "${AEGISOPS_LAB_RUNTIME_ROOT:?AEGISOPS_LAB_RUNTIME_ROOT is required}"
 
   AEGISOPS_LAB_RUNTIME_ROOT="${AEGISOPS_LAB_RUNTIME_ROOT/#\~/${HOME}}"
-  RUNTIME_ENV="${AEGISOPS_LAB_RUNTIME_ENV:-${AEGISOPS_LAB_RUNTIME_ROOT}/runtime.env}"
+  assert_safe_runtime_root "${AEGISOPS_LAB_RUNTIME_ROOT}"
+  RUNTIME_ENV="${AEGISOPS_LAB_RUNTIME_ROOT}/runtime.env"
   export AEGISOPS_LAB_RUNTIME_ROOT
   export RUNTIME_ENV
 }
 
 load_lab_environment() {
+  local bootstrap_runtime_root
+
   load_bootstrap_environment
+  bootstrap_runtime_root="${AEGISOPS_LAB_RUNTIME_ROOT}"
   if [[ -f "${RUNTIME_ENV}" ]]; then
     # shellcheck disable=SC1090
     source "${RUNTIME_ENV}"
   fi
+  [[ "${AEGISOPS_LAB_RUNTIME_ROOT}" == "${bootstrap_runtime_root}" ]] \
+    || fail "runtime environment root differs from the reviewed bootstrap root"
+  assert_safe_runtime_root "${AEGISOPS_LAB_RUNTIME_ROOT}"
 
   export AEGISOPS_LAB_RUNTIME_ROOT
   export RUNTIME_ENV
@@ -78,6 +85,36 @@ assert_reviewed_wazuh_checkout() {
     . ":(exclude)${managed_relative_path}"; then
     fail "Wazuh substrate has unreviewed tracked changes outside ${managed_relative_path}"
   fi
+}
+
+record_reviewed_file_digest() {
+  local path="$1"
+  local digest_path="$2"
+  local staging_path="${digest_path}.tmp.$$"
+  local digest
+
+  digest="$(openssl dgst -sha256 -r "${path}" | awk '{print $1}')"
+  [[ "${digest}" =~ ^[0-9a-f]{64}$ ]] \
+    || fail "could not record a reviewed SHA-256 digest for ${path}"
+  printf '%s\n' "${digest}" >"${staging_path}"
+  chmod 600 "${staging_path}"
+  mv "${staging_path}" "${digest_path}"
+}
+
+assert_reviewed_file_digest() {
+  local path="$1"
+  local digest_path="$2"
+  local expected_digest
+  local actual_digest
+
+  [[ -s "${digest_path}" ]] \
+    || fail "reviewed digest is missing for ${path}; run ${LAB_DIR}/prepare-substrates.sh"
+  expected_digest="$(<"${digest_path}")"
+  [[ "${expected_digest}" =~ ^[0-9a-f]{64}$ ]] \
+    || fail "reviewed digest is invalid for ${path}; run ${LAB_DIR}/prepare-substrates.sh"
+  actual_digest="$(openssl dgst -sha256 -r "${path}" | awk '{print $1}')"
+  [[ "${actual_digest}" == "${expected_digest}" ]] \
+    || fail "${path} changed after substrate preparation; run ${LAB_DIR}/prepare-substrates.sh"
 }
 
 validate_wazuh_certificate_bundle() {
@@ -156,13 +193,31 @@ EOF
 
 assert_safe_runtime_root() {
   local candidate="${1:-}"
+  local allowed_root="${HOME}/.local/share/aegisops"
+  local canonical_allowed_root
+  local canonical_candidate
 
   [[ -n "${candidate}" ]] || fail "runtime root is empty"
   [[ "${candidate}" == /* ]] || fail "runtime root must be absolute: ${candidate}"
-  [[ "${candidate}" != "/" && "${candidate}" != "${HOME}" && "${candidate}" != "${REPO_ROOT}" ]] \
-    || fail "refusing unsafe runtime root: ${candidate}"
-  case "${candidate}" in
-    "${HOME}"/.local/share/aegisops/*) ;;
+  require_command python3
+  canonical_allowed_root="$(
+    python3 - "${allowed_root}" <<'PY'
+import pathlib
+import sys
+
+print(pathlib.Path(sys.argv[1]).resolve(strict=False))
+PY
+  )" || fail "could not resolve the allowed AegisOps runtime root"
+  canonical_candidate="$(
+    python3 - "${candidate}" <<'PY'
+import pathlib
+import sys
+
+print(pathlib.Path(sys.argv[1]).resolve(strict=False))
+PY
+  )" || fail "could not resolve runtime root: ${candidate}"
+  case "${canonical_candidate}" in
+    "${canonical_allowed_root}"/*) ;;
     *) fail "runtime root must remain below ${HOME}/.local/share/aegisops/" ;;
   esac
 }
@@ -194,6 +249,94 @@ compose_scope() {
   esac
 }
 
+phase67_volume_suffixes() {
+  printf '%s\n' \
+    postgres-data \
+    wazuh-api-configuration \
+    wazuh-etc \
+    wazuh-logs \
+    wazuh-queue \
+    wazuh-integrations \
+    wazuh-indexer-data \
+    wazuh-dashboard-config \
+    wazuh-dashboard-custom \
+    shuffle-database
+}
+
+assert_phase67_resource_owned() {
+  local resource_type="$1"
+  local resource_id="$2"
+  local labels
+  local phase_label
+  local project_label
+
+  case "${resource_type}" in
+    container)
+      labels="$(
+        docker_lab container inspect "${resource_id}" \
+          --format '{{index .Config.Labels "com.aegisops.lab.phase"}}|{{index .Config.Labels "com.docker.compose.project"}}'
+      )"
+      ;;
+    network|volume)
+      labels="$(
+        docker_lab "${resource_type}" inspect "${resource_id}" \
+          --format '{{index .Labels "com.aegisops.lab.phase"}}|{{index .Labels "com.docker.compose.project"}}'
+      )"
+      ;;
+    *) fail "unsupported Docker resource type for ownership check: ${resource_type}" ;;
+  esac
+  IFS='|' read -r phase_label project_label <<<"${labels}"
+  [[ "${phase_label}" == "67.1" ]] \
+    || fail "${resource_type} '${resource_id}' exists without the Phase 67.1 ownership label"
+  [[ "${project_label}" == "${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}" ]] \
+    || fail "${resource_type} '${resource_id}' is not owned by Compose project '${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}'"
+}
+
+assert_phase67_compose_project_ownership() {
+  local container_ids
+  local network_ids
+  local resource_id
+  local network_name="${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}-network"
+  local suffix
+  local volume_ids
+  local volume_name
+
+  container_ids="$(
+    docker_lab ps --all --quiet \
+      --filter "label=com.docker.compose.project=${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}"
+  )" || fail "could not enumerate containers for Compose project '${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}'"
+  while IFS= read -r resource_id; do
+    [[ -z "${resource_id}" ]] \
+      || assert_phase67_resource_owned container "${resource_id}"
+  done <<<"${container_ids}"
+  network_ids="$(
+    docker_lab network ls --quiet \
+      --filter "label=com.docker.compose.project=${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}"
+  )" || fail "could not enumerate networks for Compose project '${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}'"
+  while IFS= read -r resource_id; do
+    [[ -z "${resource_id}" ]] \
+      || assert_phase67_resource_owned network "${resource_id}"
+  done <<<"${network_ids}"
+  volume_ids="$(
+    docker_lab volume ls --quiet \
+      --filter "label=com.docker.compose.project=${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}"
+  )" || fail "could not enumerate volumes for Compose project '${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}'"
+  while IFS= read -r resource_id; do
+    [[ -z "${resource_id}" ]] \
+      || assert_phase67_resource_owned volume "${resource_id}"
+  done <<<"${volume_ids}"
+
+  if docker_lab network inspect "${network_name}" >/dev/null 2>&1; then
+    assert_phase67_resource_owned network "${network_name}"
+  fi
+  while IFS= read -r suffix; do
+    volume_name="${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}-${suffix}"
+    if docker_lab volume inspect "${volume_name}" >/dev/null 2>&1; then
+      assert_phase67_resource_owned volume "${volume_name}"
+    fi
+  done < <(phase67_volume_suffixes)
+}
+
 selected_port_names() {
   local scope="${1:-core}"
 
@@ -213,6 +356,15 @@ selected_port_names() {
     *)
       fail "unknown lab scope '${scope}'; expected core, wazuh, shuffle, or full"
       ;;
+  esac
+}
+
+service_name_for_published_port() {
+  case "$1" in
+    PROXY) printf '%s\n' proxy ;;
+    WAZUH_DASHBOARD) printf '%s\n' wazuh-dashboard ;;
+    SHUFFLE_FRONTEND) printf '%s\n' shuffle-frontend ;;
+    *) fail "unknown published port name '$1'" ;;
   esac
 }
 

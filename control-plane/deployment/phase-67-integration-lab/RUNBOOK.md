@@ -19,7 +19,7 @@ control-plane/deployment/phase-67-integration-lab/smoke-core.sh
 
 `up.sh` renders the complete Compose model, builds the AegisOps image, waits for service health, and records status evidence. PostgreSQL must become healthy before AegisOps, and AegisOps must become healthy before the proxy. A pending proxy or Wazuh certificate marker forces recreation of the selected scope and is cleared only after Compose succeeds.
 
-For Wazuh, first run `prepare-substrates.sh`. The command clones exactly the configured upstream tag, verifies its commit and tracked working tree, validates cached certificate expiry, chains, and key pairs, regenerates an invalid bundle through the official Wazuh generator in an isolated temporary Docker volume, and updates the upstream `admin` bcrypt entry to match the generated lab password. Regeneration marks the next Wazuh/full start for forced recreation. The temporary volume and copy container are removed before the command returns.
+For Wazuh, first run `prepare-substrates.sh`. The command clones exactly the configured upstream tag, verifies its commit and tracked working tree, validates cached certificate expiry, chains, and key pairs, regenerates an invalid bundle through the official Wazuh generator in an isolated temporary Docker volume, and updates the upstream `admin` bcrypt entry to match the generated lab password. It records the reviewed managed-file digest; `up.sh wazuh` and `up.sh full` recheck the checkout and digest immediately before startup. Every successful preparation marks the next Wazuh/full start for forced recreation so running services cannot retain an earlier certificate or admin hash. The temporary volume and copy container are removed before the command returns.
 
 ```bash
 control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh
@@ -51,7 +51,7 @@ control-plane/deployment/phase-67-integration-lab/down.sh
 control-plane/deployment/phase-67-integration-lab/cleanup.sh
 ```
 
-Both commands preserve PostgreSQL, Wazuh, and Shuffle named volumes, generated secrets, generated certificates, upstream substrate files, and evidence. They do not affect containers, networks, or volumes outside the dedicated Compose project.
+Both commands preserve PostgreSQL, Wazuh, and Shuffle named volumes, generated secrets, generated certificates, upstream substrate files, and evidence. Before teardown they require every discovered project container, network, and volume to carry both the Phase 67.1 and configured Compose project ownership labels.
 
 Permanent project-volume deletion is a separate, explicit action:
 
@@ -60,7 +60,7 @@ control-plane/deployment/phase-67-integration-lab/destroy-data.sh \
   --confirm-destroy-phase-67-lab-data
 ```
 
-That command deletes only volumes attached to the configured Compose project. It preserves the runtime directory and evidence.
+That command applies the same ownership proof before deleting only volumes attached to the configured Compose project. It preserves the runtime directory and evidence.
 
 ## Blockers
 
@@ -71,6 +71,8 @@ That command deletes only volumes attached to the configured Compose project. It
 - subnet collision or unusable network/broadcast service address: choose a dedicated subnet and update all service IPv4 variables to unique host addresses.
 - owned project network subnet mismatch: stop the lab and remove the existing project network through normal teardown before applying the new subnet.
 - initialized runtime credential missing: restore the original credential; if the preserved data is disposable, run the confirmed `destroy-data.sh` path and remove the stale runtime environment before initializing new credentials.
+- runtime root or runtime environment root mismatch: remove `..` components and symlink escapes; keep the canonical root and generated `runtime.env` below `${HOME}/.local/share/aegisops/`.
+- teardown ownership mismatch: stop and inspect the colliding Compose project manually; do not bypass the Phase 67.1 resource-label proof.
 - Wazuh substrate missing: run `prepare-substrates.sh`; do not substitute an unreviewed checkout.
 - Shuffle amd64 execution unavailable: preserve the profile settings and use the exact `colima stop` plus `colima start --vm-type vz --vz-rosetta ... --activate=false` command printed by `preflight.sh --scope shuffle`. This host-level change interrupts every workload in that Colima profile, so the lab reports it as a blocker and never applies it automatically. Do not remove the explicit `linux/amd64` platform.
 

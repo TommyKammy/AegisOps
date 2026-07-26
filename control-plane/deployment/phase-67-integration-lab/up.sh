@@ -18,7 +18,17 @@ case "${scope}" in
 esac
 
 if [[ "${scope}" == "wazuh" || "${scope}" == "full" ]]; then
+  require_command git
   require_command openssl
+  wazuh_internal_users_relative_path="single-node/config/wazuh_indexer/internal_users.yml"
+  wazuh_internal_users="${AEGISOPS_LAB_WAZUH_SOURCE_DIR}/${wazuh_internal_users_relative_path}"
+  assert_reviewed_wazuh_checkout \
+    "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}" \
+    "${AEGISOPS_LAB_WAZUH_DOCKER_COMMIT}" \
+    "${wazuh_internal_users_relative_path}"
+  assert_reviewed_file_digest \
+    "${wazuh_internal_users}" \
+    "${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-internal-users.sha256"
   validate_wazuh_certificate_bundle \
     "${AEGISOPS_LAB_WAZUH_CONFIG_DIR}/wazuh_indexer_ssl_certs" \
     || fail "Wazuh substrate certificate bundle is invalid; run ${LAB_DIR}/prepare-substrates.sh"
@@ -27,17 +37,21 @@ fi
 compose_scope "${scope}" config --quiet
 proxy_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/proxy-certificate-recreate-required"
 wazuh_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-certificate-recreate-required"
-force_recreate_arguments=()
+force_recreate=false
 if [[ -f "${proxy_recreate_marker}" ]]; then
-  force_recreate_arguments+=(--force-recreate)
+  force_recreate=true
 fi
 if [[ "${scope}" == "wazuh" || "${scope}" == "full" ]]; then
-  if [[ -f "${wazuh_recreate_marker}" && "${#force_recreate_arguments[@]}" -eq 0 ]]; then
-    force_recreate_arguments+=(--force-recreate)
+  if [[ -f "${wazuh_recreate_marker}" ]]; then
+    force_recreate=true
   fi
 fi
-compose_scope "${scope}" up --detach --build --wait "${force_recreate_arguments[@]}"
-if [[ "${#force_recreate_arguments[@]}" -gt 0 ]]; then
+if [[ "${force_recreate}" == true ]]; then
+  compose_scope "${scope}" up --detach --build --wait --force-recreate
+else
+  compose_scope "${scope}" up --detach --build --wait
+fi
+if [[ "${force_recreate}" == true ]]; then
   rm -f "${proxy_recreate_marker}"
   if [[ "${scope}" == "wazuh" || "${scope}" == "full" ]]; then
     rm -f "${wazuh_recreate_marker}"

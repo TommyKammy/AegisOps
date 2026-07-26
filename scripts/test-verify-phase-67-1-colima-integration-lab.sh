@@ -131,12 +131,30 @@ perl -0pi -e 's/proxy-certificate-recreate-required/proxy-certificate-recreate-r
   "${proxy_recreate_drift}/control-plane/deployment/phase-67-integration-lab/up.sh"
 assert_fails_with "${proxy_recreate_drift}" 'proxy-certificate-recreate-required'
 
+proxy_deleted_pair_drift="${workdir}/proxy-deleted-pair-drift"
+copy_fixture "${proxy_deleted_pair_drift}"
+perl -0pi -e 's/\$\{runtime_previously_initialized\}" == "true/\${runtime_previously_initialized}" == "false/' \
+  "${proxy_deleted_pair_drift}/control-plane/deployment/phase-67-integration-lab/init.sh"
+assert_fails_with "${proxy_deleted_pair_drift}" '"${runtime_previously_initialized}" == "true"'
+
 wazuh_certificate_drift="${workdir}/wazuh-certificate-drift"
 copy_fixture "${wazuh_certificate_drift}"
 perl -0pi -e 's/validate_wazuh_certificate_bundle/validate_removed_wazuh_certificate_bundle/g' \
   "${wazuh_certificate_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh" \
   "${wazuh_certificate_drift}/control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh"
 assert_fails_with "${wazuh_certificate_drift}" 'validate_wazuh_certificate_bundle'
+
+wazuh_start_checkout_drift="${workdir}/wazuh-start-checkout-drift"
+copy_fixture "${wazuh_start_checkout_drift}"
+perl -0pi -e 's/assert_reviewed_wazuh_checkout/assert_removed_wazuh_checkout/g' \
+  "${wazuh_start_checkout_drift}/control-plane/deployment/phase-67-integration-lab/up.sh"
+assert_fails_with "${wazuh_start_checkout_drift}" 'assert_reviewed_wazuh_checkout'
+
+wazuh_digest_drift="${workdir}/wazuh-digest-drift"
+copy_fixture "${wazuh_digest_drift}"
+perl -0pi -e 's/assert_reviewed_file_digest/assert_removed_file_digest/g' \
+  "${wazuh_digest_drift}/control-plane/deployment/phase-67-integration-lab/up.sh"
+assert_fails_with "${wazuh_digest_drift}" 'assert_reviewed_file_digest'
 
 status_evidence_drift="${workdir}/status-evidence-drift"
 copy_fixture "${status_evidence_drift}"
@@ -190,8 +208,34 @@ perl -0pi -e 's/project_network_subnets/owned_network_cidrs/g' \
   "${project_subnet_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh"
 assert_fails_with "${project_subnet_drift}" 'project_network_subnets'
 
+index_definition_drift="${workdir}/index-definition-drift"
+copy_fixture "${index_definition_drift}"
+perl -0pi -e 's/pg_get_indexdef/index_name_only/g' \
+  "${index_definition_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
+assert_fails_with "${index_definition_drift}" "pg_get_indexdef(indexrelid, 1, true) = 'idempotency_key'"
+
+port_service_owner_drift="${workdir}/port-service-owner-drift"
+copy_fixture "${port_service_owner_drift}"
+perl -0pi -e 's/com\.docker\.compose\.service=\$\{expected_service\}/com.docker.compose.project=\${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}/' \
+  "${port_service_owner_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh"
+assert_fails_with "${port_service_owner_drift}" 'com.docker.compose.service=${expected_service}'
+
+runtime_canonical_drift="${workdir}/runtime-canonical-drift"
+copy_fixture "${runtime_canonical_drift}"
+perl -0pi -e 's/resolve\(strict=False\)/absolute()/g' \
+  "${runtime_canonical_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh"
+assert_fails_with "${runtime_canonical_drift}" 'pathlib.Path(sys.argv[1]).resolve(strict=False)'
+
+teardown_ownership_drift="${workdir}/teardown-ownership-drift"
+copy_fixture "${teardown_ownership_drift}"
+perl -0pi -e 's/assert_phase67_compose_project_ownership/assert_removed_project_ownership/g' \
+  "${teardown_ownership_drift}/control-plane/deployment/phase-67-integration-lab/down.sh" \
+  "${teardown_ownership_drift}/control-plane/deployment/phase-67-integration-lab/destroy-data.sh"
+assert_fails_with "${teardown_ownership_drift}" 'assert_phase67_compose_project_ownership'
+
 echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof," \
   "certificate-renewal, network-host, duplicate-port, runtime-quoting, bounded-logs," \
   "Wazuh-checkout, teardown-recovery, proxy-recreate, Wazuh-certificate, status-evidence," \
   "selected-address, published-port-evidence, reviewed-pin, architecture, evidence-collision," \
-  "credential-guard, and project-subnet drift."
+  "credential-guard, project-subnet, replacement-certificate, start-time Wazuh-checkout," \
+  "Wazuh-digest, index-definition, port-service-owner, canonical-runtime, and teardown-ownership drift."

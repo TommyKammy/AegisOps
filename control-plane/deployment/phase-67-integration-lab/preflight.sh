@@ -136,8 +136,17 @@ while IFS= read -r port_name; do
   variable="AEGISOPS_LAB_${port_name}_PORT"
   port="${!variable}"
   if port_is_listening "${port}"; then
-    lab_binding="$(docker_lab ps --filter "label=com.docker.compose.project=${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}" --format '{{.Ports}}' | grep -F "127.0.0.1:${port}->" || true)"
-    [[ -n "${lab_binding}" ]] || fail "host port ${port} (${port_name}) is already in use outside project '${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}'"
+    expected_service="$(service_name_for_published_port "${port_name}")"
+    lab_binding="$(
+      docker_lab ps \
+        --filter "label=com.docker.compose.project=${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}" \
+        --filter "label=com.docker.compose.service=${expected_service}" \
+        --filter "label=com.aegisops.lab.phase=67.1" \
+        --format '{{.Ports}}' |
+        grep -F "127.0.0.1:${port}->" || true
+    )"
+    [[ -n "${lab_binding}" ]] \
+      || fail "host port ${port} (${port_name}) is not owned by expected Phase 67.1 service '${expected_service}'"
   fi
 done < <(selected_port_names "${scope}")
 
@@ -157,19 +166,7 @@ if docker_lab network inspect "${network_name}" >/dev/null 2>&1; then
     || fail "network '${network_name}' uses subnet '${project_network_subnets}', not requested '${AEGISOPS_LAB_NETWORK_SUBNET}'"
 fi
 
-volume_suffixes="
-postgres-data
-wazuh-api-configuration
-wazuh-etc
-wazuh-logs
-wazuh-queue
-wazuh-integrations
-wazuh-indexer-data
-wazuh-dashboard-config
-wazuh-dashboard-custom
-shuffle-database
-"
-for suffix in ${volume_suffixes}; do
+while IFS= read -r suffix; do
   volume_name="${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}-${suffix}"
   if docker_lab volume inspect "${volume_name}" >/dev/null 2>&1; then
     phase_label="$(docker_lab volume inspect "${volume_name}" --format '{{index .Labels "com.aegisops.lab.phase"}}')"
@@ -177,7 +174,7 @@ for suffix in ${volume_suffixes}; do
     [[ "${phase_label}" == "67.1" && "${project_label}" == "${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}" ]] \
       || fail "volume '${volume_name}' exists without Phase 67.1 Compose ownership"
   fi
-done
+done < <(phase67_volume_suffixes)
 
 network_subnets="$(
   docker_lab network ls --format '{{.Name}}' |

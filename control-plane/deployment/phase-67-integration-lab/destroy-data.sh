@@ -12,6 +12,8 @@ confirmation="${1:-}"
 [[ "$#" -eq 1 ]] || fail "usage: $0 --confirm-destroy-phase-67-lab-data"
 
 require_runtime_configuration
+assert_safe_runtime_root "${AEGISOPS_LAB_RUNTIME_ROOT}"
+assert_phase67_compose_project_ownership
 compose_lab --profile wazuh --profile shuffle down --volumes --remove-orphans
 
 echo "Deleted only Compose volumes owned by project ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}."

@@ -288,6 +288,23 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 text=True,
             )
 
+    def test_init_marks_deleted_proxy_pair_for_recreation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            first = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(first.returncode, 0, first.stderr)
+            runtime_root = (
+                home / ".local" / "share" / "aegisops" / "phase-67-integration-lab"
+            )
+            marker = runtime_root / "proxy-certificate-recreate-required"
+            self.assertFalse(marker.exists())
+            (runtime_root / "proxy-certs" / "lab.key").unlink()
+            (runtime_root / "proxy-certs" / "lab.crt").unlink()
+
+            second = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertTrue(marker.is_file())
+
     def test_selected_scope_checks_only_published_ports(self) -> None:
         expected = {
             "core": ["PROXY"],
@@ -311,6 +328,29 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.splitlines(), port_names)
+
+    def test_published_ports_map_to_expected_compose_services(self) -> None:
+        expected = {
+            "PROXY": "proxy",
+            "WAZUH_DASHBOARD": "wazuh-dashboard",
+            "SHUFFLE_FRONTEND": "shuffle-frontend",
+        }
+        for port_name, service_name in expected.items():
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'source "$1"; service_name_for_published_port "$2"',
+                    "phase67-port-service-test",
+                    str(LAB_DIR / "lab-common.sh"),
+                    port_name,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), service_name)
 
     def test_selected_scope_rejects_duplicate_ports(self) -> None:
         env = os.environ.copy()
@@ -416,6 +456,14 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             "'lifecycle_transition_records_lifecycle_state_known_values'",
             entrypoint,
         )
+        self.assertIn("AND indnkeyatts = 1", entrypoint)
+        self.assertIn("AND indnatts = 1", entrypoint)
+        self.assertIn("AND indexprs IS NULL", entrypoint)
+        self.assertIn("AND indpred IS NULL", entrypoint)
+        self.assertIn(
+            "pg_get_indexdef(indexrelid, 1, true) = 'idempotency_key'",
+            entrypoint,
+        )
 
     def test_custom_bootstrap_documentation_keeps_override_exported(self) -> None:
         readme = (LAB_DIR / "README.md").read_text(encoding="utf-8")
@@ -459,10 +507,25 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
     def test_wazuh_substrate_rejects_unreviewed_tracked_changes(self) -> None:
         common = (LAB_DIR / "lab-common.sh").read_text(encoding="utf-8")
         prepare = (LAB_DIR / "prepare-substrates.sh").read_text(encoding="utf-8")
+        up = (LAB_DIR / "up.sh").read_text(encoding="utf-8")
         self.assertIn('diff --quiet HEAD -- \\\n    . ":(exclude)', common)
         self.assertLess(
             prepare.index("assert_reviewed_wazuh_checkout"),
             prepare.index("require_command docker"),
+        )
+        self.assertLess(
+            up.index("assert_reviewed_wazuh_checkout"),
+            up.index("validate_wazuh_certificate_bundle"),
+        )
+        self.assertIn("assert_reviewed_file_digest", up)
+        self.assertIn("record_reviewed_file_digest", prepare)
+        self.assertLess(
+            prepare.index("record_reviewed_file_digest"),
+            prepare.index("wazuh-certificate-recreate-required"),
+        )
+        self.assertIn(
+            "The next wazuh/full up.sh run will force service recreation.",
+            prepare,
         )
         self.assertIn("replace_admin_hash(current, placeholder)", prepare)
         self.assertIn(
@@ -678,6 +741,34 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 result.stderr,
             )
 
+    def test_reviewed_file_digest_rejects_post_prepare_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = pathlib.Path(tmpdir)
+            reviewed_file = root / "internal_users.yml"
+            digest_file = root / "internal_users.sha256"
+            reviewed_file.write_text("reviewed\n", encoding="utf-8")
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    (
+                        'source "$1"; '
+                        'record_reviewed_file_digest "$2" "$3"; '
+                        'printf "changed\\n" >"$2"; '
+                        'assert_reviewed_file_digest "$2" "$3"'
+                    ),
+                    "phase67-reviewed-digest-test",
+                    str(LAB_DIR / "lab-common.sh"),
+                    str(reviewed_file),
+                    str(digest_file),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("changed after substrate preparation", result.stderr)
+
     def test_init_rejects_unreviewed_runtime_pins(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = pathlib.Path(tmpdir)
@@ -714,6 +805,42 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             )
             self.assertFalse(missing_credential.exists())
 
+    def test_runtime_root_rejects_dotdot_and_symlink_escapes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            allowed_root = home / ".local" / "share" / "aegisops"
+            outside_root = home / ".ssh"
+            allowed_root.mkdir(parents=True)
+            outside_root.mkdir()
+            (allowed_root / "escape").symlink_to(outside_root, target_is_directory=True)
+            candidates = (
+                allowed_root / ".." / ".." / ".." / ".ssh" / "phase67",
+                allowed_root / "escape" / "phase67",
+            )
+            env = os.environ.copy()
+            env["HOME"] = str(home)
+            for candidate in candidates:
+                with self.subTest(candidate=candidate):
+                    result = subprocess.run(
+                        [
+                            "bash",
+                            "-c",
+                            'source "$1"; assert_safe_runtime_root "$2"',
+                            "phase67-runtime-root-test",
+                            str(LAB_DIR / "lab-common.sh"),
+                            str(candidate),
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        env=env,
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(
+                        "runtime root must remain below",
+                        result.stderr,
+                    )
+
     def test_preflight_scope_and_evidence_contracts_are_explicit(self) -> None:
         preflight = (LAB_DIR / "preflight.sh").read_text(encoding="utf-8")
         bootstrap = (LAB_DIR / "bootstrap.env.sample").read_text(encoding="utf-8")
@@ -740,7 +867,10 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             fake_docker = fake_bin / "docker"
             fake_docker.write_text(
                 "#!/usr/bin/env bash\n"
-                'printf "%s\\n" "$*" >"${AEGISOPS_FAKE_DOCKER_LOG}"\n',
+                'case "$*" in\n'
+                '  *" network inspect "*|*" volume inspect "*) exit 1 ;;\n'
+                '  *" compose "*) printf "%s\\n" "$*" >"${AEGISOPS_FAKE_DOCKER_LOG}" ;;\n'
+                "esac\n",
                 encoding="utf-8",
             )
             fake_docker.chmod(0o755)
@@ -760,6 +890,53 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             invocation = docker_log.read_text(encoding="utf-8")
             self.assertIn("--context colima-mac-studio-solo compose", invocation)
             self.assertIn("down --remove-orphans", invocation)
+
+    def test_destroy_rejects_foreign_project_resources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            init_result = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(init_result.returncode, 0, init_result.stderr)
+            fake_bin = home / "bin"
+            fake_bin.mkdir()
+            docker_log = home / "docker.log"
+            fake_docker = fake_bin / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                'printf "%s\\n" "$*" >>"${AEGISOPS_FAKE_DOCKER_LOG}"\n'
+                'case "$*" in\n'
+                '  *" ps --all --quiet "*) printf "foreign-container\\n" ;;\n'
+                '  *" container inspect foreign-container "*) '
+                'printf "66.0|aegisops-phase67-lab\\n" ;;\n'
+                '  *" network inspect "*|*" volume inspect "*) exit 1 ;;\n'
+                "esac\n",
+                encoding="utf-8",
+            )
+            fake_docker.chmod(0o755)
+            env = os.environ.copy()
+            env["HOME"] = str(home)
+            env["PATH"] = f"{fake_bin}:{env['PATH']}"
+            env["AEGISOPS_FAKE_DOCKER_LOG"] = str(docker_log)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(LAB_DIR / "destroy-data.sh"),
+                    "--confirm-destroy-phase-67-lab-data",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "exists without the Phase 67.1 ownership label",
+                result.stderr,
+            )
+            self.assertNotIn(
+                " compose ",
+                docker_log.read_text(encoding="utf-8"),
+            )
 
     def test_status_accepts_evidence_flag_without_explicit_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -807,14 +984,19 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 )
 
     def test_normal_cleanup_and_destroy_boundaries_are_distinct(self) -> None:
+        up = (LAB_DIR / "up.sh").read_text(encoding="utf-8")
         down = (LAB_DIR / "down.sh").read_text(encoding="utf-8")
         cleanup = (LAB_DIR / "cleanup.sh").read_text(encoding="utf-8")
         destroy = (LAB_DIR / "destroy-data.sh").read_text(encoding="utf-8")
 
+        self.assertNotIn("force_recreate_arguments", up)
+        self.assertIn('if [[ "${force_recreate}" == true ]]', up)
         self.assertNotIn("--volumes", down)
         self.assertNotIn("--volumes", cleanup)
         self.assertIn("--volumes", destroy)
         self.assertIn("--confirm-destroy-phase-67-lab-data", destroy)
+        self.assertIn("assert_phase67_compose_project_ownership", down)
+        self.assertIn("assert_phase67_compose_project_ownership", destroy)
 
 
 if __name__ == "__main__":
