@@ -26,6 +26,19 @@ require_fixed_string() {
     || fail "Missing required line in ${path#${repo_root}/}: ${expected}"
 }
 
+require_adjacent_lines() {
+  local path="$1"
+  local first="$2"
+  local second="$3"
+
+  awk -v first="${first}" -v second="${second}" '
+    previous == first && $0 == second { found = 1 }
+    { previous = $0 }
+    END { exit(found ? 0 : 1) }
+  ' "${path}" \
+    || fail "Missing required adjacent lines in ${path#${repo_root}/}: ${first} -> ${second}"
+}
+
 require_absent_string() {
   local path="$1"
   local forbidden="$2"
@@ -81,6 +94,7 @@ bootstrap="${lab_dir}/bootstrap.env.sample"
 common="${lab_dir}/lab-common.sh"
 init="${lab_dir}/init.sh"
 preflight="${lab_dir}/preflight.sh"
+prepare="${lab_dir}/prepare-substrates.sh"
 down="${lab_dir}/down.sh"
 cleanup="${lab_dir}/cleanup.sh"
 destroy="${lab_dir}/destroy-data.sh"
@@ -187,13 +201,21 @@ require_fixed_string "${preflight}" 'project_network_subnets'
 require_fixed_string "${preflight}" 'ARM64 service execution is unavailable'
 require_fixed_string "${preflight}" 'record "PASS published_ports=${published_ports}"'
 require_fixed_string "${preflight}" 'mktemp "${evidence_dir}/preflight-${scope}-'
-require_fixed_string "${lab_dir}/prepare-substrates.sh" 'type=volume,source=${cert_volume},target=/certificates'
-require_fixed_string "${lab_dir}/prepare-substrates.sh" 'validate_wazuh_certificate_bundle'
-require_fixed_string "${lab_dir}/prepare-substrates.sh" 'wazuh-certificate-recreate-required'
-require_fixed_string "${lab_dir}/prepare-substrates.sh" 'OPENSEARCH_JAVA_HOME=/usr/share/wazuh-indexer/jdk'
+require_fixed_string "${prepare}" 'type=volume,source=${cert_volume},target=/certificates'
+require_fixed_string "${prepare}" 'validate_wazuh_certificate_bundle'
+require_fixed_string "${prepare}" 'wazuh-certificate-recreate-required'
+require_adjacent_lines \
+  "${prepare}" \
+  '  mark_wazuh_recreation_required' \
+  '  docker_lab cp "${cert_container}:/certificates/." "${cert_dir}"'
+require_adjacent_lines \
+  "${prepare}" \
+  'mark_wazuh_recreation_required' \
+  'python3 - \'
+require_fixed_string "${prepare}" 'OPENSEARCH_JAVA_HOME=/usr/share/wazuh-indexer/jdk'
 require_fixed_string "${common}" 'diff --quiet HEAD --'
-require_fixed_string "${lab_dir}/prepare-substrates.sh" 'replace_admin_hash(current, placeholder)'
-require_fixed_string "${lab_dir}/prepare-substrates.sh" 'record_reviewed_file_digest'
+require_fixed_string "${prepare}" 'replace_admin_hash(current, placeholder)'
+require_fixed_string "${prepare}" 'record_reviewed_file_digest'
 require_fixed_string "${lab_dir}/up.sh" 'assert_reviewed_wazuh_checkout'
 require_fixed_string "${lab_dir}/up.sh" 'assert_reviewed_file_digest'
 require_fixed_string "${lab_dir}/up.sh" 'proxy-certificate-recreate-required'

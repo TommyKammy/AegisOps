@@ -144,6 +144,12 @@ perl -0pi -e 's/validate_wazuh_certificate_bundle/validate_removed_wazuh_certifi
   "${wazuh_certificate_drift}/control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh"
 assert_fails_with "${wazuh_certificate_drift}" 'validate_wazuh_certificate_bundle'
 
+wazuh_marker_order_drift="${workdir}/wazuh-marker-order-drift"
+copy_fixture "${wazuh_marker_order_drift}"
+perl -0pi -e 's/  mark_wazuh_recreation_required\n  docker_lab cp/  docker_lab cp/' \
+  "${wazuh_marker_order_drift}/control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh"
+assert_fails_with "${wazuh_marker_order_drift}" 'mark_wazuh_recreation_required'
+
 wazuh_start_checkout_drift="${workdir}/wazuh-start-checkout-drift"
 copy_fixture "${wazuh_start_checkout_drift}"
 perl -0pi -e 's/assert_reviewed_wazuh_checkout/assert_removed_wazuh_checkout/g' \
@@ -248,8 +254,8 @@ assert_fails_with "${teardown_ownership_drift}" 'assert_phase67_compose_project_
 
 echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof," \
   "certificate-renewal, network-host, duplicate-port, runtime-quoting, bounded-logs," \
-  "Wazuh-checkout, teardown-recovery, proxy-recreate, Wazuh-certificate, status-evidence," \
-  "selected-address, published-port-evidence, reviewed-pin, architecture, evidence-collision," \
-  "credential-guard, preserved-volume, evidence-runtime-digest, project-subnet," \
-  "replacement-certificate, start-time Wazuh-checkout, Wazuh-digest, index-definition," \
-  "port-service-owner, canonical-runtime, and teardown-ownership drift."
+  "Wazuh-checkout, teardown-recovery, proxy-recreate, Wazuh-certificate, Wazuh-marker-order," \
+  "status-evidence, selected-address, published-port-evidence, reviewed-pin, architecture," \
+  "evidence-collision, credential-guard, preserved-volume, evidence-runtime-digest," \
+  "project-subnet, replacement-certificate, start-time Wazuh-checkout, Wazuh-digest," \
+  "index-definition, port-service-owner, canonical-runtime, and teardown-ownership drift."

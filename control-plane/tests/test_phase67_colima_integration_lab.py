@@ -545,9 +545,17 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         )
         self.assertIn("assert_reviewed_file_digest", up)
         self.assertIn("record_reviewed_file_digest", prepare)
-        self.assertLess(
-            prepare.index("record_reviewed_file_digest"),
-            prepare.index("wazuh-certificate-recreate-required"),
+        self.assertIn(
+            "mark_wazuh_recreation_required\n"
+            '  docker_lab cp "${cert_container}:/certificates/." "${cert_dir}"',
+            prepare,
+        )
+        self.assertIn(
+            'internal_users="${AEGISOPS_LAB_WAZUH_CONFIG_DIR}/'
+            'wazuh_indexer/internal_users.yml"\n'
+            "mark_wazuh_recreation_required\n"
+            "python3 -",
+            prepare,
         )
         self.assertIn(
             "The next wazuh/full up.sh run will force service recreation.",

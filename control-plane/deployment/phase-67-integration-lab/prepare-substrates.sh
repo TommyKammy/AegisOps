@@ -39,6 +39,12 @@ require_command docker
 require_command openssl
 
 cert_dir="${AEGISOPS_LAB_WAZUH_CONFIG_DIR}/wazuh_indexer_ssl_certs"
+wazuh_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-certificate-recreate-required"
+mark_wazuh_recreation_required() {
+  : >"${wazuh_recreate_marker}"
+  chmod 600 "${wazuh_recreate_marker}"
+}
+
 required_certificates="
 root-ca.pem
 root-ca-manager.pem
@@ -82,6 +88,7 @@ if [[ "${certificates_complete}" != true ]]; then
     --mount "type=volume,source=${cert_volume},target=/certificates" \
     --entrypoint /bin/true \
     "${cert_image}" >/dev/null
+  mark_wazuh_recreation_required
   docker_lab cp "${cert_container}:/certificates/." "${cert_dir}"
   cleanup_cert_staging
   trap - EXIT
@@ -107,6 +114,7 @@ admin_hash="$(
 [[ -n "${admin_hash}" ]] || fail "Wazuh indexer password hash generation returned no bcrypt hash"
 
 internal_users="${AEGISOPS_LAB_WAZUH_CONFIG_DIR}/wazuh_indexer/internal_users.yml"
+mark_wazuh_recreation_required
 python3 - \
   "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}" \
   "${wazuh_internal_users_relative_path}" \
@@ -182,9 +190,6 @@ chmod 600 "${internal_users}"
 record_reviewed_file_digest \
   "${internal_users}" \
   "${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-internal-users.sha256"
-wazuh_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-certificate-recreate-required"
-: >"${wazuh_recreate_marker}"
-chmod 600 "${wazuh_recreate_marker}"
 
 echo "Prepared Wazuh ${AEGISOPS_LAB_WAZUH_VERSION} substrate at ${AEGISOPS_LAB_WAZUH_SOURCE_DIR}"
 echo "The next wazuh/full up.sh run will force service recreation."
