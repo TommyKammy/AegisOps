@@ -15,11 +15,37 @@ LAB_DIR = REPO_ROOT / "control-plane" / "deployment" / "phase-67-integration-lab
 
 class Phase67ColimaIntegrationLabTests(unittest.TestCase):
     def _run_init(
-        self, home: pathlib.Path, bootstrap: pathlib.Path
+        self,
+        home: pathlib.Path,
+        bootstrap: pathlib.Path,
+        docker_volumes: tuple[str, ...] = (),
+        docker_volume_list_exit: int = 0,
     ) -> subprocess.CompletedProcess[str]:
+        fake_bin = home / "fake-bin"
+        fake_bin.mkdir(exist_ok=True)
+        fake_docker = fake_bin / "docker"
+        fake_docker.write_text(
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            'if [[ "$*" == *" volume ls --quiet"* ]]; then\n'
+            '  printf "%s" "${PHASE67_TEST_DOCKER_VOLUMES:-}"\n'
+            '  exit "${PHASE67_TEST_DOCKER_VOLUME_LIST_EXIT:-0}"\n'
+            "fi\n"
+            'echo "unexpected docker invocation: $*" >&2\n'
+            "exit 1\n",
+            encoding="utf-8",
+        )
+        fake_docker.chmod(0o755)
         env = os.environ.copy()
         env["HOME"] = str(home)
         env["AEGISOPS_LAB_BOOTSTRAP_ENV"] = str(bootstrap)
+        env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+        env["PHASE67_TEST_DOCKER_VOLUMES"] = "".join(
+            f"{volume}\n" for volume in docker_volumes
+        )
+        env["PHASE67_TEST_DOCKER_VOLUME_LIST_EXIT"] = str(
+            docker_volume_list_exit
+        )
         return subprocess.run(
             ["bash", str(LAB_DIR / "init.sh")],
             check=False,
@@ -804,6 +830,129 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 second.stderr,
             )
             self.assertFalse(missing_credential.exists())
+
+    def test_init_rejects_preserved_volumes_when_runtime_environment_is_missing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            first = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(first.returncode, 0, first.stderr)
+            runtime_root = (
+                home / ".local" / "share" / "aegisops" / "phase-67-integration-lab"
+            )
+            runtime_env = runtime_root / "runtime.env"
+            postgres_secret = runtime_root / "secrets" / "postgres-password"
+            runtime_env.unlink()
+            postgres_secret.unlink()
+
+            second = self._run_init(
+                home,
+                LAB_DIR / "bootstrap.env.sample",
+                docker_volumes=("aegisops-phase67-lab-postgres-data",),
+            )
+
+            self.assertNotEqual(second.returncode, 0)
+            self.assertIn(
+                "runtime.env is missing while preserved Phase 67.1 volumes exist",
+                second.stderr,
+            )
+            self.assertFalse(postgres_secret.exists())
+            self.assertFalse(runtime_env.exists())
+
+    def test_init_fails_closed_when_preserved_volumes_cannot_be_enumerated(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            result = self._run_init(
+                home,
+                LAB_DIR / "bootstrap.env.sample",
+                docker_volume_list_exit=1,
+            )
+            runtime_root = (
+                home / ".local" / "share" / "aegisops" / "phase-67-integration-lab"
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "could not enumerate Docker volumes before initializing",
+                result.stderr,
+            )
+            self.assertFalse((runtime_root / "runtime.env").exists())
+            self.assertFalse((runtime_root / "secrets").exists())
+
+    def test_evidence_header_records_runtime_artifact_state_and_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = pathlib.Path(tmpdir)
+            (root / "control-plane").mkdir()
+            migrations = root / "postgres" / "control-plane" / "migrations"
+            migrations.mkdir(parents=True)
+            runtime_file = root / "control-plane" / "main.py"
+            runtime_file.write_text("print('reviewed')\n", encoding="utf-8")
+            (migrations / "0001.sql").write_text("SELECT 1;\n", encoding="utf-8")
+            (root / ".dockerignore").write_text("**\n!control-plane/**\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "init", "-q"], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "config", "user.name", "Phase 67 test"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "config",
+                    "user.email",
+                    "phase67-test@example.invalid",
+                ],
+                check=True,
+            )
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "commit", "-qm", "fixture"],
+                check=True,
+            )
+            clean_evidence = root / "clean.evidence"
+            dirty_evidence = root / "dirty.evidence"
+
+            def write_header(output: pathlib.Path) -> dict[str, str]:
+                result = subprocess.run(
+                    [
+                        "bash",
+                        "-c",
+                        (
+                            'source "$1"; REPO_ROOT="$2"; '
+                            'write_evidence_header "$3"'
+                        ),
+                        "phase67-evidence-header-test",
+                        str(LAB_DIR / "lab-common.sh"),
+                        str(root),
+                        str(output),
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                return dict(
+                    line.split("=", 1)
+                    for line in output.read_text(encoding="utf-8").splitlines()
+                )
+
+            clean = write_header(clean_evidence)
+            self.assertEqual(clean["repository_runtime_state"], "clean")
+            self.assertRegex(
+                clean["repository_runtime_artifact_sha256"], r"^[0-9a-f]{64}$"
+            )
+
+            runtime_file.write_text("print('local edit')\n", encoding="utf-8")
+            dirty = write_header(dirty_evidence)
+            self.assertEqual(dirty["repository_runtime_state"], "dirty")
+            self.assertNotEqual(
+                dirty["repository_runtime_artifact_sha256"],
+                clean["repository_runtime_artifact_sha256"],
+            )
 
     def test_runtime_root_rejects_dotdot_and_symlink_escapes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

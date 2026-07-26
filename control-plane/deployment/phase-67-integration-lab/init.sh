@@ -38,6 +38,8 @@ if [[ -f "${RUNTIME_ENV}" ]]; then
     [[ -s "${secret_dir}/${credential}" ]] \
       || fail "initialized runtime is missing credential ${credential}; restore it before reuse, or destroy preserved lab volumes and remove ${RUNTIME_ENV} before reinitializing"
   done
+else
+  assert_no_preserved_phase67_volumes
 fi
 
 mkdir -p \

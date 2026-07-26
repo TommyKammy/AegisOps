@@ -263,6 +263,25 @@ phase67_volume_suffixes() {
     shuffle-database
 }
 
+assert_no_preserved_phase67_volumes() {
+  local existing_volumes
+  local preserved_volumes=""
+  local suffix
+  local volume_name
+
+  require_command docker
+  existing_volumes="$(docker_lab volume ls --quiet)" \
+    || fail "could not enumerate Docker volumes before initializing new Phase 67.1 credentials"
+  while IFS= read -r suffix; do
+    volume_name="${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}-${suffix}"
+    if grep -Fqx -- "${volume_name}" <<<"${existing_volumes}"; then
+      preserved_volumes="${preserved_volumes}${volume_name}"$'\n'
+    fi
+  done < <(phase67_volume_suffixes)
+  [[ -z "${preserved_volumes}" ]] \
+    || fail "runtime.env is missing while preserved Phase 67.1 volumes exist: $(tr '\n' ' ' <<<"${preserved_volumes}"); restore the original runtime.env and credentials, or explicitly destroy the preserved project data before reinitializing"
+}
+
 assert_phase67_resource_owned() {
   local resource_type="$1"
   local resource_id="$2"
@@ -416,8 +435,98 @@ assert_unique_selected_ports() {
 
 write_evidence_header() {
   local output="$1"
+  local repository_commit
+  local repository_runtime_artifact_sha256
+  local repository_runtime_changes
+  local repository_runtime_state
+
+  require_command git
+  require_command python3
+  repository_commit="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null)" \
+    || fail "could not identify the repository commit for evidence"
+  repository_runtime_changes="$(
+    git -C "${REPO_ROOT}" status --porcelain=v1 --untracked-files=all -- \
+      .dockerignore control-plane postgres/control-plane/migrations
+  )" || fail "could not inspect repository runtime changes for evidence"
+  if [[ -n "${repository_runtime_changes}" ]]; then
+    repository_runtime_state=dirty
+  else
+    repository_runtime_state=clean
+  fi
+  repository_runtime_artifact_sha256="$(
+    python3 - "${REPO_ROOT}" <<'PY'
+import hashlib
+import os
+import pathlib
+import stat
+import sys
+
+repo_root = pathlib.Path(sys.argv[1])
+roots = (
+    repo_root / ".dockerignore",
+    repo_root / "control-plane",
+    repo_root / "postgres" / "control-plane" / "migrations",
+)
+excluded_directories = {"__pycache__", ".pytest_cache"}
+entries: list[pathlib.Path] = []
+for root in roots:
+    if not root.exists() and not root.is_symlink():
+        continue
+    entries.append(root)
+    if not root.is_dir() or root.is_symlink():
+        continue
+    for directory, directory_names, file_names in os.walk(root):
+        directory_names[:] = sorted(
+            name for name in directory_names if name not in excluded_directories
+        )
+        base = pathlib.Path(directory)
+        entries.extend(base / name for name in directory_names)
+        entries.extend(
+            base / name
+            for name in sorted(file_names)
+            if not name.endswith(".pyc")
+        )
+
+digest = hashlib.sha256()
+digest.update(b"aegisops-phase67-runtime-artifacts-v1\0")
+for path in sorted(
+    set(entries),
+    key=lambda item: item.relative_to(repo_root).as_posix(),
+):
+    relative = path.relative_to(repo_root).as_posix().encode()
+    metadata = path.lstat()
+    mode = stat.S_IMODE(metadata.st_mode)
+    if path.is_symlink():
+        kind = b"link"
+        content = os.readlink(path).encode()
+    elif path.is_dir():
+        kind = b"directory"
+        content = b""
+    elif path.is_file():
+        kind = b"file"
+        content = None
+    else:
+        continue
+    for value in (relative, kind, f"{mode:o}".encode()):
+        digest.update(len(value).to_bytes(8, "big"))
+        digest.update(value)
+    if content is None:
+        digest.update(metadata.st_size.to_bytes(8, "big"))
+        with path.open("rb") as artifact:
+            for chunk in iter(lambda: artifact.read(1024 * 1024), b""):
+                digest.update(chunk)
+    else:
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+print(digest.hexdigest())
+PY
+  )" || fail "could not calculate the repository runtime artifact digest for evidence"
+  [[ "${repository_runtime_artifact_sha256}" =~ ^[0-9a-f]{64}$ ]] \
+    || fail "repository runtime artifact digest is invalid"
   {
     printf 'recorded_at_utc=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-    printf 'repository_commit=%s\n' "$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || printf unknown)"
+    printf 'repository_commit=%s\n' "${repository_commit}"
+    printf 'repository_runtime_state=%s\n' "${repository_runtime_state}"
+    printf 'repository_runtime_artifact_sha256=%s\n' "${repository_runtime_artifact_sha256}"
   } >"${output}"
 }

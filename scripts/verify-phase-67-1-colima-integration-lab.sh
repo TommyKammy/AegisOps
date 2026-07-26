@@ -79,6 +79,7 @@ done
 compose="${lab_dir}/docker-compose.yml"
 bootstrap="${lab_dir}/bootstrap.env.sample"
 common="${lab_dir}/lab-common.sh"
+init="${lab_dir}/init.sh"
 preflight="${lab_dir}/preflight.sh"
 down="${lab_dir}/down.sh"
 cleanup="${lab_dir}/cleanup.sh"
@@ -143,16 +144,21 @@ require_fixed_string "${common}" 'record_reviewed_file_digest'
 require_fixed_string "${common}" 'assert_reviewed_file_digest'
 require_fixed_string "${common}" 'pathlib.Path(sys.argv[1]).resolve(strict=False)'
 require_fixed_string "${common}" 'assert_phase67_compose_project_ownership'
+require_fixed_string "${common}" 'assert_no_preserved_phase67_volumes'
+require_fixed_string "${common}" 'repository_runtime_state='
+require_fixed_string "${common}" 'repository_runtime_artifact_sha256='
+require_fixed_string "${common}" 'aegisops-phase67-runtime-artifacts-v1'
 require_fixed_string "${common}" 'validate_wazuh_certificate_bundle'
 require_fixed_string "${common}" 'openssl x509 -checkend 604800'
 require_fixed_string "${common}" 'openssl verify -CAfile'
-require_fixed_string "${lab_dir}/init.sh" "printf 'Aa1!%sZz9!"
-require_fixed_string "${lab_dir}/init.sh" 'load_bootstrap_environment'
-require_fixed_string "${lab_dir}/init.sh" 'openssl x509 -checkend 604800'
-require_fixed_string "${lab_dir}/init.sh" 'write_runtime_env_assignment AEGISOPS_LAB_RUNTIME_ROOT'
-require_fixed_string "${lab_dir}/init.sh" 'proxy-certificate-recreate-required'
-require_fixed_string "${lab_dir}/init.sh" 'initialized runtime is missing credential'
-require_fixed_string "${lab_dir}/init.sh" '"${runtime_previously_initialized}" == "true"'
+require_fixed_string "${init}" "printf 'Aa1!%sZz9!"
+require_fixed_string "${init}" 'load_bootstrap_environment'
+require_fixed_string "${init}" 'openssl x509 -checkend 604800'
+require_fixed_string "${init}" 'write_runtime_env_assignment AEGISOPS_LAB_RUNTIME_ROOT'
+require_fixed_string "${init}" 'proxy-certificate-recreate-required'
+require_fixed_string "${init}" 'initialized runtime is missing credential'
+require_fixed_string "${init}" '"${runtime_previously_initialized}" == "true"'
+require_fixed_string "${init}" 'assert_no_preserved_phase67_volumes'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'AEGISOPS_CONTROL_PLANE_POSTGRES_DSN="$(cat "${dsn_file}")"'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'unset AEGISOPS_CONTROL_PLANE_POSTGRES_DSN_FILE'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" '/opt/aegisops/bin/first-boot-entrypoint.sh /bin/true'
@@ -213,6 +219,7 @@ require_fixed_string "${readme}" 'canonical runtime root must remain below'
 require_fixed_string "${runbook}" 'Preflight is read-only with respect to Colima and Docker.'
 require_fixed_string "${runbook}" 'validates cached certificate expiry, chains, and key pairs'
 require_fixed_string "${runbook}" 'initialized runtime credential missing'
+require_fixed_string "${runbook}" 'repository runtime state and artifact SHA-256'
 require_fixed_string "${runbook}" 'recheck the checkout and digest immediately before startup'
 require_fixed_string "${runbook}" 'Phase 67.1 resource-label proof'
 require_fixed_string "${repo_root}/README.md" '[Phase 67.1 Colima integration lab]'

@@ -3,7 +3,7 @@
 ## Preconditions
 
 1. Review `bootstrap.env.sample`, especially the Colima profile, Docker context, resource minimums, loopback ports, subnet, architecture, and emulation acceptance. If using an untracked custom copy, export `AEGISOPS_LAB_BOOTSTRAP_ENV` for the lifetime of the lab shell.
-2. Run `init.sh`. It creates an untracked runtime env, mounted AegisOps secrets, Shuffle/Wazuh bootstrap values, and a 30-day localhost TLS certificate. Rerunning it reapplies bootstrap settings and renews the certificate when less than seven days remain; rotating an existing certificate marks the next `up.sh` for forced recreation. An initialized runtime with a missing credential fails closed because preserved volumes retain the original credential.
+2. Run `init.sh`. It creates an untracked runtime env, mounted AegisOps secrets, Shuffle/Wazuh bootstrap values, and a 30-day localhost TLS certificate. Rerunning it reapplies bootstrap settings and renews the certificate when less than seven days remain; rotating an existing certificate marks the next `up.sh` for forced recreation. An initialized runtime with a missing credential fails closed because preserved volumes retain the original credential. When `runtime.env` is absent, the configured Docker context must be available and contain none of the known project volumes before initialization can generate new credentials.
 3. Run `preflight.sh --scope core --write-evidence`, or select `wazuh`, `shuffle`, or `full` for the intended start. Do not continue past a `BLOCKED:` result.
 
 Preflight is read-only with respect to Colima and Docker. It never starts or reconfigures Colima, changes Docker's active context, removes a container, or creates a Compose resource. With `--write-evidence`, it writes only a timestamped report below the dedicated runtime evidence directory.
@@ -42,7 +42,7 @@ control-plane/deployment/phase-67-integration-lab/logs.sh control-plane proxy
 
 Logs are bounded to the latest 200 lines per service by default. Increase the snapshot with `AEGISOPS_LAB_LOG_TAIL`; unbounded follow mode is rejected.
 
-Evidence is stored below `${AEGISOPS_LAB_RUNTIME_ROOT}/evidence`. It may include host and service metadata, so it is mode `0600` and remains untracked.
+Evidence is stored below `${AEGISOPS_LAB_RUNTIME_ROOT}/evidence`. It may include host and service metadata, so it is mode `0600` and remains untracked. Every header records the Git commit plus the repository runtime state and artifact SHA-256 for the Docker build and repository bind-mount inputs, so evidence produced from local edits is distinguishable from a clean reviewed checkout.
 
 ## Stop And Cleanup
 
@@ -71,6 +71,7 @@ That command applies the same ownership proof before deleting only volumes attac
 - subnet collision or unusable network/broadcast service address: choose a dedicated subnet and update all service IPv4 variables to unique host addresses.
 - owned project network subnet mismatch: stop the lab and remove the existing project network through normal teardown before applying the new subnet.
 - initialized runtime credential missing: restore the original credential; if the preserved data is disposable, run the confirmed `destroy-data.sh` path and remove the stale runtime environment before initializing new credentials.
+- runtime environment missing while project volumes remain: restore the original `runtime.env` and credentials before running `destroy-data.sh`, or remove only the verified project-owned volumes explicitly; do not allow `init.sh` to generate replacements against preserved data.
 - runtime root or runtime environment root mismatch: remove `..` components and symlink escapes; keep the canonical root and generated `runtime.env` below `${HOME}/.local/share/aegisops/`.
 - teardown ownership mismatch: stop and inspect the colliding Compose project manually; do not bypass the Phase 67.1 resource-label proof.
 - Wazuh substrate missing: run `prepare-substrates.sh`; do not substitute an unreviewed checkout.

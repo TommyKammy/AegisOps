@@ -202,6 +202,19 @@ perl -0pi -e 's/initialized runtime is missing credential/initialized runtime re
   "${credential_guard_drift}/control-plane/deployment/phase-67-integration-lab/init.sh"
 assert_fails_with "${credential_guard_drift}" 'initialized runtime is missing credential'
 
+preserved_volume_guard_drift="${workdir}/preserved-volume-guard-drift"
+copy_fixture "${preserved_volume_guard_drift}"
+perl -0pi -e 's/assert_no_preserved_phase67_volumes/assert_removed_preserved_phase67_volumes/g' \
+  "${preserved_volume_guard_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh" \
+  "${preserved_volume_guard_drift}/control-plane/deployment/phase-67-integration-lab/init.sh"
+assert_fails_with "${preserved_volume_guard_drift}" 'assert_no_preserved_phase67_volumes'
+
+evidence_runtime_digest_drift="${workdir}/evidence-runtime-digest-drift"
+copy_fixture "${evidence_runtime_digest_drift}"
+perl -0pi -e 's/repository_runtime_artifact_sha256/repository_runtime_artifact_md5/g' \
+  "${evidence_runtime_digest_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh"
+assert_fails_with "${evidence_runtime_digest_drift}" 'repository_runtime_artifact_sha256='
+
 project_subnet_drift="${workdir}/project-subnet-drift"
 copy_fixture "${project_subnet_drift}"
 perl -0pi -e 's/project_network_subnets/owned_network_cidrs/g' \
@@ -237,5 +250,6 @@ echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, mi
   "certificate-renewal, network-host, duplicate-port, runtime-quoting, bounded-logs," \
   "Wazuh-checkout, teardown-recovery, proxy-recreate, Wazuh-certificate, status-evidence," \
   "selected-address, published-port-evidence, reviewed-pin, architecture, evidence-collision," \
-  "credential-guard, project-subnet, replacement-certificate, start-time Wazuh-checkout," \
-  "Wazuh-digest, index-definition, port-service-owner, canonical-runtime, and teardown-ownership drift."
+  "credential-guard, preserved-volume, evidence-runtime-digest, project-subnet," \
+  "replacement-certificate, start-time Wazuh-checkout, Wazuh-digest, index-definition," \
+  "port-service-owner, canonical-runtime, and teardown-ownership drift."
