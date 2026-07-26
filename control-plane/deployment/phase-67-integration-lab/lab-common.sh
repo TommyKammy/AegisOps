@@ -108,6 +108,27 @@ selected_port_names() {
   esac
 }
 
+assert_unique_selected_ports() {
+  local scope="${1:-core}"
+  local selected_ports=" "
+  local port_name
+  local variable
+  local port
+
+  while IFS= read -r port_name; do
+    variable="AEGISOPS_LAB_${port_name}_PORT"
+    port="${!variable}"
+    [[ "${port}" =~ ^[0-9]+$ && "${port}" -ge 1 && "${port}" -le 65535 ]] \
+      || fail "${variable} must be an integer from 1 through 65535"
+    case "${selected_ports}" in
+      *" ${port} "*)
+        fail "selected scope '${scope}' assigns duplicate host port ${port}"
+        ;;
+    esac
+    selected_ports="${selected_ports}${port} "
+  done < <(selected_port_names "${scope}")
+}
+
 write_evidence_header() {
   local output="$1"
   {

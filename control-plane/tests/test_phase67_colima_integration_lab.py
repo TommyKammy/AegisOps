@@ -247,6 +247,31 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.splitlines(), port_names)
 
+    def test_selected_scope_rejects_duplicate_ports(self) -> None:
+        env = os.environ.copy()
+        env.update(
+            {
+                "AEGISOPS_LAB_PROXY_PORT": "18443",
+                "AEGISOPS_LAB_WAZUH_DASHBOARD_PORT": "18443",
+                "AEGISOPS_LAB_SHUFFLE_FRONTEND_PORT": "13001",
+            }
+        )
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                'source "$1"; assert_unique_selected_ports full',
+                "phase67-port-test",
+                str(LAB_DIR / "lab-common.sh"),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("assigns duplicate host port 18443", result.stderr)
+
     def test_current_runtime_migrations_require_schema_readiness(self) -> None:
         entrypoint = (LAB_DIR / "control-plane-entrypoint.sh").read_text(
             encoding="utf-8"
@@ -270,6 +295,25 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             "could not prove reviewed schema state for recorded migration",
             entrypoint,
         )
+        self.assertIn(
+            "'false_positive_review_id', 'detector_lifecycle_id'",
+            entrypoint,
+        )
+        self.assertIn(
+            "'lifecycle_transition_records_lifecycle_state_known_values'",
+            entrypoint,
+        )
+
+    def test_custom_bootstrap_documentation_keeps_override_exported(self) -> None:
+        readme = (LAB_DIR / "README.md").read_text(encoding="utf-8")
+        self.assertIn("export AEGISOPS_LAB_BOOTSTRAP_ENV=", readme)
+        self.assertIn("Keep `AEGISOPS_LAB_BOOTSTRAP_ENV` exported", readme)
+
+    def test_network_validation_rejects_non_host_addresses(self) -> None:
+        preflight = (LAB_DIR / "preflight.sh").read_text(encoding="utf-8")
+        self.assertIn("requested.network_address", preflight)
+        self.assertIn("requested.broadcast_address", preflight)
+        self.assertIn("service IPv4 values must be usable host addresses", preflight)
 
     def test_normal_cleanup_and_destroy_boundaries_are_distinct(self) -> None:
         down = (LAB_DIR / "down.sh").read_text(encoding="utf-8")

@@ -52,11 +52,12 @@ Use `status.sh`, `logs.sh [service ...]`, and the bounded tail controlled by `AE
 To override defaults without editing tracked files, copy `bootstrap.env.sample` to an untracked path and set:
 
 ```bash
-AEGISOPS_LAB_BOOTSTRAP_ENV=/absolute/path/to/lab-bootstrap.env \
-  control-plane/deployment/phase-67-integration-lab/init.sh
+export AEGISOPS_LAB_BOOTSTRAP_ENV=/absolute/path/to/lab-bootstrap.env
+control-plane/deployment/phase-67-integration-lab/init.sh
+control-plane/deployment/phase-67-integration-lab/preflight.sh --scope core
 ```
 
-Rerun `init.sh` after changing the untracked bootstrap file; bootstrap values replace the previously generated runtime values while existing secrets remain stable. If the subnet changes, update every `AEGISOPS_LAB_*_IPV4` value to a unique address in that subnet. Preflight rejects overlapping Docker networks, out-of-subnet or duplicate service addresses, and host-port ownership conflicts for the selected scope.
+Keep `AEGISOPS_LAB_BOOTSTRAP_ENV` exported for every lab command in that shell. Rerun `init.sh` after changing the untracked bootstrap file; bootstrap values replace the previously generated runtime values while existing secrets remain stable. If the subnet changes, update every `AEGISOPS_LAB_*_IPV4` value to a unique usable host address in that subnet. Preflight rejects overlapping Docker networks, network or broadcast addresses, out-of-subnet or duplicate service addresses, duplicate selected ports, and host-port ownership conflicts for the selected scope.
 
 Use `preflight.sh --scope full --write-evidence` before a complete lab start. On Apple Silicon, `shuffle` and `full` additionally require the selected Colima profile to expose Rosetta or an x86_64 binfmt handler. Preflight reports the exact profile-preserving Colima restart command when that host capability is absent; it never restarts Colima itself.
 

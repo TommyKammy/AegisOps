@@ -132,6 +132,7 @@ require_fixed_string "${common}" 'docker --context "${AEGISOPS_LAB_DOCKER_CONTEX
 require_fixed_string "${common}" '"${HOME}"/.local/share/aegisops/*)'
 require_fixed_string "${common}" 'load_bootstrap_environment'
 require_fixed_string "${common}" 'selected_port_names'
+require_fixed_string "${common}" 'assert_unique_selected_ports'
 require_fixed_string "${lab_dir}/init.sh" "printf 'Aa1!%sZz9!"
 require_fixed_string "${lab_dir}/init.sh" 'load_bootstrap_environment'
 require_fixed_string "${lab_dir}/init.sh" 'openssl x509 -checkend 604800'
@@ -143,6 +144,8 @@ require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'detected migratio
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'migration_readiness_query'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'prove_migration_state'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'could not prove reviewed schema state for recorded migration'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "'false_positive_review_id', 'detector_lifecycle_id'"
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "'lifecycle_transition_records_lifecycle_state_known_values'"
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'exec "$@"'
 require_fixed_string "${preflight}" 'colima status --profile "${AEGISOPS_LAB_COLIMA_PROFILE}" --json'
 require_fixed_string "${preflight}" 'Shuffle 2.2.1 is amd64-only'
@@ -151,6 +154,9 @@ require_fixed_string "${preflight}" 'Shuffle amd64 execution is unavailable in C
 require_fixed_string "${preflight}" '--activate=false'
 require_fixed_string "${preflight}" 'host port ${port}'
 require_fixed_string "${preflight}" 'selected_port_names "${scope}"'
+require_fixed_string "${preflight}" 'assert_unique_selected_ports "${scope}"'
+require_fixed_string "${preflight}" 'requested.network_address'
+require_fixed_string "${preflight}" 'requested.broadcast_address'
 require_fixed_string "${lab_dir}/prepare-substrates.sh" 'type=volume,source=${cert_volume},target=/certificates'
 require_fixed_string "${lab_dir}/prepare-substrates.sh" 'Wazuh certificate generation is incomplete'
 require_fixed_string "${lab_dir}/prepare-substrates.sh" 'OPENSEARCH_JAVA_HOME=/usr/share/wazuh-indexer/jdk'
@@ -159,6 +165,7 @@ require_fixed_string "${cleanup}" 'Use destroy-data.sh only when permanent delet
 require_fixed_string "${destroy}" '--confirm-destroy-phase-67-lab-data'
 require_fixed_string "${destroy}" 'down --volumes --remove-orphans'
 require_fixed_string "${readme}" 'Phase 67.1 does not mount the Docker socket or start Orborus'
+require_fixed_string "${readme}" 'export AEGISOPS_LAB_BOOTSTRAP_ENV='
 require_fixed_string "${runbook}" 'Preflight is read-only with respect to Colima and Docker.'
 require_fixed_string "${repo_root}/README.md" '[Phase 67.1 Colima integration lab]'
 require_fixed_string "${repo_root}/control-plane/README.md" '`deployment/phase-67-integration-lab/`'

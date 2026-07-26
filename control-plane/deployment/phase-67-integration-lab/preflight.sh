@@ -104,6 +104,7 @@ if [[ "${scope}" == "shuffle" || "${scope}" == "full" ]]; then
   fi
 fi
 
+assert_unique_selected_ports "${scope}"
 while IFS= read -r port_name; do
   variable="AEGISOPS_LAB_${port_name}_PORT"
   port="${!variable}"
@@ -177,17 +178,31 @@ import os
 import sys
 
 requested = ipaddress.ip_network(sys.argv[1], strict=True)
+if not isinstance(requested, ipaddress.IPv4Network):
+    raise SystemExit("requested lab subnet must be IPv4")
 addresses = [
     ipaddress.ip_address(value)
     for value in os.environ["SERVICE_ADDRESSES"].splitlines()
     if value
 ]
+if any(not isinstance(address, ipaddress.IPv4Address) for address in addresses):
+    raise SystemExit("service addresses must be IPv4")
 if len(addresses) != len(set(addresses)):
     raise SystemExit("service IPv4 values must be unique")
 outside = [str(address) for address in addresses if address not in requested]
 if outside:
     raise SystemExit(
         f"service IPv4 values outside requested subnet {requested}: {','.join(outside)}"
+    )
+unusable = [
+    str(address)
+    for address in addresses
+    if address in (requested.network_address, requested.broadcast_address)
+]
+if unusable:
+    raise SystemExit(
+        f"service IPv4 values must be usable host addresses in {requested}: "
+        f"{','.join(unusable)}"
     )
 
 for line in os.environ.get("NETWORK_SUBNETS", "").splitlines():

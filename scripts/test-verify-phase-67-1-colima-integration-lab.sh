@@ -87,4 +87,17 @@ perl -0pi -e 's/openssl x509 -checkend 604800/openssl x509 -noout/' \
   "${certificate_renewal_drift}/control-plane/deployment/phase-67-integration-lab/init.sh"
 assert_fails_with "${certificate_renewal_drift}" 'openssl x509 -checkend 604800'
 
-echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof, and certificate-renewal drift."
+network_host_drift="${workdir}/network-host-drift"
+copy_fixture "${network_host_drift}"
+perl -0pi -e 's/requested\.network_address/requested.network_marker/g' \
+  "${network_host_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh"
+assert_fails_with "${network_host_drift}" 'requested.network_address'
+
+duplicate_port_drift="${workdir}/duplicate-port-drift"
+copy_fixture "${duplicate_port_drift}"
+perl -0pi -e 's/assert_unique_selected_ports/assert_removed_unique_selected_ports/g' \
+  "${duplicate_port_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh" \
+  "${duplicate_port_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh"
+assert_fails_with "${duplicate_port_drift}" 'assert_unique_selected_ports'
+
+echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof, certificate-renewal, network-host, and duplicate-port drift."
