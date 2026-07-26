@@ -7,8 +7,10 @@ LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${LAB_DIR}/lab-common.sh"
 
 require_runtime_environment
-[[ "${1:-}" != "--follow" && "${1:-}" != "-f" ]] \
-  || fail "unbounded follow mode is intentionally unavailable; rerun this command for a fresh bounded snapshot"
+for log_argument in "$@"; do
+  [[ "${log_argument}" != -* ]] \
+    || fail "log options are intentionally unavailable; pass only service names for a bounded snapshot"
+done
 
 if [[ "$#" -eq 0 ]]; then
   compose_lab --profile wazuh --profile shuffle logs \

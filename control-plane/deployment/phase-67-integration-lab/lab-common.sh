@@ -40,9 +40,13 @@ load_lab_environment() {
   export RUNTIME_ENV
 }
 
-require_runtime_environment() {
+require_runtime_configuration() {
   load_lab_environment
   [[ -f "${RUNTIME_ENV}" ]] || fail "runtime environment not initialized; run ${LAB_DIR}/init.sh"
+}
+
+require_runtime_environment() {
+  require_runtime_configuration
   [[ -d "${AEGISOPS_LAB_SECRET_DIR:-}" ]] || fail "runtime secret directory is missing; rerun ${LAB_DIR}/init.sh"
 }
 

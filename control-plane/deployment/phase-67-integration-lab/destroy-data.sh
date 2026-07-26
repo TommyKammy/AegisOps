@@ -11,7 +11,7 @@ confirmation="${1:-}"
   || fail "permanent lab-volume deletion requires: $0 --confirm-destroy-phase-67-lab-data"
 [[ "$#" -eq 1 ]] || fail "usage: $0 --confirm-destroy-phase-67-lab-data"
 
-require_runtime_environment
+require_runtime_configuration
 compose_lab --profile wazuh --profile shuffle down --volumes --remove-orphans
 
 echo "Deleted only Compose volumes owned by project ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}."

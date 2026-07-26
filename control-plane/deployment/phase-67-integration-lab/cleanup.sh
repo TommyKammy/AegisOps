@@ -7,7 +7,7 @@ LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${LAB_DIR}/lab-common.sh"
 
 [[ "$#" -eq 0 ]] || fail "usage: $0"
-require_runtime_environment
+require_runtime_configuration
 "${LAB_DIR}/down.sh"
 
 echo "Non-destructive cleanup complete."

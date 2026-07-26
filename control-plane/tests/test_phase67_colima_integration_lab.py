@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -71,7 +72,7 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 0o600,
             )
             self.assertIn(
-                f"AEGISOPS_LAB_RUNTIME_ROOT={runtime_root}",
+                f'AEGISOPS_LAB_RUNTIME_ROOT="{runtime_root}"',
                 runtime_env.read_text(encoding="utf-8"),
             )
 
@@ -129,7 +130,7 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 runtime_root / "secrets" / "postgres-password"
             ).read_text(encoding="utf-8")
             self.assertIn(
-                "AEGISOPS_LAB_PROXY_PORT=19443",
+                'AEGISOPS_LAB_PROXY_PORT="19443"',
                 runtime_env.read_text(encoding="utf-8"),
             )
 
@@ -143,7 +144,7 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             second = self._run_init(home, bootstrap)
             self.assertEqual(second.returncode, 0, second.stderr)
             self.assertIn(
-                "AEGISOPS_LAB_PROXY_PORT=29443",
+                'AEGISOPS_LAB_PROXY_PORT="29443"',
                 runtime_env.read_text(encoding="utf-8"),
             )
             self.assertEqual(
@@ -152,6 +153,65 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 ).read_text(encoding="utf-8"),
                 postgres_secret,
             )
+
+    def test_runtime_environment_supports_whitespace_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            bootstrap = home / "bootstrap.env"
+            bootstrap.write_text(
+                (LAB_DIR / "bootstrap.env.sample")
+                .read_text(encoding="utf-8")
+                .replace(
+                    "AEGISOPS_LAB_RUNTIME_ROOT=${HOME}/.local/share/aegisops/"
+                    "phase-67-integration-lab",
+                    'AEGISOPS_LAB_RUNTIME_ROOT="${HOME}/.local/share/aegisops/'
+                    'phase 67 integration lab"',
+                ),
+                encoding="utf-8",
+            )
+
+            result = self._run_init(home, bootstrap)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            runtime_root = (
+                home / ".local" / "share" / "aegisops" / "phase 67 integration lab"
+            )
+            runtime_env = runtime_root / "runtime.env"
+            sourced = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'source "$1"; printf "%s" "${AEGISOPS_LAB_RUNTIME_ROOT}"',
+                    "phase67-runtime-env-test",
+                    str(runtime_env),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(sourced.returncode, 0, sourced.stderr)
+            self.assertEqual(sourced.stdout, str(runtime_root))
+
+            docker_bin = shutil.which("docker")
+            if docker_bin is not None:
+                rendered = subprocess.run(
+                    [
+                        docker_bin,
+                        "compose",
+                        "--env-file",
+                        str(runtime_env),
+                        "-f",
+                        str(LAB_DIR / "docker-compose.yml"),
+                        "config",
+                        "--format",
+                        "json",
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                self.assertEqual(rendered.returncode, 0, rendered.stderr)
+                self.assertIn(str(runtime_root / "proxy-certs"), rendered.stdout)
 
     def test_init_rotates_proxy_certificate_near_expiry(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -314,6 +374,173 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         self.assertIn("requested.network_address", preflight)
         self.assertIn("requested.broadcast_address", preflight)
         self.assertIn("service IPv4 values must be usable host addresses", preflight)
+
+    def test_logs_rejects_options_after_service_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            init_result = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(init_result.returncode, 0, init_result.stderr)
+            env = os.environ.copy()
+            env["HOME"] = str(home)
+
+            for follow_option in ("--follow", "-f"):
+                with self.subTest(follow_option=follow_option):
+                    result = subprocess.run(
+                        [
+                            "bash",
+                            str(LAB_DIR / "logs.sh"),
+                            "control-plane",
+                            follow_option,
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        env=env,
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(
+                        "pass only service names for a bounded snapshot",
+                        result.stderr,
+                    )
+
+    def test_wazuh_substrate_rejects_unreviewed_tracked_changes(self) -> None:
+        prepare = (LAB_DIR / "prepare-substrates.sh").read_text(encoding="utf-8")
+        self.assertIn('diff --quiet HEAD -- \\\n  . ":(exclude)', prepare)
+        self.assertIn("replace_admin_hash(current, placeholder)", prepare)
+        self.assertIn(
+            "unreviewed changes outside the managed admin hash",
+            prepare,
+        )
+
+    def test_prepare_substrates_blocks_dirty_tracked_wazuh_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            runtime_root = (
+                home / ".local" / "share" / "aegisops" / "phase-67-integration-lab"
+            )
+            wazuh_source = runtime_root / "substrates" / "wazuh-docker"
+            internal_users = (
+                wazuh_source
+                / "single-node"
+                / "config"
+                / "wazuh_indexer"
+                / "internal_users.yml"
+            )
+            manager_config = (
+                wazuh_source
+                / "single-node"
+                / "config"
+                / "wazuh_cluster"
+                / "wazuh_manager.conf"
+            )
+            internal_users.parent.mkdir(parents=True)
+            manager_config.parent.mkdir(parents=True)
+            internal_users.write_text(
+                'admin:\n  hash: "reviewed-placeholder"\nreserved:\n  enabled: true\n',
+                encoding="utf-8",
+            )
+            manager_config.write_text("<ossec_config />\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "init", "-q", str(wazuh_source)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(wazuh_source), "config", "user.name", "Phase67 Test"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(wazuh_source),
+                    "config",
+                    "user.email",
+                    "phase67-test@example.invalid",
+                ],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(wazuh_source), "add", "."],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(wazuh_source), "commit", "-qm", "fixture"],
+                check=True,
+            )
+            pinned_commit = subprocess.run(
+                ["git", "-C", str(wazuh_source), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            bootstrap = home / "bootstrap.env"
+            bootstrap.write_text(
+                (LAB_DIR / "bootstrap.env.sample")
+                .read_text(encoding="utf-8")
+                .replace(
+                    "499184cbeb44fc1086791d11ad4b9bdcb77a9bb9",
+                    pinned_commit,
+                ),
+                encoding="utf-8",
+            )
+            init_result = self._run_init(home, bootstrap)
+            self.assertEqual(init_result.returncode, 0, init_result.stderr)
+            manager_config.write_text("<unreviewed />\n", encoding="utf-8")
+            env = os.environ.copy()
+            env["HOME"] = str(home)
+            env["AEGISOPS_LAB_BOOTSTRAP_ENV"] = str(bootstrap)
+
+            result = subprocess.run(
+                ["bash", str(LAB_DIR / "prepare-substrates.sh")],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "Wazuh substrate has unreviewed tracked changes outside",
+                result.stderr,
+            )
+
+    def test_down_works_when_generated_secrets_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            init_result = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(init_result.returncode, 0, init_result.stderr)
+            runtime_root = (
+                home / ".local" / "share" / "aegisops" / "phase-67-integration-lab"
+            )
+            shutil.rmtree(runtime_root / "secrets")
+
+            fake_bin = home / "bin"
+            fake_bin.mkdir()
+            docker_log = home / "docker.log"
+            fake_docker = fake_bin / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                'printf "%s\\n" "$*" >"${AEGISOPS_FAKE_DOCKER_LOG}"\n',
+                encoding="utf-8",
+            )
+            fake_docker.chmod(0o755)
+            env = os.environ.copy()
+            env["HOME"] = str(home)
+            env["PATH"] = f"{fake_bin}:{env['PATH']}"
+            env["AEGISOPS_FAKE_DOCKER_LOG"] = str(docker_log)
+
+            result = subprocess.run(
+                ["bash", str(LAB_DIR / "down.sh")],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            invocation = docker_log.read_text(encoding="utf-8")
+            self.assertIn("--context colima-mac-studio-solo compose", invocation)
+            self.assertIn("down --remove-orphans", invocation)
 
     def test_normal_cleanup_and_destroy_boundaries_are_distinct(self) -> None:
         down = (LAB_DIR / "down.sh").read_text(encoding="utf-8")

@@ -33,6 +33,11 @@ fi
 actual_commit="$(git -C "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}" rev-parse HEAD)"
 [[ "${actual_commit}" == "${AEGISOPS_LAB_WAZUH_DOCKER_COMMIT}" ]] \
   || fail "Wazuh substrate commit is ${actual_commit}; expected ${AEGISOPS_LAB_WAZUH_DOCKER_COMMIT}"
+wazuh_internal_users_relative_path="single-node/config/wazuh_indexer/internal_users.yml"
+if ! git -C "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}" diff --quiet HEAD -- \
+  . ":(exclude)${wazuh_internal_users_relative_path}"; then
+  fail "Wazuh substrate has unreviewed tracked changes outside ${wazuh_internal_users_relative_path}"
+fi
 
 cert_dir="${AEGISOPS_LAB_WAZUH_CONFIG_DIR}/wazuh_indexer_ssl_certs"
 required_certificates="
@@ -108,39 +113,76 @@ admin_hash="$(
 [[ -n "${admin_hash}" ]] || fail "Wazuh indexer password hash generation returned no bcrypt hash"
 
 internal_users="${AEGISOPS_LAB_WAZUH_CONFIG_DIR}/wazuh_indexer/internal_users.yml"
-python3 - "${internal_users}" "${admin_hash}" <<'PY'
+python3 - \
+  "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}" \
+  "${wazuh_internal_users_relative_path}" \
+  "${internal_users}" \
+  "${admin_hash}" <<'PY'
 from __future__ import annotations
 
+import os
 import pathlib
+import subprocess
 import sys
 
-path = pathlib.Path(sys.argv[1])
-new_hash = sys.argv[2]
-lines = path.read_text(encoding="utf-8").splitlines()
+repository = pathlib.Path(sys.argv[1])
+relative_path = sys.argv[2]
+path = pathlib.Path(sys.argv[3])
+new_hash = sys.argv[4]
 
-section_start = next((index for index, line in enumerate(lines) if line == "admin:"), None)
-if section_start is None:
-    raise SystemExit("admin section is missing from Wazuh internal_users.yml")
+canonical = subprocess.run(
+    ["git", "-C", str(repository), "show", f"HEAD:{relative_path}"],
+    check=True,
+    capture_output=True,
+    text=True,
+).stdout
+current = path.read_text(encoding="utf-8")
 
-section_end = next(
-    (
+def replace_admin_hash(document: str, replacement: str) -> str:
+    lines = document.splitlines()
+    section_start = next(
+        (index for index, line in enumerate(lines) if line == "admin:"),
+        None,
+    )
+    if section_start is None:
+        raise SystemExit("admin section is missing from Wazuh internal_users.yml")
+
+    section_end = next(
+        (
+            index
+            for index in range(section_start + 1, len(lines))
+            if lines[index] and not lines[index][0].isspace() and lines[index].endswith(":")
+        ),
+        len(lines),
+    )
+    hash_indexes = [
         index
-        for index in range(section_start + 1, len(lines))
-        if lines[index] and not lines[index][0].isspace() and lines[index].endswith(":")
-    ),
-    len(lines),
-)
-hash_indexes = [
-    index
-    for index in range(section_start + 1, section_end)
-    if lines[index].lstrip().startswith("hash:")
-]
-if len(hash_indexes) != 1:
-    raise SystemExit("admin section must contain exactly one hash entry")
+        for index in range(section_start + 1, section_end)
+        if lines[index].lstrip().startswith("hash:")
+    ]
+    if len(hash_indexes) != 1:
+        raise SystemExit("admin section must contain exactly one hash entry")
 
-indent = lines[hash_indexes[0]][: len(lines[hash_indexes[0]]) - len(lines[hash_indexes[0]].lstrip())]
-lines[hash_indexes[0]] = f'{indent}hash: "{new_hash}"'
-path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    hash_index = hash_indexes[0]
+    indent = lines[hash_index][: len(lines[hash_index]) - len(lines[hash_index].lstrip())]
+    lines[hash_index] = f'{indent}hash: "{replacement}"'
+    return "\n".join(lines) + "\n"
+
+
+placeholder = "__AEGISOPS_REVIEWED_ADMIN_HASH__"
+if replace_admin_hash(current, placeholder) != replace_admin_hash(canonical, placeholder):
+    raise SystemExit(
+        "Wazuh internal_users.yml has unreviewed changes outside the managed admin hash"
+    )
+
+expected = replace_admin_hash(canonical, new_hash)
+temporary_path = path.with_name(f".{path.name}.aegisops-{os.getpid()}")
+try:
+    temporary_path.write_text(expected, encoding="utf-8")
+    temporary_path.chmod(0o600)
+    os.replace(temporary_path, path)
+finally:
+    temporary_path.unlink(missing_ok=True)
 PY
 chmod 600 "${internal_users}"
 

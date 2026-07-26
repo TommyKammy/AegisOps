@@ -100,4 +100,30 @@ perl -0pi -e 's/assert_unique_selected_ports/assert_removed_unique_selected_port
   "${duplicate_port_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh"
 assert_fails_with "${duplicate_port_drift}" 'assert_unique_selected_ports'
 
-echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof, certificate-renewal, network-host, and duplicate-port drift."
+runtime_quoting_drift="${workdir}/runtime-quoting-drift"
+copy_fixture "${runtime_quoting_drift}"
+perl -0pi -e 's/write_runtime_env_assignment/write_removed_runtime_env_assignment/g' \
+  "${runtime_quoting_drift}/control-plane/deployment/phase-67-integration-lab/init.sh"
+assert_fails_with "${runtime_quoting_drift}" 'write_runtime_env_assignment'
+
+bounded_logs_drift="${workdir}/bounded-logs-drift"
+copy_fixture "${bounded_logs_drift}"
+perl -0pi -e 's/for log_argument in "\$\@"; do/for log_argument in "--follow"; do/' \
+  "${bounded_logs_drift}/control-plane/deployment/phase-67-integration-lab/logs.sh"
+assert_fails_with "${bounded_logs_drift}" 'for log_argument in "$@"; do'
+
+wazuh_checkout_drift="${workdir}/wazuh-checkout-drift"
+copy_fixture "${wazuh_checkout_drift}"
+perl -0pi -e 's/diff --quiet HEAD --/diff --quiet HEAD^ --/' \
+  "${wazuh_checkout_drift}/control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh"
+assert_fails_with "${wazuh_checkout_drift}" 'diff --quiet HEAD --'
+
+teardown_recovery_drift="${workdir}/teardown-recovery-drift"
+copy_fixture "${teardown_recovery_drift}"
+perl -0pi -e 's/require_runtime_configuration/require_runtime_environment/' \
+  "${teardown_recovery_drift}/control-plane/deployment/phase-67-integration-lab/down.sh"
+assert_fails_with "${teardown_recovery_drift}" 'require_runtime_configuration'
+
+echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof," \
+  "certificate-renewal, network-host, duplicate-port, runtime-quoting, bounded-logs," \
+  "Wazuh-checkout, and teardown-recovery drift."
