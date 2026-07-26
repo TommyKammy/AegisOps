@@ -6,7 +6,7 @@ The lab is intentionally isolated:
 
 - every Docker command names `AEGISOPS_LAB_DOCKER_CONTEXT`; no script changes the global Docker context;
 - Compose uses project `aegisops-phase67-lab`, a dedicated bridge network, and project-owned named volumes;
-- published ports bind only to `127.0.0.1`;
+- the only published port is the TLS reverse proxy on `127.0.0.1`;
 - generated env, secrets, certificates, upstream substrates, and evidence live outside the repository under `~/.local/share/aegisops/phase-67-integration-lab` by default;
 - ordinary `down.sh` and `cleanup.sh` preserve named volumes and evidence;
 - only `destroy-data.sh --confirm-destroy-phase-67-lab-data` deletes project volumes.
@@ -20,9 +20,9 @@ The default `core` scope starts PostgreSQL, applies the reviewed first-boot migr
 | Scope | Services | Host access |
 | --- | --- | --- |
 | `core` | PostgreSQL, AegisOps, proxy | `https://localhost:18443` |
-| `wazuh` | core plus manager, indexer, dashboard | `https://localhost:18444` |
-| `shuffle` | core plus backend, frontend, OpenSearch | `http://localhost:13001` |
-| `full` | all of the above | all loopback endpoints |
+| `wazuh` | core plus manager, indexer, dashboard | `https://wazuh.localhost:18443` |
+| `shuffle` | core plus backend, frontend, OpenSearch | `https://shuffle.localhost:18443` |
+| `full` | all of the above | the three TLS proxy hostnames above |
 
 Wazuh `4.14.6` is pinned to the reviewed upstream tag commit and arm64 image digests. Shuffle `2.2.1` images are pinned to amd64 digests and run through explicit Colima emulation acceptance. Phase 67.1 does not mount the Docker socket or start Orborus, so Shuffle workflow execution remains disabled until Phase 67.3.
 
@@ -57,11 +57,11 @@ control-plane/deployment/phase-67-integration-lab/init.sh
 control-plane/deployment/phase-67-integration-lab/preflight.sh --scope core
 ```
 
-Keep `AEGISOPS_LAB_BOOTSTRAP_ENV` exported for every lab command in that shell. Rerun `init.sh` after changing the untracked bootstrap file; bootstrap values replace the previously generated runtime values while existing secrets remain stable. The canonical runtime root must remain below `${HOME}/.local/share/aegisops/`, and `runtime.env` is fixed inside that root. The reviewed Wazuh and Shuffle versions, commits, and platforms are fixed to the images in `docker-compose.yml` and cannot be overridden. If the subnet changes, update every selected `AEGISOPS_LAB_*_IPV4` value to a unique usable host address in that subnet; an existing owned project network must be removed through normal teardown before its subnet can change. Preflight rejects overlapping Docker networks, network or broadcast addresses, out-of-subnet or duplicate selected service addresses, duplicate selected ports, and host-port ownership conflicts for the expected service in the selected scope.
+Keep `AEGISOPS_LAB_BOOTSTRAP_ENV` exported for every lab command in that shell. Rerun `init.sh` after changing the untracked bootstrap file; bootstrap values replace the previously generated runtime values while existing secrets remain stable. The canonical runtime root must remain below `${HOME}/.local/share/aegisops/`, and `runtime.env` is fixed inside that root. The reviewed Wazuh and Shuffle versions, commits, and platforms are fixed to the images in `docker-compose.yml` and cannot be overridden. If the subnet changes, update every selected `AEGISOPS_LAB_*_IPV4` value to a unique usable host address in that subnet; an existing owned project network must be removed through normal teardown before its subnet can change. Preflight rejects overlapping Docker networks, network or broadcast addresses, out-of-subnet or duplicate selected service addresses, and proxy-port ownership conflicts. Wazuh and Shuffle remain internal-only services; their user interfaces are selected by the `wazuh.localhost` and `shuffle.localhost` proxy hostnames.
 
 The tracked bootstrap defaults `AEGISOPS_LAB_ALLOW_EMULATION=no`. Before selecting `shuffle` or `full`, use an untracked bootstrap and change it to `yes` only after explicitly accepting emulation. Use `preflight.sh --scope full --write-evidence` before a complete lab start. On Apple Silicon, `shuffle` and `full` additionally require the selected Colima profile to expose Rosetta or an x86_64 binfmt handler. On an x86_64 profile, scopes containing ARM64 services require an accepted and registered `qemu-aarch64` handler. Preflight reports the exact profile-preserving Colima restart command when the reviewed Shuffle host capability is absent; it never restarts Colima itself.
 
-The generated proxy certificate is valid for 30 days and only for `localhost` and `127.0.0.1`. `init.sh` preserves a valid matching certificate pair, but replaces it when less than seven days of validity remain. Any replacement in an initialized runtime records a marker that makes the next `up.sh` force service recreation before clearing the marker. Existing credential values remain stable; if an initialized runtime is missing one, `init.sh` fails instead of generating a credential that no longer matches preserved volume data. If `runtime.env` is absent, initialization also proves that no known project volume remains in the configured Docker context before generating credentials.
+The generated proxy certificate is valid for 30 days for `localhost`, `wazuh.localhost`, `shuffle.localhost`, and `127.0.0.1`. `init.sh` preserves a valid matching certificate pair, but replaces it when less than seven days of validity remain or a required proxy hostname is absent. Any replacement in an initialized runtime records a marker that makes the next `up.sh` force service recreation before clearing the marker. Existing credential values remain stable; if an initialized runtime is missing one, `init.sh` fails instead of generating a credential that no longer matches preserved volume data. The Wazuh dashboard credential introduced with the proxy-only access path is generated once during migration and then receives the same missing-credential protection. If `runtime.env` is absent, initialization also proves that no known project volume remains in the configured Docker context before generating credentials.
 
 ## Verification
 

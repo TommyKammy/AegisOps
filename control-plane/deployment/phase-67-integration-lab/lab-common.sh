@@ -360,18 +360,7 @@ selected_port_names() {
   local scope="${1:-core}"
 
   case "${scope}" in
-    core)
-      printf '%s\n' PROXY
-      ;;
-    wazuh)
-      printf '%s\n' PROXY WAZUH_DASHBOARD
-      ;;
-    shuffle)
-      printf '%s\n' PROXY SHUFFLE_FRONTEND
-      ;;
-    full)
-      printf '%s\n' PROXY WAZUH_DASHBOARD SHUFFLE_FRONTEND
-      ;;
+    core|wazuh|shuffle|full) printf '%s\n' PROXY ;;
     *)
       fail "unknown lab scope '${scope}'; expected core, wazuh, shuffle, or full"
       ;;
@@ -381,8 +370,6 @@ selected_port_names() {
 service_name_for_published_port() {
   case "$1" in
     PROXY) printf '%s\n' proxy ;;
-    WAZUH_DASHBOARD) printf '%s\n' wazuh-dashboard ;;
-    SHUFFLE_FRONTEND) printf '%s\n' shuffle-frontend ;;
     *) fail "unknown published port name '$1'" ;;
   esac
 }

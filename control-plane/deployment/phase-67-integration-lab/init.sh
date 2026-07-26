@@ -38,6 +38,10 @@ if [[ -f "${RUNTIME_ENV}" ]]; then
     [[ -s "${secret_dir}/${credential}" ]] \
       || fail "initialized runtime is missing credential ${credential}; restore it before reuse, or destroy preserved lab volumes and remove ${RUNTIME_ENV} before reinitializing"
   done
+  if grep -Fq 'AEGISOPS_LAB_WAZUH_DASHBOARD_PASSWORD=' "${RUNTIME_ENV}"; then
+    [[ -s "${secret_dir}/wazuh-dashboard-password" ]] \
+      || fail "initialized runtime is missing credential wazuh-dashboard-password; restore it before reuse, or destroy preserved lab volumes and remove ${RUNTIME_ENV} before reinitializing"
+  fi
 else
   assert_no_preserved_phase67_volumes
 fi
@@ -82,6 +86,7 @@ write_secret_once "${secret_dir}/admin-bootstrap-token"
 write_secret_once "${secret_dir}/break-glass-token"
 write_secret_once "${secret_dir}/wazuh-indexer-password" 24
 write_secret_once "${secret_dir}/wazuh-api-password" 24
+write_strong_secret_once "${secret_dir}/wazuh-dashboard-password"
 write_strong_secret_once "${secret_dir}/shuffle-opensearch-password"
 write_secret_once "${secret_dir}/shuffle-encryption-modifier"
 
@@ -99,7 +104,8 @@ generate_proxy_certificate() {
     -out "${staging_dir}/lab.crt" \
     -days 30 \
     -subj "/CN=localhost" \
-    -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" >/dev/null 2>&1; then
+    -addext "subjectAltName=DNS:localhost,DNS:wazuh.localhost,DNS:shuffle.localhost,IP:127.0.0.1" \
+    >/dev/null 2>&1; then
     rm -rf "${staging_dir}"
     fail "failed to generate the proxy TLS certificate"
   fi
@@ -119,6 +125,17 @@ if [[ -e "${cert_dir}/lab.key" || -e "${cert_dir}/lab.crt" ]]; then
     || fail "proxy TLS private key is invalid; restore or remove the certificate pair before rerunning init"
   openssl x509 -in "${cert_dir}/lab.crt" -noout >/dev/null 2>&1 \
     || fail "proxy TLS certificate is invalid; restore or remove the certificate pair before rerunning init"
+  certificate_text="$(openssl x509 -in "${cert_dir}/lab.crt" -noout -text)"
+  for required_san in \
+    "DNS:localhost" \
+    "DNS:wazuh.localhost" \
+    "DNS:shuffle.localhost" \
+    "IP Address:127.0.0.1"
+  do
+    if ! grep -Fq "${required_san}" <<<"${certificate_text}"; then
+      rotate_proxy_certificate=true
+    fi
+  done
   key_public_digest="$(
     openssl pkey -in "${cert_dir}/lab.key" -pubout -outform DER 2>/dev/null |
       openssl sha256
@@ -190,8 +207,6 @@ trap cleanup_runtime_env_staging EXIT
   write_runtime_env_assignment AEGISOPS_LAB_SHUFFLE_OPENSEARCH_IPV4 "${AEGISOPS_LAB_SHUFFLE_OPENSEARCH_IPV4}"
   write_runtime_env_assignment AEGISOPS_LAB_SHUFFLE_FRONTEND_IPV4 "${AEGISOPS_LAB_SHUFFLE_FRONTEND_IPV4}"
   write_runtime_env_assignment AEGISOPS_LAB_PROXY_PORT "${AEGISOPS_LAB_PROXY_PORT}"
-  write_runtime_env_assignment AEGISOPS_LAB_WAZUH_DASHBOARD_PORT "${AEGISOPS_LAB_WAZUH_DASHBOARD_PORT}"
-  write_runtime_env_assignment AEGISOPS_LAB_SHUFFLE_FRONTEND_PORT "${AEGISOPS_LAB_SHUFFLE_FRONTEND_PORT}"
   write_runtime_env_assignment AEGISOPS_LAB_MIN_CPUS "${AEGISOPS_LAB_MIN_CPUS}"
   write_runtime_env_assignment AEGISOPS_LAB_MIN_MEMORY_GIB "${AEGISOPS_LAB_MIN_MEMORY_GIB}"
   write_runtime_env_assignment AEGISOPS_LAB_MIN_DISK_GIB "${AEGISOPS_LAB_MIN_DISK_GIB}"
@@ -203,6 +218,9 @@ trap cleanup_runtime_env_staging EXIT
   write_runtime_env_assignment AEGISOPS_LAB_SHUFFLE_VERSION "${AEGISOPS_LAB_SHUFFLE_VERSION}"
   write_runtime_env_assignment AEGISOPS_LAB_WAZUH_INDEXER_PASSWORD "$(<"${secret_dir}/wazuh-indexer-password")"
   write_runtime_env_assignment AEGISOPS_LAB_WAZUH_API_PASSWORD "$(<"${secret_dir}/wazuh-api-password")"
+  write_runtime_env_assignment \
+    AEGISOPS_LAB_WAZUH_DASHBOARD_PASSWORD \
+    "$(<"${secret_dir}/wazuh-dashboard-password")"
   write_runtime_env_assignment \
     AEGISOPS_LAB_SHUFFLE_OPENSEARCH_PASSWORD \
     "$(<"${secret_dir}/shuffle-opensearch-password")"

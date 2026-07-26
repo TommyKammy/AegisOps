@@ -204,7 +204,7 @@ assert_fails_with "${evidence_collision_drift}" 'mktemp "${evidence_dir}/preflig
 
 credential_guard_drift="${workdir}/credential-guard-drift"
 copy_fixture "${credential_guard_drift}"
-perl -0pi -e 's/initialized runtime is missing credential/initialized runtime regenerated credential/' \
+perl -0pi -e 's/initialized runtime is missing credential/initialized runtime regenerated credential/g' \
   "${credential_guard_drift}/control-plane/deployment/phase-67-integration-lab/init.sh"
 assert_fails_with "${credential_guard_drift}" 'initialized runtime is missing credential'
 
@@ -233,6 +233,36 @@ perl -0pi -e 's/pg_get_indexdef/index_name_only/g' \
   "${index_definition_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
 assert_fails_with "${index_definition_drift}" "pg_get_indexdef(indexrelid, 1, true) = 'idempotency_key'"
 
+lookup_index_definition_drift="${workdir}/lookup-index-definition-drift"
+copy_fixture "${lookup_index_definition_drift}"
+perl -0pi -e "s/compared_at DESC/compared_at ASC/g" \
+  "${lookup_index_definition_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
+assert_fails_with "${lookup_index_definition_drift}" 'CREATE INDEX reconciliation_records_correlation_alert_latest_idx'
+
+docker_context_secret_drift="${workdir}/docker-context-secret-drift"
+copy_fixture "${docker_context_secret_drift}"
+perl -0pi -e 's#control-plane/deployment/first-boot/secrets/\n##' \
+  "${docker_context_secret_drift}/.dockerignore"
+assert_fails_with "${docker_context_secret_drift}" 'control-plane/deployment/first-boot/secrets/'
+
+wazuh_dashboard_credential_drift="${workdir}/wazuh-dashboard-credential-drift"
+copy_fixture "${wazuh_dashboard_credential_drift}"
+perl -0pi -e 's/\$\{AEGISOPS_LAB_WAZUH_DASHBOARD_PASSWORD:\?run-init-first\}/kibanaserver/' \
+  "${wazuh_dashboard_credential_drift}/control-plane/deployment/phase-67-integration-lab/docker-compose.yml"
+assert_fails_with "${wazuh_dashboard_credential_drift}" 'AEGISOPS_LAB_WAZUH_DASHBOARD_PASSWORD'
+
+proxy_ui_route_drift="${workdir}/proxy-ui-route-drift"
+copy_fixture "${proxy_ui_route_drift}"
+perl -0pi -e 's/server_name wazuh\.localhost;/server_name direct-wazuh.localhost;/' \
+  "${proxy_ui_route_drift}/control-plane/deployment/phase-67-integration-lab/config/control-plane.conf"
+assert_fails_with "${proxy_ui_route_drift}" 'server_name wazuh.localhost;'
+
+direct_ui_port_drift="${workdir}/direct-ui-port-drift"
+copy_fixture "${direct_ui_port_drift}"
+printf '\n# AEGISOPS_LAB_SHUFFLE_FRONTEND_PORT\n' \
+  >>"${direct_ui_port_drift}/control-plane/deployment/phase-67-integration-lab/docker-compose.yml"
+assert_fails_with "${direct_ui_port_drift}" 'Shuffle frontend must not be published'
+
 port_service_owner_drift="${workdir}/port-service-owner-drift"
 copy_fixture "${port_service_owner_drift}"
 perl -0pi -e 's/com\.docker\.compose\.service=\$\{expected_service\}/com.docker.compose.project=\${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}/' \
@@ -258,4 +288,5 @@ echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, mi
   "status-evidence, selected-address, published-port-evidence, reviewed-pin, architecture," \
   "evidence-collision, credential-guard, preserved-volume, evidence-runtime-digest," \
   "project-subnet, replacement-certificate, start-time Wazuh-checkout, Wazuh-digest," \
-  "index-definition, port-service-owner, canonical-runtime, and teardown-ownership drift."
+  "index-definition, lookup-index-definition, Docker-context-secret, dashboard-credential," \
+  "proxy-UI-route, direct-UI-port, port-service-owner, canonical-runtime, and teardown-ownership drift."

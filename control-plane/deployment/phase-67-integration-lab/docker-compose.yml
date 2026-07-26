@@ -147,6 +147,41 @@ services:
       com.aegisops.lab.phase: "67.1"
       com.aegisops.lab.component: wazuh-indexer
 
+  wazuh-security-bootstrap:
+    profiles:
+      - wazuh
+    platform: ${AEGISOPS_LAB_WAZUH_PLATFORM:-linux/arm64}
+    image: wazuh/wazuh-indexer:4.14.6@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5
+    environment:
+      OPENSEARCH_JAVA_HOME: /usr/share/wazuh-indexer/jdk
+    entrypoint:
+      - bash
+      - -c
+      - |
+        exec /usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh \
+          -f /securityconfig/internal_users.yml \
+          -t internalusers \
+          -nhnv \
+          -h wazuh-indexer \
+          -p 9200 \
+          -cacert /certs/root-ca.pem \
+          -cert /certs/admin.pem \
+          -key /certs/admin-key.pem
+    volumes:
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer/internal_users.yml:/securityconfig/internal_users.yml:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/root-ca.pem:/certs/root-ca.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/admin.pem:/certs/admin.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/admin-key.pem:/certs/admin-key.pem:ro
+    depends_on:
+      wazuh-indexer:
+        condition: service_healthy
+    networks:
+      - lab
+    restart: "no"
+    labels:
+      com.aegisops.lab.phase: "67.1"
+      com.aegisops.lab.component: wazuh-security-bootstrap
+
   wazuh-manager:
     profiles:
       - wazuh
@@ -203,14 +238,12 @@ services:
       - wazuh
     platform: ${AEGISOPS_LAB_WAZUH_PLATFORM:-linux/arm64}
     image: wazuh/wazuh-dashboard:4.14.6@sha256:16aa978eaa6355fe3965e310ef8eaaed4df6f701dcf5885ebd0783fcd5ee6f16
-    ports:
-      - "127.0.0.1:${AEGISOPS_LAB_WAZUH_DASHBOARD_PORT:-18444}:5601"
     environment:
       INDEXER_USERNAME: admin
       INDEXER_PASSWORD: ${AEGISOPS_LAB_WAZUH_INDEXER_PASSWORD:?run-init-first}
       WAZUH_API_URL: https://wazuh.manager
       DASHBOARD_USERNAME: kibanaserver
-      DASHBOARD_PASSWORD: kibanaserver
+      DASHBOARD_PASSWORD: ${AEGISOPS_LAB_WAZUH_DASHBOARD_PASSWORD:?run-init-first}
       API_USERNAME: wazuh-wui
       API_PASSWORD: ${AEGISOPS_LAB_WAZUH_API_PASSWORD:?run-init-first}
     volumes:
@@ -226,6 +259,8 @@ services:
         condition: service_healthy
       wazuh-indexer:
         condition: service_healthy
+      wazuh-security-bootstrap:
+        condition: service_completed_successfully
     networks:
       lab:
         ipv4_address: ${AEGISOPS_LAB_WAZUH_DASHBOARD_IPV4:-172.31.67.42}
@@ -321,8 +356,6 @@ services:
       - shuffle
     platform: ${AEGISOPS_LAB_SHUFFLE_PLATFORM:-linux/amd64}
     image: ghcr.io/shuffle/shuffle-frontend:2.2.1@sha256:0561dd421382f70d15cada11a324b40762f0930522fcc1b51edcce9c87cc0f00
-    ports:
-      - "127.0.0.1:${AEGISOPS_LAB_SHUFFLE_FRONTEND_PORT:-13001}:80"
     environment:
       BACKEND_HOSTNAME: shuffle-backend
     depends_on:

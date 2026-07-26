@@ -100,18 +100,33 @@ validate_wazuh_certificate_bundle "${cert_dir}" \
   || fail "Wazuh certificate bundle failed validity, chain, or key-pair validation"
 
 indexer_image="wazuh/wazuh-indexer:${AEGISOPS_LAB_WAZUH_VERSION}@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5"
-admin_hash="$(
+generate_indexer_password_hash() {
+  local password="$1"
+
   docker_lab run --rm \
     --platform "${AEGISOPS_LAB_WAZUH_PLATFORM}" \
     --env OPENSEARCH_JAVA_HOME=/usr/share/wazuh-indexer/jdk \
     --entrypoint bash \
     "${indexer_image}" \
     -c '/usr/share/wazuh-indexer/plugins/opensearch-security/tools/hash.sh -p "$1"' \
-    phase67 "$( <"${AEGISOPS_LAB_SECRET_DIR}/wazuh-indexer-password" )" |
+    phase67 "${password}" |
     grep -E '^\$2[aby]\$' |
     tail -1
+}
+
+admin_hash="$(
+  generate_indexer_password_hash \
+    "$(<"${AEGISOPS_LAB_SECRET_DIR}/wazuh-indexer-password")"
 )"
 [[ -n "${admin_hash}" ]] || fail "Wazuh indexer password hash generation returned no bcrypt hash"
+dashboard_hash="$(
+  generate_indexer_password_hash \
+    "$(<"${AEGISOPS_LAB_SECRET_DIR}/wazuh-dashboard-password")"
+)"
+[[ -n "${dashboard_hash}" ]] || fail "Wazuh dashboard password hash generation returned no bcrypt hash"
+disabled_demo_hash="$(generate_indexer_password_hash "$(openssl rand -hex 32)")"
+[[ -n "${disabled_demo_hash}" ]] \
+  || fail "Wazuh unused demo-user hash generation returned no bcrypt hash"
 
 internal_users="${AEGISOPS_LAB_WAZUH_CONFIG_DIR}/wazuh_indexer/internal_users.yml"
 mark_wazuh_recreation_required
@@ -119,7 +134,9 @@ python3 - \
   "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}" \
   "${wazuh_internal_users_relative_path}" \
   "${internal_users}" \
-  "${admin_hash}" <<'PY'
+  "${admin_hash}" \
+  "${dashboard_hash}" \
+  "${disabled_demo_hash}" <<'PY'
 from __future__ import annotations
 
 import os
@@ -130,7 +147,9 @@ import sys
 repository = pathlib.Path(sys.argv[1])
 relative_path = sys.argv[2]
 path = pathlib.Path(sys.argv[3])
-new_hash = sys.argv[4]
+admin_hash = sys.argv[4]
+dashboard_hash = sys.argv[5]
+disabled_demo_hash = sys.argv[6]
 
 canonical = subprocess.run(
     ["git", "-C", str(repository), "show", f"HEAD:{relative_path}"],
@@ -140,14 +159,16 @@ canonical = subprocess.run(
 ).stdout
 current = path.read_text(encoding="utf-8")
 
-def replace_admin_hash(document: str, replacement: str) -> str:
+def replace_user_hash(document: str, username: str, replacement: str) -> str:
     lines = document.splitlines()
     section_start = next(
-        (index for index, line in enumerate(lines) if line == "admin:"),
+        (index for index, line in enumerate(lines) if line == f"{username}:"),
         None,
     )
     if section_start is None:
-        raise SystemExit("admin section is missing from Wazuh internal_users.yml")
+        raise SystemExit(
+            f"{username} section is missing from Wazuh internal_users.yml"
+        )
 
     section_end = next(
         (
@@ -163,7 +184,7 @@ def replace_admin_hash(document: str, replacement: str) -> str:
         if lines[index].lstrip().startswith("hash:")
     ]
     if len(hash_indexes) != 1:
-        raise SystemExit("admin section must contain exactly one hash entry")
+        raise SystemExit(f"{username} section must contain exactly one hash entry")
 
     hash_index = hash_indexes[0]
     indent = lines[hash_index][: len(lines[hash_index]) - len(lines[hash_index].lstrip())]
@@ -171,13 +192,35 @@ def replace_admin_hash(document: str, replacement: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-placeholder = "__AEGISOPS_REVIEWED_ADMIN_HASH__"
-if replace_admin_hash(current, placeholder) != replace_admin_hash(canonical, placeholder):
+def normalize_managed_hashes(document: str) -> str:
+    normalized = replace_user_hash(
+        document,
+        "admin",
+        "__AEGISOPS_REVIEWED_ADMIN_HASH__",
+    )
+    normalized = replace_user_hash(
+        normalized,
+        "kibanaserver",
+        "__AEGISOPS_REVIEWED_DASHBOARD_HASH__",
+    )
+    for username in ("kibanaro", "logstash", "readall", "snapshotrestore"):
+        normalized = replace_user_hash(
+            normalized,
+            username,
+            f"__AEGISOPS_DISABLED_{username.upper()}_HASH__",
+        )
+    return normalized
+
+
+if normalize_managed_hashes(current) != normalize_managed_hashes(canonical):
     raise SystemExit(
-        "Wazuh internal_users.yml has unreviewed changes outside the managed admin hash"
+        "Wazuh internal_users.yml has unreviewed changes outside managed hashes"
     )
 
-expected = replace_admin_hash(canonical, new_hash)
+expected = replace_user_hash(canonical, "admin", admin_hash)
+expected = replace_user_hash(expected, "kibanaserver", dashboard_hash)
+for username in ("kibanaro", "logstash", "readall", "snapshotrestore"):
+    expected = replace_user_hash(expected, username, disabled_demo_hash)
 temporary_path = path.with_name(f".{path.name}.aegisops-{os.getpid()}")
 try:
     temporary_path.write_text(expected, encoding="utf-8")

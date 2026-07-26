@@ -103,6 +103,8 @@ cleanup="${lab_dir}/cleanup.sh"
 destroy="${lab_dir}/destroy-data.sh"
 readme="${lab_dir}/README.md"
 runbook="${lab_dir}/RUNBOOK.md"
+proxy_config="${lab_dir}/config/control-plane.conf"
+dockerignore="${repo_root}/.dockerignore"
 
 required_compose_lines=(
   'name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}'
@@ -111,9 +113,10 @@ required_compose_lines=(
   'platform: ${AEGISOPS_LAB_WAZUH_PLATFORM:-linux/arm64}'
   'platform: ${AEGISOPS_LAB_SHUFFLE_PLATFORM:-linux/amd64}'
   '"127.0.0.1:${AEGISOPS_LAB_PROXY_PORT:-18443}:8443"'
-  '"127.0.0.1:${AEGISOPS_LAB_WAZUH_DASHBOARD_PORT:-18444}:5601"'
-  '"127.0.0.1:${AEGISOPS_LAB_SHUFFLE_FRONTEND_PORT:-13001}:80"'
   'condition: service_healthy'
+  'condition: service_completed_successfully'
+  'com.aegisops.lab.component: wazuh-security-bootstrap'
+  'DASHBOARD_PASSWORD: ${AEGISOPS_LAB_WAZUH_DASHBOARD_PASSWORD:?run-init-first}'
   '- wazuh.indexer'
   '- wazuh.manager'
   "grep -q 'wazuh-analysisd is running'"
@@ -171,6 +174,13 @@ require_fixed_string "${common}" 'openssl verify -CAfile'
 require_fixed_string "${init}" "printf 'Aa1!%sZz9!"
 require_fixed_string "${init}" 'load_bootstrap_environment'
 require_fixed_string "${init}" 'openssl x509 -checkend 604800'
+require_fixed_string "${init}" 'DNS:wazuh.localhost,DNS:shuffle.localhost'
+require_fixed_string "${init}" 'certificate_text="$(openssl x509'
+require_fixed_string "${init}" '"DNS:wazuh.localhost"'
+require_fixed_string "${init}" '"DNS:shuffle.localhost"'
+require_fixed_string "${init}" '"IP Address:127.0.0.1"'
+require_fixed_string "${init}" 'wazuh-dashboard-password'
+require_fixed_string "${init}" 'AEGISOPS_LAB_WAZUH_DASHBOARD_PASSWORD'
 require_fixed_string "${init}" 'write_runtime_env_assignment AEGISOPS_LAB_RUNTIME_ROOT'
 require_fixed_string "${init}" 'proxy-certificate-recreate-required'
 require_fixed_string "${init}" 'initialized runtime is missing credential'
@@ -187,6 +197,8 @@ require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'could not prove r
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "'false_positive_review_id', 'detector_lifecycle_id'"
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "'lifecycle_transition_records_lifecycle_state_known_values'"
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "pg_get_indexdef(indexrelid, 1, true) = 'idempotency_key'"
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'CREATE INDEX reconciliation_records_correlation_alert_latest_idx ON aegisops_control.reconciliation_records USING btree (correlation_key, compared_at DESC, reconciliation_id DESC) WHERE (alert_id IS NOT NULL)'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'CREATE INDEX ai_trace_records_latest_idx ON aegisops_control.ai_trace_records USING btree (generated_at DESC, ai_trace_id DESC)'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'exec "$@"'
 require_fixed_string "${preflight}" 'colima status --profile "${AEGISOPS_LAB_COLIMA_PROFILE}" --json'
 require_fixed_string "${preflight}" 'Shuffle 2.2.1 is amd64-only'
@@ -216,9 +228,18 @@ require_adjacent_lines \
   'mark_wazuh_recreation_required' \
   'python3 - \'
 require_fixed_string "${prepare}" 'OPENSEARCH_JAVA_HOME=/usr/share/wazuh-indexer/jdk'
+require_fixed_string "${compose}" 'OPENSEARCH_JAVA_HOME: /usr/share/wazuh-indexer/jdk'
 require_fixed_string "${common}" 'diff --quiet HEAD --'
-require_fixed_string "${prepare}" 'replace_admin_hash(current, placeholder)'
+require_fixed_string "${prepare}" 'replace_user_hash(document: str, username: str, replacement: str)'
+require_fixed_string "${prepare}" '"kibanaserver", dashboard_hash'
+require_fixed_string "${prepare}" '("kibanaro", "logstash", "readall", "snapshotrestore")'
+require_fixed_string "${prepare}" 'disabled_demo_hash'
 require_fixed_string "${prepare}" 'record_reviewed_file_digest'
+require_fixed_string "${proxy_config}" 'server_name wazuh.localhost;'
+require_fixed_string "${proxy_config}" 'server_name shuffle.localhost;'
+require_fixed_string "${proxy_config}" 'proxy_pass $phase67_wazuh_dashboard;'
+require_fixed_string "${proxy_config}" 'proxy_pass $phase67_shuffle_frontend;'
+require_fixed_string "${proxy_config}" 'resolver 127.0.0.11 ipv6=off valid=10s;'
 require_fixed_string "${lab_dir}/up.sh" 'assert_reviewed_wazuh_checkout'
 require_fixed_string "${lab_dir}/up.sh" 'assert_reviewed_file_digest'
 require_fixed_string "${lab_dir}/up.sh" 'proxy-certificate-recreate-required'
@@ -249,8 +270,13 @@ require_fixed_string "${runbook}" 'recheck the checkout and digest immediately b
 require_fixed_string "${runbook}" 'Phase 67.1 resource-label proof'
 require_fixed_string "${repo_root}/README.md" '[Phase 67.1 Colima integration lab]'
 require_fixed_string "${repo_root}/control-plane/README.md" '`deployment/phase-67-integration-lab/`'
-require_fixed_string "${repo_root}/.dockerignore" '!control-plane/**'
-require_fixed_string "${repo_root}/.dockerignore" '!postgres/control-plane/migrations/**'
+require_fixed_string "${dockerignore}" '!control-plane/**'
+require_fixed_string "${dockerignore}" '!postgres/control-plane/migrations/**'
+require_fixed_string "${dockerignore}" 'control-plane/deployment/first-boot/secrets/'
+require_fixed_string "${dockerignore}" 'control-plane/deployment/first-boot/certs/'
+require_fixed_string "${dockerignore}" 'control-plane/deployment/phase-67-integration-lab/secrets/'
+require_fixed_string "${dockerignore}" 'control-plane/deployment/phase-67-integration-lab/certs/'
+require_fixed_string "${dockerignore}" 'control-plane/deployment/phase-67-integration-lab/substrates/'
 require_fixed_string "${repo_root}/.github/workflows/ci.yml" 'bash scripts/verify-phase-67-1-colima-integration-lab.sh'
 require_fixed_string "${repo_root}/.github/workflows/ci.yml" 'bash scripts/test-verify-phase-67-1-colima-integration-lab.sh'
 
@@ -273,5 +299,13 @@ fi
 if grep -E -- '^[[:space:]]*-[[:space:]]*"\$\{AEGISOPS_LAB_.*_PORT' "${compose}" >/dev/null; then
   fail "Phase 67.1 published ports must remain bound to 127.0.0.1."
 fi
+require_absent_string \
+  "${compose}" \
+  'AEGISOPS_LAB_WAZUH_DASHBOARD_PORT' \
+  "Wazuh dashboard must not be published outside the approved proxy."
+require_absent_string \
+  "${compose}" \
+  'AEGISOPS_LAB_SHUFFLE_FRONTEND_PORT' \
+  "Shuffle frontend must not be published outside the approved proxy."
 
 echo "Phase 67.1 Colima integration lab contract verified."

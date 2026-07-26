@@ -120,6 +120,11 @@ SELECT CASE
     WHERE indexrelid = 'aegisops_control.reconciliation_records_correlation_alert_latest_idx'::regclass
       AND indrelid = 'aegisops_control.reconciliation_records'::regclass
       AND indisvalid
+      AND NOT indisunique
+      AND indnkeyatts = 3
+      AND indnatts = 3
+      AND indexprs IS NULL
+      AND pg_get_indexdef(indexrelid) = 'CREATE INDEX reconciliation_records_correlation_alert_latest_idx ON aegisops_control.reconciliation_records USING btree (correlation_key, compared_at DESC, reconciliation_id DESC) WHERE (alert_id IS NOT NULL)'
   )
   THEN 'ready' ELSE 'not-ready'
 END;
@@ -134,6 +139,12 @@ SELECT CASE
     WHERE indexrelid = 'aegisops_control.ai_trace_records_latest_idx'::regclass
       AND indrelid = 'aegisops_control.ai_trace_records'::regclass
       AND indisvalid
+      AND NOT indisunique
+      AND indnkeyatts = 2
+      AND indnatts = 2
+      AND indexprs IS NULL
+      AND indpred IS NULL
+      AND pg_get_indexdef(indexrelid) = 'CREATE INDEX ai_trace_records_latest_idx ON aegisops_control.ai_trace_records USING btree (generated_at DESC, ai_trace_id DESC)'
   )
   THEN 'ready' ELSE 'not-ready'
 END;

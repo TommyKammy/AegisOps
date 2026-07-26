@@ -82,6 +82,24 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             "bash scripts/test-verify-phase-67-1-colima-integration-lab.sh", workflow
         )
 
+    def test_docker_context_excludes_generated_credentials_and_certificates(
+        self,
+    ) -> None:
+        dockerignore = (REPO_ROOT / ".dockerignore").read_text(encoding="utf-8")
+        for excluded_path in (
+            "control-plane/deployment/first-boot/generated/",
+            "control-plane/deployment/first-boot/runtime/",
+            "control-plane/deployment/first-boot/secrets/",
+            "control-plane/deployment/first-boot/certs/",
+            "control-plane/deployment/phase-67-integration-lab/runtime.env",
+            "control-plane/deployment/phase-67-integration-lab/runtime/",
+            "control-plane/deployment/phase-67-integration-lab/secrets/",
+            "control-plane/deployment/phase-67-integration-lab/certs/",
+            "control-plane/deployment/phase-67-integration-lab/evidence/",
+            "control-plane/deployment/phase-67-integration-lab/substrates/",
+        ):
+            self.assertIn(excluded_path, dockerignore)
+
     def test_init_generates_untracked_runtime_secrets_and_tls(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = pathlib.Path(tmpdir)
@@ -112,6 +130,7 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 "break-glass-token",
                 "wazuh-indexer-password",
                 "wazuh-api-password",
+                "wazuh-dashboard-password",
                 "shuffle-opensearch-password",
                 "shuffle-encryption-modifier",
             ):
@@ -120,16 +139,41 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 self.assertEqual(stat.S_IMODE(secret.stat().st_mode), 0o600)
                 self.assertTrue(secret.read_text(encoding="utf-8").strip())
 
-            shuffle_password = (
-                runtime_root / "secrets" / "shuffle-opensearch-password"
-            ).read_text(encoding="utf-8")
-            self.assertRegex(shuffle_password, r"[A-Z]")
-            self.assertRegex(shuffle_password, r"[a-z]")
-            self.assertRegex(shuffle_password, r"[0-9]")
-            self.assertRegex(shuffle_password, r"[^A-Za-z0-9]")
+            for strong_password_name in (
+                "wazuh-dashboard-password",
+                "shuffle-opensearch-password",
+            ):
+                strong_password = (
+                    runtime_root / "secrets" / strong_password_name
+                ).read_text(encoding="utf-8")
+                self.assertRegex(strong_password, r"[A-Z]")
+                self.assertRegex(strong_password, r"[a-z]")
+                self.assertRegex(strong_password, r"[0-9]")
+                self.assertRegex(strong_password, r"[^A-Za-z0-9]")
 
-            self.assertTrue((runtime_root / "proxy-certs" / "lab.crt").is_file())
+            certificate = runtime_root / "proxy-certs" / "lab.crt"
+            self.assertTrue(certificate.is_file())
             self.assertTrue((runtime_root / "proxy-certs" / "lab.key").is_file())
+            certificate_text = subprocess.run(
+                [
+                    "openssl",
+                    "x509",
+                    "-in",
+                    str(certificate),
+                    "-noout",
+                    "-text",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+            for required_san in (
+                "DNS:localhost",
+                "DNS:wazuh.localhost",
+                "DNS:shuffle.localhost",
+                "IP Address:127.0.0.1",
+            ):
+                self.assertIn(required_san, certificate_text)
 
     def test_init_reapplies_bootstrap_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -334,9 +378,9 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
     def test_selected_scope_checks_only_published_ports(self) -> None:
         expected = {
             "core": ["PROXY"],
-            "wazuh": ["PROXY", "WAZUH_DASHBOARD"],
-            "shuffle": ["PROXY", "SHUFFLE_FRONTEND"],
-            "full": ["PROXY", "WAZUH_DASHBOARD", "SHUFFLE_FRONTEND"],
+            "wazuh": ["PROXY"],
+            "shuffle": ["PROXY"],
+            "full": ["PROXY"],
         }
         for scope, port_names in expected.items():
             result = subprocess.run(
@@ -356,11 +400,7 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             self.assertEqual(result.stdout.splitlines(), port_names)
 
     def test_published_ports_map_to_expected_compose_services(self) -> None:
-        expected = {
-            "PROXY": "proxy",
-            "WAZUH_DASHBOARD": "wazuh-dashboard",
-            "SHUFFLE_FRONTEND": "shuffle-frontend",
-        }
+        expected = {"PROXY": "proxy"}
         for port_name, service_name in expected.items():
             result = subprocess.run(
                 [
@@ -378,30 +418,17 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.strip(), service_name)
 
-    def test_selected_scope_rejects_duplicate_ports(self) -> None:
-        env = os.environ.copy()
-        env.update(
-            {
-                "AEGISOPS_LAB_PROXY_PORT": "18443",
-                "AEGISOPS_LAB_WAZUH_DASHBOARD_PORT": "18443",
-                "AEGISOPS_LAB_SHUFFLE_FRONTEND_PORT": "13001",
-            }
+    def test_user_interfaces_are_available_only_through_the_proxy(self) -> None:
+        compose = (LAB_DIR / "docker-compose.yml").read_text(encoding="utf-8")
+        proxy = (LAB_DIR / "config" / "control-plane.conf").read_text(
+            encoding="utf-8"
         )
-        result = subprocess.run(
-            [
-                "bash",
-                "-c",
-                'source "$1"; assert_unique_selected_ports full',
-                "phase67-port-test",
-                str(LAB_DIR / "lab-common.sh"),
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("assigns duplicate host port 18443", result.stderr)
+        self.assertNotIn("AEGISOPS_LAB_WAZUH_DASHBOARD_PORT", compose)
+        self.assertNotIn("AEGISOPS_LAB_SHUFFLE_FRONTEND_PORT", compose)
+        self.assertIn("server_name wazuh.localhost;", proxy)
+        self.assertIn("server_name shuffle.localhost;", proxy)
+        self.assertIn("proxy_pass $phase67_wazuh_dashboard;", proxy)
+        self.assertIn("proxy_pass $phase67_shuffle_frontend;", proxy)
 
     def test_selected_scope_checks_only_active_service_addresses(self) -> None:
         expected = {
@@ -490,6 +517,20 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             "pg_get_indexdef(indexrelid, 1, true) = 'idempotency_key'",
             entrypoint,
         )
+        self.assertIn(
+            "pg_get_indexdef(indexrelid) = 'CREATE INDEX "
+            "reconciliation_records_correlation_alert_latest_idx ON "
+            "aegisops_control.reconciliation_records USING btree "
+            "(correlation_key, compared_at DESC, reconciliation_id DESC) "
+            "WHERE (alert_id IS NOT NULL)'",
+            entrypoint,
+        )
+        self.assertIn(
+            "pg_get_indexdef(indexrelid) = 'CREATE INDEX "
+            "ai_trace_records_latest_idx ON aegisops_control.ai_trace_records "
+            "USING btree (generated_at DESC, ai_trace_id DESC)'",
+            entrypoint,
+        )
 
     def test_custom_bootstrap_documentation_keeps_override_exported(self) -> None:
         readme = (LAB_DIR / "README.md").read_text(encoding="utf-8")
@@ -561,9 +602,14 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             "The next wazuh/full up.sh run will force service recreation.",
             prepare,
         )
-        self.assertIn("replace_admin_hash(current, placeholder)", prepare)
+        self.assertIn("normalize_managed_hashes(current)", prepare)
+        self.assertIn('"kibanaserver", dashboard_hash', prepare)
         self.assertIn(
-            "unreviewed changes outside the managed admin hash",
+            '("kibanaro", "logstash", "readall", "snapshotrestore")',
+            prepare,
+        )
+        self.assertIn(
+            "unreviewed changes outside managed hashes",
             prepare,
         )
 
@@ -838,6 +884,50 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 second.stderr,
             )
             self.assertFalse(missing_credential.exists())
+
+    def test_init_migrates_dashboard_credential_once_then_fails_closed(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            first = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(first.returncode, 0, first.stderr)
+            runtime_root = (
+                home / ".local" / "share" / "aegisops" / "phase-67-integration-lab"
+            )
+            runtime_env = runtime_root / "runtime.env"
+            dashboard_credential = (
+                runtime_root / "secrets" / "wazuh-dashboard-password"
+            )
+
+            legacy_runtime_lines = [
+                line
+                for line in runtime_env.read_text(encoding="utf-8").splitlines()
+                if not line.startswith("AEGISOPS_LAB_WAZUH_DASHBOARD_PASSWORD=")
+            ]
+            runtime_env.write_text(
+                "\n".join(legacy_runtime_lines) + "\n",
+                encoding="utf-8",
+            )
+            dashboard_credential.unlink()
+
+            migrated = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(migrated.returncode, 0, migrated.stderr)
+            self.assertTrue(dashboard_credential.is_file())
+            self.assertIn(
+                "AEGISOPS_LAB_WAZUH_DASHBOARD_PASSWORD=",
+                runtime_env.read_text(encoding="utf-8"),
+            )
+
+            dashboard_credential.unlink()
+            missing = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn(
+                "initialized runtime is missing credential "
+                "wazuh-dashboard-password",
+                missing.stderr,
+            )
+            self.assertFalse(dashboard_credential.exists())
 
     def test_init_rejects_preserved_volumes_when_runtime_environment_is_missing(
         self,
