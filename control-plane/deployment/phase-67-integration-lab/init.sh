@@ -166,6 +166,31 @@ if [[ "${rotate_proxy_certificate}" == "true" ]]; then
 fi
 chmod 600 "${cert_dir}/lab.key" "${cert_dir}/lab.crt"
 
+wazuh_root_ca="${wazuh_config_dir}/wazuh_indexer_ssl_certs/root-ca.pem"
+proxy_wazuh_trust="${cert_dir}/wazuh-upstream-root-ca.pem"
+desired_proxy_wazuh_trust="${cert_dir}/lab.crt"
+if [[ -e "${wazuh_root_ca}" ]]; then
+  [[ -s "${wazuh_root_ca}" ]] \
+    || fail "Wazuh root CA is empty; run prepare-substrates.sh before starting Wazuh"
+  openssl x509 -in "${wazuh_root_ca}" -noout >/dev/null 2>&1 \
+    || fail "Wazuh root CA is invalid; run prepare-substrates.sh before starting Wazuh"
+  openssl x509 -checkend 604800 -noout -in "${wazuh_root_ca}" >/dev/null 2>&1 \
+    || fail "Wazuh root CA expires within seven days; run prepare-substrates.sh before starting Wazuh"
+  desired_proxy_wazuh_trust="${wazuh_root_ca}"
+fi
+if ! cmp -s "${desired_proxy_wazuh_trust}" "${proxy_wazuh_trust}"; then
+  if [[ -e "${proxy_wazuh_trust}" || "${runtime_previously_initialized}" == "true" ]]; then
+    proxy_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/proxy-certificate-recreate-required"
+    : >"${proxy_recreate_marker}"
+    chmod 600 "${proxy_recreate_marker}"
+  fi
+  proxy_wazuh_trust_staging="$(mktemp "${cert_dir}/.wazuh-upstream-root-ca.XXXXXX")"
+  cp "${desired_proxy_wazuh_trust}" "${proxy_wazuh_trust_staging}"
+  chmod 600 "${proxy_wazuh_trust_staging}"
+  mv "${proxy_wazuh_trust_staging}" "${proxy_wazuh_trust}"
+fi
+chmod 600 "${proxy_wazuh_trust}"
+
 write_runtime_env_assignment() {
   local name="$1"
   local value="$2"
@@ -235,6 +260,6 @@ trap - EXIT
 
 echo "Initialized Phase 67.1 runtime at ${AEGISOPS_LAB_RUNTIME_ROOT}"
 if [[ -f "${AEGISOPS_LAB_RUNTIME_ROOT}/proxy-certificate-recreate-required" ]]; then
-  echo "Proxy certificate rotated; the next up.sh run will force service recreation."
+  echo "Proxy certificate or trust bundle changed; the next up.sh run will force service recreation."
 fi
 echo "Next: ${LAB_DIR}/preflight.sh --write-evidence"

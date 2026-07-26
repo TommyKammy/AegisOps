@@ -105,6 +105,8 @@ readme="${lab_dir}/README.md"
 runbook="${lab_dir}/RUNBOOK.md"
 proxy_config="${lab_dir}/config/control-plane.conf"
 dockerignore="${repo_root}/.dockerignore"
+control_plane_dockerfile="${repo_root}/control-plane/deployment/first-boot/Dockerfile"
+require_file "${control_plane_dockerfile}"
 
 required_compose_lines=(
   'name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}'
@@ -130,6 +132,9 @@ required_compose_lines=(
   'wazuh/wazuh-dashboard:4.14.6@sha256:'
   'ghcr.io/shuffle/shuffle-backend:2.2.1@sha256:'
   'ghcr.io/shuffle/shuffle-frontend:2.2.1@sha256:'
+  'postgres:16.4@sha256:'
+  'nginx:1.27.0@sha256:'
+  'opensearchproject/opensearch:3.2.0@sha256:'
 )
 for line in "${required_compose_lines[@]}"; do
   require_fixed_string "${compose}" "${line}"
@@ -164,6 +169,8 @@ require_fixed_string "${common}" 'record_reviewed_file_digest'
 require_fixed_string "${common}" 'assert_reviewed_file_digest'
 require_fixed_string "${common}" 'pathlib.Path(sys.argv[1]).resolve(strict=False)'
 require_fixed_string "${common}" 'assert_phase67_compose_project_ownership'
+require_fixed_string "${common}" 'excluded_services_for_scope'
+require_fixed_string "${common}" 'assert_no_running_excluded_services'
 require_fixed_string "${common}" 'assert_no_preserved_phase67_volumes'
 require_fixed_string "${common}" 'repository_runtime_state='
 require_fixed_string "${common}" 'repository_runtime_artifact_sha256='
@@ -183,6 +190,8 @@ require_fixed_string "${init}" 'wazuh-dashboard-password'
 require_fixed_string "${init}" 'AEGISOPS_LAB_WAZUH_DASHBOARD_PASSWORD'
 require_fixed_string "${init}" 'write_runtime_env_assignment AEGISOPS_LAB_RUNTIME_ROOT'
 require_fixed_string "${init}" 'proxy-certificate-recreate-required'
+require_fixed_string "${init}" 'wazuh-upstream-root-ca.pem'
+require_fixed_string "${init}" 'desired_proxy_wazuh_trust'
 require_fixed_string "${init}" 'initialized runtime is missing credential'
 require_fixed_string "${init}" '"${runtime_previously_initialized}" == "true"'
 require_fixed_string "${init}" 'assert_no_preserved_phase67_volumes'
@@ -196,6 +205,11 @@ require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'prove_migration_s
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'could not prove reviewed schema state for recorded migration'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "'false_positive_review_id', 'detector_lifecycle_id'"
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "'lifecycle_transition_records_lifecycle_state_known_values'"
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "('evidence_records', 'provenance', 'jsonb', 'NO', \$default\$'{}'::jsonb\$default\$)"
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'SELECT table_name, column_name, udt_name, is_nullable, column_default'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'AND column_default IS NULL'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'pg_get_constraintdef(constraint_record.oid, true)'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'AND constraint_record.convalidated'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "pg_get_indexdef(indexrelid, 1, true) = 'idempotency_key'"
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'CREATE INDEX reconciliation_records_correlation_alert_latest_idx ON aegisops_control.reconciliation_records USING btree (correlation_key, compared_at DESC, reconciliation_id DESC) WHERE (alert_id IS NOT NULL)'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'CREATE INDEX ai_trace_records_latest_idx ON aegisops_control.ai_trace_records USING btree (generated_at DESC, ai_trace_id DESC)'
@@ -235,13 +249,23 @@ require_fixed_string "${prepare}" '"kibanaserver", dashboard_hash'
 require_fixed_string "${prepare}" '("kibanaro", "logstash", "readall", "snapshotrestore")'
 require_fixed_string "${prepare}" 'disabled_demo_hash'
 require_fixed_string "${prepare}" 'record_reviewed_file_digest'
+require_fixed_string "${prepare}" 'wazuh/wazuh-certs-generator:0.0.4@sha256:'
+require_fixed_string "${prepare}" 'proxy_wazuh_trust="${AEGISOPS_LAB_PROXY_CERT_DIR}/wazuh-upstream-root-ca.pem"'
 require_fixed_string "${proxy_config}" 'server_name wazuh.localhost;'
 require_fixed_string "${proxy_config}" 'server_name shuffle.localhost;'
 require_fixed_string "${proxy_config}" 'proxy_pass $phase67_wazuh_dashboard;'
 require_fixed_string "${proxy_config}" 'proxy_pass $phase67_shuffle_frontend;'
 require_fixed_string "${proxy_config}" 'resolver 127.0.0.11 ipv6=off valid=10s;'
+require_fixed_string "${proxy_config}" 'proxy_ssl_trusted_certificate /etc/nginx/certs/wazuh-upstream-root-ca.pem;'
+require_fixed_string "${proxy_config}" 'proxy_ssl_verify on;'
+require_absent_string \
+  "${proxy_config}" \
+  'proxy_ssl_verify off;' \
+  "Wazuh dashboard upstream TLS verification must remain enabled."
 require_fixed_string "${lab_dir}/up.sh" 'assert_reviewed_wazuh_checkout'
 require_fixed_string "${lab_dir}/up.sh" 'assert_reviewed_file_digest'
+require_fixed_string "${lab_dir}/up.sh" 'assert_no_running_excluded_services "${scope}"'
+require_fixed_string "${lab_dir}/up.sh" 'proxy Wazuh trust certificate is stale'
 require_fixed_string "${lab_dir}/up.sh" 'proxy-certificate-recreate-required'
 require_fixed_string "${lab_dir}/up.sh" 'wazuh-certificate-recreate-required'
 require_fixed_string "${lab_dir}/up.sh" 'force_recreate=false'
@@ -266,7 +290,7 @@ require_fixed_string "${runbook}" 'Preflight is read-only with respect to Colima
 require_fixed_string "${runbook}" 'validates cached certificate expiry, chains, and key pairs'
 require_fixed_string "${runbook}" 'initialized runtime credential missing'
 require_fixed_string "${runbook}" 'repository runtime state and artifact SHA-256'
-require_fixed_string "${runbook}" 'recheck the checkout and digest immediately before startup'
+require_fixed_string "${runbook}" 'recheck the checkout, digest, certificate bundle, and proxy trust copy immediately before startup'
 require_fixed_string "${runbook}" 'Phase 67.1 resource-label proof'
 require_fixed_string "${repo_root}/README.md" '[Phase 67.1 Colima integration lab]'
 require_fixed_string "${repo_root}/control-plane/README.md" '`deployment/phase-67-integration-lab/`'
@@ -293,6 +317,19 @@ fi
 if grep -E -- 'image:.*:latest([@[:space:]]|$)' "${compose}" >/dev/null; then
   fail "Phase 67.1 lab images must not use latest tags."
 fi
+while IFS= read -r image_reference; do
+  if [[ "${image_reference}" == *'-control-plane:local' ]]; then
+    continue
+  fi
+  [[ "${image_reference}" =~ @sha256:[0-9a-f]{64}$ ]] \
+    || fail "Phase 67.1 must pin every external Compose image by digest: ${image_reference}"
+done < <(sed -n -E 's/^[[:space:]]*image:[[:space:]]*//p' "${compose}")
+head -n 1 "${control_plane_dockerfile}" |
+  grep -E '^FROM python:3\.12-slim-bookworm@sha256:[0-9a-f]{64}$' >/dev/null \
+  || fail "Phase 67.1 control-plane base image must be pinned by digest."
+grep -E 'cert_image="wazuh/wazuh-certs-generator:0\.0\.4@sha256:[0-9a-f]{64}"' \
+  "${prepare}" >/dev/null \
+  || fail "Phase 67.1 Wazuh certificate generator must be pinned by digest."
 if grep -F -- '--volumes' "${down}" "${cleanup}" >/dev/null; then
   fail "Ordinary Phase 67.1 stop and cleanup commands must preserve named volumes."
 fi

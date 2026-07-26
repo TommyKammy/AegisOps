@@ -30,63 +30,131 @@ migration_readiness_query() {
   case "$1" in
     0008_phase_25_osquery_host_context_columns.sql)
       cat <<'EOF'
-SELECT CASE WHEN (
-  SELECT COUNT(*)
+WITH required_columns(table_name, column_name, udt_name, is_nullable, column_default) AS (
+  VALUES
+    ('evidence_records', 'provenance', 'jsonb', 'NO', $default$'{}'::jsonb$default$),
+    ('evidence_records', 'content', 'jsonb', 'NO', $default$'{}'::jsonb$default$),
+    ('observation_records', 'provenance', 'jsonb', 'NO', $default$'{}'::jsonb$default$),
+    ('observation_records', 'content', 'jsonb', 'NO', $default$'{}'::jsonb$default$)
+)
+SELECT CASE WHEN NOT EXISTS (
+  SELECT table_name, column_name, udt_name, is_nullable, column_default
+  FROM required_columns
+  EXCEPT
+  SELECT table_name, column_name, udt_name, is_nullable, column_default
   FROM information_schema.columns
   WHERE table_schema = 'aegisops_control'
-    AND (table_name, column_name) IN (
-      VALUES
-        ('evidence_records', 'provenance'),
-        ('evidence_records', 'content'),
-        ('observation_records', 'provenance'),
-        ('observation_records', 'content')
-    )
-) = 4 THEN 'ready' ELSE 'not-ready' END;
+) THEN 'ready' ELSE 'not-ready' END;
 EOF
       ;;
     0009_phase_26_external_ticket_reference_columns.sql)
       cat <<'EOF'
-WITH required_constraints(table_name, constraint_name) AS (
+WITH required_columns(table_name, column_name, udt_name, is_nullable) AS (
   VALUES
-    ('alert_records', 'alert_records_coordination_reference_fields_complete'),
-    ('alert_records', 'alert_records_coordination_target_type_reviewed'),
-    ('alert_records', 'alert_records_ticket_reference_url_https'),
-    ('alert_records', 'alert_records_coordination_reference_id_bounded'),
-    ('alert_records', 'alert_records_coordination_target_type_bounded'),
-    ('alert_records', 'alert_records_coordination_target_id_bounded'),
-    ('alert_records', 'alert_records_ticket_reference_url_bounded'),
-    ('case_records', 'case_records_coordination_reference_fields_complete'),
-    ('case_records', 'case_records_coordination_target_type_reviewed'),
-    ('case_records', 'case_records_ticket_reference_url_https'),
-    ('case_records', 'case_records_coordination_reference_id_bounded'),
-    ('case_records', 'case_records_coordination_target_type_bounded'),
-    ('case_records', 'case_records_coordination_target_id_bounded'),
-    ('case_records', 'case_records_ticket_reference_url_bounded')
+    ('alert_records', 'coordination_reference_id', 'text', 'YES'),
+    ('alert_records', 'coordination_target_type', 'text', 'YES'),
+    ('alert_records', 'coordination_target_id', 'text', 'YES'),
+    ('alert_records', 'ticket_reference_url', 'text', 'YES'),
+    ('case_records', 'coordination_reference_id', 'text', 'YES'),
+    ('case_records', 'coordination_target_type', 'text', 'YES'),
+    ('case_records', 'coordination_target_id', 'text', 'YES'),
+    ('case_records', 'ticket_reference_url', 'text', 'YES')
+),
+required_constraints(table_name, constraint_name, constraint_definition) AS (
+  VALUES
+    (
+      'alert_records',
+      'alert_records_coordination_reference_fields_complete',
+      $constraint$CHECK (coordination_reference_id IS NULL AND coordination_target_type IS NULL AND coordination_target_id IS NULL AND ticket_reference_url IS NULL OR NULLIF(btrim(coordination_reference_id), ''::text) IS NOT NULL AND NULLIF(btrim(coordination_target_type), ''::text) IS NOT NULL AND NULLIF(btrim(coordination_target_id), ''::text) IS NOT NULL AND NULLIF(btrim(ticket_reference_url), ''::text) IS NOT NULL)$constraint$
+    ),
+    (
+      'alert_records',
+      'alert_records_coordination_target_type_reviewed',
+      $constraint$CHECK (coordination_target_type IS NULL OR (coordination_target_type = ANY (ARRAY['glpi'::text, 'zammad'::text])))$constraint$
+    ),
+    (
+      'alert_records',
+      'alert_records_ticket_reference_url_https',
+      $constraint$CHECK (ticket_reference_url IS NULL OR ticket_reference_url ~* '^https://[^/?#[:space:]]+([/?#][^[:space:]]*)?$'::text)$constraint$
+    ),
+    (
+      'alert_records',
+      'alert_records_coordination_reference_id_bounded',
+      $constraint$CHECK (coordination_reference_id IS NULL OR char_length(coordination_reference_id) <= 128)$constraint$
+    ),
+    (
+      'alert_records',
+      'alert_records_coordination_target_type_bounded',
+      $constraint$CHECK (coordination_target_type IS NULL OR char_length(coordination_target_type) <= 32)$constraint$
+    ),
+    (
+      'alert_records',
+      'alert_records_coordination_target_id_bounded',
+      $constraint$CHECK (coordination_target_id IS NULL OR char_length(coordination_target_id) <= 256)$constraint$
+    ),
+    (
+      'alert_records',
+      'alert_records_ticket_reference_url_bounded',
+      $constraint$CHECK (ticket_reference_url IS NULL OR char_length(ticket_reference_url) <= 2048)$constraint$
+    ),
+    (
+      'case_records',
+      'case_records_coordination_reference_fields_complete',
+      $constraint$CHECK (coordination_reference_id IS NULL AND coordination_target_type IS NULL AND coordination_target_id IS NULL AND ticket_reference_url IS NULL OR NULLIF(btrim(coordination_reference_id), ''::text) IS NOT NULL AND NULLIF(btrim(coordination_target_type), ''::text) IS NOT NULL AND NULLIF(btrim(coordination_target_id), ''::text) IS NOT NULL AND NULLIF(btrim(ticket_reference_url), ''::text) IS NOT NULL)$constraint$
+    ),
+    (
+      'case_records',
+      'case_records_coordination_target_type_reviewed',
+      $constraint$CHECK (coordination_target_type IS NULL OR (coordination_target_type = ANY (ARRAY['glpi'::text, 'zammad'::text])))$constraint$
+    ),
+    (
+      'case_records',
+      'case_records_ticket_reference_url_https',
+      $constraint$CHECK (ticket_reference_url IS NULL OR ticket_reference_url ~* '^https://[^/?#[:space:]]+([/?#][^[:space:]]*)?$'::text)$constraint$
+    ),
+    (
+      'case_records',
+      'case_records_coordination_reference_id_bounded',
+      $constraint$CHECK (coordination_reference_id IS NULL OR char_length(coordination_reference_id) <= 128)$constraint$
+    ),
+    (
+      'case_records',
+      'case_records_coordination_target_type_bounded',
+      $constraint$CHECK (coordination_target_type IS NULL OR char_length(coordination_target_type) <= 32)$constraint$
+    ),
+    (
+      'case_records',
+      'case_records_coordination_target_id_bounded',
+      $constraint$CHECK (coordination_target_id IS NULL OR char_length(coordination_target_id) <= 256)$constraint$
+    ),
+    (
+      'case_records',
+      'case_records_ticket_reference_url_bounded',
+      $constraint$CHECK (ticket_reference_url IS NULL OR char_length(ticket_reference_url) <= 2048)$constraint$
+    )
 )
-SELECT CASE WHEN (
-    SELECT COUNT(*)
+SELECT CASE WHEN NOT EXISTS (
+    SELECT table_name, column_name, udt_name, is_nullable
+    FROM required_columns
+    EXCEPT
+    SELECT table_name, column_name, udt_name, is_nullable
     FROM information_schema.columns
     WHERE table_schema = 'aegisops_control'
-      AND (table_name, column_name) IN (
-        VALUES
-          ('alert_records', 'coordination_reference_id'),
-          ('alert_records', 'coordination_target_type'),
-          ('alert_records', 'coordination_target_id'),
-          ('alert_records', 'ticket_reference_url'),
-          ('case_records', 'coordination_reference_id'),
-          ('case_records', 'coordination_target_type'),
-          ('case_records', 'coordination_target_id'),
-          ('case_records', 'ticket_reference_url')
-      )
-  ) = 8
+      AND column_default IS NULL
+  )
   AND NOT EXISTS (
-    SELECT table_name, constraint_name FROM required_constraints
+    SELECT table_name, constraint_name, constraint_definition
+    FROM required_constraints
     EXCEPT
-    SELECT relation.relname, constraint_record.conname
+    SELECT
+      relation.relname,
+      constraint_record.conname,
+      pg_get_constraintdef(constraint_record.oid, true)
     FROM pg_constraint AS constraint_record
     JOIN pg_class AS relation ON relation.oid = constraint_record.conrelid
     WHERE constraint_record.connamespace = 'aegisops_control'::regnamespace
       AND constraint_record.contype = 'c'
+      AND constraint_record.convalidated
   )
 THEN 'ready' ELSE 'not-ready' END;
 EOF

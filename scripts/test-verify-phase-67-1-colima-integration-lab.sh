@@ -12,9 +12,12 @@ copy_fixture() {
   mkdir -p \
     "${target}/scripts" \
     "${target}/control-plane/deployment" \
+    "${target}/control-plane/deployment/first-boot" \
     "${target}/.github/workflows"
   cp -R "${repo_root}/control-plane/deployment/phase-67-integration-lab" \
     "${target}/control-plane/deployment/"
+  cp "${repo_root}/control-plane/deployment/first-boot/Dockerfile" \
+    "${target}/control-plane/deployment/first-boot/Dockerfile"
   cp "${repo_root}/README.md" "${target}/README.md"
   cp "${repo_root}/control-plane/README.md" "${target}/control-plane/README.md"
   cp "${repo_root}/.gitignore" "${target}/.gitignore"
@@ -75,15 +78,40 @@ copy_fixture "${latest_image}"
 printf '\n# image: example.invalid/lab:latest\n' >>"${latest_image}/control-plane/deployment/phase-67-integration-lab/docker-compose.yml"
 assert_fails_with "${latest_image}" 'must not use latest tags'
 
+unpinned_image="${workdir}/unpinned-image"
+copy_fixture "${unpinned_image}"
+perl -0pi -e 's#postgres:16\.4\@sha256:[0-9a-f]{64}#postgres:16.4\@sha256:unpinned#' \
+  "${unpinned_image}/control-plane/deployment/phase-67-integration-lab/docker-compose.yml"
+assert_fails_with "${unpinned_image}" 'must pin every external Compose image by digest'
+
 migration_proof_drift="${workdir}/migration-proof-drift"
 copy_fixture "${migration_proof_drift}"
 perl -0pi -e 's/prove_migration_state/prove_removed_migration_state/g' \
   "${migration_proof_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
 assert_fails_with "${migration_proof_drift}" 'prove_migration_state'
 
+migration_definition_drift="${workdir}/migration-definition-drift"
+copy_fixture "${migration_definition_drift}"
+perl -0pi -e 's/pg_get_constraintdef\(constraint_record\.oid, true\)/removed_constraint_definition/g' \
+  "${migration_definition_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
+assert_fails_with "${migration_definition_drift}" 'pg_get_constraintdef(constraint_record.oid, true)'
+
+scope_narrowing_drift="${workdir}/scope-narrowing-drift"
+copy_fixture "${scope_narrowing_drift}"
+perl -0pi -e 's/assert_no_running_excluded_services/assert_removed_running_excluded_services/g' \
+  "${scope_narrowing_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh" \
+  "${scope_narrowing_drift}/control-plane/deployment/phase-67-integration-lab/up.sh"
+assert_fails_with "${scope_narrowing_drift}" 'assert_no_running_excluded_services'
+
+wazuh_upstream_tls_drift="${workdir}/wazuh-upstream-tls-drift"
+copy_fixture "${wazuh_upstream_tls_drift}"
+perl -0pi -e 's/proxy_ssl_verify on;/proxy_ssl_verify off;/' \
+  "${wazuh_upstream_tls_drift}/control-plane/deployment/phase-67-integration-lab/config/control-plane.conf"
+assert_fails_with "${wazuh_upstream_tls_drift}" 'proxy_ssl_verify on;'
+
 certificate_renewal_drift="${workdir}/certificate-renewal-drift"
 copy_fixture "${certificate_renewal_drift}"
-perl -0pi -e 's/openssl x509 -checkend 604800/openssl x509 -noout/' \
+perl -0pi -e 's/openssl x509 -checkend 604800/openssl x509 -noout/g' \
   "${certificate_renewal_drift}/control-plane/deployment/phase-67-integration-lab/init.sh"
 assert_fails_with "${certificate_renewal_drift}" 'openssl x509 -checkend 604800'
 
@@ -133,7 +161,7 @@ assert_fails_with "${proxy_recreate_drift}" 'proxy-certificate-recreate-required
 
 proxy_deleted_pair_drift="${workdir}/proxy-deleted-pair-drift"
 copy_fixture "${proxy_deleted_pair_drift}"
-perl -0pi -e 's/\$\{runtime_previously_initialized\}" == "true/\${runtime_previously_initialized}" == "false/' \
+perl -0pi -e 's/\$\{runtime_previously_initialized\}" == "true/\${runtime_previously_initialized}" == "false/g' \
   "${proxy_deleted_pair_drift}/control-plane/deployment/phase-67-integration-lab/init.sh"
 assert_fails_with "${proxy_deleted_pair_drift}" '"${runtime_previously_initialized}" == "true"'
 
@@ -283,6 +311,7 @@ perl -0pi -e 's/assert_phase67_compose_project_ownership/assert_removed_project_
 assert_fails_with "${teardown_ownership_drift}" 'assert_phase67_compose_project_ownership'
 
 echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof," \
+  "image-digest, migration-definition, scope-narrowing, Wazuh-upstream-TLS," \
   "certificate-renewal, network-host, duplicate-port, runtime-quoting, bounded-logs," \
   "Wazuh-checkout, teardown-recovery, proxy-recreate, Wazuh-certificate, Wazuh-marker-order," \
   "status-evidence, selected-address, published-port-evidence, reviewed-pin, architecture," \

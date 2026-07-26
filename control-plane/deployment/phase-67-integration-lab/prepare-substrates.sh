@@ -63,7 +63,7 @@ validate_wazuh_certificate_bundle "${cert_dir}" || certificates_complete=false
 if [[ "${certificates_complete}" != true ]]; then
   cert_volume="${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}-cert-staging-$$"
   cert_container="${AEGISOPS_LAB_COMPOSE_PROJECT_NAME}-cert-copy-$$"
-  cert_image="wazuh/wazuh-certs-generator:0.0.4"
+  cert_image="wazuh/wazuh-certs-generator:0.0.4@sha256:369b4d58509aab074b188596870c81584f7120e653d9ef83c591f0f785dcf325"
 
   cleanup_cert_staging() {
     docker_lab rm --force "${cert_container}" >/dev/null 2>&1 || true
@@ -98,6 +98,23 @@ fi
 
 validate_wazuh_certificate_bundle "${cert_dir}" \
   || fail "Wazuh certificate bundle failed validity, chain, or key-pair validation"
+
+proxy_wazuh_trust="${AEGISOPS_LAB_PROXY_CERT_DIR}/wazuh-upstream-root-ca.pem"
+if ! cmp -s "${cert_dir}/root-ca.pem" "${proxy_wazuh_trust}"; then
+  proxy_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/proxy-certificate-recreate-required"
+  : >"${proxy_recreate_marker}"
+  chmod 600 "${proxy_recreate_marker}"
+  proxy_wazuh_trust_staging="$(mktemp "${AEGISOPS_LAB_PROXY_CERT_DIR}/.wazuh-upstream-root-ca.XXXXXX")"
+  cleanup_proxy_wazuh_trust_staging() {
+    rm -f "${proxy_wazuh_trust_staging}"
+  }
+  trap cleanup_proxy_wazuh_trust_staging EXIT
+  cp "${cert_dir}/root-ca.pem" "${proxy_wazuh_trust_staging}"
+  chmod 600 "${proxy_wazuh_trust_staging}"
+  mv "${proxy_wazuh_trust_staging}" "${proxy_wazuh_trust}"
+  proxy_wazuh_trust_staging=""
+  trap - EXIT
+fi
 
 indexer_image="wazuh/wazuh-indexer:${AEGISOPS_LAB_WAZUH_VERSION}@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5"
 generate_indexer_password_hash() {

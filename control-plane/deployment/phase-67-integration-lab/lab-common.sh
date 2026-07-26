@@ -249,6 +249,55 @@ compose_scope() {
   esac
 }
 
+excluded_services_for_scope() {
+  case "$1" in
+    core)
+      printf '%s\n' \
+        wazuh-indexer \
+        wazuh-security-bootstrap \
+        wazuh-manager \
+        wazuh-dashboard \
+        shuffle-opensearch \
+        shuffle-backend \
+        shuffle-frontend
+      ;;
+    wazuh)
+      printf '%s\n' \
+        shuffle-opensearch \
+        shuffle-backend \
+        shuffle-frontend
+      ;;
+    shuffle)
+      printf '%s\n' \
+        wazuh-indexer \
+        wazuh-security-bootstrap \
+        wazuh-manager \
+        wazuh-dashboard
+      ;;
+    full) ;;
+    *) fail "unknown lab scope '$1'; expected core, wazuh, shuffle, or full" ;;
+  esac
+}
+
+assert_no_running_excluded_services() {
+  local scope="$1"
+  local excluded_service
+  local excluded_running=""
+  local running_services
+
+  running_services="$(compose_scope full ps --services --status running)" \
+    || fail "could not enumerate running services before applying scope '${scope}'"
+  while IFS= read -r excluded_service; do
+    [[ -z "${excluded_service}" ]] && continue
+    if grep -Fqx -- "${excluded_service}" <<<"${running_services}"; then
+      excluded_running="${excluded_running}${excluded_service}"$'\n'
+    fi
+  done < <(excluded_services_for_scope "${scope}")
+
+  [[ -z "${excluded_running}" ]] \
+    || fail "scope '${scope}' excludes running services: $(tr '\n' ' ' <<<"${excluded_running}"); run ${LAB_DIR}/down.sh before narrowing the active scope"
+}
+
 phase67_volume_suffixes() {
   printf '%s\n' \
     postgres-data \

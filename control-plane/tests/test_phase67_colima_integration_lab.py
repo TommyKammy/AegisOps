@@ -154,6 +154,14 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             certificate = runtime_root / "proxy-certs" / "lab.crt"
             self.assertTrue(certificate.is_file())
             self.assertTrue((runtime_root / "proxy-certs" / "lab.key").is_file())
+            self.assertEqual(
+                (
+                    runtime_root
+                    / "proxy-certs"
+                    / "wazuh-upstream-root-ca.pem"
+                ).read_bytes(),
+                certificate.read_bytes(),
+            )
             certificate_text = subprocess.run(
                 [
                     "openssl",
@@ -531,6 +539,107 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             "USING btree (generated_at DESC, ai_trace_id DESC)'",
             entrypoint,
         )
+        self.assertIn(
+            "('evidence_records', 'provenance', 'jsonb', 'NO', "
+            "$default$'{}'::jsonb$default$)",
+            entrypoint,
+        )
+        self.assertIn(
+            "SELECT table_name, column_name, udt_name, is_nullable, column_default",
+            entrypoint,
+        )
+        self.assertIn("AND column_default IS NULL", entrypoint)
+        self.assertIn(
+            "pg_get_constraintdef(constraint_record.oid, true)",
+            entrypoint,
+        )
+        self.assertIn("AND constraint_record.convalidated", entrypoint)
+        self.assertIn(
+            "CHECK (coordination_target_type IS NULL OR "
+            "(coordination_target_type = ANY "
+            "(ARRAY['glpi'::text, 'zammad'::text])))",
+            entrypoint,
+        )
+
+    def test_scope_narrowing_rejects_running_excluded_services(self) -> None:
+        command = (
+            'source "$1"; '
+            'compose_scope() { printf "%s\\n" "${PHASE67_RUNNING_SERVICES:-}"; }; '
+            'assert_no_running_excluded_services "$2"'
+        )
+        for scope, running_service in (
+            ("core", "wazuh-dashboard"),
+            ("wazuh", "shuffle-frontend"),
+            ("shuffle", "wazuh-manager"),
+        ):
+            with self.subTest(scope=scope, running_service=running_service):
+                env = os.environ.copy()
+                env["PHASE67_RUNNING_SERVICES"] = (
+                    f"postgres\n{running_service}\n"
+                )
+                rejected = subprocess.run(
+                    [
+                        "bash",
+                        "-c",
+                        command,
+                        "phase67-scope-test",
+                        str(LAB_DIR / "lab-common.sh"),
+                        scope,
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                )
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertIn(
+                    f"scope '{scope}' excludes running services: "
+                    f"{running_service}",
+                    rejected.stderr,
+                )
+
+        env = os.environ.copy()
+        env["PHASE67_RUNNING_SERVICES"] = "wazuh-dashboard\nshuffle-frontend\n"
+        accepted = subprocess.run(
+            [
+                "bash",
+                "-c",
+                command,
+                "phase67-scope-test",
+                str(LAB_DIR / "lab-common.sh"),
+                "full",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+
+    def test_every_external_runtime_image_is_digest_pinned(self) -> None:
+        compose = (LAB_DIR / "docker-compose.yml").read_text(encoding="utf-8")
+        for line in compose.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("image:"):
+                continue
+            image = stripped.removeprefix("image:").strip()
+            if image.endswith("-control-plane:local"):
+                continue
+            self.assertRegex(image, r"@sha256:[0-9a-f]{64}$")
+
+        dockerfile = (
+            REPO_ROOT / "control-plane" / "deployment" / "first-boot" / "Dockerfile"
+        ).read_text(encoding="utf-8")
+        self.assertRegex(
+            dockerfile.splitlines()[0],
+            r"^FROM python:3\.12-slim-bookworm@sha256:[0-9a-f]{64}$",
+        )
+        prepare = (LAB_DIR / "prepare-substrates.sh").read_text(encoding="utf-8")
+        self.assertRegex(
+            prepare,
+            r'cert_image="wazuh/wazuh-certs-generator:0\.0\.4'
+            r'@sha256:[0-9a-f]{64}"',
+        )
 
     def test_custom_bootstrap_documentation_keeps_override_exported(self) -> None:
         readme = (LAB_DIR / "README.md").read_text(encoding="utf-8")
@@ -612,6 +721,27 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             "unreviewed changes outside managed hashes",
             prepare,
         )
+        self.assertIn(
+            'proxy_wazuh_trust="${AEGISOPS_LAB_PROXY_CERT_DIR}/'
+            'wazuh-upstream-root-ca.pem"',
+            prepare,
+        )
+        self.assertLess(
+            prepare.index(': >"${proxy_recreate_marker}"'),
+            prepare.index('mv "${proxy_wazuh_trust_staging}"'),
+        )
+        self.assertIn("proxy Wazuh trust certificate is stale", up)
+
+        proxy_config = (LAB_DIR / "config" / "control-plane.conf").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "proxy_ssl_trusted_certificate "
+            "/etc/nginx/certs/wazuh-upstream-root-ca.pem;",
+            proxy_config,
+        )
+        self.assertIn("proxy_ssl_verify on;", proxy_config)
+        self.assertNotIn("proxy_ssl_verify off;", proxy_config)
 
     def test_wazuh_certificate_bundle_requires_valid_chains_and_key_pairs(
         self,
