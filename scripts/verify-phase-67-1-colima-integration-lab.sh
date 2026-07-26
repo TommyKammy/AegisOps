@@ -30,13 +30,16 @@ require_adjacent_lines() {
   local path="$1"
   local first="$2"
   local second="$3"
+  local line
+  local previous=""
 
-  awk -v first="${first}" -v second="${second}" '
-    previous == first && $0 == second { found = 1 }
-    { previous = $0 }
-    END { exit(found ? 0 : 1) }
-  ' "${path}" \
-    || fail "Missing required adjacent lines in ${path#${repo_root}/}: ${first} -> ${second}"
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    if [[ "${previous}" == "${first}" && "${line}" == "${second}" ]]; then
+      return 0
+    fi
+    previous="${line}"
+  done <"${path}"
+  fail "Missing required adjacent lines in ${path#${repo_root}/}: ${first} -> ${second}"
 }
 
 require_absent_string() {
