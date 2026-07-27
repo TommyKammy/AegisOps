@@ -121,8 +121,12 @@ validate_wazuh_certificate_bundle() {
   local cert_dir="$1"
   local certificate
   local certificate_digest
+  local certificate_text
+  local expected_identity
+  local escaped_identity
   local key
   local key_digest
+  local subject
   local required_files=(
     root-ca.pem
     root-ca-manager.pem
@@ -158,6 +162,32 @@ validate_wazuh_certificate_bundle() {
   do
     openssl pkey -in "${cert_dir}/${key}" -noout >/dev/null 2>&1 || return 1
   done
+
+  while IFS='|' read -r certificate expected_identity; do
+    certificate_text="$(
+      openssl x509 -in "${cert_dir}/${certificate}" -noout -text 2>/dev/null
+    )" || return 1
+    escaped_identity="${expected_identity//./\\.}"
+    grep -Eq "DNS:${escaped_identity}([,[:space:]]|$)" \
+      <<<"${certificate_text}" || return 1
+  done <<'EOF'
+wazuh.indexer.pem|wazuh.indexer
+wazuh.manager.pem|wazuh.manager
+wazuh.dashboard.pem|wazuh.dashboard
+EOF
+  subject="$(
+    openssl x509 \
+      -in "${cert_dir}/admin.pem" \
+      -noout \
+      -subject \
+      -nameopt RFC2253 2>/dev/null
+  )" || return 1
+  subject="${subject#subject=}"
+  subject="${subject# }"
+  case ",${subject}," in
+    *,CN=admin,*) ;;
+    *) return 1 ;;
+  esac
 
   while IFS='|' read -r certificate key; do
     certificate_digest="$(

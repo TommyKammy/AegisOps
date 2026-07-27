@@ -43,9 +43,27 @@ fi
 
 compose_scope "${scope}" config --quiet
 proxy_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/proxy-certificate-recreate-required"
+proxy_config_state="${AEGISOPS_LAB_RUNTIME_ROOT}/proxy-config.sha256"
 wazuh_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-certificate-recreate-required"
+require_command openssl
+proxy_config_digest="$(
+  {
+    printf 'nginx.conf\0'
+    cat "${LAB_DIR}/config/nginx.conf"
+    printf '\0control-plane.conf\0'
+    cat "${LAB_DIR}/config/control-plane.conf"
+  } |
+    openssl dgst -sha256 -r |
+    awk '{print $1}'
+)"
+[[ "${proxy_config_digest}" =~ ^[0-9a-f]{64}$ ]] \
+  || fail "could not calculate the tracked proxy configuration digest"
 force_recreate=false
 if [[ -f "${proxy_recreate_marker}" ]]; then
+  force_recreate=true
+fi
+if [[ ! -s "${proxy_config_state}" ]] ||
+  [[ "$(<"${proxy_config_state}")" != "${proxy_config_digest}" ]]; then
   force_recreate=true
 fi
 if [[ "${scope}" == "wazuh" || "${scope}" == "full" ]]; then
@@ -58,6 +76,10 @@ if [[ "${force_recreate}" == true ]]; then
 else
   compose_scope "${scope}" up --detach --build --wait
 fi
+proxy_config_state_staging="$(mktemp "${proxy_config_state}.tmp.XXXXXX")"
+printf '%s\n' "${proxy_config_digest}" >"${proxy_config_state_staging}"
+chmod 600 "${proxy_config_state_staging}"
+mv "${proxy_config_state_staging}" "${proxy_config_state}"
 if [[ "${force_recreate}" == true ]]; then
   rm -f "${proxy_recreate_marker}"
   if [[ "${scope}" == "wazuh" || "${scope}" == "full" ]]; then

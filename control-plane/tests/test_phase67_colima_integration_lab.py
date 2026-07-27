@@ -594,9 +594,67 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         )
         self.assertIn("AND constraint_record.convalidated", entrypoint)
         self.assertIn(
-            "140510440ec3b14bd340813f458665ef7"
-            "adde6e2c780e47a460621d4850785a0",
+            "e2595161f20c3faf32d1891f26f6c8ee"
+            "eb08c40c73a6db8ebb495bdec6fb7bba",
             entrypoint,
+        )
+        self.assertIn(
+            "c0eecfc71b9e55e2ee8d2712cbee144"
+            "8497f847711f67a4f74977155de559920",
+            entrypoint,
+        )
+        self.assertIn(
+            "f88e5cdaaa4b0079bfcadd42c335b0b2"
+            "2722fd4f856ed1e1a609b4fdf6589f6f",
+            entrypoint,
+        )
+        self.assertGreaterEqual(entrypoint.count("constraint_definition_sha256"), 3)
+        self.assertGreaterEqual(entrypoint.count("column_definition_sha256"), 3)
+        self.assertIn("COALESCE(column_default, '<NULL>')", entrypoint)
+        self.assertIn(
+            "c8fc21a6b5137a90c9b0590994e7894a"
+            "3530d1832b06b3877375437c0a0f84ef",
+            entrypoint,
+        )
+        self.assertIn(
+            "cb6ee538dcb158f0bc6a25bddd04f9ff"
+            "6f38c3a5d2fb88d0922cf06f0cf555f7",
+            entrypoint,
+        )
+        self.assertIn(
+            "6854488c1104636fedc6452212aedaf54"
+            "5a2a3447ebde3b47af026b693bb8f1e",
+            entrypoint,
+        )
+        phase13_readiness = entrypoint.split(
+            "0013_phase_61_detector_lifecycle_records.sql)",
+            maxsplit=1,
+        )[1].split(
+            "0014_phase_61_source_health_records.sql)",
+            maxsplit=1,
+        )[0]
+        phase14_readiness = entrypoint.split(
+            "0014_phase_61_source_health_records.sql)",
+            maxsplit=1,
+        )[1].split(
+            "0015_phase_64_known_limitation_ownership_records.sql)",
+            maxsplit=1,
+        )[0]
+        phase15_readiness = entrypoint.split(
+            "0015_phase_64_known_limitation_ownership_records.sql)",
+            maxsplit=1,
+        )[1]
+        self.assertNotIn(
+            "lifecycle_transition_records_subject_family_matches",
+            phase13_readiness,
+        )
+        self.assertNotIn(
+            "lifecycle_transition_records_subject_family_matches",
+            phase14_readiness,
+        )
+        self.assertIn(
+            "lifecycle_transition_records_subject_family_matches",
+            phase15_readiness,
         )
         self.assertIn("AND indnkeyatts = 1", entrypoint)
         self.assertIn("AND indnatts = 1", entrypoint)
@@ -838,9 +896,6 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             cert_dir = pathlib.Path(tmpdir)
             ca_key = cert_dir / "ca.key"
             ca_cert = cert_dir / "ca.pem"
-            leaf_key = cert_dir / "leaf.key"
-            leaf_request = cert_dir / "leaf.csr"
-            leaf_cert = cert_dir / "leaf.pem"
             subprocess.run(
                 [
                     "openssl",
@@ -862,56 +917,84 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
-            subprocess.run(
-                [
-                    "openssl",
-                    "req",
-                    "-newkey",
-                    "rsa:2048",
-                    "-nodes",
-                    "-keyout",
-                    str(leaf_key),
-                    "-out",
-                    str(leaf_request),
-                    "-subj",
-                    "/CN=wazuh.indexer",
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            subprocess.run(
-                [
+            for root_name in ("root-ca.pem", "root-ca-manager.pem"):
+                shutil.copy2(ca_cert, cert_dir / root_name)
+
+            def create_leaf(
+                identity: str,
+                certificate_name: str,
+                key_name: str,
+                include_san: bool,
+            ) -> None:
+                request = cert_dir / f"{identity}.csr"
+                subprocess.run(
+                    [
+                        "openssl",
+                        "req",
+                        "-newkey",
+                        "rsa:2048",
+                        "-nodes",
+                        "-keyout",
+                        str(cert_dir / key_name),
+                        "-out",
+                        str(request),
+                        "-subj",
+                        f"/CN={identity}",
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                sign_command = [
                     "openssl",
                     "x509",
                     "-req",
                     "-in",
-                    str(leaf_request),
+                    str(request),
                     "-CA",
                     str(ca_cert),
                     "-CAkey",
                     str(ca_key),
                     "-CAcreateserial",
                     "-out",
-                    str(leaf_cert),
+                    str(cert_dir / certificate_name),
                     "-days",
                     "30",
                     "-sha256",
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
+                ]
+                if include_san:
+                    extensions = cert_dir / f"{identity}.ext"
+                    extensions.write_text(
+                        f"subjectAltName=DNS:{identity}\n",
+                        encoding="utf-8",
+                    )
+                    sign_command.extend(["-extfile", str(extensions)])
+                subprocess.run(
+                    sign_command,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+            create_leaf(
+                "wazuh.indexer",
+                "wazuh.indexer.pem",
+                "wazuh.indexer-key.pem",
+                True,
             )
-            for root_name in ("root-ca.pem", "root-ca-manager.pem"):
-                shutil.copy2(ca_cert, cert_dir / root_name)
-            for certificate_name, key_name in (
-                ("wazuh.indexer.pem", "wazuh.indexer-key.pem"),
-                ("admin.pem", "admin-key.pem"),
-                ("wazuh.manager.pem", "wazuh.manager-key.pem"),
-                ("wazuh.dashboard.pem", "wazuh.dashboard-key.pem"),
-            ):
-                shutil.copy2(leaf_cert, cert_dir / certificate_name)
-                shutil.copy2(leaf_key, cert_dir / key_name)
+            create_leaf("admin", "admin.pem", "admin-key.pem", False)
+            create_leaf(
+                "wazuh.manager",
+                "wazuh.manager.pem",
+                "wazuh.manager-key.pem",
+                True,
+            )
+            create_leaf(
+                "wazuh.dashboard",
+                "wazuh.dashboard.pem",
+                "wazuh.dashboard-key.pem",
+                True,
+            )
 
             validation_command = (
                 'source "$1"; validate_wazuh_certificate_bundle "$2"'
@@ -930,6 +1013,33 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(valid.returncode, 0, valid.stderr)
+
+            dashboard_certificate = (cert_dir / "wazuh.dashboard.pem").read_bytes()
+            dashboard_key = (cert_dir / "wazuh.dashboard-key.pem").read_bytes()
+            shutil.copy2(
+                cert_dir / "wazuh.indexer.pem",
+                cert_dir / "wazuh.dashboard.pem",
+            )
+            shutil.copy2(
+                cert_dir / "wazuh.indexer-key.pem",
+                cert_dir / "wazuh.dashboard-key.pem",
+            )
+            wrong_identity = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    validation_command,
+                    "phase67-wazuh-cert-test",
+                    str(LAB_DIR / "lab-common.sh"),
+                    str(cert_dir),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(wrong_identity.returncode, 0)
+            (cert_dir / "wazuh.dashboard.pem").write_bytes(dashboard_certificate)
+            (cert_dir / "wazuh.dashboard-key.pem").write_bytes(dashboard_key)
 
             (cert_dir / "wazuh.dashboard.pem").write_text(
                 "corrupt certificate\n",
@@ -953,9 +1063,26 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
     def test_up_recreates_services_after_certificate_rotation(self) -> None:
         up = (LAB_DIR / "up.sh").read_text(encoding="utf-8")
         self.assertIn("proxy-certificate-recreate-required", up)
+        self.assertIn('proxy_config_state="${AEGISOPS_LAB_RUNTIME_ROOT}/', up)
+        self.assertIn("proxy-config.sha256", up)
+        self.assertIn('cat "${LAB_DIR}/config/nginx.conf"', up)
+        self.assertIn('cat "${LAB_DIR}/config/control-plane.conf"', up)
         self.assertIn("wazuh-certificate-recreate-required", up)
         self.assertIn("--force-recreate", up)
         self.assertIn('rm -f "${proxy_recreate_marker}"', up)
+        self.assertLess(
+            up.index('mv "${proxy_config_state_staging}" "${proxy_config_state}"'),
+            up.index('rm -f "${proxy_recreate_marker}"'),
+        )
+
+    def test_status_evidence_records_running_control_plane_image_id(self) -> None:
+        status = (LAB_DIR / "status.sh").read_text(encoding="utf-8")
+        self.assertIn(
+            'compose_scope "${scope}" ps --all --quiet control-plane',
+            status,
+        )
+        self.assertIn("control_plane_container_image_id", status)
+        self.assertIn("^sha256:[0-9a-f]{64}$", status)
 
     def test_prepare_substrates_blocks_dirty_tracked_wazuh_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1413,7 +1540,13 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             fake_docker = fake_bin / "docker"
             fake_docker.write_text(
                 "#!/usr/bin/env bash\n"
-                'printf "phase67-status\\n"\n',
+                'case "$*" in\n'
+                '  *" ps --all --quiet control-plane") '
+                'printf "phase67-control-plane\\n" ;;\n'
+                '  *" inspect --format {{.Image}} phase67-control-plane") '
+                'printf "sha256:%064d\\n" 0 ;;\n'
+                '  *) printf "phase67-status\\n" ;;\n'
+                "esac\n",
                 encoding="utf-8",
             )
             fake_docker.chmod(0o755)
@@ -1443,9 +1576,12 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             evidence_files = list(evidence_dir.glob("status-full-*"))
             self.assertEqual(len(evidence_files), 2)
             for evidence_file in evidence_files:
+                evidence_text = evidence_file.read_text(encoding="utf-8")
+                self.assertIn("phase67-status", evidence_text)
                 self.assertIn(
-                    "phase67-status",
-                    evidence_file.read_text(encoding="utf-8"),
+                    "control_plane_container_image_id=sha256:"
+                    + "0" * 64,
+                    evidence_text,
                 )
 
     def test_normal_cleanup_and_destroy_boundaries_are_distinct(self) -> None:

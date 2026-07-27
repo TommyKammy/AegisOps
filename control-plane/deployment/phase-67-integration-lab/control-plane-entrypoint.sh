@@ -238,17 +238,18 @@ WITH required_constraints(
     ('false_positive_review_records', 'false_positive_review_records_review_evidence_references_check', 'c', '049adf5e78e910c4701d246a7091aa8da825b7463e68307a42aec00f4743f112'),
     ('false_positive_review_records', 'false_positive_review_records_source_signal_handling_check', 'c', 'ac35853bca6023fe207581f73a23a17019947ae54fc8fbcb3f4730018411033a'),
     ('false_positive_review_records', 'false_positive_review_records_pkey', 'p', 'd533a279676c8fe30544a6d7f32aa3d5514981f9f76400a1b01f8f252270505c'),
-    ('lifecycle_transition_records', 'lifecycle_transition_records_lifecycle_state_known_values', 'c', 'ef74ab603986603cd2ff2b00511ee728ac9f065d990aacae741d3dce390640ff'),
-    ('lifecycle_transition_records', 'lifecycle_transition_records_previous_lifecycle_state_known_val', 'c', 'fefe9fb48ffe837ef6521937db37dd146676fe063f5b3cb5cd3b33c6b80b36ea'),
-    ('lifecycle_transition_records', 'lifecycle_transition_records_previous_state_matches_subject_fam', 'c', '168b886ebcfa9bc75e364c714f6fb12e911190e6160498ba8ebc12e7864472d1'),
-    ('lifecycle_transition_records', 'lifecycle_transition_records_state_matches_subject_family', 'c', 'f1c1cd1c9e8ffa25a7e45897033e496c488ff5226263bca00fb69bd1a1058896'),
-    ('lifecycle_transition_records', 'lifecycle_transition_records_subject_family_matches', 'c', '140510440ec3b14bd340813f458665ef7adde6e2c780e47a460621d4850785a0'),
     ('suppression_proposal_records', 'suppression_proposal_records_check', 'c', 'c301f4f6b2114934d4ed303465343282c5d5f24deb560d9d1564a1c8a115af9f'),
     ('suppression_proposal_records', 'suppression_proposal_records_citation_references_check', 'c', '94d775f52f33dc14149c46d6db50988780d2c23b5093909675e6c8794b4ffe08'),
     ('suppression_proposal_records', 'suppression_proposal_records_lifecycle_state_check', 'c', '111609d959aecc0bf7bdc5c2dc2b7de5651042e3afe6eed619773ea61420d146'),
     ('suppression_proposal_records', 'suppression_proposal_records_scope_check', 'c', 'e2eabef5b9c4305c25884438a42404210babd99e34e13c4d34d8bf06ba48d01d'),
     ('suppression_proposal_records', 'suppression_proposal_records_source_signal_handling_check', 'c', 'a73e31642acad39f915fa3d5ab4c406ad523f098a0b78556e4a9491eb6fb780a'),
     ('suppression_proposal_records', 'suppression_proposal_records_pkey', 'p', '042287098cca89ed986f5908087860c2c25da2791bbcfbc6e1af47413feaac88')
+),
+required_table_signatures(table_name, column_definition_sha256) AS (
+  VALUES
+    ('detector_lifecycle_records', 'c8fc21a6b5137a90c9b0590994e7894a3530d1832b06b3877375437c0a0f84ef'),
+    ('false_positive_review_records', 'f7be4ff9d0f0a60bf0c44fd2532ef74aefcf0e22e80111d9d17426cf2c2e9bc3'),
+    ('suppression_proposal_records', 'ae202414690ff4276e6cf7536cb2994f6a61693af34f29335f6a322f4e7c2b5b')
 )
 SELECT CASE
   WHEN (
@@ -288,6 +289,33 @@ SELECT CASE
     'lifecycle_state', 'created_at', 'updated_at'
   ]::text[]
   AND NOT EXISTS (
+    SELECT table_name, column_definition_sha256
+    FROM required_table_signatures
+    EXCEPT
+    SELECT
+      table_name,
+      encode(
+        sha256(
+          convert_to(
+            string_agg(
+              ordinal_position::text || '|' ||
+              column_name || '|' ||
+              data_type || '|' ||
+              udt_name || '|' ||
+              is_nullable || '|' ||
+              COALESCE(column_default, '<NULL>'),
+              E'\n' ORDER BY ordinal_position
+            ),
+            'UTF8'
+          )
+        ),
+        'hex'
+      )
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
+    GROUP BY table_name
+  )
+  AND NOT EXISTS (
     SELECT
       table_name,
       constraint_name,
@@ -319,19 +347,28 @@ EOF
       ;;
     0014_phase_61_source_health_records.sql)
       cat <<'EOF'
-WITH required_constraints(constraint_name) AS (
+WITH required_constraints(
+  table_name,
+  constraint_name,
+  constraint_type,
+  constraint_definition_sha256
+) AS (
   VALUES
-    ('source_health_records_cache_sourced_check'),
-    ('source_health_records_check'),
-    ('source_health_records_check1'),
-    ('source_health_records_credential_posture_check'),
-    ('source_health_records_detector_drift_check'),
-    ('source_health_records_display_state_authority_check'),
-    ('source_health_records_evidence_references_check'),
-    ('source_health_records_health_state_check'),
-    ('source_health_records_reviewed_state_check'),
-    ('source_health_records_source_native_authority_check'),
-    ('source_health_records_pkey')
+    ('source_health_records', 'source_health_records_cache_sourced_check', 'c', 'c0eecfc71b9e55e2ee8d2712cbee1448497f847711f67a4f74977155de559920'),
+    ('source_health_records', 'source_health_records_check', 'c', 'f7d22a54742633931e33d0df4430e6c84110dfdbbb20c2eee2e52393b3cd7ff5'),
+    ('source_health_records', 'source_health_records_check1', 'c', 'a9f67478d1b055d8498c001972c3fbf3d3f99a9dc14f8d32553a4d8c82fe3fbe'),
+    ('source_health_records', 'source_health_records_credential_posture_check', 'c', '6979b4a597cc0fdb2f8ce6edea86403e778c9b4da7a4c0945b1c4ead3ac51913'),
+    ('source_health_records', 'source_health_records_detector_drift_check', 'c', 'eb75b6976ba1e6a9ad6da2df2dc6f89eece6ac4c51dbcbbff546facd396e0981'),
+    ('source_health_records', 'source_health_records_display_state_authority_check', 'c', 'daeefd502d0af4b63e4c1c0efea68ee48d08c7ebcd17d6f012c09874aea2cb89'),
+    ('source_health_records', 'source_health_records_evidence_references_check', 'c', '450241642dd9e29a7ac9bb598411f364434e92f83cd25690cd7ad4a9ab506147'),
+    ('source_health_records', 'source_health_records_health_state_check', 'c', '440efb2ab8aca4681d5a969106cb9573679f8cb3f6a311c72e36b68aaa312b2c'),
+    ('source_health_records', 'source_health_records_reviewed_state_check', 'c', '22815d84e2c821c4f835794d31097373c4aa56c6009f7b28ccc3f6e3861a0628'),
+    ('source_health_records', 'source_health_records_source_native_authority_check', 'c', 'fe00860392a891d58a3708c82454acb3747291fb8a3c3379514de9fcbcb47d7b'),
+    ('source_health_records', 'source_health_records_pkey', 'p', '62226b9278f392cb0ce33d6a4115fe2ccd4fdddf286f3116bb6fc1b6447dead1')
+),
+required_table_signatures(table_name, column_definition_sha256) AS (
+  VALUES
+    ('source_health_records', 'cb6ee538dcb158f0bc6a25bddd04f9ff6f38c3a5d2fb88d0922cf06f0cf555f7')
 )
 SELECT CASE
   WHEN (
@@ -347,38 +384,88 @@ SELECT CASE
     'lifecycle_state', 'created_at', 'updated_at'
   ]::text[]
   AND NOT EXISTS (
-    SELECT constraint_name FROM required_constraints
+    SELECT table_name, column_definition_sha256
+    FROM required_table_signatures
     EXCEPT
-    SELECT conname
-    FROM pg_constraint
-    WHERE conrelid = 'aegisops_control.source_health_records'::regclass
-  )
-  AND (
-    SELECT COUNT(*)
-    FROM pg_constraint
-    WHERE conrelid = 'aegisops_control.lifecycle_transition_records'::regclass
-      AND conname IN (
-        'lifecycle_transition_records_subject_family_matches',
-        'lifecycle_transition_records_state_matches_subject_family',
-        'lifecycle_transition_records_previous_state_matches_subject_family'
+    SELECT
+      table_name,
+      encode(
+        sha256(
+          convert_to(
+            string_agg(
+              ordinal_position::text || '|' ||
+              column_name || '|' ||
+              data_type || '|' ||
+              udt_name || '|' ||
+              is_nullable || '|' ||
+              COALESCE(column_default, '<NULL>'),
+              E'\n' ORDER BY ordinal_position
+            ),
+            'UTF8'
+          )
+        ),
+        'hex'
       )
-  ) = 3
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
+    GROUP BY table_name
+  )
+  AND NOT EXISTS (
+    SELECT
+      table_name,
+      constraint_name,
+      constraint_type,
+      constraint_definition_sha256
+    FROM required_constraints
+    EXCEPT
+    SELECT
+      relation.relname::text,
+      constraint_record.conname::text,
+      constraint_record.contype::text,
+      encode(
+        sha256(
+          convert_to(
+            pg_get_constraintdef(constraint_record.oid, true),
+            'UTF8'
+          )
+        ),
+        'hex'
+      )
+    FROM pg_constraint AS constraint_record
+    JOIN pg_class AS relation ON relation.oid = constraint_record.conrelid
+    WHERE constraint_record.connamespace = 'aegisops_control'::regnamespace
+      AND constraint_record.convalidated
+  )
   THEN 'ready' ELSE 'not-ready'
 END;
 EOF
       ;;
     0015_phase_64_known_limitation_ownership_records.sql)
       cat <<'EOF'
-WITH required_constraints(constraint_name) AS (
+WITH required_constraints(
+  table_name,
+  constraint_name,
+  constraint_type,
+  constraint_definition_sha256
+) AS (
   VALUES
-    ('known_limitation_ownership_record_phase66_handoff_posture_check'),
-    ('known_limitation_ownership_records_authority_boundary_check'),
-    ('known_limitation_ownership_records_check'),
-    ('known_limitation_ownership_records_check1'),
-    ('known_limitation_ownership_records_evidence_references_check'),
-    ('known_limitation_ownership_records_review_state_check'),
-    ('known_limitation_ownership_records_severity_check'),
-    ('known_limitation_ownership_records_pkey')
+    ('known_limitation_ownership_records', 'known_limitation_ownership_record_phase66_handoff_posture_check', 'c', 'f88e5cdaaa4b0079bfcadd42c335b0b22722fd4f856ed1e1a609b4fdf6589f6f'),
+    ('known_limitation_ownership_records', 'known_limitation_ownership_records_authority_boundary_check', 'c', '46daf54580215aa96626061e70ada968b8eca7506f102bbf242e7d3d62e11f1d'),
+    ('known_limitation_ownership_records', 'known_limitation_ownership_records_check', 'c', '828ea502b4ba467f5c4722d1f91d14829c47459bc5e59be5f21b635cde9b27ad'),
+    ('known_limitation_ownership_records', 'known_limitation_ownership_records_check1', 'c', 'e72e32c4789dfb782250e110d7104ea61047ce5ad83901bb77ebc42a2f079b33'),
+    ('known_limitation_ownership_records', 'known_limitation_ownership_records_evidence_references_check', 'c', '450241642dd9e29a7ac9bb598411f364434e92f83cd25690cd7ad4a9ab506147'),
+    ('known_limitation_ownership_records', 'known_limitation_ownership_records_review_state_check', 'c', 'd5c803f97e228707f2073928298c16525d0745fb4beab331923c96b2556a6a4e'),
+    ('known_limitation_ownership_records', 'known_limitation_ownership_records_severity_check', 'c', '411666e04294ee4749c61ca9b01cb8fe5bc0ea1ab6a390570114ffee7499d37c'),
+    ('known_limitation_ownership_records', 'known_limitation_ownership_records_pkey', 'p', '03632a7197298f23150518683fc2be1ae9699c3975cad9443532eb7e99815469'),
+    ('lifecycle_transition_records', 'lifecycle_transition_records_lifecycle_state_known_values', 'c', 'ef74ab603986603cd2ff2b00511ee728ac9f065d990aacae741d3dce390640ff'),
+    ('lifecycle_transition_records', 'lifecycle_transition_records_previous_lifecycle_state_known_val', 'c', 'fefe9fb48ffe837ef6521937db37dd146676fe063f5b3cb5cd3b33c6b80b36ea'),
+    ('lifecycle_transition_records', 'lifecycle_transition_records_previous_state_matches_subject_fam', 'c', 'ea647d71bbb5b19a89e675e6a89c74f6172e2c04c27864f8a018d6af4cddd4e1'),
+    ('lifecycle_transition_records', 'lifecycle_transition_records_state_matches_subject_family', 'c', '56829e22566a5973397174a2c18d77ecb0c387f25d9c2555d39bc34ce9b0113c'),
+    ('lifecycle_transition_records', 'lifecycle_transition_records_subject_family_matches', 'c', 'e2595161f20c3faf32d1891f26f6c8eeeb08c40c73a6db8ebb495bdec6fb7bba')
+),
+required_table_signatures(table_name, column_definition_sha256) AS (
+  VALUES
+    ('known_limitation_ownership_records', '6854488c1104636fedc6452212aedaf545a2a3447ebde3b47af026b693bb8f1e')
 )
 SELECT CASE
   WHEN (
@@ -394,24 +481,58 @@ SELECT CASE
     'created_at', 'updated_at'
   ]::text[]
   AND NOT EXISTS (
-    SELECT constraint_name FROM required_constraints
+    SELECT table_name, column_definition_sha256
+    FROM required_table_signatures
     EXCEPT
-    SELECT conname
-    FROM pg_constraint
-    WHERE conrelid = 'aegisops_control.known_limitation_ownership_records'::regclass
-  )
-  AND (
-    SELECT COUNT(*)
-    FROM pg_constraint
-    WHERE conrelid = 'aegisops_control.lifecycle_transition_records'::regclass
-      AND conname IN (
-        'lifecycle_transition_records_subject_family_matches',
-        'lifecycle_transition_records_lifecycle_state_known_values',
-        'lifecycle_transition_records_previous_lifecycle_state_known_values',
-        'lifecycle_transition_records_state_matches_subject_family',
-        'lifecycle_transition_records_previous_state_matches_subject_family'
+    SELECT
+      table_name,
+      encode(
+        sha256(
+          convert_to(
+            string_agg(
+              ordinal_position::text || '|' ||
+              column_name || '|' ||
+              data_type || '|' ||
+              udt_name || '|' ||
+              is_nullable || '|' ||
+              COALESCE(column_default, '<NULL>'),
+              E'\n' ORDER BY ordinal_position
+            ),
+            'UTF8'
+          )
+        ),
+        'hex'
       )
-  ) = 5
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
+    GROUP BY table_name
+  )
+  AND NOT EXISTS (
+    SELECT
+      table_name,
+      constraint_name,
+      constraint_type,
+      constraint_definition_sha256
+    FROM required_constraints
+    EXCEPT
+    SELECT
+      relation.relname::text,
+      constraint_record.conname::text,
+      constraint_record.contype::text,
+      encode(
+        sha256(
+          convert_to(
+            pg_get_constraintdef(constraint_record.oid, true),
+            'UTF8'
+          )
+        ),
+        'hex'
+      )
+    FROM pg_constraint AS constraint_record
+    JOIN pg_class AS relation ON relation.oid = constraint_record.conrelid
+    WHERE constraint_record.connamespace = 'aegisops_control'::regnamespace
+      AND constraint_record.convalidated
+  )
   THEN 'ready' ELSE 'not-ready'
 END;
 EOF

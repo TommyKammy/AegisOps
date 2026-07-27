@@ -102,6 +102,18 @@ perl -0pi -e 's/constraint_record\.contype::text/removed_constraint_type/g' \
   "${migration_constraint_type_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
 assert_fails_with "${migration_constraint_type_drift}" 'constraint_record.contype::text'
 
+source_health_constraint_drift="${workdir}/source-health-constraint-drift"
+copy_fixture "${source_health_constraint_drift}"
+perl -0pi -e 's/c0eecfc71b9e55e2ee8d2712cbee1448497f847711f67a4f74977155de559920/removed_source_health_definition/' \
+  "${source_health_constraint_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
+assert_fails_with "${source_health_constraint_drift}" 'c0eecfc71b9e55e2ee8d2712cbee1448497f847711f67a4f74977155de559920'
+
+column_definition_drift="${workdir}/column-definition-drift"
+copy_fixture "${column_definition_drift}"
+perl -0pi -e 's/cb6ee538dcb158f0bc6a25bddd04f9ff6f38c3a5d2fb88d0922cf06f0cf555f7/removed_source_health_columns/' \
+  "${column_definition_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
+assert_fails_with "${column_definition_drift}" 'cb6ee538dcb158f0bc6a25bddd04f9ff6f38c3a5d2fb88d0922cf06f0cf555f7'
+
 runtime_identity_drift="${workdir}/runtime-identity-drift"
 copy_fixture "${runtime_identity_drift}"
 perl -0pi -e 's#include /etc/nginx/certs/runtime-auth\.conf;#include /etc/nginx/certs/removed-runtime-auth.conf;#' \
@@ -171,6 +183,12 @@ perl -0pi -e 's/proxy-certificate-recreate-required/proxy-certificate-recreate-r
   "${proxy_recreate_drift}/control-plane/deployment/phase-67-integration-lab/up.sh"
 assert_fails_with "${proxy_recreate_drift}" 'proxy-certificate-recreate-required'
 
+proxy_config_tracking_drift="${workdir}/proxy-config-tracking-drift"
+copy_fixture "${proxy_config_tracking_drift}"
+perl -0pi -e 's#cat "\$\{LAB_DIR\}/config/control-plane\.conf"#cat "\${LAB_DIR}/config/removed-control-plane.conf"#' \
+  "${proxy_config_tracking_drift}/control-plane/deployment/phase-67-integration-lab/up.sh"
+assert_fails_with "${proxy_config_tracking_drift}" 'cat "${LAB_DIR}/config/control-plane.conf"'
+
 proxy_deleted_pair_drift="${workdir}/proxy-deleted-pair-drift"
 copy_fixture "${proxy_deleted_pair_drift}"
 perl -0pi -e 's/\$\{runtime_previously_initialized\}" == "true/\${runtime_previously_initialized}" == "false/g' \
@@ -183,6 +201,12 @@ perl -0pi -e 's/validate_wazuh_certificate_bundle/validate_removed_wazuh_certifi
   "${wazuh_certificate_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh" \
   "${wazuh_certificate_drift}/control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh"
 assert_fails_with "${wazuh_certificate_drift}" 'validate_wazuh_certificate_bundle'
+
+wazuh_certificate_identity_drift="${workdir}/wazuh-certificate-identity-drift"
+copy_fixture "${wazuh_certificate_identity_drift}"
+perl -0pi -e 's/DNS:\$\{escaped_identity\}/REMOVED:\${escaped_identity}/' \
+  "${wazuh_certificate_identity_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh"
+assert_fails_with "${wazuh_certificate_identity_drift}" 'DNS:${escaped_identity}([,[:space:]]|$)'
 
 wazuh_marker_order_drift="${workdir}/wazuh-marker-order-drift"
 copy_fixture "${wazuh_marker_order_drift}"
@@ -207,6 +231,12 @@ copy_fixture "${status_evidence_drift}"
 perl -0pi -e 's/scope="full"/scope="invalid"/' \
   "${status_evidence_drift}/control-plane/deployment/phase-67-integration-lab/status.sh"
 assert_fails_with "${status_evidence_drift}" 'scope="full"'
+
+image_evidence_drift="${workdir}/image-evidence-drift"
+copy_fixture "${image_evidence_drift}"
+perl -0pi -e 's/control_plane_container_image_id/removed_container_image_id/g' \
+  "${image_evidence_drift}/control-plane/deployment/phase-67-integration-lab/status.sh"
+assert_fails_with "${image_evidence_drift}" 'control_plane_container_image_id'
 
 selected_address_drift="${workdir}/selected-address-drift"
 copy_fixture "${selected_address_drift}"
@@ -323,11 +353,13 @@ perl -0pi -e 's/assert_phase67_compose_project_ownership/assert_removed_project_
 assert_fails_with "${teardown_ownership_drift}" 'assert_phase67_compose_project_ownership'
 
 echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof," \
-  "image-digest, migration-definition, migration-constraint-type, runtime-identity," \
-  "scope-narrowing, Wazuh-upstream-TLS," \
+  "image-digest, migration-definition, migration-constraint-type, source-health-constraint," \
+  "column-definition," \
+  "runtime-identity, scope-narrowing, Wazuh-upstream-TLS," \
   "certificate-renewal, network-host, duplicate-port, runtime-quoting, bounded-logs," \
-  "Wazuh-checkout, teardown-recovery, proxy-recreate, Wazuh-certificate, Wazuh-marker-order," \
-  "status-evidence, selected-address, published-port-evidence, reviewed-pin, architecture," \
+  "Wazuh-checkout, teardown-recovery, proxy-recreate, proxy-config-tracking," \
+  "Wazuh-certificate, Wazuh-certificate-identity, Wazuh-marker-order, status-evidence," \
+  "image-evidence, selected-address, published-port-evidence, reviewed-pin, architecture," \
   "evidence-collision, credential-guard, preserved-volume, evidence-runtime-digest," \
   "project-subnet, replacement-certificate, start-time Wazuh-checkout, Wazuh-digest," \
   "index-definition, lookup-index-definition, Docker-context-secret, dashboard-credential," \

@@ -97,7 +97,7 @@ if [[ "${certificates_complete}" != true ]]; then
 fi
 
 validate_wazuh_certificate_bundle "${cert_dir}" \
-  || fail "Wazuh certificate bundle failed validity, chain, or key-pair validation"
+  || fail "Wazuh certificate bundle failed validity, identity, chain, or key-pair validation"
 
 proxy_wazuh_trust="${AEGISOPS_LAB_PROXY_CERT_DIR}/wazuh-upstream-root-ca.pem"
 if ! cmp -s "${cert_dir}/root-ca.pem" "${proxy_wazuh_trust}"; then
