@@ -96,6 +96,18 @@ perl -0pi -e 's/pg_get_constraintdef\(constraint_record\.oid, true\)/removed_con
   "${migration_definition_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
 assert_fails_with "${migration_definition_drift}" 'pg_get_constraintdef(constraint_record.oid, true)'
 
+migration_constraint_type_drift="${workdir}/migration-constraint-type-drift"
+copy_fixture "${migration_constraint_type_drift}"
+perl -0pi -e 's/constraint_record\.contype::text/removed_constraint_type/g' \
+  "${migration_constraint_type_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
+assert_fails_with "${migration_constraint_type_drift}" 'constraint_record.contype::text'
+
+runtime_identity_drift="${workdir}/runtime-identity-drift"
+copy_fixture "${runtime_identity_drift}"
+perl -0pi -e 's#include /etc/nginx/certs/runtime-auth\.conf;#include /etc/nginx/certs/removed-runtime-auth.conf;#' \
+  "${runtime_identity_drift}/control-plane/deployment/phase-67-integration-lab/config/control-plane.conf"
+assert_fails_with "${runtime_identity_drift}" 'include /etc/nginx/certs/runtime-auth.conf;'
+
 scope_narrowing_drift="${workdir}/scope-narrowing-drift"
 copy_fixture "${scope_narrowing_drift}"
 perl -0pi -e 's/assert_no_running_excluded_services/assert_removed_running_excluded_services/g' \
@@ -311,7 +323,8 @@ perl -0pi -e 's/assert_phase67_compose_project_ownership/assert_removed_project_
 assert_fails_with "${teardown_ownership_drift}" 'assert_phase67_compose_project_ownership'
 
 echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof," \
-  "image-digest, migration-definition, scope-narrowing, Wazuh-upstream-TLS," \
+  "image-digest, migration-definition, migration-constraint-type, runtime-identity," \
+  "scope-narrowing, Wazuh-upstream-TLS," \
   "certificate-renewal, network-host, duplicate-port, runtime-quoting, bounded-logs," \
   "Wazuh-checkout, teardown-recovery, proxy-recreate, Wazuh-certificate, Wazuh-marker-order," \
   "status-evidence, selected-address, published-port-evidence, reviewed-pin, architecture," \

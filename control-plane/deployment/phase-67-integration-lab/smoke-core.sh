@@ -10,7 +10,7 @@ source "${LAB_DIR}/lab-common.sh"
 require_runtime_environment
 require_command curl
 
-for endpoint in healthz readyz; do
+for endpoint in healthz readyz runtime; do
   curl \
     --fail \
     --silent \

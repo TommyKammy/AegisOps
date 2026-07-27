@@ -220,25 +220,35 @@ EOF
       ;;
     0013_phase_61_detector_lifecycle_records.sql)
       cat <<'EOF'
-WITH required_constraints(table_name, constraint_name) AS (
+WITH required_constraints(
+  table_name,
+  constraint_name,
+  constraint_type,
+  constraint_definition_sha256
+) AS (
   VALUES
-    ('detector_lifecycle_records', 'detector_lifecycle_records_lifecycle_audit_references_check'),
-    ('detector_lifecycle_records', 'detector_lifecycle_records_lifecycle_state_check'),
-    ('detector_lifecycle_records', 'detector_lifecycle_records_pkey'),
-    ('false_positive_review_records', 'false_positive_review_records_check'),
-    ('false_positive_review_records', 'false_positive_review_records_disposition_check'),
-    ('false_positive_review_records', 'false_positive_review_records_dispute_state_check'),
-    ('false_positive_review_records', 'false_positive_review_records_lifecycle_state_check'),
-    ('false_positive_review_records', 'false_positive_review_records_recurrence_posture_check'),
-    ('false_positive_review_records', 'false_positive_review_records_review_evidence_references_check'),
-    ('false_positive_review_records', 'false_positive_review_records_source_signal_handling_check'),
-    ('false_positive_review_records', 'false_positive_review_records_pkey'),
-    ('suppression_proposal_records', 'suppression_proposal_records_check'),
-    ('suppression_proposal_records', 'suppression_proposal_records_citation_references_check'),
-    ('suppression_proposal_records', 'suppression_proposal_records_lifecycle_state_check'),
-    ('suppression_proposal_records', 'suppression_proposal_records_scope_check'),
-    ('suppression_proposal_records', 'suppression_proposal_records_source_signal_handling_check'),
-    ('suppression_proposal_records', 'suppression_proposal_records_pkey')
+    ('detector_lifecycle_records', 'detector_lifecycle_records_lifecycle_audit_references_check', 'c', 'baa018bbc9e92cdcdc66a3ef7348cf8ef25c3e44e1522325ddde82407be6384c'),
+    ('detector_lifecycle_records', 'detector_lifecycle_records_lifecycle_state_check', 'c', '326c0e0c27344296c0fed67fdd2154697a994777632ba749357d1d918137b1da'),
+    ('detector_lifecycle_records', 'detector_lifecycle_records_pkey', 'p', 'fb856795c560c3513a1abd6205472cd1e766cc37859113cc5aa76b4e2d272b7b'),
+    ('false_positive_review_records', 'false_positive_review_records_check', 'c', 'c301f4f6b2114934d4ed303465343282c5d5f24deb560d9d1564a1c8a115af9f'),
+    ('false_positive_review_records', 'false_positive_review_records_disposition_check', 'c', 'a6db0268ab4cc254070904bd80b5b9f9a1117c277b346bf02b4c02d81d61d94d'),
+    ('false_positive_review_records', 'false_positive_review_records_dispute_state_check', 'c', '2d5f25807637aecca3c453bad6a92268f08edef259f3ef337750dbcb4257e567'),
+    ('false_positive_review_records', 'false_positive_review_records_lifecycle_state_check', 'c', '5980dbdd0348b7e34b1056e74e91a4dffd1d02e44f4b5e6ae490f0bc92af579e'),
+    ('false_positive_review_records', 'false_positive_review_records_recurrence_posture_check', 'c', '82156f1b791c32c6a58263b607d1717edfbaeba2c80b4eaa73a4a239e32daed1'),
+    ('false_positive_review_records', 'false_positive_review_records_review_evidence_references_check', 'c', '049adf5e78e910c4701d246a7091aa8da825b7463e68307a42aec00f4743f112'),
+    ('false_positive_review_records', 'false_positive_review_records_source_signal_handling_check', 'c', 'ac35853bca6023fe207581f73a23a17019947ae54fc8fbcb3f4730018411033a'),
+    ('false_positive_review_records', 'false_positive_review_records_pkey', 'p', 'd533a279676c8fe30544a6d7f32aa3d5514981f9f76400a1b01f8f252270505c'),
+    ('lifecycle_transition_records', 'lifecycle_transition_records_lifecycle_state_known_values', 'c', 'ef74ab603986603cd2ff2b00511ee728ac9f065d990aacae741d3dce390640ff'),
+    ('lifecycle_transition_records', 'lifecycle_transition_records_previous_lifecycle_state_known_val', 'c', 'fefe9fb48ffe837ef6521937db37dd146676fe063f5b3cb5cd3b33c6b80b36ea'),
+    ('lifecycle_transition_records', 'lifecycle_transition_records_previous_state_matches_subject_fam', 'c', '168b886ebcfa9bc75e364c714f6fb12e911190e6160498ba8ebc12e7864472d1'),
+    ('lifecycle_transition_records', 'lifecycle_transition_records_state_matches_subject_family', 'c', 'f1c1cd1c9e8ffa25a7e45897033e496c488ff5226263bca00fb69bd1a1058896'),
+    ('lifecycle_transition_records', 'lifecycle_transition_records_subject_family_matches', 'c', '140510440ec3b14bd340813f458665ef7adde6e2c780e47a460621d4850785a0'),
+    ('suppression_proposal_records', 'suppression_proposal_records_check', 'c', 'c301f4f6b2114934d4ed303465343282c5d5f24deb560d9d1564a1c8a115af9f'),
+    ('suppression_proposal_records', 'suppression_proposal_records_citation_references_check', 'c', '94d775f52f33dc14149c46d6db50988780d2c23b5093909675e6c8794b4ffe08'),
+    ('suppression_proposal_records', 'suppression_proposal_records_lifecycle_state_check', 'c', '111609d959aecc0bf7bdc5c2dc2b7de5651042e3afe6eed619773ea61420d146'),
+    ('suppression_proposal_records', 'suppression_proposal_records_scope_check', 'c', 'e2eabef5b9c4305c25884438a42404210babd99e34e13c4d34d8bf06ba48d01d'),
+    ('suppression_proposal_records', 'suppression_proposal_records_source_signal_handling_check', 'c', 'a73e31642acad39f915fa3d5ab4c406ad523f098a0b78556e4a9491eb6fb780a'),
+    ('suppression_proposal_records', 'suppression_proposal_records_pkey', 'p', '042287098cca89ed986f5908087860c2c25da2791bbcfbc6e1af47413feaac88')
 )
 SELECT CASE
   WHEN (
@@ -278,43 +288,30 @@ SELECT CASE
     'lifecycle_state', 'created_at', 'updated_at'
   ]::text[]
   AND NOT EXISTS (
-    SELECT table_name, constraint_name FROM required_constraints
+    SELECT
+      table_name,
+      constraint_name,
+      constraint_type,
+      constraint_definition_sha256
+    FROM required_constraints
     EXCEPT
-    SELECT relation.relname, constraint_record.conname
+    SELECT
+      relation.relname::text,
+      constraint_record.conname::text,
+      constraint_record.contype::text,
+      encode(
+        sha256(
+          convert_to(
+            pg_get_constraintdef(constraint_record.oid, true),
+            'UTF8'
+          )
+        ),
+        'hex'
+      )
     FROM pg_constraint AS constraint_record
     JOIN pg_class AS relation ON relation.oid = constraint_record.conrelid
     WHERE constraint_record.connamespace = 'aegisops_control'::regnamespace
-  )
-  AND (
-    SELECT COUNT(*)
-    FROM pg_constraint
-    WHERE conrelid = 'aegisops_control.lifecycle_transition_records'::regclass
-      AND conname IN (
-        'lifecycle_transition_records_subject_family_matches',
-        'lifecycle_transition_records_state_matches_subject_family',
-        'lifecycle_transition_records_previous_state_matches_subject_family'
-      )
-  ) = 3
-  AND (
-    (
-      SELECT COUNT(*)
-      FROM pg_constraint
-      WHERE conrelid = 'aegisops_control.lifecycle_transition_records'::regclass
-        AND conname IN (
-          'lifecycle_transition_records_lifecycle_state_known',
-          'lifecycle_transition_records_previous_lifecycle_state_known'
-        )
-    ) = 2
-    OR
-    (
-      SELECT COUNT(*)
-      FROM pg_constraint
-      WHERE conrelid = 'aegisops_control.lifecycle_transition_records'::regclass
-        AND conname IN (
-          'lifecycle_transition_records_lifecycle_state_known_values',
-          'lifecycle_transition_records_previous_lifecycle_state_known_values'
-        )
-    ) = 2
+      AND constraint_record.convalidated
   )
   THEN 'ready' ELSE 'not-ready'
 END;

@@ -183,6 +183,30 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             ):
                 self.assertIn(required_san, certificate_text)
 
+            proxy_secret = (
+                runtime_root / "secrets" / "protected-surface-proxy-secret"
+            ).read_text(encoding="utf-8").strip()
+            runtime_auth = runtime_root / "proxy-certs" / "runtime-auth.conf"
+            self.assertEqual(stat.S_IMODE(runtime_auth.stat().st_mode), 0o600)
+            runtime_auth_text = runtime_auth.read_text(encoding="utf-8")
+            self.assertIn(
+                f'proxy_set_header X-AegisOps-Proxy-Secret "{proxy_secret}";',
+                runtime_auth_text,
+            )
+            self.assertIn(
+                'proxy_set_header X-AegisOps-Authenticated-Identity '
+                '"phase67-lab-platform-admin";',
+                runtime_auth_text,
+            )
+            self.assertIn(
+                'proxy_set_header X-AegisOps-Authenticated-Role '
+                '"platform_admin";',
+                runtime_auth_text,
+            )
+            self.assertFalse(
+                (runtime_root / "proxy-certificate-recreate-required").exists()
+            )
+
     def test_init_reapplies_bootstrap_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = pathlib.Path(tmpdir)
@@ -383,6 +407,45 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             self.assertEqual(second.returncode, 0, second.stderr)
             self.assertTrue(marker.is_file())
 
+    def test_init_marks_changed_runtime_proxy_identity_for_recreation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            first = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(first.returncode, 0, first.stderr)
+            runtime_root = (
+                home / ".local" / "share" / "aegisops" / "phase-67-integration-lab"
+            )
+            marker = runtime_root / "proxy-certificate-recreate-required"
+            proxy_secret = (
+                runtime_root / "secrets" / "protected-surface-proxy-secret"
+            )
+            proxy_secret.write_text("a" * 64 + "\n", encoding="utf-8")
+
+            second = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertTrue(marker.is_file())
+            self.assertIn(
+                'proxy_set_header X-AegisOps-Proxy-Secret "' + "a" * 64 + '";',
+                (
+                    runtime_root / "proxy-certs" / "runtime-auth.conf"
+                ).read_text(encoding="utf-8"),
+            )
+            init_script = (LAB_DIR / "init.sh").read_text(encoding="utf-8")
+            auth_update = init_script.index(
+                'if ! cmp -s "${proxy_runtime_auth_staging}" '
+                '"${proxy_runtime_auth}"; then'
+            )
+            self.assertLess(
+                init_script.index(
+                    ': >"${proxy_recreate_marker}"',
+                    auth_update,
+                ),
+                init_script.index(
+                    'mv "${proxy_runtime_auth_staging}" "${proxy_runtime_auth}"',
+                    auth_update,
+                ),
+            )
+
     def test_selected_scope_checks_only_published_ports(self) -> None:
         expected = {
             "core": ["PROXY"],
@@ -517,6 +580,24 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             "'lifecycle_transition_records_lifecycle_state_known_values'",
             entrypoint,
         )
+        self.assertIn(
+            "'lifecycle_transition_records_previous_lifecycle_state_known_val'",
+            entrypoint,
+        )
+        self.assertIn("constraint_definition_sha256", entrypoint)
+        self.assertIn("constraint_record.contype::text", entrypoint)
+        self.assertIn(
+            "sha256(\n"
+            "          convert_to(\n"
+            "            pg_get_constraintdef(constraint_record.oid, true),",
+            entrypoint,
+        )
+        self.assertIn("AND constraint_record.convalidated", entrypoint)
+        self.assertIn(
+            "140510440ec3b14bd340813f458665ef7"
+            "adde6e2c780e47a460621d4850785a0",
+            entrypoint,
+        )
         self.assertIn("AND indnkeyatts = 1", entrypoint)
         self.assertIn("AND indnatts = 1", entrypoint)
         self.assertIn("AND indexprs IS NULL", entrypoint)
@@ -553,7 +634,6 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             "pg_get_constraintdef(constraint_record.oid, true)",
             entrypoint,
         )
-        self.assertIn("AND constraint_record.convalidated", entrypoint)
         self.assertIn(
             "CHECK (coordination_target_type IS NULL OR "
             "(coordination_target_type = ANY "
@@ -742,6 +822,14 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         )
         self.assertIn("proxy_ssl_verify on;", proxy_config)
         self.assertNotIn("proxy_ssl_verify off;", proxy_config)
+        runtime_location = proxy_config.split("location = /runtime {", maxsplit=1)[1]
+        runtime_location = runtime_location.split("}", maxsplit=1)[0]
+        self.assertIn(
+            "include /etc/nginx/certs/runtime-auth.conf;",
+            runtime_location,
+        )
+        smoke_core = (LAB_DIR / "smoke-core.sh").read_text(encoding="utf-8")
+        self.assertIn("for endpoint in healthz readyz runtime; do", smoke_core)
 
     def test_wazuh_certificate_bundle_requires_valid_chains_and_key_pairs(
         self,
