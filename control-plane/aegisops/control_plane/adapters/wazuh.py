@@ -218,7 +218,16 @@ class WazuhAlertAdapter:
 
     @staticmethod
     def _parse_timestamp(value: str) -> datetime:
-        parsed = datetime.fromisoformat(value)
+        normalized = value
+        if value.endswith("Z"):
+            normalized = value[:-1] + "+00:00"
+        elif (
+            len(value) >= 5
+            and value[-5] in {"+", "-"}
+            and value[-4:].isdigit()
+        ):
+            normalized = f"{value[:-2]}:{value[-2:]}"
+        parsed = datetime.fromisoformat(normalized)
         if parsed.tzinfo is None or parsed.utcoffset() is None:
             raise ValueError("timestamp must be timezone-aware")
         return parsed

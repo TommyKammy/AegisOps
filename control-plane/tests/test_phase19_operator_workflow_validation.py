@@ -1369,7 +1369,7 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                         payload = get_error_payload(path)
                         self.assertEqual(payload["error"], "invalid_request")
                         self.assertIn(
-                            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+                            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
                             payload["message"],
                         )
 
@@ -1401,7 +1401,7 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                         )
                         self.assertEqual(payload["error"], "invalid_request")
                         self.assertIn(
-                            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+                            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
                             payload["message"],
                         )
             finally:

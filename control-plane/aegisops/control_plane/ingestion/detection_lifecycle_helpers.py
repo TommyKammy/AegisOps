@@ -677,7 +677,8 @@ class LiveWazuhIntakeHandler:
                 source_family=source_family,
             )
             raise ValueError(
-                "live Wazuh ingest only admits the reviewed github_audit and entra_id live source families"
+                "live Wazuh ingest only admits the reviewed github_audit, entra_id, "
+                "and wazuh_detection live source families"
             )
 
         adapter = WazuhAlertAdapter()

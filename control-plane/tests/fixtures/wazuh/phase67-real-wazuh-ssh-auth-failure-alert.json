@@ -1,0 +1,79 @@
+{
+  "timestamp": "2026-07-27T23:33:37.232+0000",
+  "rule": {
+    "level": 5,
+    "description": "sshd: Attempt to login using a non-existent user",
+    "id": "5710",
+    "mitre": {
+      "id": [
+        "T1110.001",
+        "T1021.004"
+      ],
+      "tactic": [
+        "Credential Access",
+        "Lateral Movement"
+      ],
+      "technique": [
+        "Password Guessing",
+        "SSH"
+      ]
+    },
+    "firedtimes": 6,
+    "mail": false,
+    "groups": [
+      "syslog",
+      "sshd",
+      "authentication_failed",
+      "invalid_login"
+    ],
+    "gdpr": [
+      "IV_35.7.d",
+      "IV_32.2"
+    ],
+    "gpg13": [
+      "7.1"
+    ],
+    "hipaa": [
+      "164.312.b"
+    ],
+    "nist_800_53": [
+      "AU.14",
+      "AC.7",
+      "AU.6"
+    ],
+    "pci_dss": [
+      "10.2.4",
+      "10.2.5",
+      "10.6.1"
+    ],
+    "tsc": [
+      "CC6.1",
+      "CC6.8",
+      "CC7.2",
+      "CC7.3"
+    ]
+  },
+  "agent": {
+    "id": "000",
+    "name": "8fcf0827b2a5"
+  },
+  "manager": {
+    "name": "8fcf0827b2a5"
+  },
+  "id": "1785195217.5695",
+  "full_log": "Jul 27 23:33:36 phase67-test-endpoint sshd[6702]: Failed password for invalid user aegisops-phase67-invalid from 192.0.2.67 port 5067 ssh2",
+  "predecoder": {
+    "program_name": "sshd",
+    "timestamp": "Jul 27 23:33:36",
+    "hostname": "phase67-test-endpoint"
+  },
+  "decoder": {
+    "parent": "sshd",
+    "name": "sshd"
+  },
+  "data": {
+    "srcip": "192.0.2.67",
+    "srcuser": "aegisops-phase67-invalid"
+  },
+  "location": "/var/ossec/logs/aegisops-phase67-ssh-test.log"
+}

@@ -32,6 +32,10 @@ if [[ "${scope}" == "wazuh" || "${scope}" == "full" ]]; then
   assert_reviewed_file_digest \
     "${wazuh_internal_users}" \
     "${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-internal-users.sha256"
+  : "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG:?AEGISOPS_LAB_WAZUH_MANAGER_CONFIG is required}"
+  assert_reviewed_file_digest \
+    "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}" \
+    "${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-manager-config.sha256"
   validate_wazuh_certificate_bundle \
     "${AEGISOPS_LAB_WAZUH_CONFIG_DIR}/wazuh_indexer_ssl_certs" \
     || fail "Wazuh substrate certificate bundle is invalid; run ${LAB_DIR}/prepare-substrates.sh"

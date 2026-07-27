@@ -77,6 +77,8 @@ jobs:
           bash scripts/test-verify-phase-52-6-host-preflight-contract.sh
           bash scripts/verify-phase-67-1-colima-integration-lab.sh
           bash scripts/test-verify-phase-67-1-colima-integration-lab.sh
+          bash scripts/verify-phase-67-2-real-wazuh-intake.sh
+          bash scripts/test-verify-phase-67-2-real-wazuh-intake.sh
           bash scripts/verify-support-playbook-break-glass-rehearsal.sh
           bash scripts/verify-response-action-safety-model-doc.sh
           bash scripts/verify-requirements-baseline-control-plane-thesis.sh

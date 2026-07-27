@@ -256,6 +256,40 @@ record_reviewed_file_digest \
   "${internal_users}" \
   "${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-internal-users.sha256"
 
+manager_config_relative_path="single-node/config/wazuh_cluster/wazuh_manager.conf"
+manager_config_fragment="${LAB_DIR}/wazuh/ossec-integration.xml"
+: "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG:?AEGISOPS_LAB_WAZUH_MANAGER_CONFIG is required}"
+[[ -s "${manager_config_fragment}" ]] \
+  || fail "Phase 67.2 Wazuh integration fragment is missing"
+manager_config_staging="$(
+  mktemp "$(dirname "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}")/.manager-ossec.XXXXXX"
+)"
+cleanup_manager_config_staging() {
+  [[ -z "${manager_config_staging:-}" ]] || rm -f "${manager_config_staging}"
+}
+trap cleanup_manager_config_staging EXIT
+{
+  git -C "${AEGISOPS_LAB_WAZUH_SOURCE_DIR}" \
+    show "HEAD:${manager_config_relative_path}"
+  printf '\n'
+  cat "${manager_config_fragment}"
+  printf '\n'
+} >"${manager_config_staging}"
+chmod 600 "${manager_config_staging}"
+if ! cmp -s "${manager_config_staging}" "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}"; then
+  mv "${manager_config_staging}" "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}"
+  manager_config_staging=""
+  mark_wazuh_recreation_required
+else
+  rm -f "${manager_config_staging}"
+  manager_config_staging=""
+fi
+trap - EXIT
+chmod 600 "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}"
+record_reviewed_file_digest \
+  "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}" \
+  "${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-manager-config.sha256"
+
 echo "Prepared Wazuh ${AEGISOPS_LAB_WAZUH_VERSION} substrate at ${AEGISOPS_LAB_WAZUH_SOURCE_DIR}"
 echo "The next wazuh/full up.sh run will force service recreation."
 echo "Shuffle images remain execution-disabled; Docker socket mounting is deferred to Phase 67.3."

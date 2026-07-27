@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aegisops.local/schemas/phase67-wazuh-intake-evidence-v1.json",
+  "title": "Phase 67.2 real Wazuh intake evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_mode",
+    "fixture_provenance",
+    "captured_at",
+    "repository_revision",
+    "wazuh_manager_health",
+    "native_wazuh_alert_id",
+    "native_wazuh_manager_id",
+    "native_wazuh_rule_id",
+    "native_event_timestamp",
+    "negative_boundary",
+    "first_delivery",
+    "duplicate_delivery",
+    "analyst_queue",
+    "case_promotion",
+    "authority_boundary"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "phase67-wazuh-intake-evidence-v1"
+    },
+    "source_mode": {
+      "const": "real_wazuh"
+    },
+    "fixture_provenance": {
+      "enum": [
+        "live_capture_sanitized",
+        "not_exported"
+      ]
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "repository_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "wazuh_manager_health": {
+      "const": "healthy"
+    },
+    "native_wazuh_alert_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "native_wazuh_manager_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "native_wazuh_rule_id": {
+      "const": "5710"
+    },
+    "native_event_timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:?\\d{2})$"
+    },
+    "negative_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseline_alert_count",
+        "after_alert_count",
+        "authoritative_alert_delta"
+      ],
+      "properties": {
+        "baseline_alert_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "after_alert_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "authoritative_alert_delta": {
+          "const": 0
+        }
+      }
+    },
+    "first_delivery": {
+      "$ref": "#/$defs/delivery"
+    },
+    "duplicate_delivery": {
+      "$ref": "#/$defs/delivery"
+    },
+    "analyst_queue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_system",
+        "alert_id",
+        "case_id"
+      ],
+      "properties": {
+        "source_system": {
+          "const": "wazuh"
+        },
+        "alert_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_id": {
+          "type": "null"
+        }
+      }
+    },
+    "case_promotion": {
+      "const": "not_performed"
+    },
+    "authority_boundary": {
+      "const": "aegisops_admission_is_authoritative"
+    }
+  },
+  "$defs": {
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "http_status",
+        "disposition",
+        "aegisops_alert_id",
+        "finding_id",
+        "reconciliation_id"
+      ],
+      "properties": {
+        "http_status": {
+          "const": 202
+        },
+        "disposition": {
+          "enum": [
+            "created",
+            "restated",
+            "deduplicated"
+          ]
+        },
+        "aegisops_alert_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "finding_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reconciliation_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -5,8 +5,12 @@ from typing import Callable, Mapping, Protocol
 from .models import AlertRecord, CaseRecord, LeadRecord, ReconciliationRecord
 
 
-REVIEWED_LIVE_SOURCE_FAMILIES = frozenset({"github_audit", "entra_id"})
-REVIEWED_LIVE_SLICE_LABEL = "Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
+REVIEWED_LIVE_SOURCE_FAMILIES = frozenset(
+    {"github_audit", "entra_id", "wazuh_detection"}
+)
+REVIEWED_LIVE_SLICE_LABEL = (
+    "GitHub audit, Entra ID, and Wazuh detection live slice"
+)
 
 
 class ReviewedSlicePolicyServiceDependencies(Protocol):

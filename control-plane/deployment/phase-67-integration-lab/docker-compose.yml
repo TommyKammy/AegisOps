@@ -187,6 +187,8 @@ services:
       - wazuh
     platform: ${AEGISOPS_LAB_WAZUH_PLATFORM:-linux/arm64}
     image: wazuh/wazuh-manager:4.14.6@sha256:4683ddc88474c79ae6171d9132adbd45fda86bdfb22ad0d8ddee167654c9e841
+    entrypoint:
+      - /opt/aegisops-wazuh/manager-entrypoint.sh
     environment:
       INDEXER_URL: https://wazuh.indexer:9200
       INDEXER_USERNAME: admin
@@ -197,6 +199,14 @@ services:
       SSL_KEY: /etc/ssl/filebeat.key
       API_USERNAME: wazuh-wui
       API_PASSWORD: ${AEGISOPS_LAB_WAZUH_API_PASSWORD:?run-init-first}
+      AEGISOPS_WAZUH_INGEST_URL: https://proxy:8443/intake/wazuh
+      AEGISOPS_WAZUH_INGEST_SHARED_SECRET_FILE: /run/secrets/wazuh-ingest-shared-secret
+      AEGISOPS_WAZUH_INGEST_CA_FILE: /run/aegisops-certs/lab.crt
+      AEGISOPS_WAZUH_ALLOWED_RULE_ID: "5710"
+      AEGISOPS_WAZUH_RECEIPT_FILE: /var/ossec/logs/integrations/aegisops-receipts.jsonl
+      AEGISOPS_WAZUH_HTTP_TIMEOUT_SECONDS: "10"
+    secrets:
+      - wazuh-ingest-shared-secret
     ulimits:
       memlock:
         soft: -1
@@ -213,9 +223,13 @@ services:
       - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem:ro
       - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/wazuh.manager.pem:/etc/ssl/filebeat.pem:ro
       - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key:ro
-      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf:ro
+      - ${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG:?prepare-substrates-first}:/wazuh-config-mount/etc/ossec.conf:ro
+      - ./wazuh:/opt/aegisops-wazuh:ro
+      - ${AEGISOPS_LAB_PROXY_CERT_DIR:?run-init-first}/lab.crt:/run/aegisops-certs/lab.crt:ro
     depends_on:
       wazuh-indexer:
+        condition: service_healthy
+      proxy:
         condition: service_healthy
     networks:
       lab:
