@@ -554,6 +554,102 @@ prove_migration_state() {
   [ "${readiness_status}" = "ready" ]
 }
 
+reviewed_schema_catalog_query() {
+  cat <<'EOF'
+WITH expected_catalog_hashes(catalog_name, catalog_sha256) AS (
+  VALUES
+    ('columns', 'd906ba1ab5288c94b5c277c1aad60d6ddf499ad2aed55a2abde8729e639d3443'),
+    ('constraints', 'a00a8e3616ded3dd37dbdc6619d0309f22899c2773a9ca241a88a6b2b644336e'),
+    ('indexes', 'ba3907928c1c026b50f3a9e37c870d6c0008dddb2ebeccf9001cf937898c7d4f')
+),
+actual_catalog_hashes(catalog_name, catalog_sha256) AS (
+  SELECT
+    'columns',
+    encode(
+      sha256(
+        convert_to(
+          string_agg(
+            table_name || '|' || ordinal_position::text || '|' ||
+            column_name || '|' || data_type || '|' || udt_name || '|' ||
+            is_nullable || '|' || COALESCE(column_default, '<NULL>'),
+            E'\n' ORDER BY table_name, ordinal_position
+          ),
+          'UTF8'
+        )
+      ),
+      'hex'
+    )
+  FROM information_schema.columns
+  WHERE table_schema = 'aegisops_control'
+  UNION ALL
+  SELECT
+    'constraints',
+    encode(
+      sha256(
+        convert_to(
+          string_agg(
+            relation.relname || '|' || constraint_record.conname || '|' ||
+            constraint_record.contype::text || '|' ||
+            constraint_record.convalidated::text || '|' ||
+            pg_get_constraintdef(constraint_record.oid, true),
+            E'\n' ORDER BY relation.relname, constraint_record.conname
+          ),
+          'UTF8'
+        )
+      ),
+      'hex'
+    )
+  FROM pg_constraint AS constraint_record
+  JOIN pg_class AS relation ON relation.oid = constraint_record.conrelid
+  JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+  WHERE namespace.nspname = 'aegisops_control'
+  UNION ALL
+  SELECT
+    'indexes',
+    encode(
+      sha256(
+        convert_to(
+          string_agg(
+            tablename || '|' || indexname || '|' || indexdef,
+            E'\n' ORDER BY tablename, indexname
+          ),
+          'UTF8'
+        )
+      ),
+      'hex'
+    )
+  FROM pg_indexes
+  WHERE schemaname = 'aegisops_control'
+)
+SELECT CASE
+  WHEN NOT EXISTS (
+    SELECT catalog_name, catalog_sha256
+    FROM expected_catalog_hashes
+    EXCEPT
+    SELECT catalog_name, catalog_sha256
+    FROM actual_catalog_hashes
+  )
+  AND NOT EXISTS (
+    SELECT catalog_name, catalog_sha256
+    FROM actual_catalog_hashes
+    EXCEPT
+    SELECT catalog_name, catalog_sha256
+    FROM expected_catalog_hashes
+  )
+  THEN 'ready' ELSE 'not-ready'
+END;
+EOF
+}
+
+prove_delegated_migration_definitions() {
+  catalog_status="$(
+    psql -X "${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN}" -tA -v ON_ERROR_STOP=1 \
+      -c "$(reviewed_schema_catalog_query)" |
+      tr -d '[:space:]'
+  )" || return 1
+  [ "${catalog_status}" = "ready" ]
+}
+
 for migration_path in \
   "${migrations_dir}"/0008_*.sql \
   "${migrations_dir}"/0009_*.sql \
@@ -601,5 +697,14 @@ do
     -c "INSERT INTO aegisops_control.schema_migration_bootstrap (migration_name, migration_checksum) VALUES ('${migration_name_sql}', '${migration_checksum_sql}');" \
     >/dev/null
 done
+
+# Migrations 0001-0007 are delegated to the first-boot entrypoint. Reprove the
+# complete final catalog after 0008-0015 apply so reviewed later evolution of
+# those early tables is accepted while any column, constraint, or index drift
+# still fails before the service process starts.
+if ! prove_delegated_migration_definitions; then
+  echo "Phase 67.1 could not prove final schema definitions for delegated migrations 0001-0007." >&2
+  exit 1
+fi
 
 exec "$@"

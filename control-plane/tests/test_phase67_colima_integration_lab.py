@@ -390,6 +390,91 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 text=True,
             )
 
+    def test_init_rejects_suffix_only_proxy_certificate_sans(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            first = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(first.returncode, 0, first.stderr)
+            runtime_root = (
+                home
+                / ".local"
+                / "share"
+                / "aegisops"
+                / "phase-67-integration-lab"
+            )
+            cert_dir = runtime_root / "proxy-certs"
+            key_path = cert_dir / "lab.key"
+            cert_path = cert_dir / "lab.crt"
+            subprocess.run(
+                [
+                    "openssl",
+                    "req",
+                    "-x509",
+                    "-newkey",
+                    "rsa:2048",
+                    "-sha256",
+                    "-nodes",
+                    "-keyout",
+                    str(key_path),
+                    "-out",
+                    str(cert_path),
+                    "-days",
+                    "30",
+                    "-subj",
+                    "/CN=localhost.invalid",
+                    "-addext",
+                    "subjectAltName="
+                    "DNS:localhost.invalid,"
+                    "DNS:wazuh.localhost.invalid,"
+                    "DNS:shuffle.localhost.invalid,"
+                    "IP:127.0.0.10",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            suffix_only_fingerprint = subprocess.run(
+                ["openssl", "x509", "-in", str(cert_path), "-noout", "-fingerprint"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+
+            second = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertTrue(
+                (runtime_root / "proxy-certificate-recreate-required").is_file()
+            )
+            renewed_fingerprint = subprocess.run(
+                ["openssl", "x509", "-in", str(cert_path), "-noout", "-fingerprint"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+            self.assertNotEqual(renewed_fingerprint, suffix_only_fingerprint)
+            san_entries = subprocess.run(
+                [
+                    "openssl",
+                    "x509",
+                    "-in",
+                    str(cert_path),
+                    "-noout",
+                    "-text",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+            for required_san in (
+                "DNS:localhost",
+                "DNS:wazuh.localhost",
+                "DNS:shuffle.localhost",
+                "IP Address:127.0.0.1",
+            ):
+                self.assertIn(required_san, san_entries)
+            self.assertNotIn("localhost.invalid", san_entries)
+            self.assertNotIn("127.0.0.10", san_entries)
+
     def test_init_marks_deleted_proxy_pair_for_recreation(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = pathlib.Path(tmpdir)
@@ -697,6 +782,28 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             "(coordination_target_type = ANY "
             "(ARRAY['glpi'::text, 'zammad'::text])))",
             entrypoint,
+        )
+        self.assertIn("prove_delegated_migration_definitions", entrypoint)
+        self.assertIn(
+            "final schema definitions for delegated migrations 0001-0007",
+            entrypoint,
+        )
+        for catalog_hash in (
+            "d906ba1ab5288c94b5c277c1aad60d6d"
+            "df499ad2aed55a2abde8729e639d3443",
+            "a00a8e3616ded3dd37dbdc6619d0309f"
+            "22899c2773a9ca241a88a6b2b644336e",
+            "ba3907928c1c026b50f3a9e37c870d6c"
+            "0008dddb2ebeccf9001cf937898c7d4f",
+        ):
+            self.assertIn(catalog_hash, entrypoint)
+        self.assertLess(
+            entrypoint.rindex('"${migrations_dir}"/0015_*.sql'),
+            entrypoint.index("if ! prove_delegated_migration_definitions"),
+        )
+        self.assertLess(
+            entrypoint.index("if ! prove_delegated_migration_definitions"),
+            entrypoint.index('exec "$@"'),
         )
 
     def test_scope_narrowing_rejects_running_excluded_services(self) -> None:

@@ -114,6 +114,18 @@ perl -0pi -e 's/cb6ee538dcb158f0bc6a25bddd04f9ff6f38c3a5d2fb88d0922cf06f0cf555f7
   "${column_definition_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
 assert_fails_with "${column_definition_drift}" 'cb6ee538dcb158f0bc6a25bddd04f9ff6f38c3a5d2fb88d0922cf06f0cf555f7'
 
+delegated_catalog_drift="${workdir}/delegated-catalog-drift"
+copy_fixture "${delegated_catalog_drift}"
+perl -0pi -e 's/d906ba1ab5288c94b5c277c1aad60d6ddf499ad2aed55a2abde8729e639d3443/removed_delegated_catalog/' \
+  "${delegated_catalog_drift}/control-plane/deployment/phase-67-integration-lab/control-plane-entrypoint.sh"
+assert_fails_with "${delegated_catalog_drift}" 'd906ba1ab5288c94b5c277c1aad60d6ddf499ad2aed55a2abde8729e639d3443'
+
+proxy_san_match_drift="${workdir}/proxy-san-match-drift"
+copy_fixture "${proxy_san_match_drift}"
+perl -0pi -e 's/grep -Fxq/grep -Fq/' \
+  "${proxy_san_match_drift}/control-plane/deployment/phase-67-integration-lab/init.sh"
+assert_fails_with "${proxy_san_match_drift}" 'grep -Fxq "${required_san}"'
+
 runtime_identity_drift="${workdir}/runtime-identity-drift"
 copy_fixture "${runtime_identity_drift}"
 perl -0pi -e 's#include /etc/nginx/certs/runtime-auth\.conf;#include /etc/nginx/certs/removed-runtime-auth.conf;#' \
@@ -354,7 +366,7 @@ assert_fails_with "${teardown_ownership_drift}" 'assert_phase67_compose_project_
 
 echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof," \
   "image-digest, migration-definition, migration-constraint-type, source-health-constraint," \
-  "column-definition," \
+  "column-definition, delegated-catalog, proxy-SAN-exact-match," \
   "runtime-identity, scope-narrowing, Wazuh-upstream-TLS," \
   "certificate-renewal, network-host, duplicate-port, runtime-quoting, bounded-logs," \
   "Wazuh-checkout, teardown-recovery, proxy-recreate, proxy-config-tracking," \

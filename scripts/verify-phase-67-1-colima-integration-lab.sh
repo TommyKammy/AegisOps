@@ -184,7 +184,11 @@ require_fixed_string "${init}" "printf 'Aa1!%sZz9!"
 require_fixed_string "${init}" 'load_bootstrap_environment'
 require_fixed_string "${init}" 'openssl x509 -checkend 604800'
 require_fixed_string "${init}" 'DNS:wazuh.localhost,DNS:shuffle.localhost'
-require_fixed_string "${init}" 'certificate_text="$(openssl x509'
+require_fixed_string "${init}" 'certificate_san_entries="$('
+require_fixed_string "${init}" '/X509v3 Subject Alternative Name:/'
+require_fixed_string "${init}" 'capture_sans && /^[[:space:]]+X509v3 /'
+require_fixed_string "${init}" "tr ',' '\\n'"
+require_fixed_string "${init}" 'grep -Fxq "${required_san}"'
 require_fixed_string "${init}" '"DNS:wazuh.localhost"'
 require_fixed_string "${init}" '"DNS:shuffle.localhost"'
 require_fixed_string "${init}" '"IP Address:127.0.0.1"'
@@ -220,6 +224,12 @@ require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'f88e5cdaaa4b0079b
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'c8fc21a6b5137a90c9b0590994e7894a3530d1832b06b3877375437c0a0f84ef'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'cb6ee538dcb158f0bc6a25bddd04f9ff6f38c3a5d2fb88d0922cf06f0cf555f7'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" '6854488c1104636fedc6452212aedaf545a2a3447ebde3b47af026b693bb8f1e'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'prove_delegated_migration_definitions'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'final schema definitions for delegated migrations 0001-0007'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'd906ba1ab5288c94b5c277c1aad60d6ddf499ad2aed55a2abde8729e639d3443'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'a00a8e3616ded3dd37dbdc6619d0309f22899c2773a9ca241a88a6b2b644336e'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'ba3907928c1c026b50f3a9e37c870d6c0008dddb2ebeccf9001cf937898c7d4f'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "tablename || '|' || indexname || '|' || indexdef"
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "('evidence_records', 'provenance', 'jsonb', 'NO', \$default\$'{}'::jsonb\$default\$)"
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'SELECT table_name, column_name, udt_name, is_nullable, column_default'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'AND column_default IS NULL'

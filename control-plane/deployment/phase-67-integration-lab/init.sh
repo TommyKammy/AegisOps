@@ -125,14 +125,42 @@ if [[ -e "${cert_dir}/lab.key" || -e "${cert_dir}/lab.crt" ]]; then
     || fail "proxy TLS private key is invalid; restore or remove the certificate pair before rerunning init"
   openssl x509 -in "${cert_dir}/lab.crt" -noout >/dev/null 2>&1 \
     || fail "proxy TLS certificate is invalid; restore or remove the certificate pair before rerunning init"
-  certificate_text="$(openssl x509 -in "${cert_dir}/lab.crt" -noout -text)"
+  certificate_sans="$(
+    openssl x509 \
+      -in "${cert_dir}/lab.crt" \
+      -noout \
+      -text 2>/dev/null |
+      awk '
+        /X509v3 Subject Alternative Name:/ {
+          capture_sans = 1
+          next
+        }
+        capture_sans && /^[[:space:]]+X509v3 / {
+          exit
+        }
+        capture_sans && /Signature Algorithm:/ {
+          exit
+        }
+        capture_sans && !/^[[:space:]]+/ {
+          exit
+        }
+        capture_sans {
+          sub(/^[[:space:]]+/, "")
+          printf "%s", $0
+        }
+      '
+  )"
+  certificate_san_entries="$(
+    tr ',' '\n' <<<"${certificate_sans}" |
+      sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+  )"
   for required_san in \
     "DNS:localhost" \
     "DNS:wazuh.localhost" \
     "DNS:shuffle.localhost" \
     "IP Address:127.0.0.1"
   do
-    if ! grep -Fq "${required_san}" <<<"${certificate_text}"; then
+    if ! grep -Fxq "${required_san}" <<<"${certificate_san_entries}"; then
       rotate_proxy_certificate=true
     fi
   done
