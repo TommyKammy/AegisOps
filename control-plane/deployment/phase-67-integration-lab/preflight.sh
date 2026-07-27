@@ -111,11 +111,21 @@ case "${server_arch}" in
 esac
 [[ "${server_arch_family}" == "${colima_arch_family}" ]] \
   || fail "Docker server architecture '${server_arch}' differs from Colima architecture '${arch}'"
+
+binfmt_handler_enabled() {
+  local handler="$1"
+
+  colima ssh --profile "${AEGISOPS_LAB_COLIMA_PROFILE}" -- sh -c '
+    handler_path="/proc/sys/fs/binfmt_misc/$1"
+    grep -qx enabled /proc/sys/fs/binfmt_misc/status &&
+      grep -qx enabled "${handler_path}"
+  ' phase67-binfmt-probe "${handler}"
+}
+
 if [[ "${scope}" != "core" && "${arm64_execution}" == "emulated" ]]; then
   [[ "${AEGISOPS_LAB_ALLOW_EMULATION:-no}" == "yes" ]] \
     || fail "selected scope '${scope}' requires ARM64 service emulation; set AEGISOPS_LAB_ALLOW_EMULATION=yes only after accepting emulation"
-  if ! colima ssh --profile "${AEGISOPS_LAB_COLIMA_PROFILE}" -- sh -c \
-    'test -e /proc/sys/fs/binfmt_misc/qemu-aarch64' >/dev/null 2>&1; then
+  if ! binfmt_handler_enabled qemu-aarch64 >/dev/null 2>&1; then
     fail "ARM64 service execution is unavailable in Colima profile '${AEGISOPS_LAB_COLIMA_PROFILE}'"
   fi
 fi
@@ -124,9 +134,9 @@ if [[ "${scope}" == "shuffle" || "${scope}" == "full" ]]; then
     || fail "Shuffle 2.2.1 is amd64-only; set AEGISOPS_LAB_ALLOW_EMULATION=yes only after accepting emulation"
   if [[ "${amd64_execution}" == "emulated" ]]; then
     if ! colima ssh --profile "${AEGISOPS_LAB_COLIMA_PROFILE}" -- sh -c \
-      'test -e /mnt/lima-rosetta/rosetta || test -e /proc/sys/fs/binfmt_misc/qemu-x86_64' \
-      >/dev/null 2>&1; then
-      fail "Shuffle amd64 execution is unavailable in Colima profile '${AEGISOPS_LAB_COLIMA_PROFILE}'. Preserve the profile settings, then run: colima stop --profile ${AEGISOPS_LAB_COLIMA_PROFILE} && colima start --profile ${AEGISOPS_LAB_COLIMA_PROFILE} --vm-type vz --vz-rosetta --arch aarch64 --cpus ${cpus} --memory ${memory_gib} --disk ${disk_gib} --runtime docker --kubernetes --activate=false"
+      'test -x /mnt/lima-rosetta/rosetta' >/dev/null 2>&1; then
+      binfmt_handler_enabled qemu-x86_64 >/dev/null 2>&1 \
+        || fail "Shuffle amd64 execution is unavailable in Colima profile '${AEGISOPS_LAB_COLIMA_PROFILE}'. Preserve the profile settings, then run: colima stop --profile ${AEGISOPS_LAB_COLIMA_PROFILE} && colima start --profile ${AEGISOPS_LAB_COLIMA_PROFILE} --vm-type vz --vz-rosetta --arch aarch64 --cpus ${cpus} --memory ${memory_gib} --disk ${disk_gib} --runtime docker --kubernetes --activate=false"
     fi
   fi
 fi

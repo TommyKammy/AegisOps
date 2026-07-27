@@ -24,7 +24,7 @@ The default `core` scope starts PostgreSQL, applies the reviewed first-boot migr
 | `shuffle` | core plus backend, frontend, OpenSearch | `https://shuffle.localhost:18443` |
 | `full` | all of the above | the three TLS proxy hostnames above |
 
-Wazuh `4.14.6` is pinned to the reviewed upstream tag commit and arm64 image digests. Shuffle `2.2.1` images are pinned to amd64 digests and run through explicit Colima emulation acceptance. PostgreSQL, nginx, Shuffle OpenSearch, the control-plane base image, and the Wazuh certificate generator are also digest-pinned so evidence runs cannot silently change their external substrate. Phase 67.1 does not mount the Docker socket or start Orborus, so Shuffle workflow execution remains disabled until Phase 67.3.
+Wazuh `4.14.6` is pinned to the reviewed upstream tag commit and arm64 image digests. Shuffle `2.2.1` images are pinned to amd64 digests and run through explicit Colima emulation acceptance. Emulated execution requires both global `binfmt_misc` and the selected QEMU handler to report `enabled`; executable Colima Rosetta is accepted for amd64 instead. PostgreSQL, nginx, Shuffle OpenSearch, the control-plane base image, and the Wazuh certificate generator are also digest-pinned so evidence runs cannot silently change their external substrate. Phase 67.1 does not mount the Docker socket or start Orborus, so Shuffle workflow execution remains disabled until Phase 67.3.
 
 ## Quick Start
 

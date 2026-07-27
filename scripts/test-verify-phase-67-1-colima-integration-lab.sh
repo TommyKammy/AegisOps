@@ -73,6 +73,12 @@ perl -0pi -e 's/AEGISOPS_LAB_ALLOW_EMULATION=no/AEGISOPS_LAB_ALLOW_EMULATION=yes
   "${emulation_drift}/control-plane/deployment/phase-67-integration-lab/bootstrap.env.sample"
 assert_fails_with "${emulation_drift}" 'AEGISOPS_LAB_ALLOW_EMULATION=no'
 
+binfmt_enabled_drift="${workdir}/binfmt-enabled-drift"
+copy_fixture "${binfmt_enabled_drift}"
+perl -0pi -e 's/grep -qx enabled /test -e /g' \
+  "${binfmt_enabled_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh"
+assert_fails_with "${binfmt_enabled_drift}" 'grep -qx enabled /proc/sys/fs/binfmt_misc/status'
+
 latest_image="${workdir}/latest-image"
 copy_fixture "${latest_image}"
 printf '\n# image: example.invalid/lab:latest\n' >>"${latest_image}/control-plane/deployment/phase-67-integration-lab/docker-compose.yml"
@@ -364,7 +370,7 @@ perl -0pi -e 's/assert_phase67_compose_project_ownership/assert_removed_project_
   "${teardown_ownership_drift}/control-plane/deployment/phase-67-integration-lab/destroy-data.sh"
 assert_fails_with "${teardown_ownership_drift}" 'assert_phase67_compose_project_ownership'
 
-echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, image, migration-proof," \
+echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, binfmt-enabled, image, migration-proof," \
   "image-digest, migration-definition, migration-constraint-type, source-health-constraint," \
   "column-definition, delegated-catalog, proxy-SAN-exact-match," \
   "runtime-identity, scope-narrowing, Wazuh-upstream-TLS," \

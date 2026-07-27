@@ -1547,6 +1547,20 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         self.assertIn('selected_port_names "${scope}"', preflight)
         self.assertIn("project_network_subnets", preflight)
         self.assertIn("ARM64 service execution is unavailable", preflight)
+        self.assertIn("binfmt_handler_enabled", preflight)
+        self.assertIn(
+            "grep -qx enabled /proc/sys/fs/binfmt_misc/status",
+            preflight,
+        )
+        self.assertIn(
+            'grep -qx enabled "${handler_path}"',
+            preflight,
+        )
+        self.assertIn("'test -x /mnt/lima-rosetta/rosetta'", preflight)
+        self.assertNotIn(
+            "test -e /proc/sys/fs/binfmt_misc/qemu-",
+            preflight,
+        )
         self.assertIn('mktemp "${evidence_dir}/preflight-${scope}-', preflight)
         self.assertIn("AEGISOPS_LAB_ALLOW_EMULATION=no", bootstrap)
 
