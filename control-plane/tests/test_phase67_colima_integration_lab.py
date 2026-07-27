@@ -925,6 +925,42 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                         result.stderr,
                     )
 
+    def test_logs_requires_positive_bounded_integer_tail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            init_result = self._run_init(home, LAB_DIR / "bootstrap.env.sample")
+            self.assertEqual(init_result.returncode, 0, init_result.stderr)
+            base_env = os.environ.copy()
+            base_env["HOME"] = str(home)
+
+            for log_tail in ("all", "0", "-1", "01", "10001", " 200"):
+                for service_arguments in ((), ("control-plane",)):
+                    with self.subTest(
+                        log_tail=log_tail,
+                        service_arguments=service_arguments,
+                    ):
+                        env = base_env.copy()
+                        env["AEGISOPS_LAB_LOG_TAIL"] = log_tail
+                        result = subprocess.run(
+                            [
+                                "bash",
+                                str(LAB_DIR / "logs.sh"),
+                                *service_arguments,
+                            ],
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                            env=env,
+                        )
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn(
+                            "must be an integer from 1 through 10000",
+                            result.stderr,
+                        )
+
+            logs = (LAB_DIR / "logs.sh").read_text(encoding="utf-8")
+            self.assertEqual(logs.count('--tail "${log_tail}"'), 2)
+
     def test_wazuh_substrate_rejects_unreviewed_tracked_changes(self) -> None:
         common = (LAB_DIR / "lab-common.sh").read_text(encoding="utf-8")
         prepare = (LAB_DIR / "prepare-substrates.sh").read_text(encoding="utf-8")
@@ -933,6 +969,14 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         self.assertLess(
             prepare.index("assert_reviewed_wazuh_checkout"),
             prepare.index("require_command docker"),
+        )
+        self.assertLess(
+            prepare.index("assert_reviewed_wazuh_checkout"),
+            prepare.index('"${LAB_DIR}/preflight.sh" --scope wazuh'),
+        )
+        self.assertLess(
+            prepare.index('"${LAB_DIR}/preflight.sh" --scope wazuh'),
+            prepare.index("docker_lab run --rm"),
         )
         self.assertLess(
             up.index("assert_reviewed_wazuh_checkout"),

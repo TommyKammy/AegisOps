@@ -79,6 +79,18 @@ perl -0pi -e 's/grep -qx enabled /test -e /g' \
   "${binfmt_enabled_drift}/control-plane/deployment/phase-67-integration-lab/preflight.sh"
 assert_fails_with "${binfmt_enabled_drift}" 'grep -qx enabled /proc/sys/fs/binfmt_misc/status'
 
+prepare_preflight_drift="${workdir}/prepare-preflight-drift"
+copy_fixture "${prepare_preflight_drift}"
+perl -0pi -e 's#"\$\{LAB_DIR\}/preflight\.sh" --scope wazuh#:#' \
+  "${prepare_preflight_drift}/control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh"
+assert_fails_with "${prepare_preflight_drift}" '"${LAB_DIR}/preflight.sh" --scope wazuh'
+
+log_tail_drift="${workdir}/log-tail-drift"
+copy_fixture "${log_tail_drift}"
+perl -0pi -e 's/10000/1000000/g' \
+  "${log_tail_drift}/control-plane/deployment/phase-67-integration-lab/logs.sh"
+assert_fails_with "${log_tail_drift}" '(( 10#${log_tail} > 10000 )); then'
+
 latest_image="${workdir}/latest-image"
 copy_fixture "${latest_image}"
 printf '\n# image: example.invalid/lab:latest\n' >>"${latest_image}/control-plane/deployment/phase-67-integration-lab/docker-compose.yml"
@@ -370,7 +382,8 @@ perl -0pi -e 's/assert_phase67_compose_project_ownership/assert_removed_project_
   "${teardown_ownership_drift}/control-plane/deployment/phase-67-integration-lab/destroy-data.sh"
 assert_fails_with "${teardown_ownership_drift}" 'assert_phase67_compose_project_ownership'
 
-echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, binfmt-enabled, image, migration-proof," \
+echo "Phase 67.1 verifier rejects context, socket, cleanup, emulation, binfmt-enabled," \
+  "preparation-preflight, bounded-log-tail, image, migration-proof," \
   "image-digest, migration-definition, migration-constraint-type, source-health-constraint," \
   "column-definition, delegated-catalog, proxy-SAN-exact-match," \
   "runtime-identity, scope-narrowing, Wazuh-upstream-TLS," \

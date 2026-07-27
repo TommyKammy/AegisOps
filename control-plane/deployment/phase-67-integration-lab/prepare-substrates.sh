@@ -38,6 +38,11 @@ assert_reviewed_wazuh_checkout \
 require_command docker
 require_command openssl
 
+# Preparation launches platform-selected helper images before up.sh. Reuse the
+# Wazuh preflight so architecture, explicit emulation acceptance, and enabled
+# binfmt handler checks complete before any Docker mutation or container run.
+"${LAB_DIR}/preflight.sh" --scope wazuh
+
 cert_dir="${AEGISOPS_LAB_WAZUH_CONFIG_DIR}/wazuh_indexer_ssl_certs"
 wazuh_recreate_marker="${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh-certificate-recreate-required"
 mark_wazuh_recreation_required() {

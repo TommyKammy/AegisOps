@@ -38,14 +38,14 @@ control-plane/deployment/phase-67-integration-lab/smoke-core.sh
 control-plane/deployment/phase-67-integration-lab/down.sh
 ```
 
-Prepare the pinned Wazuh checkout and generated indexer certificates before a Wazuh or full start:
+Prepare the pinned Wazuh checkout and generated indexer certificates before a Wazuh or full start. Preparation runs the Wazuh-scoped preflight before its first Docker helper so ARM64 hash generation cannot bypass architecture or emulation acceptance:
 
 ```bash
 control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh
 control-plane/deployment/phase-67-integration-lab/up.sh wazuh
 ```
 
-Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
+Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 
 `up.sh` will not represent a narrower scope while services from another optional profile remain running. Run `down.sh` before changing from `full` to `core`, `wazuh`, or `shuffle`, or when switching directly between the two optional scopes.
 
