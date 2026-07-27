@@ -21,6 +21,7 @@ Current scaffold:
 - `tests/` contains focused service-root tests for the local runtime skeleton.
 - `config/local.env.sample` defines non-secret local placeholders for PostgreSQL, OpenSearch, and n8n integration boundaries.
 - `deployment/first-boot/` contains reviewed Phase 16 bootstrap and entrypoint skeletons for the narrow first-boot control-plane, PostgreSQL, and reverse-proxy contract.
+- `deployment/phase-67-integration-lab/` contains the non-production Colima scaffold for a dedicated real-container AegisOps, Wazuh, and Shuffle trial environment.
 
 Current persistence status:
 

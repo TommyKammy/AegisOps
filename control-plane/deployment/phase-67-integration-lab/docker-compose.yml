@@ -1,0 +1,444 @@
+name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}
+
+services:
+  postgres:
+    image: postgres:16.4@sha256:e62fbf9d3e2b49816a32c400ed2dba83e3b361e6833e624024309c35d334b412
+    environment:
+      POSTGRES_DB: aegisops_control_plane
+      POSTGRES_USER: aegisops_control_plane
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
+    secrets:
+      - postgres-password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      lab:
+        ipv4_address: ${AEGISOPS_LAB_POSTGRES_IPV4:-172.31.67.30}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U aegisops_control_plane -d aegisops_control_plane
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    labels:
+      com.aegisops.lab.phase: "67.1"
+      com.aegisops.lab.component: postgres
+
+  control-plane:
+    build:
+      context: ../../..
+      dockerfile: control-plane/deployment/first-boot/Dockerfile
+    image: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-control-plane:local
+    entrypoint:
+      - /opt/aegisops/bin/phase-67-lab-entrypoint.sh
+    command:
+      - python3
+      - main.py
+      - serve
+    environment:
+      AEGISOPS_CONTROL_PLANE_HOST: 0.0.0.0
+      AEGISOPS_CONTROL_PLANE_PORT: 8080
+      AEGISOPS_CONTROL_PLANE_POSTGRES_DSN_FILE: /run/secrets/control-plane-postgres-dsn
+      AEGISOPS_CONTROL_PLANE_BOOT_MODE: first-boot
+      AEGISOPS_CONTROL_PLANE_LOG_LEVEL: INFO
+      AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_FILE: /run/secrets/wazuh-ingest-shared-secret
+      AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET_FILE: /run/secrets/wazuh-ingest-proxy-secret
+      AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_TRUSTED_PROXY_CIDRS: ${AEGISOPS_LAB_PROXY_IPV4:-172.31.67.10}/32
+      AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET_FILE: /run/secrets/protected-surface-proxy-secret
+      AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_TRUSTED_PROXY_CIDRS: ${AEGISOPS_LAB_PROXY_IPV4:-172.31.67.10}/32
+      AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT: svc-aegisops-phase67-proxy
+      AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER: phase67-lab
+      AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN_FILE: /run/secrets/admin-bootstrap-token
+      AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN_FILE: /run/secrets/break-glass-token
+      AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL: http://shuffle-backend:5001
+    secrets:
+      - control-plane-postgres-dsn
+      - wazuh-ingest-shared-secret
+      - wazuh-ingest-proxy-secret
+      - protected-surface-proxy-secret
+      - admin-bootstrap-token
+      - break-glass-token
+    volumes:
+      - ./control-plane-entrypoint.sh:/opt/aegisops/bin/phase-67-lab-entrypoint.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      lab:
+        ipv4_address: ${AEGISOPS_LAB_CONTROL_PLANE_IPV4:-172.31.67.20}
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    labels:
+      com.aegisops.lab.phase: "67.1"
+      com.aegisops.lab.component: control-plane
+
+  proxy:
+    image: nginx:1.27.0@sha256:98f8ec75657d21b924fe4f69b6b9bff2f6550ea48838af479d8894a852000e40
+    ports:
+      - "127.0.0.1:${AEGISOPS_LAB_PROXY_PORT:-18443}:8443"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/control-plane.conf:/etc/nginx/conf.d/control-plane.conf:ro
+      - ${AEGISOPS_LAB_PROXY_CERT_DIR:?run-init-first}:/etc/nginx/certs:ro
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    networks:
+      lab:
+        ipv4_address: ${AEGISOPS_LAB_PROXY_IPV4:-172.31.67.10}
+    healthcheck:
+      test:
+        - CMD
+        - nginx
+        - -t
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    labels:
+      com.aegisops.lab.phase: "67.1"
+      com.aegisops.lab.component: proxy
+
+  wazuh-indexer:
+    profiles:
+      - wazuh
+    platform: ${AEGISOPS_LAB_WAZUH_PLATFORM:-linux/arm64}
+    image: wazuh/wazuh-indexer:4.14.6@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5
+    environment:
+      OPENSEARCH_JAVA_OPTS: -Xms2g -Xmx2g
+      INDEXER_USERNAME: admin
+      INDEXER_PASSWORD: ${AEGISOPS_LAB_WAZUH_INDEXER_PASSWORD:?run-init-first}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - wazuh-indexer-data:/var/lib/wazuh-indexer
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/config/certs/root-ca.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem:/usr/share/wazuh-indexer/config/certs/wazuh.indexer.key:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/wazuh.indexer.pem:/usr/share/wazuh-indexer/config/certs/wazuh.indexer.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/admin.pem:/usr/share/wazuh-indexer/config/certs/admin.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/admin-key.pem:/usr/share/wazuh-indexer/config/certs/admin-key.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer/wazuh.indexer.yml:/usr/share/wazuh-indexer/config/opensearch.yml:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/config/opensearch-security/internal_users.yml:ro
+    networks:
+      lab:
+        ipv4_address: ${AEGISOPS_LAB_WAZUH_INDEXER_IPV4:-172.31.67.41}
+        aliases:
+          - wazuh.indexer
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -sk --fail -u "$${INDEXER_USERNAME}:$${INDEXER_PASSWORD}" https://127.0.0.1:9200/_cluster/health >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 60
+    labels:
+      com.aegisops.lab.phase: "67.1"
+      com.aegisops.lab.component: wazuh-indexer
+
+  wazuh-security-bootstrap:
+    profiles:
+      - wazuh
+    platform: ${AEGISOPS_LAB_WAZUH_PLATFORM:-linux/arm64}
+    image: wazuh/wazuh-indexer:4.14.6@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5
+    environment:
+      OPENSEARCH_JAVA_HOME: /usr/share/wazuh-indexer/jdk
+    entrypoint:
+      - bash
+      - -c
+      - |
+        exec /usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh \
+          -f /securityconfig/internal_users.yml \
+          -t internalusers \
+          -nhnv \
+          -h wazuh-indexer \
+          -p 9200 \
+          -cacert /certs/root-ca.pem \
+          -cert /certs/admin.pem \
+          -key /certs/admin-key.pem
+    volumes:
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer/internal_users.yml:/securityconfig/internal_users.yml:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/root-ca.pem:/certs/root-ca.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/admin.pem:/certs/admin.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/admin-key.pem:/certs/admin-key.pem:ro
+    depends_on:
+      wazuh-indexer:
+        condition: service_healthy
+    networks:
+      - lab
+    restart: "no"
+    labels:
+      com.aegisops.lab.phase: "67.1"
+      com.aegisops.lab.component: wazuh-security-bootstrap
+
+  wazuh-manager:
+    profiles:
+      - wazuh
+    platform: ${AEGISOPS_LAB_WAZUH_PLATFORM:-linux/arm64}
+    image: wazuh/wazuh-manager:4.14.6@sha256:4683ddc88474c79ae6171d9132adbd45fda86bdfb22ad0d8ddee167654c9e841
+    environment:
+      INDEXER_URL: https://wazuh.indexer:9200
+      INDEXER_USERNAME: admin
+      INDEXER_PASSWORD: ${AEGISOPS_LAB_WAZUH_INDEXER_PASSWORD:?run-init-first}
+      FILEBEAT_SSL_VERIFICATION_MODE: full
+      SSL_CERTIFICATE_AUTHORITIES: /etc/ssl/root-ca.pem
+      SSL_CERTIFICATE: /etc/ssl/filebeat.pem
+      SSL_KEY: /etc/ssl/filebeat.key
+      API_USERNAME: wazuh-wui
+      API_PASSWORD: ${AEGISOPS_LAB_WAZUH_API_PASSWORD:?run-init-first}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 655360
+        hard: 655360
+    volumes:
+      - wazuh-api-configuration:/var/ossec/api/configuration
+      - wazuh-etc:/var/ossec/etc
+      - wazuh-logs:/var/ossec/logs
+      - wazuh-queue:/var/ossec/queue
+      - wazuh-integrations:/var/ossec/integrations
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/wazuh.manager.pem:/etc/ssl/filebeat.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf:ro
+    depends_on:
+      wazuh-indexer:
+        condition: service_healthy
+    networks:
+      lab:
+        ipv4_address: ${AEGISOPS_LAB_WAZUH_MANAGER_IPV4:-172.31.67.40}
+        aliases:
+          - wazuh.manager
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - status="$$(/var/ossec/bin/wazuh-control status)"; printf '%s\n' "$${status}" | grep -q 'wazuh-analysisd is running' && printf '%s\n' "$${status}" | grep -q 'wazuh-apid is running'
+      interval: 10s
+      timeout: 5s
+      retries: 60
+    labels:
+      com.aegisops.lab.phase: "67.1"
+      com.aegisops.lab.component: wazuh-manager
+
+  wazuh-dashboard:
+    profiles:
+      - wazuh
+    platform: ${AEGISOPS_LAB_WAZUH_PLATFORM:-linux/arm64}
+    image: wazuh/wazuh-dashboard:4.14.6@sha256:16aa978eaa6355fe3965e310ef8eaaed4df6f701dcf5885ebd0783fcd5ee6f16
+    environment:
+      INDEXER_USERNAME: admin
+      INDEXER_PASSWORD: ${AEGISOPS_LAB_WAZUH_INDEXER_PASSWORD:?run-init-first}
+      WAZUH_API_URL: https://wazuh.manager
+      DASHBOARD_USERNAME: kibanaserver
+      DASHBOARD_PASSWORD: ${AEGISOPS_LAB_WAZUH_DASHBOARD_PASSWORD:?run-init-first}
+      API_USERNAME: wazuh-wui
+      API_PASSWORD: ${AEGISOPS_LAB_WAZUH_API_PASSWORD:?run-init-first}
+    volumes:
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_dashboard/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:ro
+      - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_dashboard/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml:ro
+      - wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config
+      - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
+    depends_on:
+      wazuh-manager:
+        condition: service_healthy
+      wazuh-indexer:
+        condition: service_healthy
+      wazuh-security-bootstrap:
+        condition: service_completed_successfully
+    networks:
+      lab:
+        ipv4_address: ${AEGISOPS_LAB_WAZUH_DASHBOARD_IPV4:-172.31.67.42}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -sk --fail https://127.0.0.1:5601/ >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 60
+    labels:
+      com.aegisops.lab.phase: "67.1"
+      com.aegisops.lab.component: wazuh-dashboard
+
+  shuffle-opensearch:
+    profiles:
+      - shuffle
+    platform: linux/arm64
+    image: opensearchproject/opensearch:3.2.0@sha256:23297b8d8545e129dd58c254ed08d786dc552410ba772983ad2af31048d2f04b
+    environment:
+      OPENSEARCH_JAVA_OPTS: -Xms3g -Xmx3g
+      bootstrap.memory_lock: "true"
+      DISABLE_PERFORMANCE_ANALYZER_AGENT_CLI: "true"
+      cluster.initial_master_nodes: shuffle-opensearch
+      cluster.routing.allocation.disk.threshold_enabled: "false"
+      cluster.name: shuffle-cluster
+      node.name: shuffle-opensearch
+      node.store.allow_mmap: "false"
+      discovery.seed_hosts: shuffle-opensearch
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${AEGISOPS_LAB_SHUFFLE_OPENSEARCH_PASSWORD:?run-init-first}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - shuffle-database:/usr/share/opensearch/data
+    networks:
+      lab:
+        ipv4_address: ${AEGISOPS_LAB_SHUFFLE_OPENSEARCH_IPV4:-172.31.67.51}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -sk --fail -u "admin:$${OPENSEARCH_INITIAL_ADMIN_PASSWORD}" https://127.0.0.1:9200/_cluster/health >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 60
+    labels:
+      com.aegisops.lab.phase: "67.1"
+      com.aegisops.lab.component: shuffle-opensearch
+
+  shuffle-backend:
+    profiles:
+      - shuffle
+    platform: ${AEGISOPS_LAB_SHUFFLE_PLATFORM:-linux/amd64}
+    image: ghcr.io/shuffle/shuffle-backend:2.2.1@sha256:0cc1775e48b7d94b7f16d0be713aa274ced52be24ad521beaaf58c67023fd2e5
+    environment:
+      BASE_URL: http://shuffle-backend:5001
+      SHUFFLE_OPENSEARCH_URL: https://shuffle-opensearch:9200
+      SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY: "true"
+      SHUFFLE_OPENSEARCH_USERNAME: admin
+      SHUFFLE_OPENSEARCH_PASSWORD: ${AEGISOPS_LAB_SHUFFLE_OPENSEARCH_PASSWORD:?run-init-first}
+      SHUFFLE_ENCRYPTION_MODIFIER: ${AEGISOPS_LAB_SHUFFLE_ENCRYPTION_MODIFIER:?run-init-first}
+      SHUFFLE_APP_HOTLOAD_FOLDER: /shuffle-apps
+      SHUFFLE_FILE_LOCATION: /shuffle-files
+      SHUFFLE_STATS_DISABLED: "true"
+      SHUFFLE_LOGS_DISABLED: "true"
+    volumes:
+      - ${AEGISOPS_LAB_SHUFFLE_APP_DIR:?run-init-first}:/shuffle-apps
+      - ${AEGISOPS_LAB_SHUFFLE_FILE_DIR:?run-init-first}:/shuffle-files
+    depends_on:
+      shuffle-opensearch:
+        condition: service_healthy
+    networks:
+      lab:
+        ipv4_address: ${AEGISOPS_LAB_SHUFFLE_BACKEND_IPV4:-172.31.67.50}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1:5001/api/v1/health >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 60
+    labels:
+      com.aegisops.lab.phase: "67.1"
+      com.aegisops.lab.component: shuffle-backend
+      com.aegisops.lab.execution-enabled: "false"
+
+  shuffle-frontend:
+    profiles:
+      - shuffle
+    platform: ${AEGISOPS_LAB_SHUFFLE_PLATFORM:-linux/amd64}
+    image: ghcr.io/shuffle/shuffle-frontend:2.2.1@sha256:0561dd421382f70d15cada11a324b40762f0930522fcc1b51edcce9c87cc0f00
+    environment:
+      BACKEND_HOSTNAME: shuffle-backend
+    depends_on:
+      shuffle-backend:
+        condition: service_healthy
+    networks:
+      lab:
+        ipv4_address: ${AEGISOPS_LAB_SHUFFLE_FRONTEND_IPV4:-172.31.67.52}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1/ >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 60
+    labels:
+      com.aegisops.lab.phase: "67.1"
+      com.aegisops.lab.component: shuffle-frontend
+
+networks:
+  lab:
+    name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${AEGISOPS_LAB_NETWORK_SUBNET:-172.31.67.0/24}
+    labels:
+      com.aegisops.lab.phase: "67.1"
+
+volumes:
+  postgres-data:
+    name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-postgres-data
+    labels:
+      com.aegisops.lab.phase: "67.1"
+  wazuh-api-configuration:
+    name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-wazuh-api-configuration
+    labels:
+      com.aegisops.lab.phase: "67.1"
+  wazuh-etc:
+    name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-wazuh-etc
+    labels:
+      com.aegisops.lab.phase: "67.1"
+  wazuh-logs:
+    name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-wazuh-logs
+    labels:
+      com.aegisops.lab.phase: "67.1"
+  wazuh-queue:
+    name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-wazuh-queue
+    labels:
+      com.aegisops.lab.phase: "67.1"
+  wazuh-integrations:
+    name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-wazuh-integrations
+    labels:
+      com.aegisops.lab.phase: "67.1"
+  wazuh-indexer-data:
+    name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-wazuh-indexer-data
+    labels:
+      com.aegisops.lab.phase: "67.1"
+  wazuh-dashboard-config:
+    name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-wazuh-dashboard-config
+    labels:
+      com.aegisops.lab.phase: "67.1"
+  wazuh-dashboard-custom:
+    name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-wazuh-dashboard-custom
+    labels:
+      com.aegisops.lab.phase: "67.1"
+  shuffle-database:
+    name: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-shuffle-database
+    labels:
+      com.aegisops.lab.phase: "67.1"
+
+secrets:
+  postgres-password:
+    file: ${AEGISOPS_LAB_SECRET_DIR:?run-init-first}/postgres-password
+  control-plane-postgres-dsn:
+    file: ${AEGISOPS_LAB_SECRET_DIR:?run-init-first}/control-plane-postgres-dsn
+  wazuh-ingest-shared-secret:
+    file: ${AEGISOPS_LAB_SECRET_DIR:?run-init-first}/wazuh-ingest-shared-secret
+  wazuh-ingest-proxy-secret:
+    file: ${AEGISOPS_LAB_SECRET_DIR:?run-init-first}/wazuh-ingest-proxy-secret
+  protected-surface-proxy-secret:
+    file: ${AEGISOPS_LAB_SECRET_DIR:?run-init-first}/protected-surface-proxy-secret
+  admin-bootstrap-token:
+    file: ${AEGISOPS_LAB_SECRET_DIR:?run-init-first}/admin-bootstrap-token
+  break-glass-token:
+    file: ${AEGISOPS_LAB_SECRET_DIR:?run-init-first}/break-glass-token

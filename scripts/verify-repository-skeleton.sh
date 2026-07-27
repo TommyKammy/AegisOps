@@ -9,6 +9,7 @@ expected_top_level_entries=(
   ".codex-supervisor"
   ".env.sample"
   ".github"
+  ".dockerignore"
   ".gitignore"
   "LICENSE.txt"
   "README.md"
