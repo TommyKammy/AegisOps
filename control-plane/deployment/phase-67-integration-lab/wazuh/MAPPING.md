@@ -36,6 +36,11 @@ secret value. Before correlation or persistence, the authoritative AegisOps
 intake boundary independently verifies every native-derived and fixed reviewed
 provenance field in this table.
 
+The Phase 67 proxy also attests `wazuh_detection` independently in
+`X-AegisOps-Source-Family`. The control plane rejects a payload whose
+`data.source_family` does not match that proxy-owned value before applying the
+family-specific rule and provenance gates.
+
 Wazuh remains subordinate detection evidence. Successful AegisOps admission
 creates alert state; delivery and Wazuh state do not create cases, approvals,
 actions, reconciliation authority, closeout, or readiness acceptance.

@@ -1032,6 +1032,7 @@ def _handle_wazuh_intake(
             authorization_header=handler.headers.get("Authorization"),
             forwarded_proto=handler.headers.get("X-Forwarded-Proto"),
             reverse_proxy_secret_header=handler.headers.get("X-AegisOps-Proxy-Secret"),
+            source_family_header=handler.headers.get("X-AegisOps-Source-Family"),
             peer_addr=handler.client_address[0] if handler.client_address else None,
         )
     except PermissionError as exc:

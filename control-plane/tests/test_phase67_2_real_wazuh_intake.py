@@ -397,6 +397,7 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             forwarded_proto="https",
             reverse_proxy_secret_header="reviewed-proxy-secret",
             peer_addr="172.31.67.10",
+            source_family_header="wazuh_detection",
         )
         duplicate = service.ingest_wazuh_alert(
             raw_alert=deepcopy(mapped_alert),
@@ -404,6 +405,7 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             forwarded_proto="https",
             reverse_proxy_secret_header="reviewed-proxy-secret",
             peer_addr="172.31.67.10",
+            source_family_header="wazuh_detection",
         )
 
         self.assertEqual(created.disposition, "created")
@@ -459,11 +461,50 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
                         forwarded_proto="https",
                         reverse_proxy_secret_header="reviewed-proxy-secret",
                         peer_addr="172.31.67.10",
+                        source_family_header="wazuh_detection",
                     )
 
                 self.assertEqual(store.list(AlertRecord), ())
                 self.assertEqual(store.list(CaseRecord), ())
                 self.assertEqual(service.inspect_analyst_queue().total_records, 0)
+
+    def test_control_plane_rejects_proxy_attested_family_relabeling(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="0.0.0.0",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_trusted_proxy_cidrs=("172.31.67.10/32",),
+            ),
+            store=store,
+        )
+        candidate = integrator.map_native_alert(
+            self.native_alert,
+            allowed_rule_id="5710",
+        )
+        candidate["rule"]["id"] = "9999"
+        candidate["data"]["wazuh_rule_id"] = "9999"
+        candidate["data"]["source_family"] = "github_audit"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "data.source_family must match the source family attested by "
+            "the reviewed reverse proxy",
+        ):
+            service.ingest_wazuh_alert(
+                raw_alert=candidate,
+                authorization_header="Bearer reviewed-shared-secret",
+                forwarded_proto="https",
+                reverse_proxy_secret_header="reviewed-proxy-secret",
+                peer_addr="172.31.67.10",
+                source_family_header="wazuh_detection",
+            )
+
+        self.assertEqual(store.list(AlertRecord), ())
+        self.assertEqual(store.list(CaseRecord), ())
+        self.assertEqual(service.inspect_analyst_queue().total_records, 0)
 
     def test_control_plane_rejects_inconsistent_native_wazuh_provenance(self) -> None:
         mapped_alert = integrator.map_native_alert(
@@ -504,6 +545,7 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
                         forwarded_proto="https",
                         reverse_proxy_secret_header="reviewed-proxy-secret",
                         peer_addr="172.31.67.10",
+                        source_family_header="wazuh_detection",
                     )
 
                 self.assertEqual(store.list(AlertRecord), ())
@@ -543,6 +585,7 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
                         forwarded_proto="https",
                         reverse_proxy_secret_header="reviewed-proxy-secret",
                         peer_addr="172.31.67.10",
+                        source_family_header="wazuh_detection",
                     )
 
                 self.assertEqual(store.list(AlertRecord), ())
@@ -565,6 +608,10 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             "include /etc/nginx/certs/wazuh-intake-auth.conf;",
             proxy_config,
         )
+        self.assertIn(
+            'proxy_set_header X-AegisOps-Source-Family "";',
+            proxy_config,
+        )
         self.assertNotIn('"8080:8080"', compose)
         self.assertIn(
             "AEGISOPS_WAZUH_INGEST_SHARED_SECRET_FILE: "
@@ -579,6 +626,10 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
         self.assertIn("proxy_set_header X-Forwarded-For \\$remote_addr;", init_script)
         self.assertIn(
             'proxy_set_header X-AegisOps-Proxy-Secret "${wazuh_ingest_proxy_secret}";',
+            init_script,
+        )
+        self.assertIn(
+            'proxy_set_header X-AegisOps-Source-Family "wazuh_detection";',
             init_script,
         )
         self.assertIn("<name>custom-aegisops</name>", integration)
@@ -676,6 +727,23 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
         )
         self.assertIn(
             "forged fixed Wazuh provenance must return HTTP 400",
+            trial,
+        )
+        self.assertIn(
+            "relabeled Wazuh source family must return HTTP 400",
+            trial,
+        )
+        self.assertIn(
+            'mktemp "${AEGISOPS_LAB_EVIDENCE_DIR}/.wazuh-intake-',
+            trial,
+        )
+        self.assertIn(
+            """jq -e 'type == "object"' "${evidence_staging_file}" >/dev/null""",
+            trial,
+        )
+        self.assertIn('rm -f "${evidence_staging_file}"', trial)
+        self.assertIn(
+            'mv "${evidence_staging_file}" "${evidence_file}"',
             trial,
         )
         self.assertIn("integrator.map_native_alert(", trial)

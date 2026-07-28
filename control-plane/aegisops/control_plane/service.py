@@ -667,14 +667,14 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
         authorization_header: str | None,
         forwarded_proto: str | None,
         reverse_proxy_secret_header: str | None,
-        peer_addr: str | None,
+        peer_addr: str | None, source_family_header: str | None = None,
     ) -> FindingAlertIngestResult:
         return self._detection_intake_service.ingest_wazuh_alert(
             raw_alert=raw_alert,
             authorization_header=authorization_header,
             forwarded_proto=forwarded_proto,
             reverse_proxy_secret_header=reverse_proxy_secret_header,
-            peer_addr=peer_addr,
+            peer_addr=peer_addr, source_family_header=source_family_header,
         )
 
     def _listener_is_loopback(self) -> bool:

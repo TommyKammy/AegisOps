@@ -41,7 +41,11 @@ grep -Fq "wazuh-integratord is running" <<<"${manager_status}" \
   || fail "Wazuh integratord is not healthy"
 
 temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/aegisops-phase67-wazuh.XXXXXX")"
+evidence_staging_file=""
 cleanup() {
+  if [[ -n "${evidence_staging_file}" ]]; then
+    rm -f "${evidence_staging_file}"
+  fi
   rm -rf "${temporary_dir}"
 }
 trap cleanup EXIT
@@ -351,6 +355,21 @@ unreviewed_rule_status="$(
 [[ "${unreviewed_rule_status}" == "400" ]] \
   || fail "unreviewed Wazuh rule must return HTTP 400, got ${unreviewed_rule_status}"
 
+jq '
+  .rule.id = "9999"
+  | .data.wazuh_rule_id = "9999"
+  | .data.source_family = "github_audit"
+' "${mapped_fixture}" >"${temporary_dir}/relabeled-family.json"
+relabeled_family_status="$(
+  http_status "${temporary_dir}/relabeled-family-response.json" \
+    --header "@${authenticated_header_file}" \
+    --header "Content-Type: application/json" \
+    --data-binary "@${temporary_dir}/relabeled-family.json" \
+    "${proxy_url}"
+)"
+[[ "${relabeled_family_status}" == "400" ]] \
+  || fail "relabeled Wazuh source family must return HTTP 400, got ${relabeled_family_status}"
+
 jq '.data.reviewed_by = "forged-phase67-review"' \
   "${mapped_fixture}" >"${temporary_dir}/forged-provenance.json"
 forged_provenance_status="$(
@@ -613,8 +632,13 @@ capture_artifact_digests
 [[ "${worktree_artifact_digest}" == "${initial_artifact_digest}" ]] \
   || fail "Phase 67 artifacts changed during the Wazuh intake trial"
 captured_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+evidence_staging_file="$(
+  mktemp "${AEGISOPS_LAB_EVIDENCE_DIR}/.wazuh-intake-${captured_at//[:]/}.XXXXXX"
+)"
 evidence_file="$(
-  mktemp "${AEGISOPS_LAB_EVIDENCE_DIR}/wazuh-intake-${captured_at//[:]/}.XXXXXX"
+  dirname="${evidence_staging_file%/*}"
+  basename="${evidence_staging_file##*/}"
+  printf '%s/%s\n' "${dirname}" "${basename#.}"
 )"
 jq -n \
   --arg captured_at "${captured_at}" \
@@ -677,14 +701,18 @@ jq -n \
       case_promotion: "not_performed",
       authority_boundary: "aegisops_admission_is_authoritative"
     }
-  ' >"${evidence_file}"
-chmod 600 "${evidence_file}"
+  ' >"${evidence_staging_file}"
+jq -e 'type == "object"' "${evidence_staging_file}" >/dev/null
+chmod 600 "${evidence_staging_file}"
+mv "${evidence_staging_file}" "${evidence_file}"
+evidence_staging_file=""
 
 echo "PASS missing_bearer_secret=403"
 echo "PASS invalid_bearer_secret=403"
 echo "PASS malformed_payload=400"
 echo "PASS unsupported_source_family=400"
 echo "PASS unreviewed_wazuh_rule=400"
+echo "PASS relabeled_wazuh_source_family=400"
 echo "PASS forged_fixed_wazuh_provenance=400"
 echo "PASS oversized_payload=413"
 echo "PASS proxy_bypass=403"

@@ -238,6 +238,7 @@ proxy_set_header Host \$host;
 proxy_set_header X-Forwarded-For \$remote_addr;
 proxy_set_header X-Forwarded-Proto https;
 proxy_set_header X-AegisOps-Proxy-Secret "${wazuh_ingest_proxy_secret}";
+proxy_set_header X-AegisOps-Source-Family "wazuh_detection";
 proxy_set_header X-AegisOps-Proxy-Service-Account "";
 proxy_set_header X-AegisOps-Authenticated-IdP "";
 proxy_set_header X-AegisOps-Authenticated-Subject "";

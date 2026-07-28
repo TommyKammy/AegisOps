@@ -79,6 +79,24 @@ assert_fails_with \
   "${unbounded_headers}" \
   'proxy_set_header X-Forwarded-For \$remote_addr;'
 
+source_family_attestation_removed="${workdir}/source-family-attestation-removed"
+copy_fixture "${source_family_attestation_removed}"
+sed -i.bak \
+  '/proxy_set_header X-AegisOps-Source-Family "wazuh_detection";/d' \
+  "${source_family_attestation_removed}/control-plane/deployment/phase-67-integration-lab/init.sh"
+assert_fails_with \
+  "${source_family_attestation_removed}" \
+  'proxy_set_header X-AegisOps-Source-Family "wazuh_detection";'
+
+source_family_gate_removed="${workdir}/source-family-gate-removed"
+copy_fixture "${source_family_gate_removed}"
+sed -i.bak \
+  's/source_family != attested_source_family/source_family == attested_source_family/' \
+  "${source_family_gate_removed}/control-plane/aegisops/control_plane/ingestion/detection_lifecycle_helpers.py"
+assert_fails_with \
+  "${source_family_gate_removed}" \
+  "source_family != attested_source_family"
+
 rule_drift="${workdir}/rule-drift"
 copy_fixture "${rule_drift}"
 perl -0pi -e \
@@ -187,6 +205,24 @@ printf '\n# --header "Authorization: Bearer ${shared_secret}"\n' \
 assert_fails_with \
   "${secret_argv_regression}" \
   'Forbidden Phase 67.2 content in control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh: --header "Authorization: Bearer ${shared_secret}"'
+
+atomic_manifest_publish_removed="${workdir}/atomic-manifest-publish-removed"
+copy_fixture "${atomic_manifest_publish_removed}"
+sed -i.bak \
+  's/mv "${evidence_staging_file}" "${evidence_file}"/cp "${evidence_staging_file}" "${evidence_file}"/' \
+  "${atomic_manifest_publish_removed}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${atomic_manifest_publish_removed}" \
+  'mv "${evidence_staging_file}" "${evidence_file}"'
+
+manifest_staging_cleanup_removed="${workdir}/manifest-staging-cleanup-removed"
+copy_fixture "${manifest_staging_cleanup_removed}"
+sed -i.bak \
+  's/rm -f "${evidence_staging_file}"/true/' \
+  "${manifest_staging_cleanup_removed}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${manifest_staging_cleanup_removed}" \
+  'rm -f "${evidence_staging_file}"'
 
 unmanaged_proxy_ca="${workdir}/unmanaged-proxy-ca"
 copy_fixture "${unmanaged_proxy_ca}"

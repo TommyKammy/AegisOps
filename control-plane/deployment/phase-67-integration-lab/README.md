@@ -18,7 +18,8 @@ Phase 67.2 adds one bounded real signal path:
 `Wazuh rule 5710 -> custom-aegisops -> TLS proxy -> POST /intake/wazuh -> AegisOps admission`
 
 The proxy remains the only published intake boundary. Caller-supplied trusted
-identity headers are cleared, the proxy credential is injected from an
+identity headers are cleared, the proxy credential and fixed
+`wazuh_detection` source-family attestation are injected from an
 untracked read-only include, and Wazuh reads its bearer credential and proxy CA
 from mounted files.
 
@@ -68,7 +69,9 @@ alert. It also verifies HTTP, proxy-bypass, credential, malformed,
 unsupported-source, and oversized-payload failures, and requires zero change
 to authoritative analyst-queue alert state across those negative tests. The
 mode-`600` manifest stays below the untracked runtime evidence directory. Its
-schema requires `created` followed by `deduplicated` and represents the shared
+JSON is built and validated in a cleanup-managed hidden staging file before an
+atomic rename publishes the completed manifest. Its schema requires `created`
+followed by `deduplicated` and represents the shared
 AegisOps alert identity once at the manifest boundary, so delivery records
 cannot claim different alert IDs.
 

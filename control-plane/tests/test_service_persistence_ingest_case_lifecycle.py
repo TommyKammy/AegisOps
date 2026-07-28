@@ -413,6 +413,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
                 forwarded_proto="https",
                 reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
                 peer_addr="10.10.0.5",
+                source_family_header="github_audit",
             ),
             wazuh_result,
         )
@@ -531,6 +532,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             forwarded_proto="https",
             reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
             peer_addr="10.10.0.5",
+            source_family_header="github_audit",
         )
         lifecycle_delegate.lifecycle_transition_id.assert_called_once_with(
             transition_timestamp="20260405T120000.000000Z",

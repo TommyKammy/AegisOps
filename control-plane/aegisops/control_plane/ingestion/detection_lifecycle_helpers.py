@@ -594,6 +594,7 @@ class LiveWazuhIntakeHandler:
         forwarded_proto: str | None,
         reverse_proxy_secret_header: str | None,
         peer_addr: str | None,
+        source_family_header: str | None = None,
     ) -> FindingAlertIngestResult:
         service = self._service
         service._runtime_boundary_service.validate_wazuh_ingest_runtime()
@@ -671,6 +672,41 @@ class LiveWazuhIntakeHandler:
             data.get("source_family"),
             "data.source_family",
         )
+        attested_source_family = service._normalize_optional_string(
+            source_family_header,
+            "X-AegisOps-Source-Family",
+        )
+        if (
+            attested_source_family is not None
+            and attested_source_family not in REVIEWED_LIVE_SOURCE_FAMILIES
+        ):
+            service._emit_structured_event(
+                logging.WARNING,
+                "wazuh_ingest_rejected",
+                reason="unsupported_proxy_attested_source_family",
+                peer_addr=peer_addr,
+                source_family=source_family,
+                attested_source_family=attested_source_family,
+            )
+            raise ValueError(
+                "live Wazuh ingest proxy attested an unsupported source family"
+            )
+        if (
+            attested_source_family is not None
+            and source_family != attested_source_family
+        ):
+            service._emit_structured_event(
+                logging.WARNING,
+                "wazuh_ingest_rejected",
+                reason="proxy_attested_source_family_mismatch",
+                peer_addr=peer_addr,
+                source_family=source_family,
+                attested_source_family=attested_source_family,
+            )
+            raise ValueError(
+                "data.source_family must match the source family attested by "
+                "the reviewed reverse proxy"
+            )
         if source_family not in REVIEWED_LIVE_SOURCE_FAMILIES:
             service._emit_structured_event(
                 logging.WARNING,

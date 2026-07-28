@@ -107,6 +107,9 @@ require_fixed_string \
   "include /etc/nginx/certs/wazuh-intake-auth.conf;"
 require_fixed_string \
   "${proxy}" \
+  'proxy_set_header X-AegisOps-Source-Family "";'
+require_fixed_string \
+  "${proxy}" \
   "proxy_pass http://phase67_control_plane/intake/wazuh;"
 
 require_fixed_string \
@@ -118,6 +121,9 @@ require_fixed_string \
 require_fixed_string \
   "${init}" \
   'proxy_set_header X-AegisOps-Proxy-Secret "${wazuh_ingest_proxy_secret}";'
+require_fixed_string \
+  "${init}" \
+  'proxy_set_header X-AegisOps-Source-Family "wazuh_detection";'
 require_fixed_string \
   "${init}" \
   'proxy_set_header X-AegisOps-Authenticated-Role "";'
@@ -230,6 +236,12 @@ require_fixed_string \
 require_fixed_string \
   "${intake_helpers}" \
   'if actual_value != expected_value:'
+require_fixed_string \
+  "${intake_helpers}" \
+  'source_family != attested_source_family'
+require_fixed_string \
+  "${intake_helpers}" \
+  '"proxy_attested_source_family_mismatch"'
 
 require_fixed_string \
   "${env_sample}" \
@@ -238,6 +250,19 @@ require_fixed_string \
   "${env_sample}" \
   "AEGISOPS_WAZUH_INGEST_CA_FILE=/var/ossec/integrations/aegisops-lab-ca.crt"
 require_absent_string "${env_sample}" "AEGISOPS_WAZUH_INGEST_SHARED_SECRET="
+require_fixed_string \
+  "${trial}" \
+  'mktemp "${AEGISOPS_LAB_EVIDENCE_DIR}/.wazuh-intake-'
+require_fixed_string \
+  "${trial}" \
+  'jq -e '\''type == "object"'\'' "${evidence_staging_file}" >/dev/null'
+require_fixed_string "${trial}" 'rm -f "${evidence_staging_file}"'
+require_fixed_string \
+  "${trial}" \
+  'mv "${evidence_staging_file}" "${evidence_file}"'
+require_fixed_string \
+  "${trial}" \
+  "relabeled Wazuh source family must return HTTP 400"
 require_fixed_string "${mapping}" 'Native Wazuh alert `id`; never generated'
 require_fixed_string "${mapping}" "Wazuh remains subordinate detection evidence"
 require_fixed_string "${live_fixture}" '"timestamp": "2026-07-27T23:33:37.232+0000"'
