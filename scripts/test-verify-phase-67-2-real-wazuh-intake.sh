@@ -148,6 +148,33 @@ assert_fails_with \
   "${runtime_check_removed}" \
   "running Phase 67 artifacts do not match the worktree"
 
+active_manager_config_check_removed="${workdir}/active-manager-config-check-removed"
+copy_fixture "${active_manager_config_check_removed}"
+sed -i.bak \
+  's#runtime_file_digest wazuh-manager /var/ossec/etc/ossec.conf#runtime_file_digest wazuh-manager /tmp/reviewed-ossec.conf#' \
+  "${active_manager_config_check_removed}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${active_manager_config_check_removed}" \
+  "runtime_file_digest wazuh-manager /var/ossec/etc/ossec.conf"
+
+authoritative_rule_boundary_removed="${workdir}/authoritative-rule-boundary-removed"
+copy_fixture "${authoritative_rule_boundary_removed}"
+sed -i.bak \
+  's/REVIEWED_WAZUH_DETECTION_RULE_ID = "5710"/REVIEWED_WAZUH_DETECTION_RULE_ID = "5711"/' \
+  "${authoritative_rule_boundary_removed}/control-plane/aegisops/control_plane/reviewed_slice_policy.py"
+assert_fails_with \
+  "${authoritative_rule_boundary_removed}" \
+  'REVIEWED_WAZUH_DETECTION_RULE_ID = "5710"'
+
+unreviewed_rule_probe_removed="${workdir}/unreviewed-rule-probe-removed"
+copy_fixture "${unreviewed_rule_probe_removed}"
+sed -i.bak \
+  's/unreviewed Wazuh rule must return HTTP 400/unreviewed Wazuh rule accepted/' \
+  "${unreviewed_rule_probe_removed}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${unreviewed_rule_probe_removed}" \
+  "unreviewed Wazuh rule must return HTTP 400"
+
 duplicate_event="${workdir}/duplicate-event"
 copy_fixture "${duplicate_event}"
 sed -i.bak \

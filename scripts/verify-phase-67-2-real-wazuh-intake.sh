@@ -67,6 +67,8 @@ require_file \
   "${repo_root}/control-plane/aegisops/control_plane/reviewed_slice_policy.py"
 require_file \
   "${repo_root}/control-plane/aegisops/control_plane/ingestion/detection_lifecycle_helpers.py"
+reviewed_slice_policy="${repo_root}/control-plane/aegisops/control_plane/reviewed_slice_policy.py"
+intake_helpers="${repo_root}/control-plane/aegisops/control_plane/ingestion/detection_lifecycle_helpers.py"
 require_file "${repo_root}/.github/workflows/ci.yml"
 
 for command in \
@@ -190,6 +192,15 @@ require_fixed_string "${integrator}" "MAX_ALERT_BYTES = 256 * 1024"
 require_fixed_string "${integrator}" "os.O_NOFOLLOW"
 require_fixed_string "${integrator}" 'if argv[2] != "file-bound":'
 require_absent_string "${integrator}" "fixture-shared-secret"
+require_fixed_string \
+  "${reviewed_slice_policy}" \
+  'REVIEWED_WAZUH_DETECTION_RULE_ID = "5710"'
+require_fixed_string \
+  "${intake_helpers}" \
+  'native_rule_id != REVIEWED_WAZUH_DETECTION_RULE_ID'
+require_fixed_string \
+  "${intake_helpers}" \
+  'or provenance_rule_id != native_rule_id'
 
 require_fixed_string \
   "${env_sample}" \
@@ -249,6 +260,7 @@ require_fixed_string "${trial}" "missing Bearer secret must return HTTP 403"
 require_fixed_string "${trial}" "invalid Bearer secret must return HTTP 403"
 require_fixed_string "${trial}" "malformed JSON must return HTTP 400"
 require_fixed_string "${trial}" "unsupported source family must return HTTP 400"
+require_fixed_string "${trial}" "unreviewed Wazuh rule must return HTTP 400"
 require_fixed_string "${trial}" "oversized payload must return HTTP 413"
 require_fixed_string "${trial}" "direct backend bypass unexpectedly succeeded"
 require_fixed_string "${trial}" "negative_authoritative_alert_delta=0"
@@ -267,6 +279,18 @@ require_fixed_string \
 require_fixed_string \
   "${trial}" \
   '[[ "${runtime_artifact_digest}" == "${worktree_artifact_digest}" ]]'
+require_fixed_string \
+  "${trial}" \
+  'file_digest "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}"'
+require_fixed_string \
+  "${trial}" \
+  "runtime_file_digest wazuh-manager /var/ossec/etc/ossec.conf"
+require_fixed_string \
+  "${trial}" \
+  '"wazuh-manager-config=${worktree_manager_config}"'
+require_fixed_string \
+  "${trial}" \
+  '"wazuh-manager-config=${runtime_manager_config}"'
 require_fixed_string "${trial}" 'duplicate_receipt_index=$((initial_receipt_count + 2))'
 require_fixed_string "${trial}" 'runtime_artifact_digest: $runtime_artifact_digest'
 require_fixed_string "${trial}" "LC_ALL=C date -u '+%b %e %H:%M:%S'"

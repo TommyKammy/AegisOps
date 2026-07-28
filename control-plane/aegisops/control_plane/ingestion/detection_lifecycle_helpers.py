@@ -29,7 +29,10 @@ from ..models import (
     RecommendationRecord,
 )
 from ..models import DetectorLifecycleRecord
-from ..reviewed_slice_policy import REVIEWED_LIVE_SOURCE_FAMILIES
+from ..reviewed_slice_policy import (
+    REVIEWED_LIVE_SOURCE_FAMILIES,
+    REVIEWED_WAZUH_DETECTION_RULE_ID,
+)
 
 if TYPE_CHECKING:
     from .detection_lifecycle import DetectionIntakeService
@@ -659,13 +662,12 @@ class LiveWazuhIntakeHandler:
             )
 
         native_alert = service._require_mapping(raw_alert, "alert")
+        data = service._require_mapping(
+            native_alert.get("data"),
+            "data",
+        )
         source_family = service._normalize_optional_string(
-            (
-                service._require_mapping(
-                    native_alert.get("data"),
-                    "data",
-                )
-            ).get("source_family"),
+            data.get("source_family"),
             "data.source_family",
         )
         if source_family not in REVIEWED_LIVE_SOURCE_FAMILIES:
@@ -680,6 +682,35 @@ class LiveWazuhIntakeHandler:
                 "live Wazuh ingest only admits the reviewed github_audit, entra_id, "
                 "and wazuh_detection live source families"
             )
+        if source_family == "wazuh_detection":
+            native_rule = service._require_mapping(
+                native_alert.get("rule"),
+                "rule",
+            )
+            native_rule_id = service._normalize_optional_string(
+                native_rule.get("id"),
+                "rule.id",
+            )
+            provenance_rule_id = service._normalize_optional_string(
+                data.get("wazuh_rule_id"),
+                "data.wazuh_rule_id",
+            )
+            if (
+                native_rule_id != REVIEWED_WAZUH_DETECTION_RULE_ID
+                or provenance_rule_id != native_rule_id
+            ):
+                service._emit_structured_event(
+                    logging.WARNING,
+                    "wazuh_ingest_rejected",
+                    reason="wazuh_detection_rule_mismatch",
+                    peer_addr=peer_addr,
+                    source_family=source_family,
+                )
+                raise ValueError(
+                    "live Wazuh detection ingest requires matching reviewed rule "
+                    f"id {REVIEWED_WAZUH_DETECTION_RULE_ID!r} in rule.id and "
+                    "data.wazuh_rule_id"
+                )
 
         adapter = WazuhAlertAdapter()
         native_record = self._intake.with_native_detection_admission_provenance(

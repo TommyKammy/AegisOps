@@ -186,6 +186,8 @@ capture_artifact_digests() {
   local runtime_wrapper
   local worktree_integrator
   local runtime_integrator
+  local worktree_manager_config
+  local runtime_manager_config
 
   worktree_control_plane="$(
     tree_digest "${REPO_ROOT}/control-plane" "${control_plane_manifest}"
@@ -221,20 +223,28 @@ capture_artifact_digests() {
       wazuh-manager \
       /var/ossec/integrations/aegisops_wazuh_integrator.py
   )"
+  worktree_manager_config="$(
+    file_digest "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}"
+  )"
+  runtime_manager_config="$(
+    runtime_file_digest wazuh-manager /var/ossec/etc/ossec.conf
+  )"
 
   worktree_artifact_digest="$(
     aggregate_artifact_digest \
       "control-plane=${worktree_control_plane}" \
       "postgres-migrations=${worktree_migrations}" \
       "wazuh-wrapper=${worktree_wrapper}" \
-      "wazuh-integrator=${worktree_integrator}"
+      "wazuh-integrator=${worktree_integrator}" \
+      "wazuh-manager-config=${worktree_manager_config}"
   )"
   runtime_artifact_digest="$(
     aggregate_artifact_digest \
       "control-plane=${runtime_control_plane}" \
       "postgres-migrations=${runtime_migrations}" \
       "wazuh-wrapper=${runtime_wrapper}" \
-      "wazuh-integrator=${runtime_integrator}"
+      "wazuh-integrator=${runtime_integrator}" \
+      "wazuh-manager-config=${runtime_manager_config}"
   )"
   [[ "${runtime_artifact_digest}" == "${worktree_artifact_digest}" ]] \
     || fail "running Phase 67 artifacts do not match the worktree; run ${LAB_DIR}/up.sh wazuh"
@@ -287,6 +297,18 @@ unsupported_status="$(
 )"
 [[ "${unsupported_status}" == "400" ]] \
   || fail "unsupported source family must return HTTP 400, got ${unsupported_status}"
+
+jq '.rule.id = "9999" | .data.wazuh_rule_id = "9999"' \
+  "${fixture}" >"${temporary_dir}/unreviewed-rule.json"
+unreviewed_rule_status="$(
+  http_status "${temporary_dir}/unreviewed-rule-response.json" \
+    --header "@${authenticated_header_file}" \
+    --header "Content-Type: application/json" \
+    --data-binary "@${temporary_dir}/unreviewed-rule.json" \
+    "${proxy_url}"
+)"
+[[ "${unreviewed_rule_status}" == "400" ]] \
+  || fail "unreviewed Wazuh rule must return HTTP 400, got ${unreviewed_rule_status}"
 
 python3 - "${temporary_dir}/oversized.json" <<'PY'
 from pathlib import Path
@@ -605,6 +627,7 @@ echo "PASS missing_bearer_secret=403"
 echo "PASS invalid_bearer_secret=403"
 echo "PASS malformed_payload=400"
 echo "PASS unsupported_source_family=400"
+echo "PASS unreviewed_wazuh_rule=400"
 echo "PASS oversized_payload=413"
 echo "PASS proxy_bypass=403"
 echo "PASS negative_authoritative_alert_delta=0"
