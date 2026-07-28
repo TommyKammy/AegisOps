@@ -269,6 +269,21 @@ require_fixed_string \
   '[[ "${runtime_artifact_digest}" == "${worktree_artifact_digest}" ]]'
 require_fixed_string "${trial}" 'duplicate_receipt_index=$((initial_receipt_count + 2))'
 require_fixed_string "${trial}" 'runtime_artifact_digest: $runtime_artifact_digest'
+require_fixed_string "${trial}" "LC_ALL=C date -u '+%b %e %H:%M:%S'"
+require_fixed_string "${up}" "wazuh-integration-artifacts.sha256"
+require_fixed_string "${up}" "printf 'manager-entrypoint.sh\\0'"
+require_fixed_string "${up}" "printf '\\0custom-aegisops\\0'"
+require_fixed_string "${up}" "printf '\\0aegisops_wazuh_integrator.py\\0'"
+require_fixed_string "${up}" "printf '\\0ossec-integration.xml\\0'"
+require_fixed_string \
+  "${up}" \
+  '[[ "$(<"${wazuh_integration_state}")" != "${wazuh_integration_digest}" ]]'
+require_fixed_string \
+  "${up}" \
+  'cmp -s "${expected_manager_config}" "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}"'
+require_fixed_string \
+  "${up}" \
+  "Wazuh manager config does not match its reviewed source fragment"
 python3 - "${trial}" <<'PY'
 from pathlib import Path
 import sys

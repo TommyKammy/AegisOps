@@ -157,6 +157,33 @@ assert_fails_with \
   "${duplicate_event}" \
   "trial must emit exactly one native rule-5710 event"
 
+manager_recreate_removed="${workdir}/manager-recreate-removed"
+copy_fixture "${manager_recreate_removed}"
+sed -i.bak \
+  's/wazuh-integration-artifacts.sha256/wazuh-integration-artifacts.removed/' \
+  "${manager_recreate_removed}/control-plane/deployment/phase-67-integration-lab/up.sh"
+assert_fails_with \
+  "${manager_recreate_removed}" \
+  "wazuh-integration-artifacts.sha256"
+
+manager_source_binding_removed="${workdir}/manager-source-binding-removed"
+copy_fixture "${manager_source_binding_removed}"
+sed -i.bak \
+  's/cmp -s "${expected_manager_config}" "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}"/cmp -s "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}" "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}"/' \
+  "${manager_source_binding_removed}/control-plane/deployment/phase-67-integration-lab/up.sh"
+assert_fails_with \
+  "${manager_source_binding_removed}" \
+  'cmp -s "${expected_manager_config}" "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}"'
+
+localized_timestamp="${workdir}/localized-timestamp"
+copy_fixture "${localized_timestamp}"
+sed -i.bak \
+  "s/LC_ALL=C date -u/date -u/" \
+  "${localized_timestamp}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${localized_timestamp}" \
+  "LC_ALL=C date -u '+%b %e %H:%M:%S'"
+
 fixture_timestamp_drift="${workdir}/fixture-timestamp-drift"
 copy_fixture "${fixture_timestamp_drift}"
 sed -i.bak \

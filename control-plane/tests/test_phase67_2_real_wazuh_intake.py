@@ -363,6 +363,7 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
 
     def test_trial_has_one_native_event_and_protects_runtime_attribution(self) -> None:
         trial = (LAB_DIR / "test-wazuh-intake.sh").read_text(encoding="utf-8")
+        up_script = (LAB_DIR / "up.sh").read_text(encoding="utf-8")
 
         self.assertEqual(
             trial.count(
@@ -387,6 +388,25 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             "runtime_artifact_digest: $runtime_artifact_digest",
             trial,
         )
+        self.assertIn("LC_ALL=C date -u '+%b %e %H:%M:%S'", trial)
+        self.assertIn("wazuh-integration-artifacts.sha256", up_script)
+        self.assertIn(
+            '[[ "$(<"${wazuh_integration_state}")" != '
+            '"${wazuh_integration_digest}" ]]',
+            up_script,
+        )
+        self.assertIn(
+            'cmp -s "${expected_manager_config}" '
+            '"${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}"',
+            up_script,
+        )
+        for artifact in (
+            "manager-entrypoint.sh",
+            "custom-aegisops",
+            "aegisops_wazuh_integrator.py",
+            "ossec-integration.xml",
+        ):
+            self.assertIn(artifact, up_script)
 
 
 if __name__ == "__main__":

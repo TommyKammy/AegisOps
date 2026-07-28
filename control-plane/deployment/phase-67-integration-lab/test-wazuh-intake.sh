@@ -379,7 +379,7 @@ compose_scope wazuh exec -T wazuh-manager \
     chown root:wazuh "$1"
     chmod 0640 "$1"
   ' phase67 /var/ossec/logs/aegisops-phase67-ssh-test.log
-test_timestamp="$(date -u '+%b %e %H:%M:%S')"
+test_timestamp="$(LC_ALL=C date -u '+%b %e %H:%M:%S')"
 compose_scope wazuh exec -T wazuh-manager \
   sh -c '
     printf "%s phase67-test-endpoint sshd[6702]: Failed password for invalid user aegisops-phase67-invalid from 192.0.2.67 port 5067 ssh2\n" "$1" >>"$2"
