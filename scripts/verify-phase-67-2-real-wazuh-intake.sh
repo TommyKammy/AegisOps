@@ -134,7 +134,10 @@ require_fixed_string \
   "AEGISOPS_WAZUH_INGEST_SHARED_SECRET_FILE: /run/secrets/wazuh-ingest-shared-secret"
 require_fixed_string \
   "${compose}" \
-  "AEGISOPS_WAZUH_INGEST_CA_FILE: /run/aegisops-certs/lab.crt"
+  "AEGISOPS_WAZUH_INGEST_CA_FILE: /var/ossec/integrations/aegisops-lab-ca.crt"
+require_fixed_string \
+  "${compose}" \
+  '- ${AEGISOPS_LAB_PROXY_CERT_DIR:?run-init-first}/lab.crt:/run/aegisops-bootstrap/lab.crt:ro'
 require_fixed_string \
   "${compose}" \
   'AEGISOPS_WAZUH_ALLOWED_RULE_ID: "5710"'
@@ -146,6 +149,17 @@ require_fixed_string \
   "- ./wazuh:/opt/aegisops-wazuh:ro"
 require_fixed_string "${compose}" "- wazuh-ingest-shared-secret"
 require_absent_string "${compose}" '"8080:8080"'
+require_fixed_string \
+  "${manager_entrypoint}" \
+  "/run/aegisops-bootstrap/lab.crt"
+require_fixed_string \
+  "${manager_entrypoint}" \
+  "/var/ossec/integrations/aegisops-lab-ca.crt"
+require_fixed_string "${manager_entrypoint}" "  0644 \\"
+require_fixed_string "${integrator}" "fcntl.flock(descriptor, fcntl.LOCK_EX)"
+require_fixed_string "${integrator}" "_write_all(descriptor, encoded)"
+require_fixed_string "${integrator}" "os.fsync(descriptor)"
+require_fixed_string "${integrator}" "os.ftruncate(descriptor, initial_size)"
 
 require_fixed_string \
   "${prepare}" \
@@ -171,7 +185,7 @@ require_fixed_string \
   "--group wazuh"
 require_fixed_string \
   "${manager_entrypoint}" \
-  "--mode 0750"
+  "  0750 \\"
 require_fixed_string \
   "${manager_entrypoint}" \
   "/var/ossec/integrations/custom-aegisops"
@@ -211,6 +225,9 @@ require_fixed_string \
 require_fixed_string \
   "${env_sample}" \
   "AEGISOPS_WAZUH_INGEST_SHARED_SECRET_FILE=/run/secrets/wazuh-ingest-shared-secret"
+require_fixed_string \
+  "${env_sample}" \
+  "AEGISOPS_WAZUH_INGEST_CA_FILE=/var/ossec/integrations/aegisops-lab-ca.crt"
 require_absent_string "${env_sample}" "AEGISOPS_WAZUH_INGEST_SHARED_SECRET="
 require_fixed_string "${mapping}" 'Native Wazuh alert `id`; never generated'
 require_fixed_string "${mapping}" "Wazuh remains subordinate detection evidence"
@@ -297,6 +314,12 @@ require_fixed_string \
 require_fixed_string \
   "${trial}" \
   '"wazuh-manager-config=${runtime_manager_config}"'
+require_fixed_string \
+  "${trial}" \
+  '"wazuh-proxy-ca=${worktree_proxy_ca}"'
+require_fixed_string \
+  "${trial}" \
+  '"wazuh-proxy-ca=${runtime_proxy_ca}"'
 require_fixed_string "${trial}" 'duplicate_receipt_index=$((initial_receipt_count + 2))'
 require_fixed_string "${trial}" 'runtime_artifact_digest: $runtime_artifact_digest'
 require_fixed_string "${trial}" "LC_ALL=C date -u '+%b %e %H:%M:%S'"
@@ -305,6 +328,10 @@ require_fixed_string "${up}" "printf 'manager-entrypoint.sh\\0'"
 require_fixed_string "${up}" "printf '\\0custom-aegisops\\0'"
 require_fixed_string "${up}" "printf '\\0aegisops_wazuh_integrator.py\\0'"
 require_fixed_string "${up}" "printf '\\0ossec-integration.xml\\0'"
+require_fixed_string "${up}" "printf '\\0proxy-ca.crt\\0'"
+require_fixed_string \
+  "${up}" \
+  'cat "${AEGISOPS_LAB_PROXY_CERT_DIR}/lab.crt"'
 require_fixed_string \
   "${up}" \
   '[[ "$(<"${wazuh_integration_state}")" != "${wazuh_integration_digest}" ]]'

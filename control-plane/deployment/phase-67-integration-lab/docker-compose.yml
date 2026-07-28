@@ -201,7 +201,7 @@ services:
       API_PASSWORD: ${AEGISOPS_LAB_WAZUH_API_PASSWORD:?run-init-first}
       AEGISOPS_WAZUH_INGEST_URL: https://proxy:8443/intake/wazuh
       AEGISOPS_WAZUH_INGEST_SHARED_SECRET_FILE: /run/secrets/wazuh-ingest-shared-secret
-      AEGISOPS_WAZUH_INGEST_CA_FILE: /run/aegisops-certs/lab.crt
+      AEGISOPS_WAZUH_INGEST_CA_FILE: /var/ossec/integrations/aegisops-lab-ca.crt
       AEGISOPS_WAZUH_ALLOWED_RULE_ID: "5710"
       AEGISOPS_WAZUH_RECEIPT_FILE: /var/ossec/logs/integrations/aegisops-receipts.jsonl
       AEGISOPS_WAZUH_HTTP_TIMEOUT_SECONDS: "10"
@@ -225,7 +225,7 @@ services:
       - ${AEGISOPS_LAB_WAZUH_CONFIG_DIR:?prepare-substrates-first}/wazuh_indexer_ssl_certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key:ro
       - ${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG:?prepare-substrates-first}:/wazuh-config-mount/etc/ossec.conf:ro
       - ./wazuh:/opt/aegisops-wazuh:ro
-      - ${AEGISOPS_LAB_PROXY_CERT_DIR:?run-init-first}/lab.crt:/run/aegisops-certs/lab.crt:ro
+      - ${AEGISOPS_LAB_PROXY_CERT_DIR:?run-init-first}/lab.crt:/run/aegisops-bootstrap/lab.crt:ro
     depends_on:
       wazuh-indexer:
         condition: service_healthy

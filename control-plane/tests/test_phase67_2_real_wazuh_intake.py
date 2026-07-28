@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -207,7 +209,9 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             status, response = integrator.post_mapped_alert(
                 hook_url="https://proxy:8443/intake/wazuh",
                 shared_secret="fixture-shared-secret",
-                ca_file=Path("/run/aegisops-certs/lab.crt"),
+                ca_file=Path(
+                    "/var/ossec/integrations/aegisops-lab-ca.crt"
+                ),
                 mapped_alert=self.native_alert,
                 timeout_seconds=10,
                 urlopen=fake_urlopen,
@@ -228,6 +232,124 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
         self.assertEqual(receipt["disposition"], "created")
         self.assertEqual(receipt["aegisops_alert_id"], "alert-001")
         self.assertNotIn("secret", json.dumps(receipt).casefold())
+
+    def test_receipt_journal_completes_short_writes_and_syncs(self) -> None:
+        receipt = {
+            "schema_version": "phase67-wazuh-receipt-v1",
+            "native_wazuh_alert_id": "phase67-short-write",
+            "disposition": "created",
+        }
+        real_write = os.write
+        write_sizes: list[int] = []
+
+        def short_write(descriptor: int, payload: bytes) -> int:
+            write_size = max(1, len(payload) // 2)
+            write_sizes.append(write_size)
+            return real_write(descriptor, payload[:write_size])
+
+        with tempfile.TemporaryDirectory() as directory:
+            receipt_path = Path(directory) / "receipts.jsonl"
+            with (
+                mock.patch.object(
+                    integrator.os,
+                    "write",
+                    side_effect=short_write,
+                ),
+                mock.patch.object(
+                    integrator.os,
+                    "fsync",
+                    wraps=os.fsync,
+                ) as fsync,
+            ):
+                integrator.append_receipt(receipt_path, receipt)
+
+            lines = receipt_path.read_text(encoding="utf-8").splitlines()
+
+        self.assertGreater(len(write_sizes), 1)
+        self.assertEqual([json.loads(line) for line in lines], [receipt])
+        fsync.assert_called_once()
+
+    def test_receipt_journal_rejects_a_write_that_makes_no_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            receipt_path = Path(directory) / "receipts.jsonl"
+            with mock.patch.object(integrator.os, "write", return_value=0):
+                with self.assertRaisesRegex(
+                    integrator.IntegrationError,
+                    "receipt append made no forward progress",
+                ):
+                    integrator.append_receipt(
+                        receipt_path,
+                        {"native_wazuh_alert_id": "phase67-zero-write"},
+                    )
+
+    def test_receipt_journal_rolls_back_a_partial_failed_append(self) -> None:
+        existing_receipt = {
+            "native_wazuh_alert_id": "phase67-existing",
+            "disposition": "created",
+        }
+        failed_receipt = {
+            "native_wazuh_alert_id": "phase67-partial-failure",
+            "disposition": "created",
+        }
+        real_write = os.write
+        write_attempt = 0
+
+        def fail_after_partial_write(descriptor: int, payload: bytes) -> int:
+            nonlocal write_attempt
+            write_attempt += 1
+            if write_attempt == 1:
+                write_size = max(1, len(payload) // 2)
+                return real_write(descriptor, payload[:write_size])
+            raise OSError("simulated full receipt volume")
+
+        with tempfile.TemporaryDirectory() as directory:
+            receipt_path = Path(directory) / "receipts.jsonl"
+            integrator.append_receipt(receipt_path, existing_receipt)
+            with mock.patch.object(
+                integrator.os,
+                "write",
+                side_effect=fail_after_partial_write,
+            ):
+                with self.assertRaisesRegex(
+                    integrator.IntegrationError,
+                    "simulated full receipt volume",
+                ):
+                    integrator.append_receipt(receipt_path, failed_receipt)
+
+            lines = receipt_path.read_text(encoding="utf-8").splitlines()
+
+        self.assertEqual([json.loads(line) for line in lines], [existing_receipt])
+
+    def test_receipt_journal_keeps_concurrent_appends_as_complete_lines(self) -> None:
+        receipts = [
+            {
+                "native_wazuh_alert_id": f"phase67-concurrent-{index}",
+                "disposition": "created",
+            }
+            for index in range(32)
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            receipt_path = Path(directory) / "receipts.jsonl"
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                list(
+                    executor.map(
+                        lambda receipt: integrator.append_receipt(
+                            receipt_path,
+                            receipt,
+                        ),
+                        receipts,
+                    )
+                )
+
+            parsed = [
+                json.loads(line)
+                for line in receipt_path.read_text(
+                    encoding="utf-8"
+                ).splitlines()
+            ]
+
+        self.assertCountEqual(parsed, receipts)
 
     def test_runtime_requires_non_secret_file_bound_api_key_marker(self) -> None:
         with self.assertRaisesRegex(
@@ -403,7 +525,8 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             compose,
         )
         self.assertIn(
-            "AEGISOPS_WAZUH_INGEST_CA_FILE: /run/aegisops-certs/lab.crt",
+            "AEGISOPS_WAZUH_INGEST_CA_FILE: "
+            "/var/ossec/integrations/aegisops-lab-ca.crt",
             compose,
         )
         self.assertIn("proxy_set_header X-Forwarded-For \\$remote_addr;", init_script)
@@ -499,6 +622,26 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             '"wazuh-manager-config=${runtime_manager_config}"',
             trial,
         )
+        self.assertIn(
+            '"wazuh-proxy-ca=${worktree_proxy_ca}"',
+            trial,
+        )
+        self.assertIn(
+            '"wazuh-proxy-ca=${runtime_proxy_ca}"',
+            trial,
+        )
+        manager_entrypoint = (
+            LAB_DIR / "wazuh" / "manager-entrypoint.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "/run/aegisops-bootstrap/lab.crt",
+            manager_entrypoint,
+        )
+        self.assertIn(
+            "/var/ossec/integrations/aegisops-lab-ca.crt",
+            manager_entrypoint,
+        )
+        self.assertIn("  0644 \\", manager_entrypoint)
         self.assertIn("LC_ALL=C date -u '+%b %e %H:%M:%S'", trial)
         self.assertIn("wazuh-integration-artifacts.sha256", up_script)
         self.assertIn(
@@ -516,6 +659,7 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             "custom-aegisops",
             "aegisops_wazuh_integrator.py",
             "ossec-integration.xml",
+            "proxy-ca.crt",
         ):
             self.assertIn(artifact, up_script)
 

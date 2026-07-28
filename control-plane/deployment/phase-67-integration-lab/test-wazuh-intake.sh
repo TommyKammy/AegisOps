@@ -186,6 +186,8 @@ capture_artifact_digests() {
   local runtime_wrapper
   local worktree_integrator
   local runtime_integrator
+  local worktree_proxy_ca
+  local runtime_proxy_ca
   local worktree_manager_config
   local runtime_manager_config
 
@@ -223,6 +225,14 @@ capture_artifact_digests() {
       wazuh-manager \
       /var/ossec/integrations/aegisops_wazuh_integrator.py
   )"
+  worktree_proxy_ca="$(
+    file_digest "${AEGISOPS_LAB_PROXY_CERT_DIR}/lab.crt"
+  )"
+  runtime_proxy_ca="$(
+    runtime_file_digest \
+      wazuh-manager \
+      /var/ossec/integrations/aegisops-lab-ca.crt
+  )"
   worktree_manager_config="$(
     file_digest "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}"
   )"
@@ -236,6 +246,7 @@ capture_artifact_digests() {
       "postgres-migrations=${worktree_migrations}" \
       "wazuh-wrapper=${worktree_wrapper}" \
       "wazuh-integrator=${worktree_integrator}" \
+      "wazuh-proxy-ca=${worktree_proxy_ca}" \
       "wazuh-manager-config=${worktree_manager_config}"
   )"
   runtime_artifact_digest="$(
@@ -244,6 +255,7 @@ capture_artifact_digests() {
       "postgres-migrations=${runtime_migrations}" \
       "wazuh-wrapper=${runtime_wrapper}" \
       "wazuh-integrator=${runtime_integrator}" \
+      "wazuh-proxy-ca=${runtime_proxy_ca}" \
       "wazuh-manager-config=${runtime_manager_config}"
   )"
   [[ "${runtime_artifact_digest}" == "${worktree_artifact_digest}" ]] \

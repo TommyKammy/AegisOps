@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime
+import errno
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -243,6 +245,21 @@ def build_receipt(
     }
 
 
+def _write_all(descriptor: int, payload: bytes) -> None:
+    remaining = memoryview(payload)
+    while remaining:
+        try:
+            written = os.write(descriptor, remaining)
+        except InterruptedError:
+            continue
+        if written <= 0:
+            raise OSError(
+                errno.EIO,
+                "receipt append made no forward progress",
+            )
+        remaining = remaining[written:]
+
+
 def append_receipt(path: Path, receipt: Mapping[str, object]) -> None:
     path.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
     encoded = (
@@ -258,7 +275,22 @@ def append_receipt(path: Path, receipt: Mapping[str, object]) -> None:
         descriptor = os.open(path, flags, 0o640)
         try:
             os.fchmod(descriptor, 0o640)
-            os.write(descriptor, encoded)
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            initial_size = os.lseek(descriptor, 0, os.SEEK_END)
+            try:
+                _write_all(descriptor, encoded)
+                os.fsync(descriptor)
+            except OSError as append_error:
+                try:
+                    os.ftruncate(descriptor, initial_size)
+                    os.fsync(descriptor)
+                except OSError as rollback_error:
+                    raise OSError(
+                        errno.EIO,
+                        "receipt append failed "
+                        f"({append_error}); rollback failed ({rollback_error})",
+                    ) from append_error
+                raise
         finally:
             os.close(descriptor)
     except OSError as exc:

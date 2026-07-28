@@ -139,6 +139,69 @@ assert_fails_with \
   "${secret_argv_regression}" \
   'Forbidden Phase 67.2 content in control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh: --header "Authorization: Bearer ${shared_secret}"'
 
+unmanaged_proxy_ca="${workdir}/unmanaged-proxy-ca"
+copy_fixture "${unmanaged_proxy_ca}"
+sed -i.bak \
+  's#/var/ossec/integrations/aegisops-lab-ca.crt#/run/aegisops-bootstrap/lab.crt#' \
+  "${unmanaged_proxy_ca}/control-plane/deployment/phase-67-integration-lab/docker-compose.yml"
+assert_fails_with \
+  "${unmanaged_proxy_ca}" \
+  "AEGISOPS_WAZUH_INGEST_CA_FILE: /var/ossec/integrations/aegisops-lab-ca.crt"
+
+proxy_ca_install_removed="${workdir}/proxy-ca-install-removed"
+copy_fixture "${proxy_ca_install_removed}"
+sed -i.bak \
+  's#/var/ossec/integrations/aegisops-lab-ca.crt#/tmp/aegisops-lab-ca.crt#' \
+  "${proxy_ca_install_removed}/control-plane/deployment/phase-67-integration-lab/wazuh/manager-entrypoint.sh"
+assert_fails_with \
+  "${proxy_ca_install_removed}" \
+  "/var/ossec/integrations/aegisops-lab-ca.crt"
+
+proxy_ca_recreate_binding_removed="${workdir}/proxy-ca-recreate-binding-removed"
+copy_fixture "${proxy_ca_recreate_binding_removed}"
+sed -i.bak \
+  "s/printf '\\\\0proxy-ca.crt\\\\0'/printf '\\\\0proxy-ca-removed\\\\0'/" \
+  "${proxy_ca_recreate_binding_removed}/control-plane/deployment/phase-67-integration-lab/up.sh"
+assert_fails_with \
+  "${proxy_ca_recreate_binding_removed}" \
+  "printf '\\0proxy-ca.crt\\0'"
+
+receipt_lock_removed="${workdir}/receipt-lock-removed"
+copy_fixture "${receipt_lock_removed}"
+sed -i.bak \
+  's/fcntl.flock(descriptor, fcntl.LOCK_EX)/pass/' \
+  "${receipt_lock_removed}/control-plane/deployment/phase-67-integration-lab/wazuh/aegisops_wazuh_integrator.py"
+assert_fails_with \
+  "${receipt_lock_removed}" \
+  "fcntl.flock(descriptor, fcntl.LOCK_EX)"
+
+receipt_complete_write_removed="${workdir}/receipt-complete-write-removed"
+copy_fixture "${receipt_complete_write_removed}"
+sed -i.bak \
+  's/_write_all(descriptor, encoded)/os.write(descriptor, encoded)/' \
+  "${receipt_complete_write_removed}/control-plane/deployment/phase-67-integration-lab/wazuh/aegisops_wazuh_integrator.py"
+assert_fails_with \
+  "${receipt_complete_write_removed}" \
+  "_write_all(descriptor, encoded)"
+
+receipt_sync_removed="${workdir}/receipt-sync-removed"
+copy_fixture "${receipt_sync_removed}"
+sed -i.bak \
+  's/os.fsync(descriptor)/pass/' \
+  "${receipt_sync_removed}/control-plane/deployment/phase-67-integration-lab/wazuh/aegisops_wazuh_integrator.py"
+assert_fails_with \
+  "${receipt_sync_removed}" \
+  "os.fsync(descriptor)"
+
+receipt_rollback_removed="${workdir}/receipt-rollback-removed"
+copy_fixture "${receipt_rollback_removed}"
+sed -i.bak \
+  's/os.ftruncate(descriptor, initial_size)/pass/' \
+  "${receipt_rollback_removed}/control-plane/deployment/phase-67-integration-lab/wazuh/aegisops_wazuh_integrator.py"
+assert_fails_with \
+  "${receipt_rollback_removed}" \
+  "os.ftruncate(descriptor, initial_size)"
+
 runtime_check_removed="${workdir}/runtime-check-removed"
 copy_fixture "${runtime_check_removed}"
 sed -i.bak \

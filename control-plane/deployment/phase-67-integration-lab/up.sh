@@ -66,6 +66,8 @@ if [[ "${scope}" == "wazuh" || "${scope}" == "full" ]]; then
       cat "${LAB_DIR}/wazuh/aegisops_wazuh_integrator.py"
       printf '\0ossec-integration.xml\0'
       cat "${manager_config_fragment}"
+      printf '\0proxy-ca.crt\0'
+      cat "${AEGISOPS_LAB_PROXY_CERT_DIR}/lab.crt"
     } |
       openssl dgst -sha256 -r |
       awk '{print $1}'
