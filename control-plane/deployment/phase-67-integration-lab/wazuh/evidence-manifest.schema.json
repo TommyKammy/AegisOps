@@ -10,6 +10,8 @@
     "fixture_provenance",
     "captured_at",
     "repository_revision",
+    "worktree_artifact_digest",
+    "runtime_artifact_digest",
     "wazuh_manager_health",
     "native_wazuh_alert_id",
     "native_wazuh_manager_id",
@@ -42,6 +44,14 @@
     "repository_revision": {
       "type": "string",
       "pattern": "^[0-9a-f]{40}$"
+    },
+    "worktree_artifact_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "runtime_artifact_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
     },
     "wazuh_manager_health": {
       "const": "healthy"

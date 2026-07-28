@@ -228,6 +228,16 @@ if (
     != 0
 ):
     raise SystemExit("Phase 67.2 evidence must prove negative tests write no alert state")
+required = set(schema.get("required", []))
+for digest_field in ("worktree_artifact_digest", "runtime_artifact_digest"):
+    if digest_field not in required:
+        raise SystemExit(
+            f"Phase 67.2 evidence must require runtime attribution field {digest_field}"
+        )
+    if schema["properties"][digest_field].get("pattern") != "^[0-9a-f]{64}$":
+        raise SystemExit(
+            f"Phase 67.2 evidence must constrain {digest_field} to SHA-256"
+        )
 ET.parse(sys.argv[2])
 live_fixture = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
 timestamp_pattern = schema["properties"]["native_event_timestamp"].get("pattern", "")
@@ -245,6 +255,31 @@ require_fixed_string "${trial}" "negative_authoritative_alert_delta=0"
 require_fixed_string "${trial}" 'and .disposition == "deduplicated"'
 require_fixed_string "${trial}" '.case_id == null'
 require_fixed_string "${trial}" 'source_mode: "real_wazuh"'
+require_fixed_string "${trial}" '--header "@${authenticated_header_file}"'
+require_absent_string "${trial}" '--header "Authorization: Bearer ${shared_secret}"'
+require_absent_string "${trial}" 'tail -n 1 "${receipt_file}"'
+require_fixed_string \
+  "${trial}" \
+  "single trial event produced an unexpected number of Wazuh receipts"
+require_fixed_string \
+  "${trial}" \
+  "running Phase 67 artifacts do not match the worktree"
+require_fixed_string \
+  "${trial}" \
+  '[[ "${runtime_artifact_digest}" == "${worktree_artifact_digest}" ]]'
+require_fixed_string "${trial}" 'duplicate_receipt_index=$((initial_receipt_count + 2))'
+require_fixed_string "${trial}" 'runtime_artifact_digest: $runtime_artifact_digest'
+python3 - "${trial}" <<'PY'
+from pathlib import Path
+import sys
+
+trial = Path(sys.argv[1]).read_text(encoding="utf-8")
+event = "Failed password for invalid user aegisops-phase67-invalid"
+if trial.count(event) != 1:
+    raise SystemExit("Phase 67.2 trial must emit exactly one native rule-5710 event")
+if "sshd[6702]: Invalid user aegisops-phase67-invalid" in trial:
+    raise SystemExit("Phase 67.2 trial must not emit a second invalid-user event")
+PY
 require_fixed_string "${status}" "latest_receipt=none"
 require_fixed_string "${status}" "inspect-analyst-queue"
 

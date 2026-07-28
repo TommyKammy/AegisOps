@@ -45,6 +45,12 @@ cleanup() {
   rm -rf "${temporary_dir}"
 }
 trap cleanup EXIT
+authenticated_header_file="${temporary_dir}/authenticated-header"
+invalid_header_file="${temporary_dir}/invalid-header"
+printf 'Authorization: Bearer %s\n' "${shared_secret}" >"${authenticated_header_file}"
+printf 'Authorization: Bearer invalid-phase67-secret\n' >"${invalid_header_file}"
+chmod 600 "${authenticated_header_file}" "${invalid_header_file}"
+unset shared_secret
 
 http_status() {
   local output_file="$1"
@@ -71,6 +77,174 @@ analyst_queue_count() {
       '
 }
 
+tree_digest() {
+  local root="$1"
+  local manifest="$2"
+
+  python3 - "${root}" "${manifest}" <<'PY'
+from pathlib import Path
+import hashlib
+import sys
+
+root = Path(sys.argv[1])
+paths = Path(sys.argv[2]).read_text(encoding="utf-8").splitlines()
+digest = hashlib.sha256()
+for relative_path in sorted(paths):
+    path = root / relative_path
+    if not path.is_file():
+        raise SystemExit(f"runtime artifact is missing: {path}")
+    digest.update(relative_path.encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(path.read_bytes())
+    digest.update(b"\0")
+print(digest.hexdigest())
+PY
+}
+
+runtime_tree_digest() {
+  local service="$1"
+  local root="$2"
+  local manifest="$3"
+
+  compose_scope wazuh exec -T "${service}" \
+    python3 -c '
+from pathlib import Path
+import hashlib
+import sys
+
+root = Path(sys.argv[1])
+paths = sys.stdin.read().splitlines()
+digest = hashlib.sha256()
+for relative_path in sorted(paths):
+    path = root / relative_path
+    if not path.is_file():
+        raise SystemExit(f"runtime artifact is missing: {path}")
+    digest.update(relative_path.encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(path.read_bytes())
+    digest.update(b"\0")
+print(digest.hexdigest())
+' "${root}" <"${manifest}"
+}
+
+file_digest() {
+  python3 - "$1" <<'PY'
+from pathlib import Path
+import hashlib
+import sys
+
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
+}
+
+runtime_file_digest() {
+  local service="$1"
+  local path="$2"
+
+  compose_scope wazuh exec -T "${service}" \
+    python3 -c '
+from pathlib import Path
+import hashlib
+import sys
+
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+' "${path}"
+}
+
+aggregate_artifact_digest() {
+  python3 - "$@" <<'PY'
+import hashlib
+import sys
+
+digest = hashlib.sha256()
+for component in sys.argv[1:]:
+    digest.update(component.encode("ascii"))
+    digest.update(b"\0")
+print(digest.hexdigest())
+PY
+}
+
+control_plane_manifest="${temporary_dir}/control-plane-artifacts"
+migrations_manifest="${temporary_dir}/postgres-migration-artifacts"
+write_artifact_manifests() {
+  git -C "${REPO_ROOT}" ls-files --cached --others --exclude-standard \
+    -- control-plane \
+    | sed 's#^control-plane/##' >"${control_plane_manifest}"
+  git -C "${REPO_ROOT}" ls-files --cached --others --exclude-standard \
+    -- postgres/control-plane/migrations \
+    | sed 's#^postgres/control-plane/migrations/##' >"${migrations_manifest}"
+  [[ -s "${control_plane_manifest}" && -s "${migrations_manifest}" ]] \
+    || fail "could not inventory Phase 67 runtime artifacts"
+}
+
+capture_artifact_digests() {
+  local worktree_control_plane
+  local runtime_control_plane
+  local worktree_migrations
+  local runtime_migrations
+  local worktree_wrapper
+  local runtime_wrapper
+  local worktree_integrator
+  local runtime_integrator
+
+  worktree_control_plane="$(
+    tree_digest "${REPO_ROOT}/control-plane" "${control_plane_manifest}"
+  )"
+  runtime_control_plane="$(
+    runtime_tree_digest \
+      control-plane \
+      /opt/aegisops/control-plane \
+      "${control_plane_manifest}"
+  )"
+  worktree_migrations="$(
+    tree_digest \
+      "${REPO_ROOT}/postgres/control-plane/migrations" \
+      "${migrations_manifest}"
+  )"
+  runtime_migrations="$(
+    runtime_tree_digest \
+      control-plane \
+      /opt/aegisops/postgres-migrations \
+      "${migrations_manifest}"
+  )"
+  worktree_wrapper="$(
+    file_digest "${LAB_DIR}/wazuh/custom-aegisops"
+  )"
+  runtime_wrapper="$(
+    runtime_file_digest wazuh-manager /var/ossec/integrations/custom-aegisops
+  )"
+  worktree_integrator="$(
+    file_digest "${LAB_DIR}/wazuh/aegisops_wazuh_integrator.py"
+  )"
+  runtime_integrator="$(
+    runtime_file_digest \
+      wazuh-manager \
+      /var/ossec/integrations/aegisops_wazuh_integrator.py
+  )"
+
+  worktree_artifact_digest="$(
+    aggregate_artifact_digest \
+      "control-plane=${worktree_control_plane}" \
+      "postgres-migrations=${worktree_migrations}" \
+      "wazuh-wrapper=${worktree_wrapper}" \
+      "wazuh-integrator=${worktree_integrator}"
+  )"
+  runtime_artifact_digest="$(
+    aggregate_artifact_digest \
+      "control-plane=${runtime_control_plane}" \
+      "postgres-migrations=${runtime_migrations}" \
+      "wazuh-wrapper=${runtime_wrapper}" \
+      "wazuh-integrator=${runtime_integrator}"
+  )"
+  [[ "${runtime_artifact_digest}" == "${worktree_artifact_digest}" ]] \
+    || fail "running Phase 67 artifacts do not match the worktree; run ${LAB_DIR}/up.sh wazuh"
+}
+
+repository_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+write_artifact_manifests
+capture_artifact_digests
+initial_artifact_digest="${worktree_artifact_digest}"
+
 negative_baseline_alert_count="$(analyst_queue_count)"
 
 missing_secret_status="$(
@@ -84,7 +258,7 @@ missing_secret_status="$(
 
 invalid_secret_status="$(
   http_status "${temporary_dir}/invalid-secret.json" \
-    --header "Authorization: Bearer invalid-phase67-secret" \
+    --header "@${invalid_header_file}" \
     --header "Content-Type: application/json" \
     --data-binary "@${fixture}" \
     "${proxy_url}"
@@ -94,7 +268,7 @@ invalid_secret_status="$(
 
 malformed_status="$(
   http_status "${temporary_dir}/malformed.json" \
-    --header "Authorization: Bearer ${shared_secret}" \
+    --header "@${authenticated_header_file}" \
     --header "Content-Type: application/json" \
     --data-binary '{"broken":' \
     "${proxy_url}"
@@ -106,7 +280,7 @@ jq '.data.source_family = "unsupported_phase67_source"' \
   "${fixture}" >"${temporary_dir}/unsupported.json"
 unsupported_status="$(
   http_status "${temporary_dir}/unsupported-response.json" \
-    --header "Authorization: Bearer ${shared_secret}" \
+    --header "@${authenticated_header_file}" \
     --header "Content-Type: application/json" \
     --data-binary "@${temporary_dir}/unsupported.json" \
     "${proxy_url}"
@@ -122,7 +296,7 @@ Path(sys.argv[1]).write_bytes(b"x" * (256 * 1024 + 1))
 PY
 oversized_status="$(
   http_status "${temporary_dir}/oversized-response.json" \
-    --header "Authorization: Bearer ${shared_secret}" \
+    --header "@${authenticated_header_file}" \
     --header "Content-Type: application/json" \
     --data-binary "@${temporary_dir}/oversized.json" \
     "${proxy_url}"
@@ -184,7 +358,7 @@ negative_after_alert_count="$(analyst_queue_count)"
   || fail "negative boundary tests changed authoritative analyst-queue alert state"
 
 receipt_file="/var/ossec/logs/integrations/aegisops-receipts.jsonl"
-initial_receipt_count="$(
+receipt_count() {
   compose_scope wazuh exec -T wazuh-manager \
     sh -c '
       if [ -s "$1" ]; then
@@ -193,7 +367,9 @@ initial_receipt_count="$(
         printf "0\n"
       fi
     ' phase67 "${receipt_file}"
-)"
+}
+
+initial_receipt_count="$(receipt_count)"
 [[ "${initial_receipt_count}" =~ ^[0-9]+$ ]] \
   || fail "could not determine the initial Wazuh receipt count"
 
@@ -206,23 +382,13 @@ compose_scope wazuh exec -T wazuh-manager \
 test_timestamp="$(date -u '+%b %e %H:%M:%S')"
 compose_scope wazuh exec -T wazuh-manager \
   sh -c '
-    printf "%s phase67-test-endpoint sshd[6702]: Invalid user aegisops-phase67-invalid from 192.0.2.67 port 5067\n" "$1" >>"$2"
     printf "%s phase67-test-endpoint sshd[6702]: Failed password for invalid user aegisops-phase67-invalid from 192.0.2.67 port 5067 ssh2\n" "$1" >>"$2"
   ' phase67 "${test_timestamp}" /var/ossec/logs/aegisops-phase67-ssh-test.log
 
 receipt_deadline=$((SECONDS + 90))
 first_receipt=""
 while ((SECONDS < receipt_deadline)); do
-  current_receipt_count="$(
-    compose_scope wazuh exec -T wazuh-manager \
-      sh -c '
-        if [ -s "$1" ]; then
-          wc -l <"$1"
-        else
-          printf "0\n"
-        fi
-      ' phase67 "${receipt_file}"
-  )"
+  current_receipt_count="$(receipt_count)"
   if ((current_receipt_count > initial_receipt_count)); then
     first_receipt="$(
       compose_scope wazuh exec -T wazuh-manager \
@@ -240,6 +406,10 @@ jq -e '
   and .disposition == "created"
 ' <<<"${first_receipt}" >/dev/null \
   || fail "first real Wazuh delivery did not create one AegisOps alert"
+sleep 4
+pre_replay_receipt_count="$(receipt_count)"
+[[ "${pre_replay_receipt_count//[[:space:]]/}" == "$((initial_receipt_count + 1))" ]] \
+  || fail "single trial event produced an unexpected number of Wazuh receipts"
 
 native_alert_id="$(jq -er '.native_wazuh_alert_id' <<<"${first_receipt}")"
 replay_file="/tmp/aegisops-phase67-replay-${native_alert_id//[^A-Za-z0-9._-]/_}.json"
@@ -275,9 +445,25 @@ compose_scope wazuh exec -T wazuh-manager \
   https://proxy:8443/intake/wazuh >/dev/null
 compose_scope wazuh exec -T wazuh-manager rm -f "${replay_file}"
 
-duplicate_receipt="$(
-  compose_scope wazuh exec -T wazuh-manager tail -n 1 "${receipt_file}"
-)"
+duplicate_receipt=""
+duplicate_receipt_index=$((initial_receipt_count + 2))
+receipt_deadline=$((SECONDS + 30))
+while ((SECONDS < receipt_deadline)); do
+  current_receipt_count="$(receipt_count)"
+  current_receipt_count="${current_receipt_count//[[:space:]]/}"
+  if ((current_receipt_count >= duplicate_receipt_index)); then
+    [[ "${current_receipt_count}" == "${duplicate_receipt_index}" ]] \
+      || fail "replay produced an unexpected number of Wazuh receipts"
+    duplicate_receipt="$(
+      compose_scope wazuh exec -T wazuh-manager \
+        sed -n "${duplicate_receipt_index}p" "${receipt_file}"
+    )"
+    break
+  fi
+  sleep 1
+done
+[[ -n "${duplicate_receipt}" ]] \
+  || fail "duplicate Wazuh receipt did not appear within 30 seconds"
 jq -e \
   --arg native_alert_id "${native_alert_id}" \
   --arg alert_id "$(jq -er '.aegisops_alert_id' <<<"${first_receipt}")" '
@@ -340,7 +526,12 @@ else:
 PY
 )"
 
-repository_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+[[ "$(git -C "${REPO_ROOT}" rev-parse HEAD)" == "${repository_revision}" ]] \
+  || fail "repository revision changed during the Wazuh intake trial"
+write_artifact_manifests
+capture_artifact_digests
+[[ "${worktree_artifact_digest}" == "${initial_artifact_digest}" ]] \
+  || fail "Phase 67 artifacts changed during the Wazuh intake trial"
 captured_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 evidence_file="$(
   mktemp "${AEGISOPS_LAB_EVIDENCE_DIR}/wazuh-intake-${captured_at//[:]/}.XXXXXX"
@@ -348,6 +539,8 @@ evidence_file="$(
 jq -n \
   --arg captured_at "${captured_at}" \
   --arg repository_revision "${repository_revision}" \
+  --arg worktree_artifact_digest "${worktree_artifact_digest}" \
+  --arg runtime_artifact_digest "${runtime_artifact_digest}" \
   --arg native_alert_id "${native_alert_id}" \
   --arg manager_id "$(jq -er '.manager_id' <<<"${native_metadata}")" \
   --arg rule_id "$(jq -er '.rule_id' <<<"${native_metadata}")" \
@@ -363,6 +556,8 @@ jq -n \
       fixture_provenance: "live_capture_sanitized",
       captured_at: $captured_at,
       repository_revision: $repository_revision,
+      worktree_artifact_digest: $worktree_artifact_digest,
+      runtime_artifact_digest: $runtime_artifact_digest,
       wazuh_manager_health: "healthy",
       native_wazuh_alert_id: $native_alert_id,
       native_wazuh_manager_id: $manager_id,

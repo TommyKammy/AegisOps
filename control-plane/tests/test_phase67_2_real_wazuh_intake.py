@@ -354,6 +354,39 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             ]["const"],
             0,
         )
+        self.assertIn("worktree_artifact_digest", schema["required"])
+        self.assertIn("runtime_artifact_digest", schema["required"])
+        self.assertEqual(
+            schema["properties"]["runtime_artifact_digest"]["pattern"],
+            "^[0-9a-f]{64}$",
+        )
+
+    def test_trial_has_one_native_event_and_protects_runtime_attribution(self) -> None:
+        trial = (LAB_DIR / "test-wazuh-intake.sh").read_text(encoding="utf-8")
+
+        self.assertEqual(
+            trial.count(
+                "Failed password for invalid user aegisops-phase67-invalid"
+            ),
+            1,
+        )
+        self.assertNotIn(
+            "Invalid user aegisops-phase67-invalid from 192.0.2.67",
+            trial,
+        )
+        self.assertIn('--header "@${authenticated_header_file}"', trial)
+        self.assertNotIn(
+            '--header "Authorization: Bearer ${shared_secret}"',
+            trial,
+        )
+        self.assertIn(
+            "running Phase 67 artifacts do not match the worktree",
+            trial,
+        )
+        self.assertIn(
+            "runtime_artifact_digest: $runtime_artifact_digest",
+            trial,
+        )
 
 
 if __name__ == "__main__":

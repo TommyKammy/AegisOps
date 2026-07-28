@@ -122,6 +122,41 @@ assert_fails_with \
   "${negative_delta_drift}" \
   "must prove negative tests write no alert state"
 
+runtime_attribution_removed="${workdir}/runtime-attribution-removed"
+copy_fixture "${runtime_attribution_removed}"
+perl -0pi -e \
+  's/\n    "runtime_artifact_digest",//' \
+  "${runtime_attribution_removed}/control-plane/deployment/phase-67-integration-lab/wazuh/evidence-manifest.schema.json"
+assert_fails_with \
+  "${runtime_attribution_removed}" \
+  "must require runtime attribution field runtime_artifact_digest"
+
+secret_argv_regression="${workdir}/secret-argv-regression"
+copy_fixture "${secret_argv_regression}"
+printf '\n# --header "Authorization: Bearer ${shared_secret}"\n' \
+  >>"${secret_argv_regression}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${secret_argv_regression}" \
+  'Forbidden Phase 67.2 content in control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh: --header "Authorization: Bearer ${shared_secret}"'
+
+runtime_check_removed="${workdir}/runtime-check-removed"
+copy_fixture "${runtime_check_removed}"
+sed -i.bak \
+  's/running Phase 67 artifacts do not match the worktree/runtime artifacts accepted/' \
+  "${runtime_check_removed}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${runtime_check_removed}" \
+  "running Phase 67 artifacts do not match the worktree"
+
+duplicate_event="${workdir}/duplicate-event"
+copy_fixture "${duplicate_event}"
+sed -i.bak \
+  '/Failed password for invalid user aegisops-phase67-invalid/p' \
+  "${duplicate_event}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${duplicate_event}" \
+  "trial must emit exactly one native rule-5710 event"
+
 fixture_timestamp_drift="${workdir}/fixture-timestamp-drift"
 copy_fixture "${fixture_timestamp_drift}"
 sed -i.bak \
