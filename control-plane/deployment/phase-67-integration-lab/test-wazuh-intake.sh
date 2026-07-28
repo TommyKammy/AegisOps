@@ -35,20 +35,31 @@ for required_service in control-plane proxy wazuh-manager; do
     || fail "${required_service} is not running; run ${LAB_DIR}/up.sh wazuh"
 done
 
-manager_status="$(
-  compose_scope wazuh exec -T wazuh-manager \
-    /var/ossec/bin/wazuh-control status || true
-)"
-grep -Fq "wazuh-analysisd is running" <<<"${manager_status}" \
-  || fail "Wazuh analysisd is not healthy"
-grep -Fq "wazuh-integratord is running" <<<"${manager_status}" \
-  || fail "Wazuh integratord is not healthy"
+check_manager_health() {
+  local manager_status
+
+  manager_status="$(
+    compose_scope wazuh exec -T wazuh-manager \
+      /var/ossec/bin/wazuh-control status || true
+  )"
+  grep -Fq "wazuh-analysisd is running" <<<"${manager_status}" \
+    || fail "Wazuh analysisd is not healthy"
+  grep -Fq "wazuh-integratord is running" <<<"${manager_status}" \
+    || fail "Wazuh integratord is not healthy"
+}
+
+check_manager_health
 
 temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/aegisops-phase67-wazuh.XXXXXX")"
 evidence_staging_file=""
+replay_file=""
 cleanup() {
   if [[ -n "${evidence_staging_file}" ]]; then
     rm -f "${evidence_staging_file}"
+  fi
+  if [[ -n "${replay_file}" ]]; then
+    compose_scope wazuh exec -T wazuh-manager \
+      rm -f "${replay_file}" >/dev/null 2>&1 || true
   fi
   rm -rf "${temporary_dir}"
 }
@@ -402,6 +413,8 @@ oversized_status="$(
 [[ "${oversized_status}" == "413" ]] \
   || fail "oversized payload must return HTTP 413, got ${oversized_status}"
 
+# nginx's TLS listener returns a deliberate HTTP 400 to cleartext. A fully
+# valid POST ensures an unrelated application-level rejection cannot pass.
 set +e
 http_probe_status="$(
   curl \
@@ -410,12 +423,16 @@ http_probe_status="$(
     --output /dev/null \
     --write-out "%{http_code}" \
     --max-time 5 \
+    --request POST \
+    --header "@${authenticated_header_file}" \
+    --header "Content-Type: application/json" \
+    --data-binary "@${mapped_fixture}" \
     "http://127.0.0.1:${AEGISOPS_LAB_PROXY_PORT}/intake/wazuh" 2>/dev/null
 )"
 http_probe_rc=$?
 set -e
-[[ "${http_probe_rc}" -ne 0 || "${http_probe_status}" != "202" ]] \
-  || fail "plain HTTP unexpectedly reached the HTTPS-only Wazuh intake"
+[[ "${http_probe_rc}" -eq 0 && "${http_probe_status}" == "400" ]] \
+  || fail "plain HTTP did not receive the HTTPS listener rejection"
 
 compose_scope wazuh exec -T wazuh-manager python3 - <<'PY'
 from pathlib import Path
@@ -515,31 +532,51 @@ pre_replay_receipt_count="$(receipt_count)"
   || fail "single trial event produced an unexpected number of Wazuh receipts"
 
 native_alert_id="$(jq -er '.native_wazuh_alert_id' <<<"${first_receipt}")"
-replay_file="/tmp/aegisops-phase67-replay-${native_alert_id//[^A-Za-z0-9._-]/_}.json"
-compose_scope wazuh exec -T wazuh-manager \
-  python3 - "${native_alert_id}" "${replay_file}" <<'PY'
+replay_file="$(
+  compose_scope wazuh exec -T wazuh-manager \
+    python3 - "${native_alert_id}" <<'PY'
 from pathlib import Path
 import json
+import os
 import sys
+import tempfile
 
 native_id = sys.argv[1]
-destination = Path(sys.argv[2])
 alerts_path = Path("/var/ossec/logs/alerts/alerts.json")
+matched_alert = None
 for line in reversed(alerts_path.read_text(encoding="utf-8").splitlines()):
     try:
         alert = json.loads(line)
     except json.JSONDecodeError:
         continue
     if str(alert.get("id", "")) == native_id:
-        destination.write_text(
-            json.dumps(alert, separators=(",", ":"), ensure_ascii=True),
-            encoding="utf-8",
-        )
-        destination.chmod(0o600)
+        matched_alert = alert
         break
-else:
+if matched_alert is None:
     raise SystemExit(f"native alert {native_id!r} is missing from alerts.json")
+
+fd, destination_name = tempfile.mkstemp(
+    prefix="aegisops-phase67-replay-",
+    suffix=".json",
+    dir="/var/ossec/queue",
+    text=True,
+)
+destination = Path(destination_name)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(
+            matched_alert,
+            handle,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        )
+    destination.chmod(0o600)
+except BaseException:
+    destination.unlink(missing_ok=True)
+    raise
+print(destination)
 PY
+)"
 
 compose_scope wazuh exec -T wazuh-manager \
   /var/ossec/integrations/custom-aegisops \
@@ -547,6 +584,7 @@ compose_scope wazuh exec -T wazuh-manager \
   file-bound \
   https://proxy:8443/intake/wazuh >/dev/null
 compose_scope wazuh exec -T wazuh-manager rm -f "${replay_file}"
+replay_file=""
 
 duplicate_receipt=""
 duplicate_receipt_index=$((initial_receipt_count + 2))
@@ -635,6 +673,7 @@ write_artifact_manifests
 capture_artifact_digests
 [[ "${worktree_artifact_digest}" == "${initial_artifact_digest}" ]] \
   || fail "Phase 67 artifacts changed during the Wazuh intake trial"
+check_manager_health
 captured_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 evidence_staging_file="$(
   mktemp "${AEGISOPS_LAB_EVIDENCE_DIR}/.wazuh-intake-${captured_at//[:]/}.XXXXXX"

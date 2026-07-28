@@ -291,6 +291,14 @@ def validate_evidence_manifest(
         )
     _check_schema_tree(root_schema)
     _validate_instance(instance, root_schema, root_schema, "$")
+    manifest = _require_schema_mapping(instance, "$")
+    if manifest.get("worktree_artifact_digest") != manifest.get(
+        "runtime_artifact_digest"
+    ):
+        raise EvidenceSchemaError(
+            "$.runtime_artifact_digest must match "
+            "$.worktree_artifact_digest"
+        )
 
 
 def main(argv: Sequence[str] | None = None) -> int:

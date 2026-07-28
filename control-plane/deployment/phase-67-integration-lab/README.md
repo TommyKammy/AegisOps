@@ -64,17 +64,20 @@ integration volume as `root:wazuh` with mode `750`.
 
 `test-wazuh-intake.sh` emits a harmless SSH invalid-user event from reserved
 address `192.0.2.67`, waits for a real Wazuh alert and HTTP 202 receipt, then
-replays the exact native alert and requires deduplication to the same AegisOps
-alert. It also verifies HTTP, proxy-bypass, credential, malformed,
-unsupported-source, and oversized-payload failures, and requires zero change
-to authoritative analyst-queue alert state across those negative tests. The
-mode-`600` manifest stays below the untracked runtime evidence directory. Its
-JSON is built in a cleanup-managed hidden staging file and validated against
-the tracked Draft 2020-12 schema before an atomic rename publishes the
-completed manifest. Its schema requires `created` followed by `deduplicated`
-and represents the shared
-AegisOps alert identity once at the manifest boundary, so delivery records
-cannot claim different alert IDs.
+replays the exact native alert from an exclusive mode-`600` file below the
+root-protected Wazuh queue and requires deduplication to the same AegisOps
+alert. It also verifies authenticated valid POST rejection over plain HTTP,
+proxy-bypass, credential, malformed, unsupported-source, and oversized-payload
+failures, and requires zero change to authoritative analyst-queue alert state
+across those negative tests. The mode-`600` manifest stays below the untracked
+runtime evidence directory. Its JSON is built in a cleanup-managed hidden
+staging file and validated against the tracked Draft 2020-12 schema before an
+atomic rename publishes the completed manifest. The validator additionally
+requires the worktree and running artifact digests to match, and the trial
+rechecks `wazuh-analysisd` and `wazuh-integratord` immediately before capture.
+Its schema requires `created` followed by `deduplicated` and represents the
+shared AegisOps alert identity once at the manifest boundary, so delivery
+records cannot claim different alert IDs.
 
 The regression fixture
 `control-plane/tests/fixtures/wazuh/phase67-real-wazuh-ssh-auth-failure-alert.json`

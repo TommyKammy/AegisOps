@@ -285,6 +285,9 @@ require_fixed_string \
 require_fixed_string \
   "${evidence_validator}" \
   "validate_evidence_manifest(instance, schema)"
+require_fixed_string \
+  "${evidence_validator}" \
+  '$.runtime_artifact_digest must match '
 require_fixed_string "${mapping}" 'Native Wazuh alert `id`; never generated'
 require_fixed_string "${mapping}" "Wazuh remains subordinate detection evidence"
 require_fixed_string "${live_fixture}" '"timestamp": "2026-07-27T23:33:37.232+0000"'
@@ -441,6 +444,49 @@ if "secrets.token_hex(8)" not in trial:
     raise SystemExit("Phase 67.2 trial must generate a fresh correlation identity")
 if 'trial_username="aegisops-phase67-${trial_nonce}"' not in trial:
     raise SystemExit("Phase 67.2 trial must bind its fresh correlation identity")
+health_call = "\ncheck_manager_health\n"
+if trial.count(health_call) != 2:
+    raise SystemExit(
+        "Phase 67.2 trial must check manager health at start and before evidence"
+    )
+final_health = trial.rfind(health_call)
+artifact_guard = trial.find(
+    '|| fail "Phase 67 artifacts changed during the Wazuh intake trial"'
+)
+captured_at = trial.find('captured_at="$(date -u')
+if (
+    artifact_guard < 0
+    or captured_at < 0
+    or not artifact_guard < final_health < captured_at
+):
+    raise SystemExit(
+        "Phase 67.2 trial must check manager health immediately before evidence"
+    )
+probe_start = trial.find('http_probe_status="$(')
+probe_end = trial.find(
+    "compose_scope wazuh exec -T wazuh-manager python3 - <<'PY'",
+    probe_start,
+)
+if probe_start < 0 or probe_end < 0:
+    raise SystemExit("Phase 67.2 trial must retain the plaintext boundary probe")
+plaintext_probe = trial[probe_start:probe_end]
+for required in (
+    "--request POST",
+    '--header "@${authenticated_header_file}"',
+    '--data-binary "@${mapped_fixture}"',
+    '"${http_probe_rc}" -eq 0 && "${http_probe_status}" == "400"',
+):
+    if required not in plaintext_probe:
+        raise SystemExit(
+            "Phase 67.2 plaintext probe must use an authenticated valid POST "
+            "and require the TLS listener rejection"
+        )
+if "tempfile.mkstemp(" not in trial or 'dir="/var/ossec/queue"' not in trial:
+    raise SystemExit(
+        "Phase 67.2 replay must use an exclusive file in a protected directory"
+    )
+if 'replay_file="/tmp/aegisops-phase67-replay-' in trial:
+    raise SystemExit("Phase 67.2 replay path must not be predictable")
 PY
 require_fixed_string "${status}" "latest_receipt=none"
 require_fixed_string "${status}" "inspect-analyst-queue"

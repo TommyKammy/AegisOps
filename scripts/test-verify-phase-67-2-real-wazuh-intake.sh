@@ -233,6 +233,42 @@ assert_fails_with \
   "${schema_validation_removed}" \
   '"${evidence_validator}"'
 
+digest_equality_removed="${workdir}/digest-equality-removed"
+copy_fixture "${digest_equality_removed}"
+sed -i.bak \
+  '/[$][.]runtime_artifact_digest must match /d' \
+  "${digest_equality_removed}/control-plane/deployment/phase-67-integration-lab/wazuh/validate_evidence_manifest.py"
+assert_fails_with \
+  "${digest_equality_removed}" \
+  '$.runtime_artifact_digest must match '
+
+final_manager_health_removed="${workdir}/final-manager-health-removed"
+copy_fixture "${final_manager_health_removed}"
+perl -0pi -e \
+  's/check_manager_health\ncaptured_at=/captured_at=/' \
+  "${final_manager_health_removed}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${final_manager_health_removed}" \
+  "must check manager health at start and before evidence"
+
+plaintext_post_removed="${workdir}/plaintext-post-removed"
+copy_fixture "${plaintext_post_removed}"
+sed -i.bak \
+  '/    --request POST \\/d' \
+  "${plaintext_post_removed}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${plaintext_post_removed}" \
+  "plaintext probe must use an authenticated valid POST"
+
+protected_replay_directory_removed="${workdir}/protected-replay-directory-removed"
+copy_fixture "${protected_replay_directory_removed}"
+sed -i.bak \
+  's#dir="/var/ossec/queue"#dir="/tmp"#' \
+  "${protected_replay_directory_removed}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${protected_replay_directory_removed}" \
+  "replay must use an exclusive file in a protected directory"
+
 manifest_staging_cleanup_removed="${workdir}/manifest-staging-cleanup-removed"
 copy_fixture "${manifest_staging_cleanup_removed}"
 sed -i.bak \

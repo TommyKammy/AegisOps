@@ -85,7 +85,7 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             "captured_at": "2026-07-29T00:00:00Z",
             "repository_revision": "a" * 40,
             "worktree_artifact_digest": "b" * 64,
-            "runtime_artifact_digest": "c" * 64,
+            "runtime_artifact_digest": "b" * 64,
             "wazuh_manager_health": "healthy",
             "native_wazuh_alert_id": "phase67-native-alert",
             "native_wazuh_manager_id": "wazuh.manager",
@@ -801,6 +801,12 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
         invalid_pattern["runtime_artifact_digest"] = "not-a-digest"
         invalid_manifests["invalid digest pattern"] = invalid_pattern
 
+        mismatched_runtime = self._valid_evidence_manifest()
+        mismatched_runtime["runtime_artifact_digest"] = "c" * 64
+        invalid_manifests["runtime digest differs from worktree"] = (
+            mismatched_runtime
+        )
+
         invalid_const = self._valid_evidence_manifest()
         invalid_const["native_wazuh_rule_id"] = "9999"
         invalid_manifests["invalid const"] = invalid_const
@@ -906,6 +912,32 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             "runtime_artifact_digest: $runtime_artifact_digest",
             trial,
         )
+        self.assertEqual(trial.count("\ncheck_manager_health\n"), 2)
+        self.assertLess(
+            trial.rindex("\ncheck_manager_health\n"),
+            trial.index('captured_at="$(date -u'),
+        )
+        plaintext_probe = trial[
+            trial.index('http_probe_status="$(') :
+            trial.index("compose_scope wazuh exec -T wazuh-manager python3 - <<'PY'")
+        ]
+        self.assertIn("--request POST", plaintext_probe)
+        self.assertIn(
+            '--header "@${authenticated_header_file}"',
+            plaintext_probe,
+        )
+        self.assertIn('--data-binary "@${mapped_fixture}"', plaintext_probe)
+        self.assertIn(
+            '"${http_probe_rc}" -eq 0 && "${http_probe_status}" == "400"',
+            plaintext_probe,
+        )
+        self.assertIn("tempfile.mkstemp(", trial)
+        self.assertIn('dir="/var/ossec/queue"', trial)
+        self.assertNotIn(
+            'replay_file="/tmp/aegisops-phase67-replay-',
+            trial,
+        )
+        self.assertIn('rm -f "${replay_file}"', trial)
         self.assertIn(
             'file_digest "${AEGISOPS_LAB_WAZUH_MANAGER_CONFIG}"',
             trial,
