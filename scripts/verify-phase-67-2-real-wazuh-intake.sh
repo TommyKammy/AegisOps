@@ -242,6 +242,15 @@ require_fixed_string \
 require_fixed_string \
   "${intake_helpers}" \
   '"proxy_attested_source_family_mismatch"'
+require_fixed_string \
+  "${intake_helpers}" \
+  'source_family == "wazuh_detection"'
+require_fixed_string \
+  "${intake_helpers}" \
+  "attested_source_family is None"
+require_fixed_string \
+  "${intake_helpers}" \
+  '"missing_proxy_attested_source_family"'
 
 require_fixed_string \
   "${env_sample}" \

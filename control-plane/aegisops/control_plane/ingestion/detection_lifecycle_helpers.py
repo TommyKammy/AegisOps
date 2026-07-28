@@ -677,6 +677,21 @@ class LiveWazuhIntakeHandler:
             "X-AegisOps-Source-Family",
         )
         if (
+            source_family == "wazuh_detection"
+            and attested_source_family is None
+        ):
+            service._emit_structured_event(
+                logging.WARNING,
+                "wazuh_ingest_rejected",
+                reason="missing_proxy_attested_source_family",
+                peer_addr=peer_addr,
+                source_family=source_family,
+            )
+            raise PermissionError(
+                "live Wazuh detection ingest requires source-family "
+                "attestation from the reviewed reverse proxy"
+            )
+        if (
             attested_source_family is not None
             and attested_source_family not in REVIEWED_LIVE_SOURCE_FAMILIES
         ):

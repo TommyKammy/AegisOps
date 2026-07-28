@@ -37,9 +37,10 @@ intake boundary independently verifies every native-derived and fixed reviewed
 provenance field in this table.
 
 The Phase 67 proxy also attests `wazuh_detection` independently in
-`X-AegisOps-Source-Family`. The control plane rejects a payload whose
-`data.source_family` does not match that proxy-owned value before applying the
-family-specific rule and provenance gates.
+`X-AegisOps-Source-Family`. The control plane requires that proxy-owned value
+for every `wazuh_detection` payload and rejects either a missing attestation or
+a `data.source_family` mismatch before applying the family-specific rule and
+provenance gates.
 
 Wazuh remains subordinate detection evidence. Successful AegisOps admission
 creates alert state; delivery and Wazuh state do not create cases, approvals,

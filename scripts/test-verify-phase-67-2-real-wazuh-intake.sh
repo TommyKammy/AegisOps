@@ -97,6 +97,15 @@ assert_fails_with \
   "${source_family_gate_removed}" \
   "source_family != attested_source_family"
 
+source_family_requirement_removed="${workdir}/source-family-requirement-removed"
+copy_fixture "${source_family_requirement_removed}"
+sed -i.bak \
+  's/attested_source_family is None/attested_source_family is not None/' \
+  "${source_family_requirement_removed}/control-plane/aegisops/control_plane/ingestion/detection_lifecycle_helpers.py"
+assert_fails_with \
+  "${source_family_requirement_removed}" \
+  "attested_source_family is None"
+
 rule_drift="${workdir}/rule-drift"
 copy_fixture "${rule_drift}"
 perl -0pi -e \
