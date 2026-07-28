@@ -18,6 +18,10 @@ require_command python3
 
 fixture="${REPO_ROOT}/control-plane/tests/fixtures/wazuh/phase53-smb-single-node-ssh-auth-failure-alert.json"
 [[ -s "${fixture}" ]] || fail "reviewed Wazuh negative-test fixture is missing"
+evidence_schema="${LAB_DIR}/wazuh/evidence-manifest.schema.json"
+evidence_validator="${LAB_DIR}/wazuh/validate_evidence_manifest.py"
+[[ -s "${evidence_schema}" ]] || fail "Wazuh evidence schema is missing"
+[[ -s "${evidence_validator}" ]] || fail "Wazuh evidence validator is missing"
 shared_secret_file="${AEGISOPS_LAB_SECRET_DIR}/wazuh-ingest-shared-secret"
 [[ -s "${shared_secret_file}" ]] || fail "Wazuh intake shared secret is missing"
 shared_secret="$(<"${shared_secret_file}")"
@@ -702,7 +706,10 @@ jq -n \
       authority_boundary: "aegisops_admission_is_authoritative"
     }
   ' >"${evidence_staging_file}"
-jq -e 'type == "object"' "${evidence_staging_file}" >/dev/null
+python3 \
+  "${evidence_validator}" \
+  "${evidence_schema}" \
+  "${evidence_staging_file}"
 chmod 600 "${evidence_staging_file}"
 mv "${evidence_staging_file}" "${evidence_file}"
 evidence_staging_file=""

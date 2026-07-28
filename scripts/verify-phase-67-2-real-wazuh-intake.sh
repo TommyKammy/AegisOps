@@ -55,6 +55,7 @@ files=(
   wazuh/integrator.env.sample
   wazuh/MAPPING.md
   wazuh/evidence-manifest.schema.json
+  wazuh/validate_evidence_manifest.py
 )
 for file in "${files[@]}"; do
   require_file "${lab_dir}/${file}"
@@ -94,6 +95,7 @@ integration="${lab_dir}/wazuh/ossec-integration.xml"
 env_sample="${lab_dir}/wazuh/integrator.env.sample"
 mapping="${lab_dir}/wazuh/MAPPING.md"
 schema="${lab_dir}/wazuh/evidence-manifest.schema.json"
+evidence_validator="${lab_dir}/wazuh/validate_evidence_manifest.py"
 policy="${repo_root}/control-plane/aegisops/control_plane/reviewed_slice_policy.py"
 ingest_helper="${repo_root}/control-plane/aegisops/control_plane/ingestion/detection_lifecycle_helpers.py"
 unit_test="${repo_root}/control-plane/tests/test_phase67_2_real_wazuh_intake.py"
@@ -262,9 +264,8 @@ require_absent_string "${env_sample}" "AEGISOPS_WAZUH_INGEST_SHARED_SECRET="
 require_fixed_string \
   "${trial}" \
   'mktemp "${AEGISOPS_LAB_EVIDENCE_DIR}/.wazuh-intake-'
-require_fixed_string \
-  "${trial}" \
-  'jq -e '\''type == "object"'\'' "${evidence_staging_file}" >/dev/null'
+require_fixed_string "${trial}" '"${evidence_validator}"'
+require_fixed_string "${trial}" '"${evidence_schema}"'
 require_fixed_string "${trial}" 'rm -f "${evidence_staging_file}"'
 require_fixed_string \
   "${trial}" \
@@ -272,6 +273,18 @@ require_fixed_string \
 require_fixed_string \
   "${trial}" \
   "relabeled Wazuh source family must return HTTP 400"
+require_fixed_string \
+  "${evidence_validator}" \
+  'DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema"'
+require_fixed_string \
+  "${evidence_validator}" \
+  '"additionalProperties"'
+require_fixed_string \
+  "${evidence_validator}" \
+  '"$ref"'
+require_fixed_string \
+  "${evidence_validator}" \
+  "validate_evidence_manifest(instance, schema)"
 require_fixed_string "${mapping}" 'Native Wazuh alert `id`; never generated'
 require_fixed_string "${mapping}" "Wazuh remains subordinate detection evidence"
 require_fixed_string "${live_fixture}" '"timestamp": "2026-07-27T23:33:37.232+0000"'
@@ -452,7 +465,7 @@ for shell_file in \
 do
   bash -n "${shell_file}"
 done
-python3 -m py_compile "${integrator}" "${wrapper}"
+python3 -m py_compile "${integrator}" "${wrapper}" "${evidence_validator}"
 
 if [[
   -f "${repo_root}/control-plane/aegisops/control_plane/service.py" &&

@@ -69,9 +69,10 @@ alert. It also verifies HTTP, proxy-bypass, credential, malformed,
 unsupported-source, and oversized-payload failures, and requires zero change
 to authoritative analyst-queue alert state across those negative tests. The
 mode-`600` manifest stays below the untracked runtime evidence directory. Its
-JSON is built and validated in a cleanup-managed hidden staging file before an
-atomic rename publishes the completed manifest. Its schema requires `created`
-followed by `deduplicated` and represents the shared
+JSON is built in a cleanup-managed hidden staging file and validated against
+the tracked Draft 2020-12 schema before an atomic rename publishes the
+completed manifest. Its schema requires `created` followed by `deduplicated`
+and represents the shared
 AegisOps alert identity once at the manifest boundary, so delivery records
 cannot claim different alert IDs.
 

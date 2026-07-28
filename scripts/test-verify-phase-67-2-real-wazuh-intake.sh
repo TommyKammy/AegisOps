@@ -224,6 +224,15 @@ assert_fails_with \
   "${atomic_manifest_publish_removed}" \
   'mv "${evidence_staging_file}" "${evidence_file}"'
 
+schema_validation_removed="${workdir}/schema-validation-removed"
+copy_fixture "${schema_validation_removed}"
+sed -i.bak \
+  '/"${evidence_validator}"/d' \
+  "${schema_validation_removed}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${schema_validation_removed}" \
+  '"${evidence_validator}"'
+
 manifest_staging_cleanup_removed="${workdir}/manifest-staging-cleanup-removed"
 copy_fixture "${manifest_staging_cleanup_removed}"
 sed -i.bak \

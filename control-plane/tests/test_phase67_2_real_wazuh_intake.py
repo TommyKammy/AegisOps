@@ -32,6 +32,7 @@ from support.fixtures import load_wazuh_fixture
 REPO_ROOT = CONTROL_PLANE_ROOT.parent
 LAB_DIR = CONTROL_PLANE_ROOT / "deployment" / "phase-67-integration-lab"
 INTEGRATOR_PATH = LAB_DIR / "wazuh" / "aegisops_wazuh_integrator.py"
+EVIDENCE_VALIDATOR_PATH = LAB_DIR / "wazuh" / "validate_evidence_manifest.py"
 
 spec = importlib.util.spec_from_file_location(
     "phase67_aegisops_wazuh_integrator",
@@ -42,6 +43,16 @@ if spec is None or spec.loader is None:
 integrator = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = integrator
 spec.loader.exec_module(integrator)
+
+validator_spec = importlib.util.spec_from_file_location(
+    "phase67_evidence_manifest_validator",
+    EVIDENCE_VALIDATOR_PATH,
+)
+if validator_spec is None or validator_spec.loader is None:
+    raise RuntimeError("could not load Phase 67.2 evidence manifest validator")
+evidence_validator = importlib.util.module_from_spec(validator_spec)
+sys.modules[validator_spec.name] = evidence_validator
+validator_spec.loader.exec_module(evidence_validator)
 
 
 class _FakeResponse:
@@ -64,6 +75,47 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
         self.native_alert = load_wazuh_fixture(
             "phase67-real-wazuh-ssh-auth-failure-alert.json"
         )
+
+    @staticmethod
+    def _valid_evidence_manifest() -> dict[str, object]:
+        return {
+            "schema_version": "phase67-wazuh-intake-evidence-v1",
+            "source_mode": "real_wazuh",
+            "fixture_provenance": "live_capture_sanitized",
+            "captured_at": "2026-07-29T00:00:00Z",
+            "repository_revision": "a" * 40,
+            "worktree_artifact_digest": "b" * 64,
+            "runtime_artifact_digest": "c" * 64,
+            "wazuh_manager_health": "healthy",
+            "native_wazuh_alert_id": "phase67-native-alert",
+            "native_wazuh_manager_id": "wazuh.manager",
+            "native_wazuh_rule_id": "5710",
+            "native_event_timestamp": "2026-07-29T00:00:00+00:00",
+            "aegisops_alert_id": "alert-phase67",
+            "negative_boundary": {
+                "baseline_alert_count": 3,
+                "after_alert_count": 3,
+                "authoritative_alert_delta": 0,
+            },
+            "first_delivery": {
+                "http_status": 202,
+                "disposition": "created",
+                "finding_id": "finding-phase67",
+                "reconciliation_id": "reconciliation-created",
+            },
+            "duplicate_delivery": {
+                "http_status": 202,
+                "disposition": "deduplicated",
+                "finding_id": "finding-phase67",
+                "reconciliation_id": "reconciliation-deduplicated",
+            },
+            "analyst_queue": {
+                "source_system": "wazuh",
+                "case_id": None,
+            },
+            "case_promotion": "not_performed",
+            "authority_boundary": "aegisops_admission_is_authoritative",
+        }
 
     def test_mapper_preserves_native_identity_and_adds_reviewed_provenance(self) -> None:
         native_alert = deepcopy(self.native_alert)
@@ -728,6 +780,74 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             schema["properties"]["analyst_queue"]["properties"],
         )
 
+    def test_evidence_validator_enforces_the_tracked_schema(self) -> None:
+        schema = json.loads(
+            (LAB_DIR / "wazuh" / "evidence-manifest.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        evidence_validator.validate_evidence_manifest(
+            self._valid_evidence_manifest(),
+            schema,
+        )
+
+        invalid_manifests: dict[str, dict[str, object]] = {}
+
+        missing_required = self._valid_evidence_manifest()
+        missing_required.pop("repository_revision")
+        invalid_manifests["missing required field"] = missing_required
+
+        invalid_pattern = self._valid_evidence_manifest()
+        invalid_pattern["runtime_artifact_digest"] = "not-a-digest"
+        invalid_manifests["invalid digest pattern"] = invalid_pattern
+
+        invalid_const = self._valid_evidence_manifest()
+        invalid_const["native_wazuh_rule_id"] = "9999"
+        invalid_manifests["invalid const"] = invalid_const
+
+        extra_nested_property = self._valid_evidence_manifest()
+        extra_nested_property["analyst_queue"]["unexpected"] = True
+        invalid_manifests["additional nested property"] = extra_nested_property
+
+        for label, manifest in invalid_manifests.items():
+            with self.subTest(label=label):
+                with self.assertRaises(evidence_validator.EvidenceSchemaError):
+                    evidence_validator.validate_evidence_manifest(manifest, schema)
+
+    def test_evidence_validator_fails_closed_on_schema_drift(self) -> None:
+        schema = json.loads(
+            (LAB_DIR / "wazuh" / "evidence-manifest.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        schema["properties"]["schema_version"]["description"] = (
+            "new unsupported contract keyword"
+        )
+
+        with self.assertRaisesRegex(
+            evidence_validator.EvidenceSchemaError,
+            "unsupported schema keywords: description",
+        ):
+            evidence_validator.validate_evidence_manifest(
+                self._valid_evidence_manifest(),
+                schema,
+            )
+
+    def test_evidence_validator_rejects_non_json_values_and_duplicate_keys(
+        self,
+    ) -> None:
+        invalid_documents = {
+            "non-standard number": '{"value":NaN}',
+            "duplicate key": '{"value":1,"value":2}',
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            for label, document in invalid_documents.items():
+                with self.subTest(label=label):
+                    path = Path(directory) / f"{label.replace(' ', '-')}.json"
+                    path.write_text(document, encoding="utf-8")
+                    with self.assertRaises(evidence_validator.EvidenceSchemaError):
+                        evidence_validator.load_json(path)
+
     def test_trial_has_one_native_event_and_protects_runtime_attribution(self) -> None:
         trial = (LAB_DIR / "test-wazuh-intake.sh").read_text(encoding="utf-8")
         up_script = (LAB_DIR / "up.sh").read_text(encoding="utf-8")
@@ -770,14 +890,16 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             'mktemp "${AEGISOPS_LAB_EVIDENCE_DIR}/.wazuh-intake-',
             trial,
         )
-        self.assertIn(
-            """jq -e 'type == "object"' "${evidence_staging_file}" >/dev/null""",
-            trial,
-        )
+        self.assertIn('"${evidence_validator}"', trial)
+        self.assertIn('"${evidence_schema}"', trial)
         self.assertIn('rm -f "${evidence_staging_file}"', trial)
         self.assertIn(
             'mv "${evidence_staging_file}" "${evidence_file}"',
             trial,
+        )
+        self.assertLess(
+            trial.index('"${evidence_validator}"'),
+            trial.index('mv "${evidence_staging_file}" "${evidence_file}"'),
         )
         self.assertIn("integrator.map_native_alert(", trial)
         self.assertIn(
