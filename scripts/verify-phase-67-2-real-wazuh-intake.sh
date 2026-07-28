@@ -210,6 +210,9 @@ require_fixed_string \
   "${reviewed_slice_policy}" \
   'REVIEWED_WAZUH_DETECTION_RULE_ID = "5710"'
 require_fixed_string \
+  "${reviewed_slice_policy}" \
+  "REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE"
+require_fixed_string \
   "${intake_helpers}" \
   'native_rule_id != REVIEWED_WAZUH_DETECTION_RULE_ID'
 require_fixed_string \
@@ -217,7 +220,13 @@ require_fixed_string \
   'or provenance_rule_id != native_rule_id'
 require_fixed_string \
   "${intake_helpers}" \
-  'for field_name, expected_value in expected_native_provenance.items():'
+  'expected_wazuh_provenance.update('
+require_fixed_string \
+  "${intake_helpers}" \
+  'REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE'
+require_fixed_string \
+  "${intake_helpers}" \
+  'for field_name, expected_value in expected_wazuh_provenance.items():'
 require_fixed_string \
   "${intake_helpers}" \
   'if actual_value != expected_value:'
@@ -263,6 +272,31 @@ if (
 ):
     raise SystemExit("Phase 67.2 evidence must prove negative tests write no alert state")
 required = set(schema.get("required", []))
+if "aegisops_alert_id" not in required:
+    raise SystemExit(
+        "Phase 67.2 evidence must represent one shared AegisOps alert identity"
+    )
+for delivery_name, expected_disposition in (
+    ("first_delivery", "created"),
+    ("duplicate_delivery", "deduplicated"),
+):
+    definition = schema["$defs"][delivery_name]
+    disposition = definition["properties"]["disposition"].get("const")
+    if disposition != expected_disposition:
+        raise SystemExit(
+            f"Phase 67.2 evidence {delivery_name} must require "
+            f"{expected_disposition}"
+        )
+    if "aegisops_alert_id" in definition["properties"]:
+        raise SystemExit(
+            "Phase 67.2 delivery evidence must use the shared "
+            "aegisops_alert_id"
+        )
+if "alert_id" in schema["properties"]["analyst_queue"]["properties"]:
+    raise SystemExit(
+        "Phase 67.2 analyst queue evidence must use the shared "
+        "aegisops_alert_id"
+    )
 for digest_field in ("worktree_artifact_digest", "runtime_artifact_digest"):
     if digest_field not in required:
         raise SystemExit(
@@ -284,12 +318,17 @@ require_fixed_string "${trial}" "invalid Bearer secret must return HTTP 403"
 require_fixed_string "${trial}" "malformed JSON must return HTTP 400"
 require_fixed_string "${trial}" "unsupported source family must return HTTP 400"
 require_fixed_string "${trial}" "unreviewed Wazuh rule must return HTTP 400"
+require_fixed_string \
+  "${trial}" \
+  "forged fixed Wazuh provenance must return HTTP 400"
+require_fixed_string "${trial}" "integrator.map_native_alert("
 require_fixed_string "${trial}" "oversized payload must return HTTP 413"
 require_fixed_string "${trial}" "direct backend bypass unexpectedly succeeded"
 require_fixed_string "${trial}" "negative_authoritative_alert_delta=0"
 require_fixed_string "${trial}" 'and .disposition == "deduplicated"'
 require_fixed_string "${trial}" '.case_id == null'
 require_fixed_string "${trial}" 'source_mode: "real_wazuh"'
+require_fixed_string "${trial}" 'aegisops_alert_id: $aegisops_alert_id'
 require_fixed_string "${trial}" '--header "@${authenticated_header_file}"'
 require_absent_string "${trial}" '--header "Authorization: Bearer ${shared_secret}"'
 require_absent_string "${trial}" 'tail -n 1 "${receipt_file}"'

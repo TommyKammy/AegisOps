@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import Callable, Mapping, Protocol
 
 from .models import AlertRecord, CaseRecord, LeadRecord, ReconciliationRecord
@@ -9,6 +10,23 @@ REVIEWED_LIVE_SOURCE_FAMILIES = frozenset(
     {"github_audit", "entra_id", "wazuh_detection"}
 )
 REVIEWED_WAZUH_DETECTION_RULE_ID = "5710"
+REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE: Mapping[str, str] = MappingProxyType(
+    {
+        "source_system": "wazuh",
+        "source_component": "wazuh-manager",
+        "ingest_channel": "reviewed_proxy",
+        "admission_channel": "live_wazuh_webhook",
+        "secret_custody_reference": (
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_FILE"
+        ),
+        "proxy_route": (
+            "phase67-proxy:/intake/wazuh -> control-plane:/intake/wazuh"
+        ),
+        "reviewed_by": "phase-67.2-live-wazuh-mapping-v1",
+        "product_profile": "phase-67-single-node",
+        "mapping_version": "phase67-wazuh-v1",
+    }
+)
 REVIEWED_LIVE_SLICE_LABEL = (
     "GitHub audit, Entra ID, and Wazuh detection live slice"
 )

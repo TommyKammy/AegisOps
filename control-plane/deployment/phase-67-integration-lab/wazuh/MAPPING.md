@@ -24,6 +24,7 @@ event data. It adds only the reviewed AegisOps admission provenance below.
 | `data.proxy_route` | Fixed Phase 67 proxy-to-control-plane route. |
 | `data.reviewed_by` | Fixed mapping review identifier. |
 | `data.product_profile` | Fixed bounded profile `phase-67-single-node`. |
+| `data.mapping_version` | Fixed reviewed value `phase67-wazuh-v1`. |
 
 The script rejects non-HTTPS URLs, URLs other than `/intake/wazuh`, missing
 manager identity, missing or malformed native identifiers, rules other than
@@ -31,7 +32,9 @@ manager identity, missing or malformed native identifiers, rules other than
 `ossec.conf`. The bearer secret is read only from the mounted file named by
 `AEGISOPS_WAZUH_INGEST_SHARED_SECRET_FILE`; the mapped custody reference names
 the corresponding reviewed control-plane binding and never exposes either
-secret value.
+secret value. Before correlation or persistence, the authoritative AegisOps
+intake boundary independently verifies every native-derived and fixed reviewed
+provenance field in this table.
 
 Wazuh remains subordinate detection evidence. Successful AegisOps admission
 creates alert state; delivery and Wazuh state do not create cases, approvals,

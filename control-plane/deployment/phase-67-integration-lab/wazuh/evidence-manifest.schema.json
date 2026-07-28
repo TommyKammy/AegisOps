@@ -17,6 +17,7 @@
     "native_wazuh_manager_id",
     "native_wazuh_rule_id",
     "native_event_timestamp",
+    "aegisops_alert_id",
     "negative_boundary",
     "first_delivery",
     "duplicate_delivery",
@@ -71,6 +72,10 @@
       "type": "string",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:?\\d{2})$"
     },
+    "aegisops_alert_id": {
+      "type": "string",
+      "minLength": 1
+    },
     "negative_boundary": {
       "type": "object",
       "additionalProperties": false,
@@ -94,26 +99,21 @@
       }
     },
     "first_delivery": {
-      "$ref": "#/$defs/delivery"
+      "$ref": "#/$defs/first_delivery"
     },
     "duplicate_delivery": {
-      "$ref": "#/$defs/delivery"
+      "$ref": "#/$defs/duplicate_delivery"
     },
     "analyst_queue": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "source_system",
-        "alert_id",
         "case_id"
       ],
       "properties": {
         "source_system": {
           "const": "wazuh"
-        },
-        "alert_id": {
-          "type": "string",
-          "minLength": 1
         },
         "case_id": {
           "type": "null"
@@ -128,13 +128,12 @@
     }
   },
   "$defs": {
-    "delivery": {
+    "first_delivery": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "http_status",
         "disposition",
-        "aegisops_alert_id",
         "finding_id",
         "reconciliation_id"
       ],
@@ -143,15 +142,33 @@
           "const": 202
         },
         "disposition": {
-          "enum": [
-            "created",
-            "restated",
-            "deduplicated"
-          ]
+          "const": "created"
         },
-        "aegisops_alert_id": {
+        "finding_id": {
           "type": "string",
           "minLength": 1
+        },
+        "reconciliation_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "duplicate_delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "http_status",
+        "disposition",
+        "finding_id",
+        "reconciliation_id"
+      ],
+      "properties": {
+        "http_status": {
+          "const": 202
+        },
+        "disposition": {
+          "const": "deduplicated"
         },
         "finding_id": {
           "type": "string",

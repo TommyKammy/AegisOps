@@ -67,7 +67,10 @@ replays the exact native alert and requires deduplication to the same AegisOps
 alert. It also verifies HTTP, proxy-bypass, credential, malformed,
 unsupported-source, and oversized-payload failures, and requires zero change
 to authoritative analyst-queue alert state across those negative tests. The
-mode-`600` manifest stays below the untracked runtime evidence directory.
+mode-`600` manifest stays below the untracked runtime evidence directory. Its
+schema requires `created` followed by `deduplicated` and represents the shared
+AegisOps alert identity once at the manifest boundary, so delivery records
+cannot claim different alert IDs.
 
 The regression fixture
 `control-plane/tests/fixtures/wazuh/phase67-real-wazuh-ssh-auth-failure-alert.json`

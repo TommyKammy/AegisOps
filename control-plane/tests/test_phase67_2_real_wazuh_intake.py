@@ -21,6 +21,9 @@ if str(TESTS_ROOT) not in sys.path:
 
 from aegisops.control_plane.config import RuntimeConfig
 from aegisops.control_plane.models import AlertRecord, CaseRecord
+from aegisops.control_plane.reviewed_slice_policy import (
+    REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE,
+)
 from aegisops.control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 from support.fixtures import load_wazuh_fixture
@@ -95,6 +98,11 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_FILE",
         )
         self.assertNotIn("shared_secret", mapped["data"])
+        for field_name, expected_value in (
+            REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE.items()
+        ):
+            with self.subTest(field_name=field_name):
+                self.assertEqual(mapped["data"][field_name], expected_value)
 
     def test_mapper_rejects_rules_outside_the_bounded_filter(self) -> None:
         native_alert = deepcopy(self.native_alert)
@@ -502,6 +510,45 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
                 self.assertEqual(store.list(CaseRecord), ())
                 self.assertEqual(service.inspect_analyst_queue().total_records, 0)
 
+    def test_control_plane_rejects_forged_fixed_wazuh_provenance(self) -> None:
+        mapped_alert = integrator.map_native_alert(
+            self.native_alert,
+            allowed_rule_id="5710",
+        )
+
+        for field_name in REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE:
+            with self.subTest(field_name=field_name):
+                store, _ = make_store()
+                service = AegisOpsControlPlaneService(
+                    RuntimeConfig(
+                        host="0.0.0.0",
+                        postgres_dsn="postgresql://control-plane.local/aegisops",
+                        wazuh_ingest_shared_secret="reviewed-shared-secret",
+                        wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                        wazuh_ingest_trusted_proxy_cidrs=("172.31.67.10/32",),
+                    ),
+                    store=store,
+                )
+                candidate = deepcopy(mapped_alert)
+                candidate["data"][field_name] = "forged-phase67-provenance"
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    rf"data\.{field_name} must match its reviewed Phase 67 "
+                    "Wazuh mapping value",
+                ):
+                    service.ingest_wazuh_alert(
+                        raw_alert=candidate,
+                        authorization_header="Bearer reviewed-shared-secret",
+                        forwarded_proto="https",
+                        reverse_proxy_secret_header="reviewed-proxy-secret",
+                        peer_addr="172.31.67.10",
+                    )
+
+                self.assertEqual(store.list(AlertRecord), ())
+                self.assertEqual(store.list(CaseRecord), ())
+                self.assertEqual(service.inspect_analyst_queue().total_records, 0)
+
     def test_lab_configuration_keeps_intake_on_the_reviewed_proxy_boundary(self) -> None:
         proxy_config = (LAB_DIR / "config" / "control-plane.conf").read_text(
             encoding="utf-8"
@@ -571,6 +618,31 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             schema["properties"]["runtime_artifact_digest"]["pattern"],
             "^[0-9a-f]{64}$",
         )
+        self.assertIn("aegisops_alert_id", schema["required"])
+        self.assertEqual(
+            schema["$defs"]["first_delivery"]["properties"]["disposition"][
+                "const"
+            ],
+            "created",
+        )
+        self.assertEqual(
+            schema["$defs"]["duplicate_delivery"]["properties"]["disposition"][
+                "const"
+            ],
+            "deduplicated",
+        )
+        self.assertNotIn(
+            "aegisops_alert_id",
+            schema["$defs"]["first_delivery"]["properties"],
+        )
+        self.assertNotIn(
+            "aegisops_alert_id",
+            schema["$defs"]["duplicate_delivery"]["properties"],
+        )
+        self.assertNotIn(
+            "alert_id",
+            schema["properties"]["analyst_queue"]["properties"],
+        )
 
     def test_trial_has_one_native_event_and_protects_runtime_attribution(self) -> None:
         trial = (LAB_DIR / "test-wazuh-intake.sh").read_text(encoding="utf-8")
@@ -602,6 +674,11 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             "unreviewed Wazuh rule must return HTTP 400",
             trial,
         )
+        self.assertIn(
+            "forged fixed Wazuh provenance must return HTTP 400",
+            trial,
+        )
+        self.assertIn("integrator.map_native_alert(", trial)
         self.assertIn(
             "runtime_artifact_digest: $runtime_artifact_digest",
             trial,

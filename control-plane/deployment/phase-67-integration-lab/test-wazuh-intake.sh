@@ -47,10 +47,39 @@ cleanup() {
 trap cleanup EXIT
 authenticated_header_file="${temporary_dir}/authenticated-header"
 invalid_header_file="${temporary_dir}/invalid-header"
+mapped_fixture="${temporary_dir}/mapped-negative-test-fixture.json"
 printf 'Authorization: Bearer %s\n' "${shared_secret}" >"${authenticated_header_file}"
 printf 'Authorization: Bearer invalid-phase67-secret\n' >"${invalid_header_file}"
 chmod 600 "${authenticated_header_file}" "${invalid_header_file}"
 unset shared_secret
+python3 - \
+  "${LAB_DIR}/wazuh/aegisops_wazuh_integrator.py" \
+  "${fixture}" \
+  "${mapped_fixture}" <<'PY'
+from pathlib import Path
+import importlib.util
+import json
+import sys
+
+integrator_path = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location(
+    "phase67_negative_probe_integrator",
+    integrator_path,
+)
+if spec is None or spec.loader is None:
+    raise SystemExit("could not load the reviewed Phase 67 Wazuh Integrator")
+integrator = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(integrator)
+native_alert = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+mapped_alert = integrator.map_native_alert(
+    native_alert,
+    allowed_rule_id="5710",
+)
+Path(sys.argv[3]).write_text(
+    json.dumps(mapped_alert, separators=(",", ":"), sort_keys=True),
+    encoding="utf-8",
+)
+PY
 
 http_status() {
   local output_file="$1"
@@ -272,7 +301,7 @@ negative_baseline_alert_count="$(analyst_queue_count)"
 missing_secret_status="$(
   http_status "${temporary_dir}/missing-secret.json" \
     --header "Content-Type: application/json" \
-    --data-binary "@${fixture}" \
+    --data-binary "@${mapped_fixture}" \
     "${proxy_url}"
 )"
 [[ "${missing_secret_status}" == "403" ]] \
@@ -282,7 +311,7 @@ invalid_secret_status="$(
   http_status "${temporary_dir}/invalid-secret.json" \
     --header "@${invalid_header_file}" \
     --header "Content-Type: application/json" \
-    --data-binary "@${fixture}" \
+    --data-binary "@${mapped_fixture}" \
     "${proxy_url}"
 )"
 [[ "${invalid_secret_status}" == "403" ]] \
@@ -299,7 +328,7 @@ malformed_status="$(
   || fail "malformed JSON must return HTTP 400, got ${malformed_status}"
 
 jq '.data.source_family = "unsupported_phase67_source"' \
-  "${fixture}" >"${temporary_dir}/unsupported.json"
+  "${mapped_fixture}" >"${temporary_dir}/unsupported.json"
 unsupported_status="$(
   http_status "${temporary_dir}/unsupported-response.json" \
     --header "@${authenticated_header_file}" \
@@ -311,7 +340,7 @@ unsupported_status="$(
   || fail "unsupported source family must return HTTP 400, got ${unsupported_status}"
 
 jq '.rule.id = "9999" | .data.wazuh_rule_id = "9999"' \
-  "${fixture}" >"${temporary_dir}/unreviewed-rule.json"
+  "${mapped_fixture}" >"${temporary_dir}/unreviewed-rule.json"
 unreviewed_rule_status="$(
   http_status "${temporary_dir}/unreviewed-rule-response.json" \
     --header "@${authenticated_header_file}" \
@@ -321,6 +350,18 @@ unreviewed_rule_status="$(
 )"
 [[ "${unreviewed_rule_status}" == "400" ]] \
   || fail "unreviewed Wazuh rule must return HTTP 400, got ${unreviewed_rule_status}"
+
+jq '.data.reviewed_by = "forged-phase67-review"' \
+  "${mapped_fixture}" >"${temporary_dir}/forged-provenance.json"
+forged_provenance_status="$(
+  http_status "${temporary_dir}/forged-provenance-response.json" \
+    --header "@${authenticated_header_file}" \
+    --header "Content-Type: application/json" \
+    --data-binary "@${temporary_dir}/forged-provenance.json" \
+    "${proxy_url}"
+)"
+[[ "${forged_provenance_status}" == "400" ]] \
+  || fail "forged fixed Wazuh provenance must return HTTP 400, got ${forged_provenance_status}"
 
 python3 - "${temporary_dir}/oversized.json" <<'PY'
 from pathlib import Path
@@ -584,6 +625,7 @@ jq -n \
   --arg manager_id "$(jq -er '.manager_id' <<<"${native_metadata}")" \
   --arg rule_id "$(jq -er '.rule_id' <<<"${native_metadata}")" \
   --arg timestamp "$(jq -er '.timestamp' <<<"${native_metadata}")" \
+  --arg aegisops_alert_id "${aegisops_alert_id}" \
   --argjson first_delivery "${first_receipt}" \
   --argjson duplicate_delivery "${duplicate_receipt}" \
   --argjson queue_record "${queue_record}" \
@@ -602,6 +644,7 @@ jq -n \
       native_wazuh_manager_id: $manager_id,
       native_wazuh_rule_id: $rule_id,
       native_event_timestamp: $timestamp,
+      aegisops_alert_id: $aegisops_alert_id,
       negative_boundary: {
         baseline_alert_count: $negative_baseline_alert_count,
         after_alert_count: $negative_after_alert_count,
@@ -614,7 +657,6 @@ jq -n \
         | {
             http_status,
             disposition,
-            aegisops_alert_id,
             finding_id,
             reconciliation_id
           }
@@ -624,14 +666,12 @@ jq -n \
         | {
             http_status,
             disposition,
-            aegisops_alert_id,
             finding_id,
             reconciliation_id
           }
       ),
       analyst_queue: {
         source_system: $queue_record.source_system,
-        alert_id: $queue_record.alert_id,
         case_id: $queue_record.case_id
       },
       case_promotion: "not_performed",
@@ -645,6 +685,7 @@ echo "PASS invalid_bearer_secret=403"
 echo "PASS malformed_payload=400"
 echo "PASS unsupported_source_family=400"
 echo "PASS unreviewed_wazuh_rule=400"
+echo "PASS forged_fixed_wazuh_provenance=400"
 echo "PASS oversized_payload=413"
 echo "PASS proxy_bypass=403"
 echo "PASS negative_authoritative_alert_delta=0"

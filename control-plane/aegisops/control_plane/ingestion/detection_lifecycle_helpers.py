@@ -31,6 +31,7 @@ from ..models import (
 from ..models import DetectorLifecycleRecord
 from ..reviewed_slice_policy import (
     REVIEWED_LIVE_SOURCE_FAMILIES,
+    REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE,
     REVIEWED_WAZUH_DETECTION_RULE_ID,
 )
 
@@ -725,7 +726,7 @@ class LiveWazuhIntakeHandler:
                 native_manager.get("name"),
                 "manager.name",
             )
-            expected_native_provenance = {
+            expected_wazuh_provenance = {
                 "event_id": service._require_non_empty_string(
                     native_alert.get("id"),
                     "id",
@@ -739,7 +740,10 @@ class LiveWazuhIntakeHandler:
                 "wazuh_rule_id": native_rule_id,
                 "wazuh_rule_level": str(native_rule_level),
             }
-            for field_name, expected_value in expected_native_provenance.items():
+            expected_wazuh_provenance.update(
+                REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE
+            )
+            for field_name, expected_value in expected_wazuh_provenance.items():
                 actual_value = service._normalize_optional_string(
                     data.get(field_name),
                     f"data.{field_name}",
@@ -753,8 +757,14 @@ class LiveWazuhIntakeHandler:
                         source_family=source_family,
                         field_name=field_name,
                     )
+                    expected_source = (
+                        "reviewed Phase 67 Wazuh mapping value"
+                        if field_name
+                        in REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE
+                        else "native Wazuh alert value"
+                    )
                     raise ValueError(
-                        f"data.{field_name} must match its native Wazuh alert value"
+                        f"data.{field_name} must match its {expected_source}"
                     )
 
         adapter = WazuhAlertAdapter()

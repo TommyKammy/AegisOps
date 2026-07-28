@@ -122,6 +122,55 @@ assert_fails_with \
   "${negative_delta_drift}" \
   "must prove negative tests write no alert state"
 
+shared_alert_identity_removed="${workdir}/shared-alert-identity-removed"
+copy_fixture "${shared_alert_identity_removed}"
+perl -0pi -e \
+  's/\n    "aegisops_alert_id",//' \
+  "${shared_alert_identity_removed}/control-plane/deployment/phase-67-integration-lab/wazuh/evidence-manifest.schema.json"
+assert_fails_with \
+  "${shared_alert_identity_removed}" \
+  "must represent one shared AegisOps alert identity"
+
+first_delivery_drift="${workdir}/first-delivery-drift"
+copy_fixture "${first_delivery_drift}"
+sed -i.bak \
+  's/"const": "created"/"const": "deduplicated"/' \
+  "${first_delivery_drift}/control-plane/deployment/phase-67-integration-lab/wazuh/evidence-manifest.schema.json"
+assert_fails_with \
+  "${first_delivery_drift}" \
+  "first_delivery must require created"
+
+duplicate_delivery_drift="${workdir}/duplicate-delivery-drift"
+copy_fixture "${duplicate_delivery_drift}"
+sed -i.bak \
+  's/"const": "deduplicated"/"const": "created"/' \
+  "${duplicate_delivery_drift}/control-plane/deployment/phase-67-integration-lab/wazuh/evidence-manifest.schema.json"
+assert_fails_with \
+  "${duplicate_delivery_drift}" \
+  "duplicate_delivery must require deduplicated"
+
+divergent_delivery_identity="${workdir}/divergent-delivery-identity"
+copy_fixture "${divergent_delivery_identity}"
+python3 - \
+  "${divergent_delivery_identity}/control-plane/deployment/phase-67-integration-lab/wazuh/evidence-manifest.schema.json" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+path = Path(sys.argv[1])
+schema = json.loads(path.read_text(encoding="utf-8"))
+definition = schema["$defs"]["duplicate_delivery"]
+definition["required"].append("aegisops_alert_id")
+definition["properties"]["aegisops_alert_id"] = {
+    "type": "string",
+    "minLength": 1,
+}
+path.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
+PY
+assert_fails_with \
+  "${divergent_delivery_identity}" \
+  "delivery evidence must use the shared aegisops_alert_id"
+
 runtime_attribution_removed="${workdir}/runtime-attribution-removed"
 copy_fixture "${runtime_attribution_removed}"
 perl -0pi -e \
@@ -238,6 +287,15 @@ assert_fails_with \
   "${native_provenance_boundary_removed}" \
   "if actual_value != expected_value:"
 
+fixed_provenance_boundary_removed="${workdir}/fixed-provenance-boundary-removed"
+copy_fixture "${fixed_provenance_boundary_removed}"
+sed -i.bak \
+  's/REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE/REMOVED_WAZUH_DETECTION_FIXED_PROVENANCE/g' \
+  "${fixed_provenance_boundary_removed}/control-plane/aegisops/control_plane/ingestion/detection_lifecycle_helpers.py"
+assert_fails_with \
+  "${fixed_provenance_boundary_removed}" \
+  "REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE"
+
 unreviewed_rule_probe_removed="${workdir}/unreviewed-rule-probe-removed"
 copy_fixture "${unreviewed_rule_probe_removed}"
 sed -i.bak \
@@ -246,6 +304,15 @@ sed -i.bak \
 assert_fails_with \
   "${unreviewed_rule_probe_removed}" \
   "unreviewed Wazuh rule must return HTTP 400"
+
+fixed_provenance_probe_removed="${workdir}/fixed-provenance-probe-removed"
+copy_fixture "${fixed_provenance_probe_removed}"
+sed -i.bak \
+  's/forged fixed Wazuh provenance must return HTTP 400/forged fixed Wazuh provenance accepted/' \
+  "${fixed_provenance_probe_removed}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${fixed_provenance_probe_removed}" \
+  "forged fixed Wazuh provenance must return HTTP 400"
 
 duplicate_event="${workdir}/duplicate-event"
 copy_fixture "${duplicate_event}"
