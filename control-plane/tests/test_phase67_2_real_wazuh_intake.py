@@ -335,6 +335,51 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
                 self.assertEqual(store.list(CaseRecord), ())
                 self.assertEqual(service.inspect_analyst_queue().total_records, 0)
 
+    def test_control_plane_rejects_inconsistent_native_wazuh_provenance(self) -> None:
+        mapped_alert = integrator.map_native_alert(
+            self.native_alert,
+            allowed_rule_id="5710",
+        )
+        mutations = {
+            "event_id": "tampered-event-id",
+            "event_timestamp": "2026-07-28T00:00:00+00:00",
+            "source_id": "tampered-manager",
+            "wazuh_manager_id": "tampered-manager",
+            "wazuh_rule_level": "99",
+        }
+
+        for field_name, tampered_value in mutations.items():
+            with self.subTest(field_name=field_name):
+                store, _ = make_store()
+                service = AegisOpsControlPlaneService(
+                    RuntimeConfig(
+                        host="0.0.0.0",
+                        postgres_dsn="postgresql://control-plane.local/aegisops",
+                        wazuh_ingest_shared_secret="reviewed-shared-secret",
+                        wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                        wazuh_ingest_trusted_proxy_cidrs=("172.31.67.10/32",),
+                    ),
+                    store=store,
+                )
+                candidate = deepcopy(mapped_alert)
+                candidate["data"][field_name] = tampered_value
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    rf"data\.{field_name} must match its native Wazuh alert value",
+                ):
+                    service.ingest_wazuh_alert(
+                        raw_alert=candidate,
+                        authorization_header="Bearer reviewed-shared-secret",
+                        forwarded_proto="https",
+                        reverse_proxy_secret_header="reviewed-proxy-secret",
+                        peer_addr="172.31.67.10",
+                    )
+
+                self.assertEqual(store.list(AlertRecord), ())
+                self.assertEqual(store.list(CaseRecord), ())
+                self.assertEqual(service.inspect_analyst_queue().total_records, 0)
+
     def test_lab_configuration_keeps_intake_on_the_reviewed_proxy_boundary(self) -> None:
         proxy_config = (LAB_DIR / "config" / "control-plane.conf").read_text(
             encoding="utf-8"
@@ -409,13 +454,16 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
         up_script = (LAB_DIR / "up.sh").read_text(encoding="utf-8")
 
         self.assertEqual(
-            trial.count(
-                "Failed password for invalid user aegisops-phase67-invalid"
-            ),
+            trial.count("Failed password for invalid user %s"),
             1,
         )
         self.assertNotIn(
-            "Invalid user aegisops-phase67-invalid from 192.0.2.67",
+            "aegisops-phase67-invalid",
+            trial,
+        )
+        self.assertIn("secrets.token_hex(8)", trial)
+        self.assertIn(
+            'trial_username="aegisops-phase67-${trial_nonce}"',
             trial,
         )
         self.assertIn('--header "@${authenticated_header_file}"', trial)

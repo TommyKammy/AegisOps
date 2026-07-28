@@ -711,6 +711,51 @@ class LiveWazuhIntakeHandler:
                     f"id {REVIEWED_WAZUH_DETECTION_RULE_ID!r} in rule.id and "
                     "data.wazuh_rule_id"
                 )
+            native_rule_level = native_rule.get("level")
+            if not isinstance(native_rule_level, int) or isinstance(
+                native_rule_level,
+                bool,
+            ):
+                raise ValueError("rule.level must be an integer")
+            native_manager = service._require_mapping(
+                native_alert.get("manager"),
+                "manager",
+            )
+            native_manager_id = service._require_non_empty_string(
+                native_manager.get("name"),
+                "manager.name",
+            )
+            expected_native_provenance = {
+                "event_id": service._require_non_empty_string(
+                    native_alert.get("id"),
+                    "id",
+                ),
+                "event_timestamp": service._require_non_empty_string(
+                    native_alert.get("timestamp"),
+                    "timestamp",
+                ),
+                "source_id": native_manager_id,
+                "wazuh_manager_id": native_manager_id,
+                "wazuh_rule_id": native_rule_id,
+                "wazuh_rule_level": str(native_rule_level),
+            }
+            for field_name, expected_value in expected_native_provenance.items():
+                actual_value = service._normalize_optional_string(
+                    data.get(field_name),
+                    f"data.{field_name}",
+                )
+                if actual_value != expected_value:
+                    service._emit_structured_event(
+                        logging.WARNING,
+                        "wazuh_ingest_rejected",
+                        reason="wazuh_detection_provenance_mismatch",
+                        peer_addr=peer_addr,
+                        source_family=source_family,
+                        field_name=field_name,
+                    )
+                    raise ValueError(
+                        f"data.{field_name} must match its native Wazuh alert value"
+                    )
 
         adapter = WazuhAlertAdapter()
         native_record = self._intake.with_native_detection_admission_provenance(

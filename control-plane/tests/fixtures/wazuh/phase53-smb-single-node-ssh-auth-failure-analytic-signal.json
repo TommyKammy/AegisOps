@@ -15,7 +15,7 @@
     "source_system": "wazuh",
     "source_component": "wazuh-manager",
     "source_id": "wazuh-manager-smb-1",
-    "event_id": "wazuh-alert-1731595600.1112223",
+    "event_id": "1731595600.1112223",
     "event_timestamp": "2026-05-03T09:15:00+00:00",
     "wazuh_manager_id": "wazuh-manager-smb-1",
     "wazuh_rule_id": "5710",
@@ -27,7 +27,7 @@
     "reviewed_by": "phase-53.4-fixture-review"
   },
   "detection": {
-    "event_id": "wazuh-alert-1731595600.1112223",
+    "event_id": "1731595600.1112223",
     "event_timestamp": "2026-05-03T09:15:00+00:00",
     "source_component": "wazuh-manager",
     "source_id": "wazuh-manager-smb-1",

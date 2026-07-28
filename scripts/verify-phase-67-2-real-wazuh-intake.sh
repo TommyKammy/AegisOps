@@ -201,6 +201,12 @@ require_fixed_string \
 require_fixed_string \
   "${intake_helpers}" \
   'or provenance_rule_id != native_rule_id'
+require_fixed_string \
+  "${intake_helpers}" \
+  'for field_name, expected_value in expected_native_provenance.items():'
+require_fixed_string \
+  "${intake_helpers}" \
+  'if actual_value != expected_value:'
 
 require_fixed_string \
   "${env_sample}" \
@@ -313,11 +319,15 @@ from pathlib import Path
 import sys
 
 trial = Path(sys.argv[1]).read_text(encoding="utf-8")
-event = "Failed password for invalid user aegisops-phase67-invalid"
+event = "Failed password for invalid user %s"
 if trial.count(event) != 1:
     raise SystemExit("Phase 67.2 trial must emit exactly one native rule-5710 event")
-if "sshd[6702]: Invalid user aegisops-phase67-invalid" in trial:
-    raise SystemExit("Phase 67.2 trial must not emit a second invalid-user event")
+if "aegisops-phase67-invalid" in trial:
+    raise SystemExit("Phase 67.2 trial must not reuse a fixed correlation identity")
+if "secrets.token_hex(8)" not in trial:
+    raise SystemExit("Phase 67.2 trial must generate a fresh correlation identity")
+if 'trial_username="aegisops-phase67-${trial_nonce}"' not in trial:
+    raise SystemExit("Phase 67.2 trial must bind its fresh correlation identity")
 PY
 require_fixed_string "${status}" "latest_receipt=none"
 require_fixed_string "${status}" "inspect-analyst-queue"

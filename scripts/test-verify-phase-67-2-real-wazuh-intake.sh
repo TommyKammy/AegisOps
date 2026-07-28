@@ -166,6 +166,15 @@ assert_fails_with \
   "${authoritative_rule_boundary_removed}" \
   'REVIEWED_WAZUH_DETECTION_RULE_ID = "5710"'
 
+native_provenance_boundary_removed="${workdir}/native-provenance-boundary-removed"
+copy_fixture "${native_provenance_boundary_removed}"
+sed -i.bak \
+  's/if actual_value != expected_value:/if False:/' \
+  "${native_provenance_boundary_removed}/control-plane/aegisops/control_plane/ingestion/detection_lifecycle_helpers.py"
+assert_fails_with \
+  "${native_provenance_boundary_removed}" \
+  "if actual_value != expected_value:"
+
 unreviewed_rule_probe_removed="${workdir}/unreviewed-rule-probe-removed"
 copy_fixture "${unreviewed_rule_probe_removed}"
 sed -i.bak \
@@ -178,11 +187,20 @@ assert_fails_with \
 duplicate_event="${workdir}/duplicate-event"
 copy_fixture "${duplicate_event}"
 sed -i.bak \
-  '/Failed password for invalid user aegisops-phase67-invalid/p' \
+  '/Failed password for invalid user %s/p' \
   "${duplicate_event}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
 assert_fails_with \
   "${duplicate_event}" \
   "trial must emit exactly one native rule-5710 event"
+
+fixed_correlation_identity="${workdir}/fixed-correlation-identity"
+copy_fixture "${fixed_correlation_identity}"
+sed -i.bak \
+  's/trial_username="aegisops-phase67-${trial_nonce}"/trial_username="aegisops-phase67-invalid"/' \
+  "${fixed_correlation_identity}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${fixed_correlation_identity}" \
+  "must not reuse a fixed correlation identity"
 
 manager_recreate_removed="${workdir}/manager-recreate-removed"
 copy_fixture "${manager_recreate_removed}"
