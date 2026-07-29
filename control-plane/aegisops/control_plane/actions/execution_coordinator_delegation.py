@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Mapping
 
 from .action_receipt_validation import (
@@ -231,7 +231,7 @@ class ApprovedActionDelegationCoordinator:
                         provenance=finalized_provenance,
                         lifecycle_state="queued",
                     ),
-                    transitioned_at=delegated_at,
+                    transitioned_at=delegated_at + timedelta(microseconds=1),
                 )
         except Exception as exc:
             try:
@@ -642,7 +642,10 @@ class ApprovedActionDelegationCoordinator:
                 dispatch_failure["observed_execution_surface_id"] = observed_surface_id
 
         failure_provenance["dispatch_failure"] = dispatch_failure
-        failure_at = datetime.now(timezone.utc)
+        failure_at = max(
+            datetime.now(timezone.utc),
+            execution.delegated_at + timedelta(microseconds=1),
+        )
         with self._service._store.transaction():
             current_execution = self._service._store.get(
                 ActionExecutionRecord,

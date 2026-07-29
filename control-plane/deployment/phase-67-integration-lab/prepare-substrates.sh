@@ -292,4 +292,4 @@ record_reviewed_file_digest \
 
 echo "Prepared Wazuh ${AEGISOPS_LAB_WAZUH_VERSION} substrate at ${AEGISOPS_LAB_WAZUH_SOURCE_DIR}"
 echo "The next wazuh/full up.sh run will force service recreation."
-echo "Shuffle images remain execution-disabled; Docker socket mounting is deferred to Phase 67.3."
+echo "Shuffle execution setup is handled separately by bootstrap-shuffle.sh."

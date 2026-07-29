@@ -409,7 +409,7 @@ create table if not exists aegisops_control.action_execution_records (
   constraint action_execution_records_expiry_not_before_delegation check (
     expires_at is null or expires_at >= delegated_at
   ),
-  check (lifecycle_state in ('queued','running','succeeded','failed','canceled','superseded'))
+  check (lifecycle_state in ('dispatching','queued','running','succeeded','failed','canceled','superseded'))
 );
 
 create table if not exists aegisops_control.hunt_records (

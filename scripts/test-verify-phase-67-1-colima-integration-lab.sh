@@ -58,8 +58,10 @@ assert_fails_with "${context_mutation}" 'must not mutate the global Docker conte
 
 socket_mount="${workdir}/socket-mount"
 copy_fixture "${socket_mount}"
-printf '\n# /var/run/docker.sock:/var/run/docker.sock\n' >>"${socket_mount}/control-plane/deployment/phase-67-integration-lab/docker-compose.yml"
-assert_fails_with "${socket_mount}" 'must not mount the Docker socket'
+printf '\n  - /var/run/docker.sock:/var/run/docker.sock\n' >>"${socket_mount}/control-plane/deployment/phase-67-integration-lab/docker-compose.yml"
+assert_fails_with \
+  "${socket_mount}" \
+  'must limit Docker socket mounts to the reviewed Shuffle backend and Orborus services'
 
 destructive_cleanup="${workdir}/destructive-cleanup"
 copy_fixture "${destructive_cleanup}"

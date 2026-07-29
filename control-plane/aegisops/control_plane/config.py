@@ -240,6 +240,10 @@ class RuntimeConfig:
     opensearch_url: str = "<set-me>"
     n8n_base_url: str = "<set-me>"
     shuffle_base_url: str = "<set-me>"
+    shuffle_transport_mode: str = "deterministic"
+    shuffle_api_key: str = field(default="", repr=False)
+    shuffle_api_workflow_id: str = ""
+    shuffle_ca_file: str = ""
     isolated_executor_base_url: str = "<set-me>"
     wazuh_ingest_shared_secret: str = field(default="", repr=False)
     wazuh_ingest_reverse_proxy_secret: str = field(default="", repr=False)
@@ -313,6 +317,26 @@ class RuntimeConfig:
                 "AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL",
                 cls.shuffle_base_url,
             ),
+            shuffle_transport_mode=_load_choice(
+                source,
+                "AEGISOPS_CONTROL_PLANE_SHUFFLE_TRANSPORT_MODE",
+                cls.shuffle_transport_mode,
+                allowed_values=frozenset({"deterministic", "real_http"}),
+            ),
+            shuffle_api_key=_load_bound_string(
+                source,
+                "AEGISOPS_CONTROL_PLANE_SHUFFLE_API_KEY",
+                cls.shuffle_api_key,
+                secret_backend_transport=secret_backend_transport,
+            ),
+            shuffle_api_workflow_id=source.get(
+                "AEGISOPS_CONTROL_PLANE_SHUFFLE_API_WORKFLOW_ID",
+                cls.shuffle_api_workflow_id,
+            ).strip(),
+            shuffle_ca_file=source.get(
+                "AEGISOPS_CONTROL_PLANE_SHUFFLE_CA_FILE",
+                cls.shuffle_ca_file,
+            ).strip(),
             isolated_executor_base_url=source.get(
                 "AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL",
                 cls.isolated_executor_base_url,

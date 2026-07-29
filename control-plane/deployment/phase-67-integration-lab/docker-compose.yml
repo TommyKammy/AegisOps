@@ -41,6 +41,7 @@ services:
       AEGISOPS_CONTROL_PLANE_PORT: 8080
       AEGISOPS_CONTROL_PLANE_POSTGRES_DSN_FILE: /run/secrets/control-plane-postgres-dsn
       AEGISOPS_CONTROL_PLANE_BOOT_MODE: first-boot
+      AEGISOPS_CONTROL_PLANE_DEPLOYMENT_PROFILE: phase67-integration-lab
       AEGISOPS_CONTROL_PLANE_LOG_LEVEL: INFO
       AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_FILE: /run/secrets/wazuh-ingest-shared-secret
       AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET_FILE: /run/secrets/wazuh-ingest-proxy-secret
@@ -51,7 +52,11 @@ services:
       AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER: phase67-lab
       AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN_FILE: /run/secrets/admin-bootstrap-token
       AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN_FILE: /run/secrets/break-glass-token
-      AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL: http://shuffle-backend:5001
+      AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL: https://proxy:8443/shuffle-api
+      AEGISOPS_CONTROL_PLANE_SHUFFLE_TRANSPORT_MODE: ${AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE:-deterministic}
+      AEGISOPS_CONTROL_PLANE_SHUFFLE_API_KEY_FILE: /run/secrets/shuffle-api-key
+      AEGISOPS_CONTROL_PLANE_SHUFFLE_API_WORKFLOW_ID: ${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-67f30000-0000-4000-8000-000000000001}
+      AEGISOPS_CONTROL_PLANE_SHUFFLE_CA_FILE: /run/secrets/phase67-proxy-ca
     secrets:
       - control-plane-postgres-dsn
       - wazuh-ingest-shared-secret
@@ -59,8 +64,11 @@ services:
       - protected-surface-proxy-secret
       - admin-bootstrap-token
       - break-glass-token
+      - shuffle-api-key
+      - phase67-proxy-ca
     volumes:
       - ./control-plane-entrypoint.sh:/opt/aegisops/bin/phase-67-lab-entrypoint.sh:ro
+      - ./shuffle:/opt/aegisops/phase67-shuffle:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -334,7 +342,7 @@ services:
     platform: ${AEGISOPS_LAB_SHUFFLE_PLATFORM:-linux/amd64}
     image: ghcr.io/shuffle/shuffle-backend:2.2.1@sha256:0cc1775e48b7d94b7f16d0be713aa274ced52be24ad521beaaf58c67023fd2e5
     environment:
-      BASE_URL: http://shuffle-backend:5001
+      BASE_URL: http://${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-shuffle-backend-1:5001
       SHUFFLE_OPENSEARCH_URL: https://shuffle-opensearch:9200
       SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY: "true"
       SHUFFLE_OPENSEARCH_USERNAME: admin
@@ -347,6 +355,7 @@ services:
     volumes:
       - ${AEGISOPS_LAB_SHUFFLE_APP_DIR:?run-init-first}:/shuffle-apps
       - ${AEGISOPS_LAB_SHUFFLE_FILE_DIR:?run-init-first}:/shuffle-files
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       shuffle-opensearch:
         condition: service_healthy
@@ -356,14 +365,47 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - wget -qO- http://127.0.0.1:5001/api/v1/health >/dev/null
+        - wget -qO- http://127.0.0.1:5001/api/v1/users/checkusers >/dev/null
       interval: 10s
       timeout: 5s
       retries: 60
     labels:
       com.aegisops.lab.phase: "67.1"
       com.aegisops.lab.component: shuffle-backend
-      com.aegisops.lab.execution-enabled: "false"
+      com.aegisops.lab.execution-enabled: "true"
+
+  shuffle-orborus:
+    profiles:
+      - shuffle
+    platform: ${AEGISOPS_LAB_SHUFFLE_PLATFORM:-linux/amd64}
+    image: ghcr.io/shuffle/shuffle-orborus:2.2.1@sha256:3519810b3ca4fe568acefdf15ce6f2deba0ae6f0ff6b84412354d59d663dff31
+    environment:
+      BASE_URL: http://${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-shuffle-backend-1:5001
+      ENVIRONMENT_NAME: Shuffle
+      ORG_ID: Shuffle
+      DOCKER_API_VERSION: "1.40"
+      SHUFFLE_APP_SDK_TIMEOUT: "300"
+      SHUFFLE_STATS_DISABLED: "true"
+      SHUFFLE_LOGS_DISABLED: "true"
+      SHUFFLE_SWARM_CONFIG: run
+      CLEANUP: "true"
+      ORBORUS_CONTAINER_NAME: ${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}-shuffle-orborus-1
+      SHUFFLE_WORKER_IMAGE: ghcr.io/shuffle/shuffle-worker:2.2.1@sha256:9541c1fef2bc8511727610b565adbd0f7c817c53afee2dd9fef6aad8a971ffb1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      shuffle-backend:
+        condition: service_healthy
+    networks:
+      - lab
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    labels:
+      com.aegisops.lab.phase: "67.1"
+      com.aegisops.lab.slice: "67.3"
+      com.aegisops.lab.component: shuffle-orborus
+      com.aegisops.lab.execution-scope: harmless-local-test-sink
 
   shuffle-frontend:
     profiles:
@@ -381,7 +423,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - wget -qO- http://127.0.0.1/ >/dev/null
+        - curl --fail --silent http://127.0.0.1/ >/dev/null
       interval: 10s
       timeout: 5s
       retries: 60
@@ -456,3 +498,7 @@ secrets:
     file: ${AEGISOPS_LAB_SECRET_DIR:?run-init-first}/admin-bootstrap-token
   break-glass-token:
     file: ${AEGISOPS_LAB_SECRET_DIR:?run-init-first}/break-glass-token
+  shuffle-api-key:
+    file: ${AEGISOPS_LAB_SECRET_DIR:?run-init-first}/shuffle-api-key
+  phase67-proxy-ca:
+    file: ${AEGISOPS_LAB_PROXY_CERT_DIR:?run-init-first}/lab.crt

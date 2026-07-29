@@ -395,6 +395,23 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
             service.get_record(ActionExecutionRecord, execution.action_execution_id),
             execution,
         )
+        execution_transitions = sorted(
+            (
+                transition
+                for transition in store.list(support.LifecycleTransitionRecord)
+                if transition.subject_record_family == "action_execution"
+                and transition.subject_record_id == execution.action_execution_id
+            ),
+            key=lambda transition: transition.transitioned_at,
+        )
+        self.assertEqual(
+            [transition.lifecycle_state for transition in execution_transitions],
+            ["dispatching", "queued"],
+        )
+        self.assertGreater(
+            execution_transitions[1].transitioned_at,
+            execution_transitions[0].transitioned_at,
+        )
 
     def test_service_serializes_action_execution_idempotency_claim(
         self,

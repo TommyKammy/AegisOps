@@ -10,6 +10,10 @@ from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.osquery import OsqueryHostContextAdapter
 from .adapters.postgres import PostgresControlPlaneStore
 from .adapters.shuffle import ShuffleActionAdapter
+from .adapters.shuffle_real import (
+    RealShuffleActionAdapter,
+    UrllibShuffleJsonTransport,
+)
 from .assistant.ai_trace_lifecycle import AITraceLifecycleService
 from .assistant.assistant_advisory import AssistantAdvisoryCoordinator
 from .assistant.assistant_context import (
@@ -97,7 +101,7 @@ class ControlPlaneServiceCompositionDependencies:
 class ControlPlaneServiceComposition:
     store: Any
     reconciliation: N8NReconciliationAdapter
-    shuffle: ShuffleActionAdapter
+    shuffle: object
     isolated_executor: IsolatedExecutorAdapter
     assistant_provider_adapter: AssistantProviderAdapter
     reviewed_slice_policy: ReviewedSlicePolicy
@@ -140,7 +144,15 @@ def build_control_plane_service_composition(
         store if store is not None else PostgresControlPlaneStore(config.postgres_dsn)
     )
     reconciliation = N8NReconciliationAdapter(config.n8n_base_url)
-    shuffle = ShuffleActionAdapter(config.shuffle_base_url)
+    if config.shuffle_transport_mode == "real_http":
+        shuffle = RealShuffleActionAdapter(
+            base_url=config.shuffle_base_url,
+            api_key=config.shuffle_api_key,
+            api_workflow_id=config.shuffle_api_workflow_id,
+            transport=UrllibShuffleJsonTransport(config.shuffle_ca_file),
+        )
+    else:
+        shuffle = ShuffleActionAdapter(config.shuffle_base_url)
     isolated_executor = IsolatedExecutorAdapter(config.isolated_executor_base_url)
     assistant_provider_adapter = AssistantProviderAdapter(
         provider_identity="reviewed_local",

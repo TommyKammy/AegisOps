@@ -1,0 +1,55 @@
+{
+  "actions": [
+    {
+      "app_id": "3e2bdf9d5069fe3f4746c29d68785a6a",
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "environment": "Shuffle",
+      "errors": [],
+      "id": "67f30000-0000-4000-8000-000000000011",
+      "is_valid": true,
+      "label": "Harmless local receipt echo",
+      "name": "repeat_back_to_me",
+      "parameters": [
+        {
+          "name": "call",
+          "value": "$exec",
+          "variant": "WORKFLOW_VARIABLE"
+        }
+      ],
+      "position": {
+        "x": 320,
+        "y": 220
+      }
+    }
+  ],
+  "branches": [],
+  "conditions": [],
+  "description": "Phase 67.3 reviewed harmless local echo. No external connector or protected target.",
+  "errors": [],
+  "is_valid": true,
+  "name": "AegisOps Phase 67.3 harmless local receipt echo",
+  "start": "67f30000-0000-4000-8000-000000000011",
+  "tags": [
+    "aegisops",
+    "phase67.3",
+    "reviewed",
+    "harmless-local-only"
+  ],
+  "transforms": [],
+  "triggers": [],
+  "workflow_variables": [
+    {
+      "description": "Immutable reviewed contract identity, not a Shuffle execution id.",
+      "id": "67f30000-0000-4000-8000-000000000012",
+      "name": "aegisops_reviewed_template_id",
+      "value": "notify_identity_owner"
+    },
+    {
+      "description": "Immutable reviewed template version.",
+      "id": "67f30000-0000-4000-8000-000000000013",
+      "name": "aegisops_reviewed_template_version",
+      "value": "notify_identity_owner-v1-reviewed-2026-05-03"
+    }
+  ]
+}

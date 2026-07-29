@@ -647,6 +647,7 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             "0013_phase_61_detector_lifecycle_records.sql",
             "0014_phase_61_source_health_records.sql",
             "0015_phase_64_known_limitation_ownership_records.sql",
+            "0016_phase_67_action_execution_dispatching_state.sql",
         ):
             self.assertIn(migration_name, entrypoint)
         self.assertGreaterEqual(
@@ -728,7 +729,10 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         phase15_readiness = entrypoint.split(
             "0015_phase_64_known_limitation_ownership_records.sql)",
             maxsplit=1,
-        )[1]
+        )[1].split(
+            "0016_phase_67_action_execution_dispatching_state.sql)",
+            maxsplit=1,
+        )[0]
         self.assertNotIn(
             "lifecycle_transition_records_subject_family_matches",
             phase13_readiness,
@@ -740,6 +744,18 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         self.assertIn(
             "lifecycle_transition_records_subject_family_matches",
             phase15_readiness,
+        )
+        phase16_readiness = entrypoint.split(
+            "0016_phase_67_action_execution_dispatching_state.sql)",
+            maxsplit=1,
+        )[1]
+        self.assertIn(
+            "action_execution_records_lifecycle_state_check",
+            phase16_readiness,
+        )
+        self.assertIn(
+            "5b340453651de616ba658ab802f574a909f04bccf7e7c483a5ba92c6d50b8c9e",
+            phase16_readiness,
         )
         self.assertIn("AND indnkeyatts = 1", entrypoint)
         self.assertIn("AND indnatts = 1", entrypoint)
@@ -791,14 +807,14 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         for catalog_hash in (
             "d906ba1ab5288c94b5c277c1aad60d6d"
             "df499ad2aed55a2abde8729e639d3443",
-            "a00a8e3616ded3dd37dbdc6619d0309f"
-            "22899c2773a9ca241a88a6b2b644336e",
+            "5de18095fdfcf3c0d223a45280d3b96a"
+            "699dde0ebdc6e11328a1a936fb39d8de",
             "ba3907928c1c026b50f3a9e37c870d6c"
             "0008dddb2ebeccf9001cf937898c7d4f",
         ):
             self.assertIn(catalog_hash, entrypoint)
         self.assertLess(
-            entrypoint.rindex('"${migrations_dir}"/0015_*.sql'),
+            entrypoint.rindex('"${migrations_dir}"/0016_*.sql'),
             entrypoint.index("if ! prove_delegated_migration_definitions"),
         )
         self.assertLess(

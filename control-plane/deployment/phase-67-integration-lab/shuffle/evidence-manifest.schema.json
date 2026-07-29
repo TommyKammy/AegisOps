@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aegisops.example/schemas/phase67-3-real-shuffle-trial.json",
+  "title": "Phase 67.3 real Shuffle trial evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "captured_at",
+    "source_mode",
+    "workflow_api_id",
+    "reviewed_template_id",
+    "reviewed_template_version",
+    "action_request_id",
+    "approval_decision_id",
+    "delegation_id",
+    "execution_id",
+    "idempotency_key",
+    "idempotency_execution_count",
+    "correlation_id",
+    "requested_scope",
+    "payload_hash",
+    "expected_execution_receipt_id",
+    "action_execution_id",
+    "normalized_receipt_sha256",
+    "reconciliation_id",
+    "replay_reconciliation_id",
+    "execution_lifecycle_state",
+    "reconciliation_disposition",
+    "authority_posture",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "phase67.3-real-shuffle-trial-v1"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_mode": {
+      "const": "real_shuffle"
+    },
+    "workflow_api_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reviewed_template_id": {
+      "const": "notify_identity_owner"
+    },
+    "reviewed_template_version": {
+      "const": "notify_identity_owner-v1-reviewed-2026-05-03"
+    },
+    "action_request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "approval_decision_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "delegation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "execution_id": {
+      "type": "string",
+      "format": "uuid",
+      "minLength": 1,
+      "not": {
+        "pattern": "^shuffle-run-"
+      }
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "idempotency_execution_count": {
+      "const": 1
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requested_scope": {
+      "type": "object",
+      "required": [
+        "record_family",
+        "record_id",
+        "finding_id",
+        "recipient_identity"
+      ],
+      "properties": {
+        "record_family": {
+          "const": "phase67_lab_trial"
+        },
+        "record_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "finding_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recipient_identity": {
+          "const": "local-test-sink"
+        }
+      },
+      "additionalProperties": false
+    },
+    "payload_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "expected_execution_receipt_id": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "pattern": "^shuffle-receipt-"
+      }
+    },
+    "action_execution_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "normalized_receipt_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reconciliation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "replay_reconciliation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "execution_lifecycle_state": {
+      "const": "succeeded"
+    },
+    "reconciliation_disposition": {
+      "const": "matched"
+    },
+    "authority_posture": {
+      "const": "aegisops_reconciliation_remains_authoritative"
+    },
+    "limitations": {
+      "type": "array",
+      "contains": {
+        "const": "isolated_non-production_lab"
+      },
+      "minItems": 3,
+      "uniqueItems": true
+    }
+  }
+}
