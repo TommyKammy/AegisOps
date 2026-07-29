@@ -12,6 +12,7 @@ copy_fixture() {
 
   mkdir -p \
     "${target}/control-plane/deployment" \
+    "${target}/control-plane/aegisops/control_plane/adapters" \
     "${target}/control-plane/aegisops/control_plane/ingestion" \
     "${target}/control-plane/tests/fixtures/wazuh" \
     "${target}/.github/workflows"
@@ -24,6 +25,9 @@ copy_fixture() {
   cp \
     "${repo_root}/control-plane/aegisops/control_plane/ingestion/detection_lifecycle_helpers.py" \
     "${target}/control-plane/aegisops/control_plane/ingestion/detection_lifecycle_helpers.py"
+  cp \
+    "${repo_root}/control-plane/aegisops/control_plane/adapters/wazuh.py" \
+    "${target}/control-plane/aegisops/control_plane/adapters/wazuh.py"
   cp \
     "${repo_root}/control-plane/tests/test_phase67_2_real_wazuh_intake.py" \
     "${target}/control-plane/tests/test_phase67_2_real_wazuh_intake.py"
@@ -241,6 +245,51 @@ sed -i.bak \
 assert_fails_with \
   "${digest_equality_removed}" \
   '$.runtime_artifact_digest must match '
+
+negative_delta_invariant_removed="${workdir}/negative-delta-invariant-removed"
+copy_fixture "${negative_delta_invariant_removed}"
+sed -i.bak \
+  '/after_alert_count - baseline_alert_count/d' \
+  "${negative_delta_invariant_removed}/control-plane/deployment/phase-67-integration-lab/wazuh/validate_evidence_manifest.py"
+assert_fails_with \
+  "${negative_delta_invariant_removed}" \
+  "after_alert_count - baseline_alert_count"
+
+rfc3339_lexical_guard_removed="${workdir}/rfc3339-lexical-guard-removed"
+copy_fixture "${rfc3339_lexical_guard_removed}"
+sed -i.bak \
+  's/RFC3339_DATE_TIME.fullmatch(value) is None/False/' \
+  "${rfc3339_lexical_guard_removed}/control-plane/deployment/phase-67-integration-lab/wazuh/validate_evidence_manifest.py"
+assert_fails_with \
+  "${rfc3339_lexical_guard_removed}" \
+  "RFC3339_DATE_TIME.fullmatch(value)"
+
+mapping_version_correlation_removed="${workdir}/mapping-version-correlation-removed"
+copy_fixture "${mapping_version_correlation_removed}"
+sed -i.bak \
+  's/"data.mapping_version"/"data.mapping_version_removed"/' \
+  "${mapping_version_correlation_removed}/control-plane/aegisops/control_plane/adapters/wazuh.py"
+assert_fails_with \
+  "${mapping_version_correlation_removed}" \
+  '"data.mapping_version"'
+
+mapping_version_persistence_removed="${workdir}/mapping-version-persistence-removed"
+copy_fixture "${mapping_version_persistence_removed}"
+perl -0pi -e \
+  's/provenance\["mapping_version"\]/provenance["mapping_version_removed"]/g' \
+  "${mapping_version_persistence_removed}/control-plane/aegisops/control_plane/adapters/wazuh.py"
+assert_fails_with \
+  "${mapping_version_persistence_removed}" \
+  'provenance["mapping_version"]'
+
+integratord_health_removed="${workdir}/integratord-health-removed"
+copy_fixture "${integratord_health_removed}"
+sed -i.bak \
+  's/wazuh-integratord is running/wazuh-integratord is stopped/' \
+  "${integratord_health_removed}/control-plane/deployment/phase-67-integration-lab/docker-compose.yml"
+assert_fails_with \
+  "${integratord_health_removed}" \
+  "wazuh-integratord is running"
 
 final_manager_health_removed="${workdir}/final-manager-health-removed"
 copy_fixture "${final_manager_health_removed}"

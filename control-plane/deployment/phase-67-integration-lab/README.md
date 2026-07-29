@@ -73,11 +73,14 @@ across those negative tests. The mode-`600` manifest stays below the untracked
 runtime evidence directory. Its JSON is built in a cleanup-managed hidden
 staging file and validated against the tracked Draft 2020-12 schema before an
 atomic rename publishes the completed manifest. The validator additionally
-requires the worktree and running artifact digests to match, and the trial
-rechecks `wazuh-analysisd` and `wazuh-integratord` immediately before capture.
-Its schema requires `created` followed by `deduplicated` and represents the
-shared AegisOps alert identity once at the manifest boundary, so delivery
-records cannot claim different alert IDs.
+requires RFC 3339 timestamps, matching worktree and running artifact digests,
+and an authoritative alert delta recomputed from the captured counts. The
+trial rechecks `wazuh-analysisd` and `wazuh-integratord` immediately before
+capture, while the manager Compose healthcheck requires integratord throughout
+startup. Its schema requires `created` followed by `deduplicated` and
+represents the shared AegisOps alert identity once at the manifest boundary,
+so delivery records cannot claim different alert IDs. The admitted reviewed
+context retains the fixed Wazuh mapping version used to produce the alert.
 
 The regression fixture
 `control-plane/tests/fixtures/wazuh/phase67-real-wazuh-ssh-auth-failure-alert.json`

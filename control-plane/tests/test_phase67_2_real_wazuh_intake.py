@@ -20,6 +20,7 @@ if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
 from aegisops.control_plane.config import RuntimeConfig
+from aegisops.control_plane.adapters.wazuh import WazuhAlertAdapter
 from aegisops.control_plane.models import AlertRecord, CaseRecord
 from aegisops.control_plane.reviewed_slice_policy import (
     REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE,
@@ -475,6 +476,16 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             queue.records[0]["reviewed_context"]["source"]["source_family"],
             "wazuh_detection",
         )
+        self.assertEqual(
+            queue.records[0]["reviewed_context"]["provenance"][
+                "mapping_version"
+            ],
+            "phase67-wazuh-v1",
+        )
+        self.assertIn(
+            "data.mapping_version",
+            WazuhAlertAdapter.reviewed_correlation_fields,
+        )
 
     def test_control_plane_rejects_unreviewed_or_inconsistent_wazuh_rules(self) -> None:
         mapped_alert = integrator.map_native_alert(
@@ -807,6 +818,14 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             mismatched_runtime
         )
 
+        mismatched_negative_delta = self._valid_evidence_manifest()
+        mismatched_negative_delta["negative_boundary"][
+            "after_alert_count"
+        ] = 4
+        invalid_manifests["negative boundary delta mismatch"] = (
+            mismatched_negative_delta
+        )
+
         invalid_const = self._valid_evidence_manifest()
         invalid_const["native_wazuh_rule_id"] = "9999"
         invalid_manifests["invalid const"] = invalid_const
@@ -819,6 +838,42 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             with self.subTest(label=label):
                 with self.assertRaises(evidence_validator.EvidenceSchemaError):
                     evidence_validator.validate_evidence_manifest(manifest, schema)
+
+    def test_evidence_validator_enforces_rfc3339_date_time_syntax(self) -> None:
+        schema = json.loads(
+            (LAB_DIR / "wazuh" / "evidence-manifest.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for value in (
+            "2026-07-29T00:00:00Z",
+            "2026-07-29t00:00:00z",
+            "2026-07-29T09:00:00+09:00",
+        ):
+            with self.subTest(valid_value=value):
+                manifest = self._valid_evidence_manifest()
+                manifest["captured_at"] = value
+                evidence_validator.validate_evidence_manifest(
+                    manifest,
+                    schema,
+                )
+        invalid_values = (
+            "2026-07-29 00:00:00+00:00",
+            "20260729T000000+00:00",
+            "2026-07-29T00:00:00+00:00:00",
+        )
+        for value in invalid_values:
+            with self.subTest(value=value):
+                manifest = self._valid_evidence_manifest()
+                manifest["captured_at"] = value
+                with self.assertRaisesRegex(
+                    evidence_validator.EvidenceSchemaError,
+                    "RFC 3339 date-time syntax",
+                ):
+                    evidence_validator.validate_evidence_manifest(
+                        manifest,
+                        schema,
+                    )
 
     def test_evidence_validator_fails_closed_on_schema_drift(self) -> None:
         schema = json.loads(
@@ -857,6 +912,7 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
     def test_trial_has_one_native_event_and_protects_runtime_attribution(self) -> None:
         trial = (LAB_DIR / "test-wazuh-intake.sh").read_text(encoding="utf-8")
         up_script = (LAB_DIR / "up.sh").read_text(encoding="utf-8")
+        compose = (LAB_DIR / "docker-compose.yml").read_text(encoding="utf-8")
 
         self.assertEqual(
             trial.count("Failed password for invalid user %s"),
@@ -912,6 +968,7 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             "runtime_artifact_digest: $runtime_artifact_digest",
             trial,
         )
+        self.assertIn("wazuh-integratord is running", compose)
         self.assertEqual(trial.count("\ncheck_manager_health\n"), 2)
         self.assertLess(
             trial.rindex("\ncheck_manager_health\n"),

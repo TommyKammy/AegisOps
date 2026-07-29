@@ -239,7 +239,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - status="$$(/var/ossec/bin/wazuh-control status)"; printf '%s\n' "$${status}" | grep -q 'wazuh-analysisd is running' && printf '%s\n' "$${status}" | grep -q 'wazuh-apid is running'
+        - status="$$(/var/ossec/bin/wazuh-control status)"; printf '%s\n' "$${status}" | grep -q 'wazuh-analysisd is running' && printf '%s\n' "$${status}" | grep -q 'wazuh-integratord is running' && printf '%s\n' "$${status}" | grep -q 'wazuh-apid is running'
       interval: 10s
       timeout: 5s
       retries: 60

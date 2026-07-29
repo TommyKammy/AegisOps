@@ -68,8 +68,11 @@ require_file \
   "${repo_root}/control-plane/aegisops/control_plane/reviewed_slice_policy.py"
 require_file \
   "${repo_root}/control-plane/aegisops/control_plane/ingestion/detection_lifecycle_helpers.py"
+require_file \
+  "${repo_root}/control-plane/aegisops/control_plane/adapters/wazuh.py"
 reviewed_slice_policy="${repo_root}/control-plane/aegisops/control_plane/reviewed_slice_policy.py"
 intake_helpers="${repo_root}/control-plane/aegisops/control_plane/ingestion/detection_lifecycle_helpers.py"
+wazuh_adapter="${repo_root}/control-plane/aegisops/control_plane/adapters/wazuh.py"
 require_file "${repo_root}/.github/workflows/ci.yml"
 
 for command in \
@@ -156,6 +159,7 @@ require_fixed_string \
   "${compose}" \
   "- ./wazuh:/opt/aegisops-wazuh:ro"
 require_fixed_string "${compose}" "- wazuh-ingest-shared-secret"
+require_fixed_string "${compose}" "wazuh-integratord is running"
 require_absent_string "${compose}" '"8080:8080"'
 require_fixed_string \
   "${manager_entrypoint}" \
@@ -288,6 +292,18 @@ require_fixed_string \
 require_fixed_string \
   "${evidence_validator}" \
   '$.runtime_artifact_digest must match '
+require_fixed_string \
+  "${evidence_validator}" \
+  "RFC3339_DATE_TIME.fullmatch(value)"
+require_fixed_string \
+  "${evidence_validator}" \
+  "after_alert_count - baseline_alert_count"
+require_fixed_string \
+  "${wazuh_adapter}" \
+  '"data.mapping_version"'
+require_fixed_string \
+  "${wazuh_adapter}" \
+  'provenance["mapping_version"]'
 require_fixed_string "${mapping}" 'Native Wazuh alert `id`; never generated'
 require_fixed_string "${mapping}" "Wazuh remains subordinate detection evidence"
 require_fixed_string "${live_fixture}" '"timestamp": "2026-07-27T23:33:37.232+0000"'

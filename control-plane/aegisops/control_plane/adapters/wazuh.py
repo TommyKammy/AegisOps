@@ -67,6 +67,7 @@ class WazuhAlertAdapter:
         "data.repository.id",
         "data.repository.full_name",
         "data.product_profile",
+        "data.mapping_version",
         "data.source_system",
         "data.source_component",
         "data.source_id",
@@ -367,6 +368,9 @@ class WazuhAlertAdapter:
                 "data.product_profile",
             )
             profile["source"]["product_profile"] = product_profile
+            mapping_version = _optional_string(data.get("mapping_version"))
+            if mapping_version is not None:
+                provenance["mapping_version"] = mapping_version
             detection = self._build_wazuh_detection_profile(data)
             if detection is not None:
                 profile["detection"] = detection

@@ -33,6 +33,12 @@ SUPPORTED_KEYWORDS = frozenset(
 SUPPORTED_TYPES = frozenset(
     {"array", "boolean", "integer", "null", "number", "object", "string"}
 )
+RFC3339_DATE_TIME = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt]"
+    r"[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]+)?"
+    r"(?:[Zz]|[+-][0-9]{2}:[0-9]{2})$"
+)
 
 
 class EvidenceSchemaError(ValueError):
@@ -193,7 +199,11 @@ def _matches_type(instance: object, expected: str) -> bool:
 
 
 def _validate_date_time(value: str, path: str) -> None:
-    normalized = f"{value[:-1]}+00:00" if value.endswith("Z") else value
+    if RFC3339_DATE_TIME.fullmatch(value) is None:
+        raise EvidenceSchemaError(f"{path} must use RFC 3339 date-time syntax")
+    normalized = f"{value[:10]}T{value[11:]}"
+    if normalized.endswith(("Z", "z")):
+        normalized = f"{normalized[:-1]}+00:00"
     try:
         parsed = datetime.fromisoformat(normalized)
     except ValueError as exc:
@@ -280,6 +290,41 @@ def _validate_instance(
         )
 
 
+def _validate_phase67_invariants(manifest: Mapping[str, object]) -> None:
+    if manifest.get("worktree_artifact_digest") != manifest.get(
+        "runtime_artifact_digest"
+    ):
+        raise EvidenceSchemaError(
+            "$.runtime_artifact_digest must match "
+            "$.worktree_artifact_digest"
+        )
+    negative_boundary = _require_schema_mapping(
+        manifest.get("negative_boundary"),
+        "$.negative_boundary",
+    )
+    integer_fields: dict[str, int] = {}
+    for field_name in (
+        "baseline_alert_count",
+        "after_alert_count",
+        "authoritative_alert_delta",
+    ):
+        value = negative_boundary.get(field_name)
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise EvidenceSchemaError(
+                f"$.negative_boundary.{field_name} must be an integer"
+            )
+        integer_fields[field_name] = value
+    observed_delta = (
+        integer_fields["after_alert_count"]
+        - integer_fields["baseline_alert_count"]
+    )
+    if observed_delta != integer_fields["authoritative_alert_delta"]:
+        raise EvidenceSchemaError(
+            "$.negative_boundary.authoritative_alert_delta must equal "
+            "after_alert_count - baseline_alert_count"
+        )
+
+
 def validate_evidence_manifest(
     instance: object,
     schema: object,
@@ -291,14 +336,7 @@ def validate_evidence_manifest(
         )
     _check_schema_tree(root_schema)
     _validate_instance(instance, root_schema, root_schema, "$")
-    manifest = _require_schema_mapping(instance, "$")
-    if manifest.get("worktree_artifact_digest") != manifest.get(
-        "runtime_artifact_digest"
-    ):
-        raise EvidenceSchemaError(
-            "$.runtime_artifact_digest must match "
-            "$.worktree_artifact_digest"
-        )
+    _validate_phase67_invariants(_require_schema_mapping(instance, "$"))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
