@@ -3,6 +3,7 @@
 set -euo pipefail
 umask 077
 trap 'rc=$?; echo "BLOCKED: Shuffle bootstrap failed at line ${LINENO} (exit ${rc})" >&2' ERR
+trap '[[ -z "${auth_header_path:-}" ]] || rm -f -- "${auth_header_path}"' EXIT
 
 LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lab-common.sh
@@ -52,7 +53,10 @@ if [[ "${api_key}" == bootstrap-pending-* ]]; then
   mv "${api_key_staging}" "${api_key_path}"
 fi
 
-auth_header="Authorization: Bearer ${api_key}"
+auth_header_path="$(mktemp "${api_key_path}.header.XXXXXX")"
+printf 'Authorization: Bearer %s\n' "${api_key}" >"${auth_header_path}"
+chmod 600 "${auth_header_path}"
+unset api_key
 if [[
   "${AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE:-}" == "real_http" &&
     "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~ ^[0-9a-fA-F-]{36}$
@@ -61,7 +65,7 @@ if [[
 else
   workflow_create_response="$(
     curl "${curl_common[@]}" \
-      -H "${auth_header}" \
+      -H "@${auth_header_path}" \
       -H 'Content-Type: application/json' \
       --data-binary "@${workflow_path}" \
       "${api_origin}/api/v1/workflows"
@@ -79,7 +83,7 @@ else
   )"
   curl "${curl_common[@]}" \
     -X PUT \
-    -H "${auth_header}" \
+    -H "@${auth_header_path}" \
     -H 'Content-Type: application/json' \
     --data-binary "${workflow_with_runtime_id}" \
     "${api_origin}/api/v1/workflows/${workflow_id}" \
@@ -88,7 +92,7 @@ fi
 
 preserved_workflow="$(
   curl "${curl_common[@]}" \
-    -H "${auth_header}" \
+    -H "@${auth_header_path}" \
     "${api_origin}/api/v1/workflows/${workflow_id}"
 )"
 python3 \

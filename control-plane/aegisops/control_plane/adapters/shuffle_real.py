@@ -12,11 +12,24 @@ from uuid import UUID
 from .shuffle import ShuffleActionAdapter, ShuffleDelegationReceipt
 
 
+_REVIEWED_ACTION_ID = "67f30000-0000-4000-8000-000000000011"
+_REVIEWED_ACTION_NAME = "repeat_back_to_me"
+
+
 class ShuffleTransportFailure(RuntimeError):
-    def __init__(self, category: str, *, retryable: bool = False) -> None:
+    def __init__(
+        self,
+        category: str,
+        *,
+        retryable: bool = False,
+        transient: bool = False,
+        outcome_unknown: bool = False,
+    ) -> None:
         super().__init__(f"Shuffle transport failed: {category}")
         self.category = category
         self.retryable = retryable
+        self.transient = transient
+        self.outcome_unknown = outcome_unknown
 
 
 def _json_values_equal(left: object, right: object) -> bool:
@@ -110,10 +123,16 @@ class UrllibShuffleJsonTransport:
             ) as response:
                 content_type = response.headers.get_content_type()
                 if content_type != "application/json":
-                    raise ShuffleTransportFailure("invalid_content_type")
+                    raise ShuffleTransportFailure(
+                        "invalid_content_type",
+                        outcome_unknown=method == "POST",
+                    )
                 response_body = response.read(1_048_577)
                 if len(response_body) > 1_048_576:
-                    raise ShuffleTransportFailure("response_too_large")
+                    raise ShuffleTransportFailure(
+                        "response_too_large",
+                        outcome_unknown=method == "POST",
+                    )
         except error.HTTPError as exc:
             category = (
                 "authentication_rejected"
@@ -122,27 +141,55 @@ class UrllibShuffleJsonTransport:
                 if exc.code == 404
                 else f"http_{exc.code}"
             )
+            transient = 500 <= exc.code <= 599
             raise ShuffleTransportFailure(
                 category,
+                transient=transient,
+                outcome_unknown=method == "POST" and transient,
             ) from exc
         except TimeoutError as exc:
-            raise ShuffleTransportFailure("timeout") from exc
+            raise ShuffleTransportFailure(
+                "timeout",
+                transient=True,
+                outcome_unknown=method == "POST",
+            ) from exc
         except error.URLError as exc:
             retryable = isinstance(exc.reason, (ConnectionRefusedError, socket.gaierror))
+            transient = isinstance(
+                exc.reason,
+                (ConnectionError, TimeoutError, socket.gaierror),
+            )
             category = (
                 "connection_not_established" if retryable else "connection_failure"
             )
-            raise ShuffleTransportFailure(category, retryable=retryable) from exc
+            raise ShuffleTransportFailure(
+                category,
+                retryable=retryable,
+                transient=transient,
+                outcome_unknown=method == "POST" and transient and not retryable,
+            ) from exc
         except OSError as exc:
             retryable = isinstance(exc, (ConnectionRefusedError, socket.gaierror))
+            transient = isinstance(
+                exc,
+                (ConnectionError, TimeoutError, socket.gaierror),
+            )
             category = (
                 "connection_not_established" if retryable else "connection_failure"
             )
-            raise ShuffleTransportFailure(category, retryable=retryable) from exc
+            raise ShuffleTransportFailure(
+                category,
+                retryable=retryable,
+                transient=transient,
+                outcome_unknown=method == "POST" and transient and not retryable,
+            ) from exc
         try:
             return json.loads(response_body)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise ShuffleTransportFailure("malformed_json") from exc
+            raise ShuffleTransportFailure(
+                "malformed_json",
+                outcome_unknown=method == "POST",
+            ) from exc
 
 
 def _require_non_empty_string(value: object, field_name: str) -> str:
@@ -261,10 +308,19 @@ class RealShuffleActionAdapter:
                 if not exc.retryable or attempt == self.max_attempts:
                     raise
         if not isinstance(response, Mapping):
-            raise ShuffleTransportFailure("malformed_dispatch_response")
+            raise ShuffleTransportFailure(
+                "malformed_dispatch_response",
+                outcome_unknown=True,
+            )
         if response.get("success") is not True:
             raise ShuffleTransportFailure("dispatch_rejected")
-        execution_id = _require_real_execution_id(response.get("execution_id"))
+        try:
+            execution_id = _require_real_execution_id(response.get("execution_id"))
+        except ValueError as exc:
+            raise ShuffleTransportFailure(
+                "malformed_dispatch_response",
+                outcome_unknown=True,
+            ) from exc
         return self._delegation_receipt(
             execution_id=execution_id,
             execution_argument=execution_argument,
@@ -544,8 +600,14 @@ class ShuffleReceiptPollingClient:
             expected_scope,
         ):
             raise ShuffleTransportFailure("requested_scope_mismatch")
+        expected_argument = dict(expected_binding)
+        expected_argument["idempotency_key"] = idempotency_key
+        if not _json_values_equal(argument, expected_argument):
+            raise ShuffleTransportFailure("execution_argument_mismatch")
 
         status = self._normalize_status(execution.get("status"))
+        if status == "success" and not self._reviewed_action_succeeded(execution):
+            status = "failed"
         return {
             "execution_surface_type": self.execution_surface_type,
             "execution_surface_id": self.execution_surface_id,
@@ -564,6 +626,28 @@ class ShuffleReceiptPollingClient:
 
     execution_surface_type: str = "automation_substrate"
     execution_surface_id: str = "shuffle"
+
+    @staticmethod
+    def _reviewed_action_succeeded(execution: Mapping[str, object]) -> bool:
+        results = execution.get("results")
+        if (
+            not isinstance(results, list)
+            or len(results) != 1
+            or not isinstance(results[0], Mapping)
+        ):
+            raise ShuffleTransportFailure("malformed_reviewed_action_result")
+        result = results[0]
+        action = result.get("action")
+        if (
+            not isinstance(action, Mapping)
+            or action.get("id") != _REVIEWED_ACTION_ID
+            or action.get("name") != _REVIEWED_ACTION_NAME
+        ):
+            raise ShuffleTransportFailure("reviewed_action_result_mismatch")
+        result_status = result.get("status")
+        if not isinstance(result_status, str) or result_status.strip() == "":
+            raise ShuffleTransportFailure("malformed_reviewed_action_result")
+        return result_status.strip().upper() == "SUCCESS"
 
     @staticmethod
     def _normalize_status(value: object) -> str:

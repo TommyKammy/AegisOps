@@ -41,7 +41,10 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
         )
         requested_at = datetime(2026, 7, 29, 1, 0, tzinfo=timezone.utc)
         delegated_at = datetime(2026, 7, 29, 1, 5, tzinfo=timezone.utc)
-        target_scope = {"recipient_identity": "local-test-sink"}
+        target_scope = {
+            "recipient_identity": "local-test-sink",
+            "risk": 1,
+        }
         approved_payload = _phase20_notify_identity_owner_payload(
             recipient_identity="local-test-sink",
             case_id="case-phase67-failed-001",
@@ -226,6 +229,18 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
             compared_at=datetime(2026, 7, 29, 1, 13, tzinfo=timezone.utc),
             stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
         )
+        receipt["requested_scope"] = {
+            "recipient_identity": "local-test-sink",
+            "risk": True,
+        }
+        type_drifted_scope = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(receipt,),
+            compared_at=datetime(2026, 7, 29, 1, 13, 30, tzinfo=timezone.utc),
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
         receipt["requested_scope"] = target_scope
         for malformed_count in (True, 1.0):
             with self.subTest(idempotency_execution_count=malformed_count):
@@ -256,8 +271,9 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
 
         self.assertEqual(missing_count.ingest_disposition, "mismatch")
         self.assertEqual(mismatched_scope.ingest_disposition, "mismatch")
+        self.assertEqual(type_drifted_scope.ingest_disposition, "mismatch")
         self.assertNotIn("normalized_receipt", execution.provenance)
-        self.assertEqual(len(store.list(ReconciliationRecord)), 2)
+        self.assertEqual(len(store.list(ReconciliationRecord)), 3)
 
     def test_service_reconcile_action_execution_rejects_non_approved_requests(self) -> None:
         store, _ = make_store()

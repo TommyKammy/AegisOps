@@ -44,6 +44,9 @@ WORKFLOW_TEMPLATE = (
 WORKFLOW_VALIDATOR = WORKFLOW_TEMPLATE.with_name(
     "validate_preserved_workflow.py"
 )
+LAB_ROOT = WORKFLOW_TEMPLATE.parents[1]
+BOOTSTRAP_SHUFFLE = LAB_ROOT / "bootstrap-shuffle.sh"
+RUN_REAL_TRIAL = WORKFLOW_TEMPLATE.with_name("run_real_trial.py")
 
 
 class _QueueTransport:
@@ -78,6 +81,40 @@ def _payload() -> dict[str, object]:
         "message_intent": "Write one harmless local lab notification.",
         "escalation_reason": "Phase 67.3 real transport proof.",
         "shuffle_delegation_binding": _binding(),
+    }
+
+
+def _execution_argument(
+    *,
+    requested_scope: dict[str, object] | None = None,
+) -> dict[str, object]:
+    binding = _binding()
+    if requested_scope is not None:
+        binding["requested_scope"] = requested_scope
+    return {
+        "action_request_id": "action-request-001",
+        "approval_decision_id": "approval-001",
+        "delegation_id": "delegation-001",
+        "payload_hash": "payload-hash-001",
+        "idempotency_key": "idempotency-001",
+        **binding,
+        "delegated_at": "2026-07-29T00:00:00Z",
+        "action": {
+            "action_type": "notify_identity_owner",
+            "recipient_identity": "local-test-sink",
+            "message_intent": "Write one harmless local lab notification.",
+            "escalation_reason": "Phase 67.3 real transport proof.",
+        },
+    }
+
+
+def _reviewed_action_result(status: str = "SUCCESS") -> dict[str, object]:
+    return {
+        "action": {
+            "id": "67f30000-0000-4000-8000-000000000011",
+            "name": "repeat_back_to_me",
+        },
+        "status": status,
     }
 
 
@@ -323,7 +360,10 @@ class RealShuffleTransportTests(unittest.TestCase):
                 api_workflow_id=API_WORKFLOW_ID,
                 transport=transport,
             )
-        with self.assertRaisesRegex(ValueError, "execution id must be a UUID"):
+        with self.assertRaisesRegex(
+            ShuffleTransportFailure,
+            "malformed_dispatch_response",
+        ):
             _dispatch(
                 _adapter(
                     _QueueTransport(
@@ -354,6 +394,8 @@ class RealShuffleTransportTests(unittest.TestCase):
                 )
         self.assertEqual(raised.exception.category, "connection_not_established")
         self.assertTrue(raised.exception.retryable)
+        self.assertTrue(raised.exception.transient)
+        self.assertFalse(raised.exception.outcome_unknown)
 
         with (
             mock.patch(
@@ -381,16 +423,11 @@ class RealShuffleTransportTests(unittest.TestCase):
                 )
         self.assertEqual(raised.exception.category, "http_503")
         self.assertFalse(raised.exception.retryable)
+        self.assertTrue(raised.exception.transient)
+        self.assertTrue(raised.exception.outcome_unknown)
 
     def test_authenticated_poll_normalizes_bound_receipt(self) -> None:
-        argument = {
-            "action_request_id": "action-request-001",
-            "approval_decision_id": "approval-001",
-            "delegation_id": "delegation-001",
-            "payload_hash": "payload-hash-001",
-            "idempotency_key": "idempotency-001",
-            **_binding(),
-        }
+        argument = _execution_argument()
         transport = _QueueTransport(
             {
                 "executions": [
@@ -398,6 +435,7 @@ class RealShuffleTransportTests(unittest.TestCase):
                         "execution_id": REAL_EXECUTION_ID,
                         "execution_argument": argument,
                         "status": "FINISHED",
+                        "results": [_reviewed_action_result()],
                         "authorization": "must-not-be-persisted",
                     }
                 ]
@@ -435,14 +473,7 @@ class RealShuffleTransportTests(unittest.TestCase):
         )
 
     def test_poll_rejects_correlation_mismatch_and_duplicate_receipt(self) -> None:
-        expected = {
-            "action_request_id": "action-request-001",
-            "approval_decision_id": "approval-001",
-            "delegation_id": "delegation-001",
-            "payload_hash": "payload-hash-001",
-            "idempotency_key": "idempotency-001",
-            **_binding(),
-        }
+        expected = _execution_argument()
         mismatched = {**expected, "payload_hash": "different"}
         client = ShuffleReceiptPollingClient(
             base_url="https://proxy:8443/shuffle-api",
@@ -563,15 +594,47 @@ class RealShuffleTransportTests(unittest.TestCase):
                 observed_at=datetime.now(timezone.utc),
             )
 
+        for field_name, drifted_value in (
+            (
+                "action",
+                {
+                    **expected["action"],
+                    "recipient_identity": "different-recipient",
+                },
+            ),
+            ("delegated_at", "2026-07-29T00:00:01Z"),
+        ):
+            with self.subTest(field_name=field_name):
+                drifted_argument = {**expected, field_name: drifted_value}
+                drift_client = ShuffleReceiptPollingClient(
+                    base_url="https://proxy:8443/shuffle-api",
+                    api_key="fixture-api-key",
+                    api_workflow_id=API_WORKFLOW_ID,
+                    transport=_QueueTransport(
+                        {
+                            "executions": [
+                                {
+                                    "execution_id": REAL_EXECUTION_ID,
+                                    "execution_argument": drifted_argument,
+                                    "status": "FINISHED",
+                                }
+                            ]
+                        }
+                    ),
+                )
+                with self.assertRaisesRegex(
+                    ShuffleTransportFailure,
+                    "execution_argument_mismatch",
+                ):
+                    drift_client.poll_normalized_receipt(
+                        execution_id=REAL_EXECUTION_ID,
+                        idempotency_key="idempotency-001",
+                        expected_binding=expected,
+                        observed_at=datetime.now(timezone.utc),
+                    )
+
     def test_poll_fails_closed_for_missing_malformed_and_failed_receipts(self) -> None:
-        expected = {
-            "action_request_id": "action-request-001",
-            "approval_decision_id": "approval-001",
-            "delegation_id": "delegation-001",
-            "payload_hash": "payload-hash-001",
-            "idempotency_key": "idempotency-001",
-            **_binding(),
-        }
+        expected = _execution_argument()
         for response, category in (
             ({"executions": []}, "missing_receipt"),
             (
@@ -625,6 +688,72 @@ class RealShuffleTransportTests(unittest.TestCase):
             observed_at=datetime.now(timezone.utc),
         )
         self.assertEqual(receipt["status"], "failed")
+
+        failed_action_client = ShuffleReceiptPollingClient(
+            base_url="https://proxy:8443/shuffle-api",
+            api_key="fixture-api-key",
+            api_workflow_id=API_WORKFLOW_ID,
+            transport=_QueueTransport(
+                {
+                    "executions": [
+                        {
+                            "execution_id": REAL_EXECUTION_ID,
+                            "execution_argument": expected,
+                            "status": "FINISHED",
+                            "results": [_reviewed_action_result("FAILURE")],
+                        }
+                    ]
+                }
+            ),
+        )
+        receipt = failed_action_client.poll_normalized_receipt(
+            execution_id=REAL_EXECUTION_ID,
+            idempotency_key="idempotency-001",
+            expected_binding=expected,
+            observed_at=datetime.now(timezone.utc),
+        )
+        self.assertEqual(receipt["status"], "failed")
+
+        missing_result_client = ShuffleReceiptPollingClient(
+            base_url="https://proxy:8443/shuffle-api",
+            api_key="fixture-api-key",
+            api_workflow_id=API_WORKFLOW_ID,
+            transport=_QueueTransport(
+                {
+                    "executions": [
+                        {
+                            "execution_id": REAL_EXECUTION_ID,
+                            "execution_argument": expected,
+                            "status": "FINISHED",
+                        }
+                    ]
+                }
+            ),
+        )
+        with self.assertRaisesRegex(
+            ShuffleTransportFailure,
+            "malformed_reviewed_action_result",
+        ):
+            missing_result_client.poll_normalized_receipt(
+                execution_id=REAL_EXECUTION_ID,
+                idempotency_key="idempotency-001",
+                expected_binding=expected,
+                observed_at=datetime.now(timezone.utc),
+            )
+
+    def test_lab_scripts_retry_transient_gets_and_hide_bearer_from_argv(
+        self,
+    ) -> None:
+        trial_source = RUN_REAL_TRIAL.read_text(encoding="utf-8")
+        bootstrap_source = BOOTSTRAP_SHUFFLE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'exc.category != "missing_receipt" and not exc.transient',
+            trial_source,
+        )
+        self.assertIn('-H "@${auth_header_path}"', bootstrap_source)
+        self.assertNotIn('-H "${auth_header}"', bootstrap_source)
+        self.assertIn("unset api_key", bootstrap_source)
 
     def test_runtime_config_loads_file_backed_real_transport_secret(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

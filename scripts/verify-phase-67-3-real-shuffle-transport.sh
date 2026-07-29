@@ -62,7 +62,8 @@ workflow_validator="${lab}/shuffle/validate_preserved_workflow.py"
 require_fixed "${adapter}" 'parsed.scheme != "https"'
 require_fixed "${adapter}" '"Authorization": f"Bearer {api_key}"'
 require_fixed "${adapter}" 'max_attempts not in {1, 2}'
-require_fixed "${adapter}" 'ShuffleTransportFailure("timeout")'
+require_fixed "${adapter}" 'outcome_unknown=method == "POST"'
+require_fixed "${adapter}" 'transient=True'
 require_fixed "${adapter}" '"connection_not_established" if retryable'
 require_fixed "${adapter}" 'startswith(("shuffle-run-", "shuffle-receipt-"))'
 require_fixed "${adapter}" 'Shuffle execution id must be a UUID'
@@ -73,6 +74,9 @@ require_fixed "${adapter}" '"interrupted_dispatch_not_observed"'
 require_fixed "${adapter}" '"interrupted_dispatch_binding_mismatch"'
 require_fixed "${adapter}" 'if not _json_values_equal('
 require_fixed "${adapter}" 'replace("+00:00", "Z")'
+require_fixed "${adapter}" '"execution_argument_mismatch"'
+require_fixed "${adapter}" '"malformed_reviewed_action_result"'
+require_fixed "${adapter}" '_REVIEWED_ACTION_NAME = "repeat_back_to_me"'
 require_fixed \
   "${repo_root}/control-plane/tests/test_phase67_3_real_shuffle_transport.py" \
   'self.assertNotIn("authorization", receipt)'
@@ -82,8 +86,10 @@ require_fixed "${reconciliation}" '"downstream execution failed and requires ope
 require_fixed "${reconciliation}" '"requested_scope"'
 require_fixed "${reconciliation}" 'not isinstance(value, bool)'
 require_fixed "${reconciliation}" 'status.strip().lower()'
+require_fixed "${reconciliation}" 'and not _json_values_equal('
 require_fixed "${delegation}" '"recover_interrupted_dispatch"'
 require_fixed "${delegation}" ').astimezone(timezone.utc)'
+require_fixed "${delegation}" 'getattr(exc, "outcome_unknown", False)'
 require_fixed "${compose}" 'AEGISOPS_CONTROL_PLANE_SHUFFLE_API_KEY_FILE: /run/secrets/shuffle-api-key'
 require_fixed "${compose}" 'NGINX_ENVSUBST_FILTER: ^AEGISOPS_LAB_CONTROL_PLANE_IPV4$'
 require_fixed "${compose}" './config/control-plane.conf:/etc/nginx/templates/control-plane.conf.template:ro'
@@ -105,6 +111,11 @@ require_fixed \
 require_fixed "${evidence_validator}" '_validate_schema(payload, schema, "$")'
 require_fixed "${evidence_validator}" 'schema.get("additionalProperties") is False'
 require_fixed "${bootstrap}" 'validate_preserved_workflow.py'
+require_fixed "${bootstrap}" '-H "@${auth_header_path}"'
+require_fixed "${bootstrap}" 'unset api_key'
+require_fixed \
+  "${lab}/shuffle/run_real_trial.py" \
+  'exc.category != "missing_receipt" and not exc.transient'
 require_fixed "${workflow_validator}" 'require_reviewed_definition('
 require_fixed "${workflow_validator}" 'len(observed) != len(expected)'
 require_fixed \

@@ -20,6 +20,33 @@ from ..models import (
 )
 
 
+def _json_values_equal(left: object, right: object) -> bool:
+    try:
+        return json.dumps(
+            _json_ready(left),
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ) == json.dumps(
+            _json_ready(right),
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _json_ready(value: object) -> object:
+    if isinstance(value, Mapping):
+        if any(not isinstance(key, str) for key in value):
+            raise TypeError("JSON object keys must be strings")
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(item) for item in value]
+    return value
+
+
 class ActionExecutionReconciliationCoordinator:
     def __init__(self, service: ExecutionCoordinatorServiceDependencies) -> None:
         self._service = service
@@ -656,7 +683,10 @@ class ActionExecutionReconciliationCoordinator:
         expected_requested_scope = downstream_binding.get("requested_scope")
         if (
             isinstance(expected_requested_scope, Mapping)
-            and observed_requested_scope != expected_requested_scope
+            and not _json_values_equal(
+                observed_requested_scope,
+                expected_requested_scope,
+            )
         ):
             return True
         if (

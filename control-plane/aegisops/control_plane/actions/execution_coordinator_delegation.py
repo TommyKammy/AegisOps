@@ -176,6 +176,12 @@ class ApprovedActionDelegationCoordinator:
                     and existing.execution_surface_id == execution_surface_id
                     and existing.idempotency_key == action_request.idempotency_key
                 ):
+                    self._require_exact_approved_expiry_binding(
+                        action_request=action_request,
+                        approval_decision=approval_decision,
+                        delegated_at=existing.delegated_at,
+                        delegation_label=delegation_label,
+                    )
                     if existing.lifecycle_state == "dispatching":
                         predispatch_execution = existing
                         delegation_id = existing.delegation_id
@@ -183,6 +189,12 @@ class ApprovedActionDelegationCoordinator:
                         break
                     return existing
             else:
+                self._require_exact_approved_expiry_binding(
+                    action_request=action_request,
+                    approval_decision=approval_decision,
+                    delegated_at=delegated_at,
+                    delegation_label=delegation_label,
+                )
                 delegation_id = self._service._next_identifier("delegation")
                 predispatch_execution = self._service.persist_record(
                     ActionExecutionRecord(
@@ -257,7 +269,10 @@ class ApprovedActionDelegationCoordinator:
                 execution_surface_id=execution_surface_id,
             )
         except Exception as exc:
-            if not recover_interrupted_claim:
+            if (
+                not recover_interrupted_claim
+                and getattr(exc, "outcome_unknown", False) is not True
+            ):
                 self._mark_dispatch_failure(
                     execution=predispatch_execution,
                     error=exc,
@@ -817,11 +832,9 @@ class ApprovedActionDelegationCoordinator:
             execution_surface_type=execution_surface_type,
             execution_surface_id=execution_surface_id,
         )
-        self._require_exact_approved_expiry_binding(
+        self._require_approved_expiry_snapshot_matches(
             action_request=action_request,
             approval_decision=approval_decision,
-            delegated_at=delegated_at,
-            delegation_label=delegation_label,
         )
         return action_request, approval_decision
 
@@ -833,8 +846,10 @@ class ApprovedActionDelegationCoordinator:
         delegated_at: datetime,
         delegation_label: str,
     ) -> None:
-        if approval_decision.approved_expires_at != action_request.expires_at:
-            raise ValueError("approved expiry window does not match action request expiry")
+        self._require_approved_expiry_snapshot_matches(
+            action_request=action_request,
+            approval_decision=approval_decision,
+        )
         if (
             approval_decision.approved_expires_at is not None
             and delegated_at > approval_decision.approved_expires_at
@@ -842,6 +857,15 @@ class ApprovedActionDelegationCoordinator:
             raise ValueError(
                 f"Action request {action_request.action_request_id!r} expired before {delegation_label} delegation"
             )
+
+    @staticmethod
+    def _require_approved_expiry_snapshot_matches(
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord,
+    ) -> None:
+        if approval_decision.approved_expires_at != action_request.expires_at:
+            raise ValueError("approved expiry window does not match action request expiry")
 
     def _require_exact_approved_payload_binding(
         self,

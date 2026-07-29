@@ -974,7 +974,7 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
                     "action-request-routine-finalization-failure-001"
                 ),
                 approved_payload=approved_payload,
-                delegated_at=delegated_at.replace(minute=6),
+                delegated_at=expires_at + timedelta(minutes=1),
                 delegation_issuer="control-plane-service",
             )
 
@@ -989,6 +989,74 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
             recover_interrupted_dispatch.call_args.kwargs["delegated_at"],
             datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
         )
+
+    def test_service_keeps_ambiguous_shuffle_post_failure_recoverable(
+        self,
+    ) -> None:
+        store, service, approved_payload, delegated_at = (
+            self._build_approved_shuffle_delegation_context(
+                approval_decision_id="approval-ambiguous-post-001",
+                action_request_id="action-request-ambiguous-post-001",
+                idempotency_key="idempotency-ambiguous-post-001",
+            )
+        )
+        original_dispatch = type(service._shuffle).dispatch_approved_action
+
+        class AmbiguousDispatchError(RuntimeError):
+            outcome_unknown = True
+
+        def raise_ambiguous_failure(adapter: object, **kwargs: object) -> object:
+            raise AmbiguousDispatchError("proxy failed after accepting POST")
+
+        with mock.patch.object(
+            type(service._shuffle),
+            "dispatch_approved_action",
+            autospec=True,
+            side_effect=raise_ambiguous_failure,
+        ):
+            with self.assertRaisesRegex(
+                AmbiguousDispatchError,
+                "proxy failed after accepting POST",
+            ):
+                service.delegate_approved_action_to_shuffle(
+                    action_request_id="action-request-ambiguous-post-001",
+                    approved_payload=approved_payload,
+                    delegated_at=delegated_at,
+                    delegation_issuer="control-plane-service",
+                )
+
+        claimed_execution = store.list(ActionExecutionRecord)[0]
+        self.assertEqual(claimed_execution.lifecycle_state, "dispatching")
+        self.assertNotIn("dispatch_failure", claimed_execution.provenance)
+        recovery_calls: list[dict[str, object]] = []
+
+        def recover(adapter: object, **kwargs: object) -> object:
+            recovery_calls.append(dict(kwargs))
+            return original_dispatch(adapter, **kwargs)
+
+        with (
+            mock.patch.object(
+                type(service._shuffle),
+                "dispatch_approved_action",
+                side_effect=AssertionError("recovery must not POST again"),
+            ),
+            mock.patch.object(
+                type(service._shuffle),
+                "recover_interrupted_dispatch",
+                new=recover,
+                create=True,
+            ),
+        ):
+            recovered = service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-ambiguous-post-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at + timedelta(minutes=1),
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(recovered.lifecycle_state, "queued")
+        self.assertEqual(len(recovery_calls), 1)
+        self.assertEqual(recovery_calls[0]["delegated_at"], delegated_at)
 
     def test_service_preserves_finalization_failure_recording_error_context(
         self,

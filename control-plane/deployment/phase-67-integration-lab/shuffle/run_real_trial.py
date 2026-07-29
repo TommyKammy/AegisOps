@@ -167,6 +167,15 @@ def main() -> int:
         "delegation_id": execution.delegation_id,
         "payload_hash": payload_hash,
         **binding,
+        "delegated_at": execution.delegated_at.astimezone(timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "action": {
+            "action_type": approved_payload["action_type"],
+            "recipient_identity": approved_payload["recipient_identity"],
+            "message_intent": approved_payload["message_intent"],
+            "escalation_reason": approved_payload["escalation_reason"],
+        },
     }
     normalized_receipt = None
     deadline = time.monotonic() + 180
@@ -179,7 +188,7 @@ def main() -> int:
                 observed_at=datetime.now(timezone.utc),
             )
         except ShuffleTransportFailure as exc:
-            if exc.category != "missing_receipt":
+            if exc.category != "missing_receipt" and not exc.transient:
                 raise
             time.sleep(2)
             continue
