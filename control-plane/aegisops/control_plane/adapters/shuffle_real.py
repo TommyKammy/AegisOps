@@ -16,6 +16,20 @@ _REVIEWED_ACTION_ID = "67f30000-0000-4000-8000-000000000011"
 _REVIEWED_ACTION_NAME = "repeat_back_to_me"
 
 
+class _RejectRedirectHandler(request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        req: request.Request,
+        fp: object,
+        code: int,
+        msg: str,
+        headers: object,
+        newurl: str,
+    ) -> None:
+        del req, fp, code, msg, headers, newurl
+        return None
+
+
 class ShuffleTransportFailure(RuntimeError):
     def __init__(
         self,
@@ -115,11 +129,14 @@ class UrllibShuffleJsonTransport:
             method=method,
         )
         context = ssl.create_default_context(cafile=self.ca_file)
+        opener = request.build_opener(
+            request.HTTPSHandler(context=context),
+            _RejectRedirectHandler(),
+        )
         try:
-            with request.urlopen(  # noqa: S310
+            with opener.open(  # noqa: S310
                 shuffle_request,
                 timeout=timeout_seconds,
-                context=context,
             ) as response:
                 content_type = response.headers.get_content_type()
                 if content_type != "application/json":
@@ -135,7 +152,9 @@ class UrllibShuffleJsonTransport:
                     )
         except error.HTTPError as exc:
             category = (
-                "authentication_rejected"
+                "redirect_rejected"
+                if 300 <= exc.code <= 399
+                else "authentication_rejected"
                 if exc.code in {401, 403}
                 else "workflow_not_found"
                 if exc.code == 404
@@ -145,7 +164,8 @@ class UrllibShuffleJsonTransport:
             raise ShuffleTransportFailure(
                 category,
                 transient=transient,
-                outcome_unknown=method == "POST" and transient,
+                outcome_unknown=method == "POST"
+                and (transient or category == "redirect_rejected"),
             ) from exc
         except TimeoutError as exc:
             raise ShuffleTransportFailure(

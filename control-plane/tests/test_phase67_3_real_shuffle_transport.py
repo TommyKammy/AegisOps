@@ -15,11 +15,14 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
+from aegisops.control_plane.adapters.executor import IsolatedExecutorAdapter
+from aegisops.control_plane.adapters.shuffle import ShuffleActionAdapter
 from aegisops.control_plane.adapters.shuffle_real import (
     RealShuffleActionAdapter,
     ShuffleReceiptPollingClient,
     ShuffleTransportFailure,
     UrllibShuffleJsonTransport,
+    _RejectRedirectHandler,
 )
 from aegisops.control_plane.config import RuntimeConfig
 
@@ -158,6 +161,34 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertEqual(
             UrllibShuffleJsonTransport(ca_file=" /fixture/ca.pem ").ca_file,
             "/fixture/ca.pem",
+        )
+
+    def test_deterministic_adapters_recover_the_claimed_execution_identity(
+        self,
+    ) -> None:
+        delegation = {
+            "delegation_id": "delegation-001",
+            "action_request_id": "action-request-001",
+            "approval_decision_id": "approval-001",
+            "payload_hash": "payload-hash-001",
+            "idempotency_key": "idempotency-001",
+            "approved_payload": _payload(),
+            "delegated_at": datetime(2026, 7, 29, tzinfo=timezone.utc),
+        }
+        shuffle = ShuffleActionAdapter(
+            base_url="https://shuffle.example.test"
+        )
+        isolated_executor = IsolatedExecutorAdapter(
+            base_url="https://executor.example.test"
+        )
+
+        self.assertEqual(
+            shuffle.recover_interrupted_dispatch(**delegation),
+            shuffle.dispatch_approved_action(**delegation),
+        )
+        self.assertEqual(
+            isolated_executor.recover_interrupted_dispatch(**delegation),
+            isolated_executor.dispatch_approved_action(**delegation),
         )
 
     def test_bounded_retry_returns_one_real_execution_identity(self) -> None:
@@ -374,15 +405,19 @@ class RealShuffleTransportTests(unittest.TestCase):
 
     def test_http_transport_only_retries_proven_preconnect_failure(self) -> None:
         transport = UrllibShuffleJsonTransport(ca_file="/fixture/ca.pem")
+        preconnect_opener = mock.Mock()
+        preconnect_opener.open.side_effect = error.URLError(
+            ConnectionRefusedError()
+        )
         with (
             mock.patch(
                 "aegisops.control_plane.adapters.shuffle_real.ssl.create_default_context",
                 return_value=object(),
             ),
             mock.patch(
-                "aegisops.control_plane.adapters.shuffle_real.request.urlopen",
-                side_effect=error.URLError(ConnectionRefusedError()),
-            ),
+                "aegisops.control_plane.adapters.shuffle_real.request.build_opener",
+                return_value=preconnect_opener,
+            ) as build_preconnect_opener,
         ):
             with self.assertRaises(ShuffleTransportFailure) as raised:
                 transport.request_json(
@@ -396,21 +431,29 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertTrue(raised.exception.retryable)
         self.assertTrue(raised.exception.transient)
         self.assertFalse(raised.exception.outcome_unknown)
+        self.assertTrue(
+            any(
+                isinstance(handler, _RejectRedirectHandler)
+                for handler in build_preconnect_opener.call_args.args
+            )
+        )
 
+        gateway_opener = mock.Mock()
+        gateway_opener.open.side_effect = error.HTTPError(
+            "https://proxy:8443/shuffle-api/api/v1/workflows/id/execute",
+            503,
+            "unavailable",
+            {},
+            None,
+        )
         with (
             mock.patch(
                 "aegisops.control_plane.adapters.shuffle_real.ssl.create_default_context",
                 return_value=object(),
             ),
             mock.patch(
-                "aegisops.control_plane.adapters.shuffle_real.request.urlopen",
-                side_effect=error.HTTPError(
-                    "https://proxy:8443/shuffle-api/api/v1/workflows/id/execute",
-                    503,
-                    "unavailable",
-                    {},
-                    None,
-                ),
+                "aegisops.control_plane.adapters.shuffle_real.request.build_opener",
+                return_value=gateway_opener,
             ),
         ):
             with self.assertRaises(ShuffleTransportFailure) as raised:
@@ -424,6 +467,37 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertEqual(raised.exception.category, "http_503")
         self.assertFalse(raised.exception.retryable)
         self.assertTrue(raised.exception.transient)
+        self.assertTrue(raised.exception.outcome_unknown)
+
+        redirect_opener = mock.Mock()
+        redirect_opener.open.side_effect = error.HTTPError(
+            "https://proxy:8443/shuffle-api/api/v1/workflows/id/execute",
+            302,
+            "found",
+            {"Location": "https://other.example.test/execution"},
+            None,
+        )
+        with (
+            mock.patch(
+                "aegisops.control_plane.adapters.shuffle_real.ssl.create_default_context",
+                return_value=object(),
+            ),
+            mock.patch(
+                "aegisops.control_plane.adapters.shuffle_real.request.build_opener",
+                return_value=redirect_opener,
+            ),
+        ):
+            with self.assertRaises(ShuffleTransportFailure) as raised:
+                transport.request_json(
+                    method="POST",
+                    url="https://proxy:8443/shuffle-api/api/v1/workflows/id/execute",
+                    api_key="fixture-api-key",
+                    payload={"fixture": True},
+                    timeout_seconds=2,
+                )
+        self.assertEqual(raised.exception.category, "redirect_rejected")
+        self.assertFalse(raised.exception.retryable)
+        self.assertFalse(raised.exception.transient)
         self.assertTrue(raised.exception.outcome_unknown)
 
     def test_authenticated_poll_normalizes_bound_receipt(self) -> None:
@@ -754,6 +828,10 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertIn('-H "@${auth_header_path}"', bootstrap_source)
         self.assertNotIn('-H "${auth_header}"', bootstrap_source)
         self.assertIn("unset api_key", bootstrap_source)
+        self.assertIn('--rawfile password "${admin_password_path}"', bootstrap_source)
+        self.assertIn("--data-binary @-", bootstrap_source)
+        self.assertNotIn("--arg password", bootstrap_source)
+        self.assertNotIn('--data-binary "${registration_payload}"', bootstrap_source)
 
     def test_runtime_config_loads_file_backed_real_transport_secret(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

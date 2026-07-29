@@ -46,3 +46,24 @@ class IsolatedExecutorAdapter:
             adapter=self.execution_surface_id,
             base_url=self.base_url,
         )
+
+    def recover_interrupted_dispatch(
+        self,
+        *,
+        delegation_id: str,
+        action_request_id: str,
+        approval_decision_id: str,
+        payload_hash: str,
+        idempotency_key: str,
+        approved_payload: Mapping[str, object],
+        delegated_at: datetime,
+    ) -> IsolatedExecutorDelegationReceipt:
+        return self.dispatch_approved_action(
+            delegation_id=delegation_id,
+            action_request_id=action_request_id,
+            approval_decision_id=approval_decision_id,
+            payload_hash=payload_hash,
+            idempotency_key=idempotency_key,
+            approved_payload=approved_payload,
+            delegated_at=delegated_at,
+        )

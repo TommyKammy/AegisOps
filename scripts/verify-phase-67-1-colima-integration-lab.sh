@@ -369,12 +369,38 @@ require_fixed_string "${repo_root}/.github/workflows/ci.yml" 'bash scripts/test-
 if grep -R --include='*.sh' -F -- 'docker context use' "${lab_dir}" >/dev/null; then
   fail "Phase 67.1 lab must not mutate the global Docker context."
 fi
-socket_mount_count="$(
-  grep -Ec -- '^[[:space:]]+- /var/run/docker\.sock:/var/run/docker\.sock$' \
-    "${compose}"
-)"
-[[ "${socket_mount_count}" -eq 2 ]] \
-  || fail "Phase 67 cumulative lab must limit Docker socket mounts to the reviewed Shuffle backend and Orborus services."
+if ! python3 - "${compose}" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+compose = Path(sys.argv[1]).read_text(encoding="utf-8")
+in_services = False
+current_service = None
+socket_owners = []
+for line in compose.splitlines():
+    if line and not line[0].isspace():
+        in_services = line == "services:"
+        current_service = None
+        continue
+    if in_services and line.startswith("  ") and not line.startswith("    "):
+        service_match = re.fullmatch(
+            r"""  ("[^"]+"|'[^']+'|[A-Za-z0-9_.-]+):\s*(?:#.*)?""",
+            line,
+        )
+        if service_match is not None:
+            current_service = service_match.group(1).strip("\"'")
+        elif line.strip() and not line.lstrip().startswith("#"):
+            current_service = None
+    if line.strip() == "- /var/run/docker.sock:/var/run/docker.sock":
+        socket_owners.append(current_service if in_services else None)
+
+if socket_owners != ["shuffle-backend", "shuffle-orborus"]:
+    raise SystemExit(1)
+PY
+then
+  fail "Phase 67 cumulative lab must limit Docker socket mounts to the reviewed Shuffle backend and Orborus services."
+fi
 require_fixed_string \
   "${compose}" \
   'com.aegisops.lab.execution-scope: harmless-local-test-sink'

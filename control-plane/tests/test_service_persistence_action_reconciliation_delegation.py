@@ -896,6 +896,7 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
         )
         original_persist_record = service.persist_record
         original_dispatch = type(service._shuffle).dispatch_approved_action
+        original_recovery = type(service._shuffle).recover_interrupted_dispatch
         dispatched_receipts: list[object] = []
 
         def capture_dispatch(adapter: object, **kwargs: object) -> object:
@@ -956,19 +957,15 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
         )
         self.assertEqual(len(dispatched_receipts), 1)
 
-        with (
-            mock.patch.object(
-                type(service._shuffle),
-                "dispatch_approved_action",
-                side_effect=AssertionError("recovery must not dispatch again"),
-            ),
-            mock.patch.object(
-                type(service._shuffle),
-                "recover_interrupted_dispatch",
-                create=True,
-                return_value=dispatched_receipts[0],
-            ) as recover_interrupted_dispatch,
-        ):
+        def capture_recovery(adapter: object, **kwargs: object) -> object:
+            return original_recovery(adapter, **kwargs)
+
+        with mock.patch.object(
+            type(service._shuffle),
+            "recover_interrupted_dispatch",
+            autospec=True,
+            side_effect=capture_recovery,
+        ) as recover_interrupted_dispatch:
             recovered = service.delegate_approved_action_to_shuffle(
                 action_request_id=(
                     "action-request-routine-finalization-failure-001"

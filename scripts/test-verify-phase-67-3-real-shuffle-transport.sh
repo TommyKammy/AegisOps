@@ -60,6 +60,30 @@ assert_fails_with \
   "${unredacted_adapter}" \
   'api_key: str = field(repr=False)'
 
+without_redirect_guard="${workdir}/without-redirect-guard"
+copy_fixture "${without_redirect_guard}"
+sed -i.bak 's/class _RejectRedirectHandler/class _FollowRedirectHandler/' \
+  "${without_redirect_guard}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_redirect_guard}" \
+  'class _RejectRedirectHandler'
+
+without_deterministic_recovery="${workdir}/without-deterministic-recovery"
+copy_fixture "${without_deterministic_recovery}"
+sed -i.bak 's/def recover_interrupted_dispatch(/def removed_recovery(/' \
+  "${without_deterministic_recovery}/control-plane/aegisops/control_plane/adapters/executor.py"
+assert_fails_with \
+  "${without_deterministic_recovery}" \
+  'def recover_interrupted_dispatch('
+
+bootstrap_password_argv="${workdir}/bootstrap-password-argv"
+copy_fixture "${bootstrap_password_argv}"
+sed -i.bak 's/--data-binary @-/--data-binary "${registration_payload}"/' \
+  "${bootstrap_password_argv}/control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh"
+assert_fails_with \
+  "${bootstrap_password_argv}" \
+  '--data-binary @-'
+
 without_terminal_state="${workdir}/without-terminal-state"
 copy_fixture "${without_terminal_state}"
 sed -i.bak \

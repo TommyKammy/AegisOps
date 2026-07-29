@@ -63,6 +63,32 @@ assert_fails_with \
   "${socket_mount}" \
   'must limit Docker socket mounts to the reviewed Shuffle backend and Orborus services'
 
+socket_owner_drift="${workdir}/socket-owner-drift"
+copy_fixture "${socket_owner_drift}"
+python3 - \
+  "${socket_owner_drift}/control-plane/deployment/phase-67-integration-lab/docker-compose.yml" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+socket_mount = "      - /var/run/docker.sock:/var/run/docker.sock\n"
+text = text.replace(socket_mount, "", 1)
+control_plane_mount = (
+    "      - ./control-plane-entrypoint.sh:"
+    "/opt/aegisops/bin/phase-67-lab-entrypoint.sh:ro\n"
+)
+text = text.replace(
+    control_plane_mount,
+    control_plane_mount + socket_mount,
+    1,
+)
+path.write_text(text, encoding="utf-8")
+PY
+assert_fails_with \
+  "${socket_owner_drift}" \
+  'must limit Docker socket mounts to the reviewed Shuffle backend and Orborus services'
+
 destructive_cleanup="${workdir}/destructive-cleanup"
 copy_fixture "${destructive_cleanup}"
 printf '\n# accidental cleanup option: --volumes\n' \

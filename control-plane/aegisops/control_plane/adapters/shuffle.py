@@ -129,6 +129,27 @@ class ShuffleActionAdapter:
             "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
         )
 
+    def recover_interrupted_dispatch(
+        self,
+        *,
+        delegation_id: str,
+        action_request_id: str,
+        approval_decision_id: str,
+        payload_hash: str,
+        idempotency_key: str,
+        approved_payload: Mapping[str, object],
+        delegated_at: datetime,
+    ) -> ShuffleDelegationReceipt:
+        return self.dispatch_approved_action(
+            delegation_id=delegation_id,
+            action_request_id=action_request_id,
+            approval_decision_id=approval_decision_id,
+            payload_hash=payload_hash,
+            idempotency_key=idempotency_key,
+            approved_payload=approved_payload,
+            delegated_at=delegated_at,
+        )
+
     @staticmethod
     def _default_workflow_id(action_type: object) -> str:
         if isinstance(action_type, str):

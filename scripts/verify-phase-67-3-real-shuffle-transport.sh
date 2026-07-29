@@ -24,6 +24,8 @@ require_fixed() {
 }
 
 files=(
+  control-plane/aegisops/control_plane/adapters/executor.py
+  control-plane/aegisops/control_plane/adapters/shuffle.py
   control-plane/aegisops/control_plane/adapters/shuffle_real.py
   control-plane/aegisops/control_plane/config.py
   control-plane/aegisops/control_plane/service_composition.py
@@ -48,6 +50,8 @@ require_executable "${lab}/bootstrap-shuffle.sh"
 require_executable "${lab}/test-shuffle-execution.sh"
 
 adapter="${repo_root}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+deterministic_shuffle="${repo_root}/control-plane/aegisops/control_plane/adapters/shuffle.py"
+isolated_executor="${repo_root}/control-plane/aegisops/control_plane/adapters/executor.py"
 reconciliation="${repo_root}/control-plane/aegisops/control_plane/actions/execution_coordinator_reconciliation.py"
 delegation="${repo_root}/control-plane/aegisops/control_plane/actions/execution_coordinator_delegation.py"
 compose="${lab}/docker-compose.yml"
@@ -64,6 +68,9 @@ require_fixed "${adapter}" '"Authorization": f"Bearer {api_key}"'
 require_fixed "${adapter}" 'max_attempts not in {1, 2}'
 require_fixed "${adapter}" 'outcome_unknown=method == "POST"'
 require_fixed "${adapter}" 'transient=True'
+require_fixed "${adapter}" 'class _RejectRedirectHandler'
+require_fixed "${adapter}" 'request.build_opener('
+require_fixed "${adapter}" '"redirect_rejected"'
 require_fixed "${adapter}" '"connection_not_established" if retryable'
 require_fixed "${adapter}" 'startswith(("shuffle-run-", "shuffle-receipt-"))'
 require_fixed "${adapter}" 'Shuffle execution id must be a UUID'
@@ -77,6 +84,8 @@ require_fixed "${adapter}" 'replace("+00:00", "Z")'
 require_fixed "${adapter}" '"execution_argument_mismatch"'
 require_fixed "${adapter}" '"malformed_reviewed_action_result"'
 require_fixed "${adapter}" '_REVIEWED_ACTION_NAME = "repeat_back_to_me"'
+require_fixed "${deterministic_shuffle}" 'def recover_interrupted_dispatch('
+require_fixed "${isolated_executor}" 'def recover_interrupted_dispatch('
 require_fixed \
   "${repo_root}/control-plane/tests/test_phase67_3_real_shuffle_transport.py" \
   'self.assertNotIn("authorization", receipt)'
@@ -113,6 +122,8 @@ require_fixed "${evidence_validator}" 'schema.get("additionalProperties") is Fal
 require_fixed "${bootstrap}" 'validate_preserved_workflow.py'
 require_fixed "${bootstrap}" '-H "@${auth_header_path}"'
 require_fixed "${bootstrap}" 'unset api_key'
+require_fixed "${bootstrap}" '--rawfile password "${admin_password_path}"'
+require_fixed "${bootstrap}" '--data-binary @-'
 require_fixed \
   "${lab}/shuffle/run_real_trial.py" \
   'exc.category != "missing_receipt" and not exc.transient'
@@ -129,6 +140,11 @@ require_fixed "${schema}" '"pattern": "^shuffle-run-"'
 require_fixed "${schema}" '"pattern": "^shuffle-receipt-"'
 require_fixed "${workflow}" '"name": "repeat_back_to_me"'
 require_fixed "${workflow}" '"value": "$exec"'
+
+if grep -F -- '--arg password' "${bootstrap}" >/dev/null \
+  || grep -F -- '--data-binary "${registration_payload}"' "${bootstrap}" >/dev/null; then
+  fail "Shuffle bootstrap credentials must not be expanded into process arguments."
+fi
 
 if grep -R -E \
   'fixture-api-key|Authorization: Bearer [A-Za-z0-9_-]{20,}' \

@@ -34,16 +34,14 @@ curl_common=(
 
 api_key="$(<"${api_key_path}")"
 if [[ "${api_key}" == bootstrap-pending-* ]]; then
-  registration_payload="$(
+  registration_response="$(
     jq -cn \
       --arg username "phase67-admin@example.invalid" \
-      --arg password "$(<"${admin_password_path}")" \
-      '{username:$username,password:$password}'
-  )"
-  registration_response="$(
+      --rawfile password "${admin_password_path}" \
+      '{username:$username,password:($password | rtrimstr("\n"))}' |
     curl "${curl_common[@]}" \
       -H 'Content-Type: application/json' \
-      --data-binary "${registration_payload}" \
+      --data-binary @- \
       "${api_origin}/api/v1/users/register"
   )"
   api_key="$(jq -er '.apikey | select(type == "string" and length > 20)' <<<"${registration_response}")"
