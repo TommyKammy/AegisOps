@@ -129,7 +129,7 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
                 "requested_scope": target_scope,
                 "idempotency_execution_count": 1,
                 "observed_at": observed_at,
-                "status": "failed",
+                "status": " ERROR ",
             },
         )
 

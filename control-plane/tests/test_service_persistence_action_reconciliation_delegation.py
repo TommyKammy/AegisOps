@@ -887,6 +887,13 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
             )
         )
         original_persist_record = service.persist_record
+        original_dispatch = type(service._shuffle).dispatch_approved_action
+        dispatched_receipts: list[object] = []
+
+        def capture_dispatch(adapter: object, **kwargs: object) -> object:
+            receipt = original_dispatch(adapter, **kwargs)
+            dispatched_receipts.append(receipt)
+            return receipt
 
         def persist_record_with_finalization_failure(
             record: object,
@@ -899,10 +906,18 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
                 raise RuntimeError("synthetic finalization failure")
             return original_persist_record(record, **kwargs)
 
-        with mock.patch.object(
-            service,
-            "persist_record",
-            side_effect=persist_record_with_finalization_failure,
+        with (
+            mock.patch.object(
+                type(service._shuffle),
+                "dispatch_approved_action",
+                autospec=True,
+                side_effect=capture_dispatch,
+            ),
+            mock.patch.object(
+                service,
+                "persist_record",
+                side_effect=persist_record_with_finalization_failure,
+            ),
         ):
             with self.assertRaisesRegex(RuntimeError, "synthetic finalization failure"):
                 service.delegate_approved_action_to_shuffle(
@@ -927,6 +942,37 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
             executions[0].provenance["dispatch_finalization_failure"]["error"],
             "synthetic finalization failure",
         )
+        self.assertEqual(len(dispatched_receipts), 1)
+
+        with (
+            mock.patch.object(
+                type(service._shuffle),
+                "dispatch_approved_action",
+                side_effect=AssertionError("recovery must not dispatch again"),
+            ),
+            mock.patch.object(
+                type(service._shuffle),
+                "recover_interrupted_dispatch",
+                create=True,
+                return_value=dispatched_receipts[0],
+            ) as recover_interrupted_dispatch,
+        ):
+            recovered = service.delegate_approved_action_to_shuffle(
+                action_request_id=(
+                    "action-request-routine-finalization-failure-001"
+                ),
+                approved_payload=approved_payload,
+                delegated_at=delegated_at.replace(minute=6),
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(recovered.lifecycle_state, "queued")
+        self.assertEqual(
+            recovered.execution_run_id,
+            dispatched_receipts[0].execution_run_id,
+        )
+        self.assertEqual(len(store.list(ActionExecutionRecord)), 1)
+        recover_interrupted_dispatch.assert_called_once()
 
     def test_service_preserves_finalization_failure_recording_error_context(
         self,

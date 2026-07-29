@@ -720,6 +720,9 @@ class ActionExecutionReconciliationCoordinator:
                 raise ValueError(
                     "observed execution idempotency_execution_count must be integer one"
                 )
+            status = execution.get("status")
+            if isinstance(status, str):
+                status = status.strip().lower()
             coordination_reference_id = execution.get("coordination_reference_id")
             coordination_target_type = execution.get("coordination_target_type")
             external_receipt_id = execution.get("external_receipt_id")
@@ -797,7 +800,7 @@ class ActionExecutionReconciliationCoordinator:
                     "external_receipt_id": external_receipt_id,
                     "coordination_target_id": coordination_target_id,
                     "ticket_reference_url": ticket_reference_url,
-                    "status": execution.get("status"),
+                    "status": status,
                 }
             )
 

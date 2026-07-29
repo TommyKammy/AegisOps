@@ -13,6 +13,7 @@ require_runtime_environment
 require_command curl
 require_command jq
 require_command openssl
+require_command python3
 
 "${LAB_DIR}/up.sh" shuffle
 
@@ -57,10 +58,6 @@ if [[
     "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~ ^[0-9a-fA-F-]{36}$
 ]]; then
   workflow_id="${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID}"
-  curl "${curl_common[@]}" \
-    -H "${auth_header}" \
-    "${api_origin}/api/v1/workflows/${workflow_id}" \
-    >/dev/null
 else
   workflow_create_response="$(
     curl "${curl_common[@]}" \
@@ -88,6 +85,17 @@ else
     "${api_origin}/api/v1/workflows/${workflow_id}" \
     >/dev/null
 fi
+
+preserved_workflow="$(
+  curl "${curl_common[@]}" \
+    -H "${auth_header}" \
+    "${api_origin}/api/v1/workflows/${workflow_id}"
+)"
+python3 \
+  "${LAB_DIR}/shuffle/validate_preserved_workflow.py" \
+  "${workflow_path}" \
+  "${workflow_id}" \
+  <<<"${preserved_workflow}"
 
 set_runtime_value() {
   local name="$1"

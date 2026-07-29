@@ -34,6 +34,16 @@ EVIDENCE_VALIDATOR = (
     / "shuffle"
     / "validate_evidence_manifest.py"
 )
+WORKFLOW_TEMPLATE = (
+    CONTROL_PLANE_ROOT
+    / "deployment"
+    / "phase-67-integration-lab"
+    / "shuffle"
+    / "harmless-local-log-workflow.json"
+)
+WORKFLOW_VALIDATOR = WORKFLOW_TEMPLATE.with_name(
+    "validate_preserved_workflow.py"
+)
 
 
 class _QueueTransport:
@@ -129,6 +139,88 @@ class RealShuffleTransportTests(unittest.TestCase):
         second_payload = transport.calls[1]["payload"]
         self.assertEqual(first_payload, second_payload)
         self.assertNotIn("fixture-api-key", repr(first_payload))
+
+    def test_interrupted_dispatch_recovers_exact_existing_execution_without_post(
+        self,
+    ) -> None:
+        delegated_at = datetime(2026, 7, 29, tzinfo=timezone.utc)
+        execution_argument = {
+            "action_request_id": "action-request-001",
+            "approval_decision_id": "approval-001",
+            "delegation_id": "delegation-001",
+            "payload_hash": "payload-hash-001",
+            "idempotency_key": "idempotency-001",
+            **_binding(),
+            "delegated_at": delegated_at.isoformat(),
+            "action": {
+                "action_type": "notify_identity_owner",
+                "recipient_identity": "local-test-sink",
+                "message_intent": "Write one harmless local lab notification.",
+                "escalation_reason": "Phase 67.3 real transport proof.",
+            },
+        }
+        transport = _QueueTransport(
+            {
+                "executions": [
+                    {
+                        "execution_id": REAL_EXECUTION_ID,
+                        "execution_argument": json.dumps(execution_argument),
+                        "status": "EXECUTING",
+                    }
+                ]
+            }
+        )
+
+        receipt = _adapter(transport).recover_interrupted_dispatch(
+            delegation_id="delegation-001",
+            action_request_id="action-request-001",
+            approval_decision_id="approval-001",
+            payload_hash="payload-hash-001",
+            idempotency_key="idempotency-001",
+            approved_payload=_payload(),
+            delegated_at=delegated_at,
+        )
+
+        self.assertEqual(receipt.execution_run_id, REAL_EXECUTION_ID)
+        self.assertEqual(len(transport.calls), 1)
+        self.assertEqual(transport.calls[0]["method"], "GET")
+        self.assertIsNone(transport.calls[0]["payload"])
+
+    def test_interrupted_dispatch_recovery_fails_closed_on_missing_or_drift(
+        self,
+    ) -> None:
+        delegated_at = datetime(2026, 7, 29, tzinfo=timezone.utc)
+        for response, category in (
+            ({"executions": []}, "interrupted_dispatch_not_observed"),
+            (
+                {
+                    "executions": [
+                        {
+                            "execution_id": REAL_EXECUTION_ID,
+                            "execution_argument": json.dumps(
+                                {
+                                    "idempotency_key": "idempotency-001",
+                                    "delegation_id": "different",
+                                }
+                            ),
+                        }
+                    ]
+                },
+                "interrupted_dispatch_binding_mismatch",
+            ),
+        ):
+            with self.subTest(category=category):
+                adapter = _adapter(_QueueTransport(response))
+                with self.assertRaisesRegex(ShuffleTransportFailure, category):
+                    adapter.recover_interrupted_dispatch(
+                        delegation_id="delegation-001",
+                        action_request_id="action-request-001",
+                        approval_decision_id="approval-001",
+                        payload_hash="payload-hash-001",
+                        idempotency_key="idempotency-001",
+                        approved_payload=_payload(),
+                        delegated_at=delegated_at,
+                    )
 
     def test_timeout_fails_closed_without_ambiguous_post_retry(self) -> None:
         transport = _QueueTransport(ShuffleTransportFailure("timeout"))
@@ -494,24 +586,40 @@ class RealShuffleTransportTests(unittest.TestCase):
     ) -> None:
         manifest = {
             "schema_version": "phase67.3-real-shuffle-trial-v1",
+            "captured_at": "2026-07-29T00:00:00Z",
             "source_mode": "real_shuffle",
             "workflow_api_id": API_WORKFLOW_ID,
+            "reviewed_template_id": "notify_identity_owner",
+            "reviewed_template_version": (
+                "notify_identity_owner-v1-reviewed-2026-05-03"
+            ),
+            "action_request_id": "action-request-001",
+            "approval_decision_id": "approval-001",
+            "delegation_id": "delegation-001",
             "execution_id": REAL_EXECUTION_ID,
             "idempotency_key": "idempotency-001",
             "idempotency_execution_count": 1,
+            "correlation_id": "correlation-001",
             "requested_scope": {
                 "record_family": "phase67_lab_trial",
+                "record_id": SECOND_REAL_EXECUTION_ID,
+                "finding_id": "finding-001",
                 "recipient_identity": "local-test-sink",
             },
             "payload_hash": "a" * 64,
             "expected_execution_receipt_id": "phase67-receipt-001",
+            "action_execution_id": "action-execution-001",
             "normalized_receipt_sha256": "b" * 64,
             "reconciliation_id": "reconciliation-001",
             "replay_reconciliation_id": "reconciliation-001",
             "execution_lifecycle_state": "succeeded",
             "reconciliation_disposition": "matched",
             "authority_posture": "aegisops_reconciliation_remains_authoritative",
-            "limitations": ("isolated_non-production_lab",),
+            "limitations": (
+                "isolated_non-production_lab",
+                "harmless_local_echo_only",
+                "no_production_integrations",
+            ),
         }
 
         def validate(candidate: dict[str, object]) -> subprocess.CompletedProcess[str]:
@@ -531,30 +639,75 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertEqual(validate(manifest).returncode, 0)
         for field_name, invalid_value, expected_error in (
             (
+                "captured_at",
+                None,
+                "expected string",
+            ),
+            (
                 "execution_lifecycle_state",
                 "failed",
-                "execution lifecycle is not succeeded",
+                "$.execution_lifecycle_state: value does not match const",
             ),
             (
                 "reconciliation_disposition",
                 "mismatch",
-                "reconciliation disposition is not matched",
+                "$.reconciliation_disposition: value does not match const",
             ),
             (
                 "idempotency_execution_count",
                 True,
-                "did not resolve to integer one execution",
+                "$.idempotency_execution_count: value does not match const",
             ),
             (
                 "idempotency_execution_count",
                 1.0,
-                "did not resolve to integer one execution",
+                "$.idempotency_execution_count: value does not match const",
             ),
         ):
             with self.subTest(field_name=field_name, invalid_value=invalid_value):
                 result = validate({**manifest, field_name: invalid_value})
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(expected_error, result.stderr)
+
+        missing_required = dict(manifest)
+        missing_required.pop("action_execution_id")
+        result = validate(missing_required)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing required property 'action_execution_id'", result.stderr)
+        result = validate({**manifest, "unexpected": "not-reviewed"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unexpected properties", result.stderr)
+
+    def test_preserved_workflow_validator_rejects_semantic_drift(self) -> None:
+        workflow_id = API_WORKFLOW_ID
+        observed = json.loads(WORKFLOW_TEMPLATE.read_text(encoding="utf-8"))
+        observed["id"] = workflow_id
+
+        def validate(candidate: dict[str, object]) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [
+                    sys.executable,
+                    str(WORKFLOW_VALIDATOR),
+                    str(WORKFLOW_TEMPLATE),
+                    workflow_id,
+                ],
+                input=json.dumps(candidate),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(validate(observed).returncode, 0)
+        drifted_action = json.loads(json.dumps(observed))
+        drifted_action["actions"][0]["name"] = "send_email"
+        result = validate(drifted_action)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reviewed value changed", result.stderr)
+        extra_action = json.loads(json.dumps(observed))
+        extra_action["actions"].append(extra_action["actions"][0])
+        result = validate(extra_action)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reviewed array length changed", result.stderr)
 
 
 if __name__ == "__main__":

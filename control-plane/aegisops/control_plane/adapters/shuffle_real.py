@@ -193,48 +193,15 @@ class RealShuffleActionAdapter:
         approved_payload: Mapping[str, object],
         delegated_at: datetime,
     ) -> ShuffleDelegationReceipt:
-        binding = approved_payload.get("shuffle_delegation_binding")
-        if not isinstance(binding, Mapping):
-            raise ValueError(
-                "real Shuffle dispatch requires an explicit reviewed delegation binding"
-            )
-        ShuffleActionAdapter._require_reviewed_phase20_notify_payload(approved_payload)
-        workflow_id = _require_non_empty_string(binding.get("workflow_id"), "workflow id")
-        workflow_version_id = _require_non_empty_string(
-            binding.get("workflow_version_id"),
-            "workflow version id",
+        execution_argument = self._reviewed_execution_argument(
+            delegation_id=delegation_id,
+            action_request_id=action_request_id,
+            approval_decision_id=approval_decision_id,
+            payload_hash=payload_hash,
+            idempotency_key=idempotency_key,
+            approved_payload=approved_payload,
+            delegated_at=delegated_at,
         )
-        correlation_id = _require_non_empty_string(
-            binding.get("correlation_id"),
-            "correlation id",
-        )
-        expected_receipt_id = _require_real_identifier(
-            binding.get("expected_execution_receipt_id"),
-            "expected receipt id",
-        )
-        requested_scope = binding.get("requested_scope")
-        if not isinstance(requested_scope, Mapping):
-            raise ValueError("Shuffle requested scope must be a mapping")
-
-        execution_argument = {
-            "action_request_id": action_request_id,
-            "approval_decision_id": approval_decision_id,
-            "delegation_id": delegation_id,
-            "payload_hash": payload_hash,
-            "idempotency_key": idempotency_key,
-            "workflow_id": workflow_id,
-            "workflow_version_id": workflow_version_id,
-            "correlation_id": correlation_id,
-            "expected_execution_receipt_id": expected_receipt_id,
-            "requested_scope": dict(requested_scope),
-            "delegated_at": delegated_at.isoformat(),
-            "action": {
-                "action_type": approved_payload["action_type"],
-                "recipient_identity": approved_payload["recipient_identity"],
-                "message_intent": approved_payload["message_intent"],
-                "escalation_reason": approved_payload["escalation_reason"],
-            },
-        }
         request_payload = {
             "execution_argument": json.dumps(
                 execution_argument,
@@ -265,22 +232,174 @@ class RealShuffleActionAdapter:
         if response.get("success") is not True:
             raise ShuffleTransportFailure("dispatch_rejected")
         execution_id = _require_real_execution_id(response.get("execution_id"))
+        return self._delegation_receipt(
+            execution_id=execution_id,
+            execution_argument=execution_argument,
+        )
+
+    def recover_interrupted_dispatch(
+        self,
+        *,
+        delegation_id: str,
+        action_request_id: str,
+        approval_decision_id: str,
+        payload_hash: str,
+        idempotency_key: str,
+        approved_payload: Mapping[str, object],
+        delegated_at: datetime,
+    ) -> ShuffleDelegationReceipt:
+        expected_argument = self._reviewed_execution_argument(
+            delegation_id=delegation_id,
+            action_request_id=action_request_id,
+            approval_decision_id=approval_decision_id,
+            payload_hash=payload_hash,
+            idempotency_key=idempotency_key,
+            approved_payload=approved_payload,
+            delegated_at=delegated_at,
+        )
+        response = self.transport.request_json(
+            method="GET",
+            url=(
+                f"{self.base_url}/api/v1/workflows/"
+                f"{self.api_workflow_id}/executions"
+            ),
+            api_key=self.api_key,
+            payload=None,
+            timeout_seconds=self.timeout_seconds,
+        )
+        raw_executions = (
+            response.get("executions")
+            if isinstance(response, Mapping)
+            else response
+        )
+        if not isinstance(raw_executions, list):
+            raise ShuffleTransportFailure("malformed_receipt_collection")
+
+        matches: list[tuple[Mapping[str, object], Mapping[str, object]]] = []
+        for execution in raw_executions:
+            if not isinstance(execution, Mapping):
+                continue
+            argument = self._decode_execution_argument(
+                execution.get("execution_argument")
+            )
+            if (
+                argument is not None
+                and argument.get("idempotency_key") == idempotency_key
+            ):
+                matches.append((execution, argument))
+        if not matches:
+            raise ShuffleTransportFailure("interrupted_dispatch_not_observed")
+        if len(matches) != 1:
+            raise ShuffleTransportFailure("duplicate_idempotency_execution")
+
+        execution, observed_argument = matches[0]
+        if observed_argument != expected_argument:
+            raise ShuffleTransportFailure(
+                "interrupted_dispatch_binding_mismatch"
+            )
+        execution_id = _require_real_execution_id(
+            execution.get("execution_id")
+        )
+        return self._delegation_receipt(
+            execution_id=execution_id,
+            execution_argument=expected_argument,
+        )
+
+    @staticmethod
+    def _decode_execution_argument(
+        value: object,
+    ) -> Mapping[str, object] | None:
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                return None
+        return value if isinstance(value, Mapping) else None
+
+    @staticmethod
+    def _reviewed_execution_argument(
+        *,
+        delegation_id: str,
+        action_request_id: str,
+        approval_decision_id: str,
+        payload_hash: str,
+        idempotency_key: str,
+        approved_payload: Mapping[str, object],
+        delegated_at: datetime,
+    ) -> dict[str, object]:
+        binding = approved_payload.get("shuffle_delegation_binding")
+        if not isinstance(binding, Mapping):
+            raise ValueError(
+                "real Shuffle dispatch requires an explicit reviewed delegation binding"
+            )
+        ShuffleActionAdapter._require_reviewed_phase20_notify_payload(approved_payload)
+        workflow_id = _require_non_empty_string(binding.get("workflow_id"), "workflow id")
+        workflow_version_id = _require_non_empty_string(
+            binding.get("workflow_version_id"),
+            "workflow version id",
+        )
+        correlation_id = _require_non_empty_string(
+            binding.get("correlation_id"),
+            "correlation id",
+        )
+        expected_receipt_id = _require_real_identifier(
+            binding.get("expected_execution_receipt_id"),
+            "expected receipt id",
+        )
+        requested_scope = binding.get("requested_scope")
+        if not isinstance(requested_scope, Mapping):
+            raise ValueError("Shuffle requested scope must be a mapping")
+
+        return {
+            "action_request_id": action_request_id,
+            "approval_decision_id": approval_decision_id,
+            "delegation_id": delegation_id,
+            "payload_hash": payload_hash,
+            "idempotency_key": idempotency_key,
+            "workflow_id": workflow_id,
+            "workflow_version_id": workflow_version_id,
+            "correlation_id": correlation_id,
+            "expected_execution_receipt_id": expected_receipt_id,
+            "requested_scope": dict(requested_scope),
+            "delegated_at": delegated_at.isoformat(),
+            "action": {
+                "action_type": approved_payload["action_type"],
+                "recipient_identity": approved_payload["recipient_identity"],
+                "message_intent": approved_payload["message_intent"],
+                "escalation_reason": approved_payload["escalation_reason"],
+            },
+        }
+
+    def _delegation_receipt(
+        self,
+        *,
+        execution_id: str,
+        execution_argument: Mapping[str, object],
+    ) -> ShuffleDelegationReceipt:
         return ShuffleDelegationReceipt(
             execution_surface_type=self.execution_surface_type,
             execution_surface_id=self.execution_surface_id,
             execution_run_id=execution_id,
-            action_request_id=action_request_id,
-            approval_decision_id=approval_decision_id,
-            delegation_id=delegation_id,
-            payload_hash=payload_hash,
+            action_request_id=str(execution_argument["action_request_id"]),
+            approval_decision_id=str(
+                execution_argument["approval_decision_id"]
+            ),
+            delegation_id=str(execution_argument["delegation_id"]),
+            payload_hash=str(execution_argument["payload_hash"]),
             adapter="shuffle_real_http",
             base_url=self.base_url,
-            workflow_id=workflow_id,
-            workflow_version_id=workflow_version_id,
-            correlation_id=correlation_id,
-            expected_execution_receipt_id=expected_receipt_id,
-            requested_scope=dict(requested_scope),
-            external_receipt_id=expected_receipt_id,
+            workflow_id=str(execution_argument["workflow_id"]),
+            workflow_version_id=str(
+                execution_argument["workflow_version_id"]
+            ),
+            correlation_id=str(execution_argument["correlation_id"]),
+            expected_execution_receipt_id=str(
+                execution_argument["expected_execution_receipt_id"]
+            ),
+            requested_scope=dict(execution_argument["requested_scope"]),
+            external_receipt_id=str(
+                execution_argument["expected_execution_receipt_id"]
+            ),
         )
 
 

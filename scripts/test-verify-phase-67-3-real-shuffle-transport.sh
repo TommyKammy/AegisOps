@@ -69,6 +69,42 @@ assert_fails_with \
   "${without_terminal_state}" \
   'payload.get("execution_lifecycle_state") == "succeeded"'
 
+without_complete_schema="${workdir}/without-complete-schema"
+copy_fixture "${without_complete_schema}"
+sed -i.bak \
+  '/_validate_schema(payload, schema/d' \
+  "${without_complete_schema}/control-plane/deployment/phase-67-integration-lab/shuffle/validate_evidence_manifest.py"
+assert_fails_with \
+  "${without_complete_schema}" \
+  '_validate_schema(payload, schema, "$")'
+
+without_preserved_workflow_check="${workdir}/without-preserved-workflow-check"
+copy_fixture "${without_preserved_workflow_check}"
+sed -i.bak \
+  's/validate_preserved_workflow.py/skip_preserved_workflow.py/' \
+  "${without_preserved_workflow_check}/control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh"
+assert_fails_with \
+  "${without_preserved_workflow_check}" \
+  'validate_preserved_workflow.py'
+
+without_dispatch_recovery="${workdir}/without-dispatch-recovery"
+copy_fixture "${without_dispatch_recovery}"
+sed -i.bak \
+  's/def recover_interrupted_dispatch(/def skip_interrupted_dispatch_recovery(/' \
+  "${without_dispatch_recovery}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_dispatch_recovery}" \
+  'def recover_interrupted_dispatch('
+
+without_status_normalization="${workdir}/without-status-normalization"
+copy_fixture "${without_status_normalization}"
+sed -i.bak \
+  's/status.strip().lower()/status.lower()/g' \
+  "${without_status_normalization}/control-plane/aegisops/control_plane/actions/execution_coordinator_reconciliation.py"
+assert_fails_with \
+  "${without_status_normalization}" \
+  'status.strip().lower()'
+
 without_orborus_identity="${workdir}/without-orborus-identity"
 copy_fixture "${without_orborus_identity}"
 sed -i.bak '/ORBORUS_CONTAINER_NAME:/d' \

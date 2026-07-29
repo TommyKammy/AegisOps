@@ -37,6 +37,7 @@ files=(
   control-plane/deployment/phase-67-integration-lab/shuffle/run_real_trial.py
   control-plane/deployment/phase-67-integration-lab/shuffle/evidence-manifest.schema.json
   control-plane/deployment/phase-67-integration-lab/shuffle/validate_evidence_manifest.py
+  control-plane/deployment/phase-67-integration-lab/shuffle/validate_preserved_workflow.py
   docs/phase-67-3-real-shuffle-transport.md
   postgres/control-plane/migrations/0016_phase_67_action_execution_dispatching_state.sql
 )
@@ -48,11 +49,15 @@ require_executable "${lab}/test-shuffle-execution.sh"
 
 adapter="${repo_root}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
 reconciliation="${repo_root}/control-plane/aegisops/control_plane/actions/execution_coordinator_reconciliation.py"
+delegation="${repo_root}/control-plane/aegisops/control_plane/actions/execution_coordinator_delegation.py"
 compose="${lab}/docker-compose.yml"
 proxy="${lab}/config/control-plane.conf"
 trial="${lab}/test-shuffle-execution.sh"
 schema="${lab}/shuffle/evidence-manifest.schema.json"
 workflow="${lab}/shuffle/harmless-local-log-workflow.json"
+bootstrap="${lab}/bootstrap-shuffle.sh"
+evidence_validator="${lab}/shuffle/validate_evidence_manifest.py"
+workflow_validator="${lab}/shuffle/validate_preserved_workflow.py"
 
 require_fixed "${adapter}" 'parsed.scheme != "https"'
 require_fixed "${adapter}" '"Authorization": f"Bearer {api_key}"'
@@ -63,6 +68,9 @@ require_fixed "${adapter}" 'startswith(("shuffle-run-", "shuffle-receipt-"))'
 require_fixed "${adapter}" 'Shuffle execution id must be a UUID'
 require_fixed "${adapter}" 'api_key: str = field(repr=False)'
 require_fixed "${adapter}" 'requires an explicit CA file'
+require_fixed "${adapter}" 'def recover_interrupted_dispatch('
+require_fixed "${adapter}" '"interrupted_dispatch_not_observed"'
+require_fixed "${adapter}" '"interrupted_dispatch_binding_mismatch"'
 require_fixed \
   "${repo_root}/control-plane/tests/test_phase67_3_real_shuffle_transport.py" \
   'self.assertNotIn("authorization", receipt)'
@@ -71,6 +79,8 @@ require_fixed "${reconciliation}" '_find_receipt_reconciliation'
 require_fixed "${reconciliation}" '"downstream execution failed and requires operator review"'
 require_fixed "${reconciliation}" '"requested_scope"'
 require_fixed "${reconciliation}" 'not isinstance(value, bool)'
+require_fixed "${reconciliation}" 'status.strip().lower()'
+require_fixed "${delegation}" '"recover_interrupted_dispatch"'
 require_fixed "${compose}" 'AEGISOPS_CONTROL_PLANE_SHUFFLE_API_KEY_FILE: /run/secrets/shuffle-api-key'
 require_fixed "${compose}" 'NGINX_ENVSUBST_FILTER: ^AEGISOPS_LAB_CONTROL_PLANE_IPV4$'
 require_fixed "${compose}" './config/control-plane.conf:/etc/nginx/templates/control-plane.conf.template:ro'
@@ -84,11 +94,16 @@ require_fixed "${proxy}" 'allow ${AEGISOPS_LAB_CONTROL_PLANE_IPV4};'
 require_fixed "${proxy}" 'rewrite ^/shuffle-api/(.*)$ /$1 break;'
 require_fixed "${trial}" 'reconciliation_id == .replay_reconciliation_id'
 require_fixed \
-  "${lab}/shuffle/validate_evidence_manifest.py" \
+  "${evidence_validator}" \
   'payload.get("execution_lifecycle_state") == "succeeded"'
 require_fixed \
-  "${lab}/shuffle/validate_evidence_manifest.py" \
+  "${evidence_validator}" \
   'not isinstance(idempotency_execution_count, bool)'
+require_fixed "${evidence_validator}" '_validate_schema(payload, schema, "$")'
+require_fixed "${evidence_validator}" 'schema.get("additionalProperties") is False'
+require_fixed "${bootstrap}" 'validate_preserved_workflow.py'
+require_fixed "${workflow_validator}" 'require_reviewed_subset('
+require_fixed "${workflow_validator}" 'len(observed) != len(expected)'
 require_fixed "${schema}" '"source_mode"'
 require_fixed "${schema}" '"const": "real_shuffle"'
 require_fixed "${schema}" '"idempotency_execution_count"'
