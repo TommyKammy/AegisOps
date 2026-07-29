@@ -226,6 +226,33 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
             compared_at=datetime(2026, 7, 29, 1, 13, tzinfo=timezone.utc),
             stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
         )
+        receipt["requested_scope"] = target_scope
+        for malformed_count in (True, 1.0):
+            with self.subTest(idempotency_execution_count=malformed_count):
+                receipt["idempotency_execution_count"] = malformed_count
+                with self.assertRaisesRegex(ValueError, "must be integer one"):
+                    service.reconcile_action_execution(
+                        action_request_id=execution.action_request_id,
+                        execution_surface_type="automation_substrate",
+                        execution_surface_id="shuffle",
+                        observed_executions=(receipt,),
+                        compared_at=datetime(
+                            2026,
+                            7,
+                            29,
+                            1,
+                            14,
+                            tzinfo=timezone.utc,
+                        ),
+                        stale_after=datetime(
+                            2026,
+                            7,
+                            29,
+                            1,
+                            30,
+                            tzinfo=timezone.utc,
+                        ),
+                    )
 
         self.assertEqual(missing_count.ingest_disposition, "mismatch")
         self.assertEqual(mismatched_scope.ingest_disposition, "mismatch")
@@ -726,6 +753,7 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
         self.assertIsNotNone(stored_execution)
         self.assertEqual(stored_execution.lifecycle_state, "failed")
         self.assertEqual(stored_execution.execution_run_id, execution.execution_run_id)
+        self.assertNotIn("normalized_receipt", stored_execution.provenance)
         self.assertEqual(
             reconciliation.subject_linkage["action_execution_ids"],
             (execution.action_execution_id,),

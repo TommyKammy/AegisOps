@@ -90,11 +90,14 @@ services:
 
   proxy:
     image: nginx:1.27.0@sha256:98f8ec75657d21b924fe4f69b6b9bff2f6550ea48838af479d8894a852000e40
+    environment:
+      AEGISOPS_LAB_CONTROL_PLANE_IPV4: ${AEGISOPS_LAB_CONTROL_PLANE_IPV4:-172.31.67.20}
+      NGINX_ENVSUBST_FILTER: ^AEGISOPS_LAB_CONTROL_PLANE_IPV4$
     ports:
       - "127.0.0.1:${AEGISOPS_LAB_PROXY_PORT:-18443}:8443"
     volumes:
       - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./config/control-plane.conf:/etc/nginx/conf.d/control-plane.conf:ro
+      - ./config/control-plane.conf:/etc/nginx/templates/control-plane.conf.template:ro
       - ${AEGISOPS_LAB_PROXY_CERT_DIR:?run-init-first}:/etc/nginx/certs:ro
     depends_on:
       control-plane:

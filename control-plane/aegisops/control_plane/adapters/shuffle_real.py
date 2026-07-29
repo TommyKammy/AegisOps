@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 import json
 import socket
@@ -35,6 +35,11 @@ class ShuffleJsonTransport(Protocol):
 @dataclass(frozen=True)
 class UrllibShuffleJsonTransport:
     ca_file: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.ca_file, str) or self.ca_file.strip() == "":
+            raise ValueError("real Shuffle transport requires an explicit CA file")
+        object.__setattr__(self, "ca_file", self.ca_file.strip())
 
     def request_json(
         self,
@@ -156,7 +161,7 @@ def _require_https_base_url(value: str) -> str:
 @dataclass(frozen=True)
 class RealShuffleActionAdapter:
     base_url: str
-    api_key: str
+    api_key: str = field(repr=False)
     api_workflow_id: str
     transport: ShuffleJsonTransport
     timeout_seconds: float = 10.0
@@ -282,7 +287,7 @@ class RealShuffleActionAdapter:
 @dataclass(frozen=True)
 class ShuffleReceiptPollingClient:
     base_url: str
-    api_key: str
+    api_key: str = field(repr=False)
     api_workflow_id: str
     transport: ShuffleJsonTransport
     timeout_seconds: float = 10.0

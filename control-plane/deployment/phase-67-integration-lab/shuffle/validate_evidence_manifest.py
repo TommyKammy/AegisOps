@@ -39,9 +39,12 @@ def main() -> int:
         and payload["idempotency_key"],
         "idempotency_key is missing",
     )
+    idempotency_execution_count = payload.get("idempotency_execution_count")
     require(
-        payload.get("idempotency_execution_count") == 1,
-        "idempotency key did not resolve to exactly one execution",
+        isinstance(idempotency_execution_count, int)
+        and not isinstance(idempotency_execution_count, bool)
+        and idempotency_execution_count == 1,
+        "idempotency key did not resolve to integer one execution",
     )
     requested_scope = payload.get("requested_scope")
     require(
@@ -66,6 +69,14 @@ def main() -> int:
         payload.get("reconciliation_id")
         == payload.get("replay_reconciliation_id"),
         "receipt replay was not idempotent",
+    )
+    require(
+        payload.get("execution_lifecycle_state") == "succeeded",
+        "execution lifecycle is not succeeded",
+    )
+    require(
+        payload.get("reconciliation_disposition") == "matched",
+        "reconciliation disposition is not matched",
     )
     require(
         payload.get("authority_posture")

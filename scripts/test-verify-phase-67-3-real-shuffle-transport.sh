@@ -44,6 +44,31 @@ assert_fails_with \
   "${without_replay}" \
   'reconciliation_id == .replay_reconciliation_id'
 
+fixed_proxy_acl="${workdir}/fixed-proxy-acl"
+copy_fixture "${fixed_proxy_acl}"
+sed -i.bak 's/allow ${AEGISOPS_LAB_CONTROL_PLANE_IPV4};/allow 172.31.67.20;/' \
+  "${fixed_proxy_acl}/control-plane/deployment/phase-67-integration-lab/config/control-plane.conf"
+assert_fails_with \
+  "${fixed_proxy_acl}" \
+  'allow ${AEGISOPS_LAB_CONTROL_PLANE_IPV4};'
+
+unredacted_adapter="${workdir}/unredacted-adapter"
+copy_fixture "${unredacted_adapter}"
+sed -i.bak 's/api_key: str = field(repr=False)/api_key: str/g' \
+  "${unredacted_adapter}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${unredacted_adapter}" \
+  'api_key: str = field(repr=False)'
+
+without_terminal_state="${workdir}/without-terminal-state"
+copy_fixture "${without_terminal_state}"
+sed -i.bak \
+  's/payload.get("execution_lifecycle_state") == "succeeded"/payload.get("execution_lifecycle_state") == "failed"/' \
+  "${without_terminal_state}/control-plane/deployment/phase-67-integration-lab/shuffle/validate_evidence_manifest.py"
+assert_fails_with \
+  "${without_terminal_state}" \
+  'payload.get("execution_lifecycle_state") == "succeeded"'
+
 without_orborus_identity="${workdir}/without-orborus-identity"
 copy_fixture "${without_orborus_identity}"
 sed -i.bak '/ORBORUS_CONTAINER_NAME:/d' \

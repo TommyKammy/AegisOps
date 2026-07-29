@@ -315,14 +315,14 @@ class ActionExecutionReconciliationCoordinator:
                 mismatch_summary = (
                     "downstream execution failed and requires operator review"
                 )
-                persist_normalized_receipt = True
+                persist_normalized_receipt = require_binding_identifiers
             else:
                 ingest_disposition = "matched"
                 lifecycle_state = "matched"
                 mismatch_summary = (
                     "matched approved action request to reviewed execution run"
                 )
-                persist_normalized_receipt = True
+                persist_normalized_receipt = require_binding_identifiers
 
         with self._service._store.transaction():
             if authoritative_execution is not None:
@@ -339,31 +339,35 @@ class ActionExecutionReconciliationCoordinator:
             if (
                 authoritative_execution is not None
                 and latest_execution is not None
-                and persist_normalized_receipt
+                and (
+                    persist_normalized_receipt
+                    or ingest_disposition == "matched"
+                )
             ):
-                normalized_receipt = self._normalized_shuffle_receipt(
-                    latest_execution
-                )
-                existing_receipt = authoritative_execution.provenance.get(
-                    "normalized_receipt"
-                )
-                if (
-                    isinstance(existing_receipt, Mapping)
-                    and existing_receipt.get("sha256")
-                    == normalized_receipt["sha256"]
-                ):
-                    existing_reconciliation = self._find_receipt_reconciliation(
-                        authoritative_execution.action_execution_id,
-                        latest_execution["execution_run_id"],
+                updated_provenance = dict(authoritative_execution.provenance)
+                if persist_normalized_receipt:
+                    normalized_receipt = self._normalized_shuffle_receipt(
+                        latest_execution
                     )
-                    if existing_reconciliation is not None:
-                        return existing_reconciliation
+                    existing_receipt = authoritative_execution.provenance.get(
+                        "normalized_receipt"
+                    )
+                    if (
+                        isinstance(existing_receipt, Mapping)
+                        and existing_receipt.get("sha256")
+                        == normalized_receipt["sha256"]
+                    ):
+                        existing_reconciliation = self._find_receipt_reconciliation(
+                            authoritative_execution.action_execution_id,
+                            latest_execution["execution_run_id"],
+                        )
+                        if existing_reconciliation is not None:
+                            return existing_reconciliation
+                    updated_provenance["normalized_receipt"] = normalized_receipt
                 reconciled_lifecycle_state = self._action_execution_lifecycle_from_status(
                     latest_execution.get("status"),
                     authoritative_execution.lifecycle_state,
                 )
-                updated_provenance = dict(authoritative_execution.provenance)
-                updated_provenance["normalized_receipt"] = normalized_receipt
                 if (
                     reconciled_lifecycle_state
                     != authoritative_execution.lifecycle_state
@@ -658,10 +662,20 @@ class ActionExecutionReconciliationCoordinator:
         if (
             authoritative_execution.provenance.get("adapter")
             == "shuffle_real_http"
-            and observed_idempotency_execution_count != 1
+            and not ActionExecutionReconciliationCoordinator._is_exact_integer_one(
+                observed_idempotency_execution_count
+            )
         ):
             return True
         return False
+
+    @staticmethod
+    def _is_exact_integer_one(value: object) -> bool:
+        return (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and value == 1
+        )
 
     def _normalize_observed_executions(
         self,
@@ -699,10 +713,12 @@ class ActionExecutionReconciliationCoordinator:
             )
             if (
                 idempotency_execution_count is not None
-                and idempotency_execution_count != 1
+                and not self._is_exact_integer_one(
+                    idempotency_execution_count
+                )
             ):
                 raise ValueError(
-                    "observed execution idempotency_execution_count must be one"
+                    "observed execution idempotency_execution_count must be integer one"
                 )
             coordination_reference_id = execution.get("coordination_reference_id")
             coordination_target_type = execution.get("coordination_target_type")

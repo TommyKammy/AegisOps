@@ -135,6 +135,9 @@ required_compose_lines=(
   'postgres:16.4@sha256:'
   'nginx:1.27.0@sha256:'
   'opensearchproject/opensearch:3.2.0@sha256:'
+  'AEGISOPS_LAB_CONTROL_PLANE_IPV4: ${AEGISOPS_LAB_CONTROL_PLANE_IPV4:-172.31.67.20}'
+  'NGINX_ENVSUBST_FILTER: ^AEGISOPS_LAB_CONTROL_PLANE_IPV4$'
+  './config/control-plane.conf:/etc/nginx/templates/control-plane.conf.template:ro'
 )
 for line in "${required_compose_lines[@]}"; do
   require_fixed_string "${compose}" "${line}"
@@ -289,6 +292,7 @@ require_fixed_string "${proxy_config}" 'server_name shuffle.localhost;'
 require_fixed_string "${proxy_config}" 'proxy_pass $phase67_wazuh_dashboard;'
 require_fixed_string "${proxy_config}" 'proxy_pass $phase67_shuffle_frontend;'
 require_fixed_string "${proxy_config}" 'resolver 127.0.0.11 ipv6=off valid=10s;'
+require_fixed_string "${proxy_config}" 'allow ${AEGISOPS_LAB_CONTROL_PLANE_IPV4};'
 require_fixed_string "${proxy_config}" 'proxy_ssl_trusted_certificate /etc/nginx/certs/wazuh-upstream-root-ca.pem;'
 require_fixed_string "${proxy_config}" 'proxy_ssl_verify on;'
 require_fixed_string "${proxy_config}" 'include /etc/nginx/certs/runtime-auth.conf;'

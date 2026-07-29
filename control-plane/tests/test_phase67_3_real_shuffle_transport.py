@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 import pathlib
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -25,6 +27,13 @@ from aegisops.control_plane.config import RuntimeConfig
 API_WORKFLOW_ID = "67f30000-0000-4000-8000-000000000001"
 REAL_EXECUTION_ID = "67f30000-0000-4000-8000-000000000002"
 SECOND_REAL_EXECUTION_ID = "67f30000-0000-4000-8000-000000000003"
+EVIDENCE_VALIDATOR = (
+    CONTROL_PLANE_ROOT
+    / "deployment"
+    / "phase-67-integration-lab"
+    / "shuffle"
+    / "validate_evidence_manifest.py"
+)
 
 
 class _QueueTransport:
@@ -86,6 +95,24 @@ def _dispatch(adapter: RealShuffleActionAdapter):
 
 
 class RealShuffleTransportTests(unittest.TestCase):
+    def test_adapter_representations_redact_credentials_and_require_ca(self) -> None:
+        adapter = _adapter(_QueueTransport())
+        polling_client = ShuffleReceiptPollingClient(
+            base_url="https://proxy:8443/shuffle-api",
+            api_key="polling-secret",
+            api_workflow_id=API_WORKFLOW_ID,
+            transport=_QueueTransport(),
+        )
+
+        self.assertNotIn("fixture-api-key", repr(adapter))
+        self.assertNotIn("polling-secret", repr(polling_client))
+        with self.assertRaisesRegex(ValueError, "requires an explicit CA file"):
+            UrllibShuffleJsonTransport(ca_file="")
+        self.assertEqual(
+            UrllibShuffleJsonTransport(ca_file=" /fixture/ca.pem ").ca_file,
+            "/fixture/ca.pem",
+        )
+
     def test_bounded_retry_returns_one_real_execution_identity(self) -> None:
         transport = _QueueTransport(
             ShuffleTransportFailure("connection_failure", retryable=True),
@@ -461,6 +488,73 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertEqual(config.shuffle_transport_mode, "real_http")
         self.assertEqual(config.shuffle_api_key, "real-file-backed-key")
         self.assertNotIn("real-file-backed-key", repr(config))
+
+    def test_evidence_validator_rejects_nonterminal_and_noninteger_proof(
+        self,
+    ) -> None:
+        manifest = {
+            "schema_version": "phase67.3-real-shuffle-trial-v1",
+            "source_mode": "real_shuffle",
+            "workflow_api_id": API_WORKFLOW_ID,
+            "execution_id": REAL_EXECUTION_ID,
+            "idempotency_key": "idempotency-001",
+            "idempotency_execution_count": 1,
+            "requested_scope": {
+                "record_family": "phase67_lab_trial",
+                "recipient_identity": "local-test-sink",
+            },
+            "payload_hash": "a" * 64,
+            "expected_execution_receipt_id": "phase67-receipt-001",
+            "normalized_receipt_sha256": "b" * 64,
+            "reconciliation_id": "reconciliation-001",
+            "replay_reconciliation_id": "reconciliation-001",
+            "execution_lifecycle_state": "succeeded",
+            "reconciliation_disposition": "matched",
+            "authority_posture": "aegisops_reconciliation_remains_authoritative",
+            "limitations": ("isolated_non-production_lab",),
+        }
+
+        def validate(candidate: dict[str, object]) -> subprocess.CompletedProcess[str]:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                manifest_path = pathlib.Path(temp_dir) / "manifest.json"
+                manifest_path.write_text(
+                    json.dumps(candidate),
+                    encoding="utf-8",
+                )
+                return subprocess.run(
+                    [sys.executable, str(EVIDENCE_VALIDATOR), str(manifest_path)],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+
+        self.assertEqual(validate(manifest).returncode, 0)
+        for field_name, invalid_value, expected_error in (
+            (
+                "execution_lifecycle_state",
+                "failed",
+                "execution lifecycle is not succeeded",
+            ),
+            (
+                "reconciliation_disposition",
+                "mismatch",
+                "reconciliation disposition is not matched",
+            ),
+            (
+                "idempotency_execution_count",
+                True,
+                "did not resolve to integer one execution",
+            ),
+            (
+                "idempotency_execution_count",
+                1.0,
+                "did not resolve to integer one execution",
+            ),
+        ):
+            with self.subTest(field_name=field_name, invalid_value=invalid_value):
+                result = validate({**manifest, field_name: invalid_value})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(expected_error, result.stderr)
 
 
 if __name__ == "__main__":

@@ -585,6 +585,24 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         self.assertIn("server_name shuffle.localhost;", proxy)
         self.assertIn("proxy_pass $phase67_wazuh_dashboard;", proxy)
         self.assertIn("proxy_pass $phase67_shuffle_frontend;", proxy)
+        self.assertIn(
+            "allow ${AEGISOPS_LAB_CONTROL_PLANE_IPV4};",
+            proxy,
+        )
+        self.assertIn(
+            "AEGISOPS_LAB_CONTROL_PLANE_IPV4: "
+            "${AEGISOPS_LAB_CONTROL_PLANE_IPV4:-172.31.67.20}",
+            compose,
+        )
+        self.assertIn(
+            "NGINX_ENVSUBST_FILTER: ^AEGISOPS_LAB_CONTROL_PLANE_IPV4$",
+            compose,
+        )
+        self.assertIn(
+            "./config/control-plane.conf:"
+            "/etc/nginx/templates/control-plane.conf.template:ro",
+            compose,
+        )
 
     def test_selected_scope_checks_only_active_service_addresses(self) -> None:
         expected = {
