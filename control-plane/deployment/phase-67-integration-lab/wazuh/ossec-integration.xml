@@ -1,0 +1,16 @@
+<ossec_config>
+  <localfile>
+    <location>/var/ossec/logs/aegisops-phase67-ssh-test.log</location>
+    <log_format>syslog</log_format>
+  </localfile>
+
+  <integration>
+    <name>custom-aegisops</name>
+    <hook_url>https://proxy:8443/intake/wazuh</hook_url>
+    <api_key>file-bound</api_key>
+    <alert_format>json</alert_format>
+    <rule_id>5710</rule_id>
+    <timeout>10</timeout>
+    <retries>1</retries>
+  </integration>
+</ossec_config>

@@ -1186,7 +1186,7 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             replay_service.create_reviewed_action_request_from_advisory(
                 record_family="recommendation",

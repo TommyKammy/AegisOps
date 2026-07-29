@@ -29,7 +29,11 @@ from ..models import (
     RecommendationRecord,
 )
 from ..models import DetectorLifecycleRecord
-from ..reviewed_slice_policy import REVIEWED_LIVE_SOURCE_FAMILIES
+from ..reviewed_slice_policy import (
+    REVIEWED_LIVE_SOURCE_FAMILIES,
+    REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE,
+    REVIEWED_WAZUH_DETECTION_RULE_ID,
+)
 
 if TYPE_CHECKING:
     from .detection_lifecycle import DetectionIntakeService
@@ -590,6 +594,7 @@ class LiveWazuhIntakeHandler:
         forwarded_proto: str | None,
         reverse_proxy_secret_header: str | None,
         peer_addr: str | None,
+        source_family_header: str | None = None,
     ) -> FindingAlertIngestResult:
         service = self._service
         service._runtime_boundary_service.validate_wazuh_ingest_runtime()
@@ -659,15 +664,64 @@ class LiveWazuhIntakeHandler:
             )
 
         native_alert = service._require_mapping(raw_alert, "alert")
+        data = service._require_mapping(
+            native_alert.get("data"),
+            "data",
+        )
         source_family = service._normalize_optional_string(
-            (
-                service._require_mapping(
-                    native_alert.get("data"),
-                    "data",
-                )
-            ).get("source_family"),
+            data.get("source_family"),
             "data.source_family",
         )
+        attested_source_family = service._normalize_optional_string(
+            source_family_header,
+            "X-AegisOps-Source-Family",
+        )
+        if (
+            source_family == "wazuh_detection"
+            and attested_source_family is None
+        ):
+            service._emit_structured_event(
+                logging.WARNING,
+                "wazuh_ingest_rejected",
+                reason="missing_proxy_attested_source_family",
+                peer_addr=peer_addr,
+                source_family=source_family,
+            )
+            raise PermissionError(
+                "live Wazuh detection ingest requires source-family "
+                "attestation from the reviewed reverse proxy"
+            )
+        if (
+            attested_source_family is not None
+            and attested_source_family not in REVIEWED_LIVE_SOURCE_FAMILIES
+        ):
+            service._emit_structured_event(
+                logging.WARNING,
+                "wazuh_ingest_rejected",
+                reason="unsupported_proxy_attested_source_family",
+                peer_addr=peer_addr,
+                source_family=source_family,
+                attested_source_family=attested_source_family,
+            )
+            raise ValueError(
+                "live Wazuh ingest proxy attested an unsupported source family"
+            )
+        if (
+            attested_source_family is not None
+            and source_family != attested_source_family
+        ):
+            service._emit_structured_event(
+                logging.WARNING,
+                "wazuh_ingest_rejected",
+                reason="proxy_attested_source_family_mismatch",
+                peer_addr=peer_addr,
+                source_family=source_family,
+                attested_source_family=attested_source_family,
+            )
+            raise ValueError(
+                "data.source_family must match the source family attested by "
+                "the reviewed reverse proxy"
+            )
         if source_family not in REVIEWED_LIVE_SOURCE_FAMILIES:
             service._emit_structured_event(
                 logging.WARNING,
@@ -677,8 +731,92 @@ class LiveWazuhIntakeHandler:
                 source_family=source_family,
             )
             raise ValueError(
-                "live Wazuh ingest only admits the reviewed github_audit and entra_id live source families"
+                "live Wazuh ingest only admits the reviewed github_audit, entra_id, "
+                "and wazuh_detection live source families"
             )
+        if source_family == "wazuh_detection":
+            native_rule = service._require_mapping(
+                native_alert.get("rule"),
+                "rule",
+            )
+            native_rule_id = service._normalize_optional_string(
+                native_rule.get("id"),
+                "rule.id",
+            )
+            provenance_rule_id = service._normalize_optional_string(
+                data.get("wazuh_rule_id"),
+                "data.wazuh_rule_id",
+            )
+            if (
+                native_rule_id != REVIEWED_WAZUH_DETECTION_RULE_ID
+                or provenance_rule_id != native_rule_id
+            ):
+                service._emit_structured_event(
+                    logging.WARNING,
+                    "wazuh_ingest_rejected",
+                    reason="wazuh_detection_rule_mismatch",
+                    peer_addr=peer_addr,
+                    source_family=source_family,
+                )
+                raise ValueError(
+                    "live Wazuh detection ingest requires matching reviewed rule "
+                    f"id {REVIEWED_WAZUH_DETECTION_RULE_ID!r} in rule.id and "
+                    "data.wazuh_rule_id"
+                )
+            native_rule_level = native_rule.get("level")
+            if not isinstance(native_rule_level, int) or isinstance(
+                native_rule_level,
+                bool,
+            ):
+                raise ValueError("rule.level must be an integer")
+            native_manager = service._require_mapping(
+                native_alert.get("manager"),
+                "manager",
+            )
+            native_manager_id = service._require_non_empty_string(
+                native_manager.get("name"),
+                "manager.name",
+            )
+            expected_wazuh_provenance = {
+                "event_id": service._require_non_empty_string(
+                    native_alert.get("id"),
+                    "id",
+                ),
+                "event_timestamp": service._require_non_empty_string(
+                    native_alert.get("timestamp"),
+                    "timestamp",
+                ),
+                "source_id": native_manager_id,
+                "wazuh_manager_id": native_manager_id,
+                "wazuh_rule_id": native_rule_id,
+                "wazuh_rule_level": str(native_rule_level),
+            }
+            expected_wazuh_provenance.update(
+                REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE
+            )
+            for field_name, expected_value in expected_wazuh_provenance.items():
+                actual_value = service._normalize_optional_string(
+                    data.get(field_name),
+                    f"data.{field_name}",
+                )
+                if actual_value != expected_value:
+                    service._emit_structured_event(
+                        logging.WARNING,
+                        "wazuh_ingest_rejected",
+                        reason="wazuh_detection_provenance_mismatch",
+                        peer_addr=peer_addr,
+                        source_family=source_family,
+                        field_name=field_name,
+                    )
+                    expected_source = (
+                        "reviewed Phase 67 Wazuh mapping value"
+                        if field_name
+                        in REVIEWED_WAZUH_DETECTION_FIXED_PROVENANCE
+                        else "native Wazuh alert value"
+                    )
+                    raise ValueError(
+                        f"data.{field_name} must match its {expected_source}"
+                    )
 
         adapter = WazuhAlertAdapter()
         native_record = self._intake.with_native_detection_admission_provenance(

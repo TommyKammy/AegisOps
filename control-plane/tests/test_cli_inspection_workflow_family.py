@@ -2438,7 +2438,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             port=0,
         )
         expected_message = (
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice"
         )
         servers: list[main.ThreadingHTTPServer] = []
 
@@ -2521,7 +2521,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             port=0,
         )
         expected_message = (
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice"
         )
         servers: list[main.ThreadingHTTPServer] = []
 
@@ -2585,7 +2585,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             )
         )
         expected_message = (
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice"
         )
         servers: list[main.ThreadingHTTPServer] = []
 

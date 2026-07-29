@@ -413,6 +413,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
                 forwarded_proto="https",
                 reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
                 peer_addr="10.10.0.5",
+                source_family_header="github_audit",
             ),
             wazuh_result,
         )
@@ -531,6 +532,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             forwarded_proto="https",
             reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
             peer_addr="10.10.0.5",
+            source_family_header="github_audit",
         )
         lifecycle_delegate.lifecycle_transition_id.assert_called_once_with(
             transition_timestamp="20260405T120000.000000Z",
@@ -2298,19 +2300,19 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.inspect_assistant_context("case", promoted_case.case_id)
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.inspect_case_detail(promoted_case.case_id)
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.record_case_observation(
                 case_id=promoted_case.case_id,
@@ -2321,7 +2323,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.record_case_lead(
                 case_id=promoted_case.case_id,
@@ -2331,7 +2333,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.record_case_recommendation(
                 case_id=promoted_case.case_id,
@@ -2341,7 +2343,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.record_case_handoff(
                 case_id=promoted_case.case_id,
@@ -2352,7 +2354,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.record_case_disposition(
                 case_id=promoted_case.case_id,
@@ -2402,13 +2404,13 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             with self.subTest(record_family=record_family):
                 with self.assertRaisesRegex(
                     ValueError,
-                    "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+                    "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
                 ):
                     service.inspect_advisory_output(record_family, record_id)
 
                 with self.assertRaisesRegex(
                     ValueError,
-                    "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+                    "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
                 ):
                     service.render_recommendation_draft(record_family, record_id)
 
@@ -2455,13 +2457,13 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             with self.subTest(record_family=record_family):
                 with self.assertRaisesRegex(
                     ValueError,
-                    "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+                    "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
                 ):
                     service.inspect_advisory_output(record_family, record_id)
 
                 with self.assertRaisesRegex(
                     ValueError,
-                    "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+                    "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
                 ):
                     service.render_recommendation_draft(record_family, record_id)
 
@@ -2472,19 +2474,19 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.inspect_assistant_context("case", promoted_case.case_id)
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.inspect_advisory_output("case", promoted_case.case_id)
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.render_recommendation_draft("case", promoted_case.case_id)
 
@@ -2530,13 +2532,13 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.inspect_advisory_output("ai_trace", ai_trace.ai_trace_id)
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.render_recommendation_draft("ai_trace", ai_trace.ai_trace_id)
 
@@ -2572,13 +2574,13 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.inspect_case_detail(promoted_case.case_id)
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.record_case_observation(
                 case_id=promoted_case.case_id,
@@ -2604,7 +2606,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.inspect_case_detail(spoofed_case.case_id)
 
@@ -2635,7 +2637,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice",
         ):
             service.inspect_case_detail(spoofed_case.case_id)
 

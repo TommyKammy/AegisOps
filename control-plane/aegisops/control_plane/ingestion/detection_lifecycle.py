@@ -95,6 +95,7 @@ class DetectionIntakeService:
         forwarded_proto: str | None,
         reverse_proxy_secret_header: str | None,
         peer_addr: str | None,
+        source_family_header: str | None = None,
     ) -> FindingAlertIngestResult:
         return self.wazuh_intake_handler.ingest_wazuh_alert(
             raw_alert=raw_alert,
@@ -102,6 +103,7 @@ class DetectionIntakeService:
             forwarded_proto=forwarded_proto,
             reverse_proxy_secret_header=reverse_proxy_secret_header,
             peer_addr=peer_addr,
+            source_family_header=source_family_header,
         )
 
     def ingest_finding_alert(

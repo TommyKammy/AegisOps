@@ -20,7 +20,7 @@ class CliInspectionUsageErrorTests(ControlPlaneCliInspectionTestBase):
             fixture_name="github-audit-alert.json"
         )
         expected_message = (
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice"
         )
 
         for command, record_family, record_id in (
@@ -72,7 +72,7 @@ class CliInspectionUsageErrorTests(ControlPlaneCliInspectionTestBase):
             fixture_name="github-audit-alert.json"
         )
         expected_message = (
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice"
         )
 
         for command in (
@@ -104,7 +104,7 @@ class CliInspectionUsageErrorTests(ControlPlaneCliInspectionTestBase):
             self._build_case_scoped_advisory_records_without_case_lineage()
         )
         expected_message = (
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
+            "outside the approved GitHub audit, Entra ID, and Wazuh detection live slice"
         )
 
         for command, record_family, record_id in (

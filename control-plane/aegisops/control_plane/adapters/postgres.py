@@ -528,12 +528,15 @@ class PostgresControlPlaneStore:
             try:
                 cursor.execute(query, (record_id,))
                 row = cursor.fetchone()
+                row_mapping = (
+                    _row_to_mapping(cursor, row) if row is not None else None
+                )
             finally:
                 cursor.close()
 
-        if row is None:
+        if row_mapping is None:
             return None
-        return self._row_to_record(record_type, _row_to_mapping(cursor, row))
+        return self._row_to_record(record_type, row_mapping)
 
     def list(self, record_type: Type[RecordT]) -> tuple[RecordT, ...]:
         table = self._table_config(record_type)
@@ -548,12 +551,15 @@ class PostgresControlPlaneStore:
             try:
                 cursor.execute(query)
                 rows = cursor.fetchall()
+                row_mappings = tuple(
+                    _row_to_mapping(cursor, row) for row in rows
+                )
             finally:
                 cursor.close()
 
         return tuple(
-            self._row_to_record(record_type, _row_to_mapping(cursor, row))
-            for row in rows
+            self._row_to_record(record_type, row_mapping)
+            for row_mapping in row_mappings
         )
 
     def latest_ai_trace_record(self) -> AITraceRecord | None:

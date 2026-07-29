@@ -949,6 +949,22 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIsNone(store.get(ActionRequestRecord, "approval-001"))
         self.assertIsNone(store.get(ReconciliationRecord, "n8n-exec-001"))
 
+    def test_get_maps_tuple_row_before_cursor_close(self) -> None:
+        store, _ = make_store(_TupleRowClosingBackend())
+        record = AlertRecord(
+            alert_id="alert-tuple-get-001",
+            finding_id="finding-tuple-get-001",
+            analytic_signal_id="signal-tuple-get-001",
+            case_id=None,
+            lifecycle_state="new",
+            reviewed_context={"review": {"status": "pending"}},
+        )
+        store.save(record)
+
+        self.assertEqual(store.get(AlertRecord, record.alert_id), record)
+        self.assertIsNone(store.get(AlertRecord, "alert-tuple-get-missing"))
+        self.assertEqual(store.list(AlertRecord), (record,))
+
     def test_store_round_trips_assistant_advisory_draft_revision_history(self) -> None:
         store, _ = make_store()
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)

@@ -26,6 +26,33 @@ control-plane/deployment/phase-67-integration-lab/prepare-substrates.sh
 control-plane/deployment/phase-67-integration-lab/up.sh wazuh
 ```
 
+Preparation also renders and digests the bounded Phase 67.2 manager
+configuration. Startup installs `custom-aegisops` with Wazuh-required
+`root:wazuh` ownership and mode `750`. The filter is exactly native rule
+`5710`; the lab does not forward the general alert stream.
+
+Run the real Wazuh intake trial:
+
+```bash
+control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh
+```
+
+The command verifies health and negative boundaries, writes a harmless SSH
+invalid-user log using reserved address `192.0.2.67`, waits for the real Wazuh
+alert and HTTP 202 AegisOps receipt, replays that native alert, and requires
+`deduplicated` with the original AegisOps alert ID. It then requires an
+unpromoted `source_system=wazuh` analyst-queue row, proves that the preceding
+negative tests produced zero authoritative alert delta, and writes a
+mode-`600` manifest below `${AEGISOPS_LAB_EVIDENCE_DIR}`.
+
+The tracked Phase 67.2 regression fixture is a sanitized native capture from
+this procedure. It retains the Wazuh native ID, timestamp format, manager
+identity, rule, synthetic SSH log, and reserved test address, but no secret or
+production data.
+
+Do not replace the bounded test input with a production endpoint, public
+address, real username, or customer log.
+
 Shuffle startup is available for substrate inspection, but workflow execution is intentionally disabled. The tracked bootstrap keeps emulation disabled; set `AEGISOPS_LAB_ALLOW_EMULATION=yes` only in an untracked bootstrap after accepting the architecture boundary. Do not add a Docker socket mount locally. Phase 67.3 must add the reviewed execution boundary.
 
 ```bash
@@ -38,11 +65,18 @@ control-plane/deployment/phase-67-integration-lab/up.sh shuffle
 control-plane/deployment/phase-67-integration-lab/status.sh full --write-evidence
 control-plane/deployment/phase-67-integration-lab/logs.sh
 control-plane/deployment/phase-67-integration-lab/logs.sh control-plane proxy
+control-plane/deployment/phase-67-integration-lab/status-wazuh-intake.sh
 ```
 
 Logs are bounded to the latest 200 lines per service by default. Set `AEGISOPS_LAB_LOG_TAIL` to an integer from 1 through 10000 to change the snapshot; `all`, zero, negative, oversized, and follow-mode requests are rejected.
 
 Evidence is stored below `${AEGISOPS_LAB_RUNTIME_ROOT}/evidence`. It may include host and service metadata, so it is mode `0600` and remains untracked. Every header records the Git commit plus the repository runtime state and artifact SHA-256 for the Docker build and repository bind-mount inputs. Status evidence additionally records the immutable image ID of the actual control-plane container, so package resolution differences in locally built images remain attributable and evidence produced from local edits is distinguishable from a clean reviewed checkout.
+
+`status-wazuh-intake.sh` prints Wazuh process health, the latest sanitized
+receipt, and the matching analyst-queue row. It never prints the bearer or
+proxy secret. Receipts and manifests remain subordinate evidence; they cannot
+create a case, approve an action, reconcile execution, close work, or accept a
+readiness gate.
 
 ## Stop And Cleanup
 
@@ -76,6 +110,10 @@ That command applies the same ownership proof before deleting only volumes attac
 - teardown ownership mismatch: stop and inspect the colliding Compose project manually; do not bypass the Phase 67.1 resource-label proof.
 - requested scope excludes running services: run `down.sh`, then start the intended narrower or alternate optional scope; do not treat a partial Compose `up` as a scope transition.
 - Wazuh substrate missing: run `prepare-substrates.sh`; do not substitute an unreviewed checkout.
+- no Wazuh intake receipt: inspect bounded `wazuh-manager`, `proxy`, and
+  `control-plane` logs, confirm `wazuh-integratord` is running, and rerun
+  `prepare-substrates.sh` plus `up.sh wazuh`; do not widen the rule `5710`
+  filter.
 - Shuffle amd64 execution unavailable: preserve the profile settings and use the exact `colima stop` plus `colima start --vm-type vz --vz-rosetta ... --activate=false` command printed by `preflight.sh --scope shuffle`. This host-level change interrupts every workload in that Colima profile, so the lab reports it as a blocker and never applies it automatically. Do not remove the explicit `linux/amd64` platform.
 
 When a blocker remains, save the relevant scoped preflight, `status.sh ... --write-evidence`, and a bounded `logs.sh` snapshot before changing the lab configuration.
