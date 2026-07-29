@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import pathlib
 import subprocess
@@ -151,7 +151,7 @@ class RealShuffleTransportTests(unittest.TestCase):
             "payload_hash": "payload-hash-001",
             "idempotency_key": "idempotency-001",
             **_binding(),
-            "delegated_at": delegated_at.isoformat(),
+            "delegated_at": "2026-07-29T00:00:00Z",
             "action": {
                 "action_type": "notify_identity_owner",
                 "recipient_identity": "local-test-sink",
@@ -178,13 +178,44 @@ class RealShuffleTransportTests(unittest.TestCase):
             payload_hash="payload-hash-001",
             idempotency_key="idempotency-001",
             approved_payload=_payload(),
-            delegated_at=delegated_at,
+            delegated_at=delegated_at.astimezone(timezone(timedelta(hours=9))),
         )
 
         self.assertEqual(receipt.execution_run_id, REAL_EXECUTION_ID)
         self.assertEqual(len(transport.calls), 1)
         self.assertEqual(transport.calls[0]["method"], "GET")
         self.assertIsNone(transport.calls[0]["payload"])
+
+    def test_dispatch_canonicalizes_delegated_timestamp_to_utc(self) -> None:
+        transport = _QueueTransport(
+            {"success": True, "execution_id": REAL_EXECUTION_ID}
+        )
+        delegated_at = datetime(
+            2026,
+            7,
+            30,
+            6,
+            15,
+            tzinfo=timezone(timedelta(hours=9)),
+        )
+
+        _adapter(transport).dispatch_approved_action(
+            delegation_id="delegation-001",
+            action_request_id="action-request-001",
+            approval_decision_id="approval-001",
+            payload_hash="payload-hash-001",
+            idempotency_key="idempotency-001",
+            approved_payload=_payload(),
+            delegated_at=delegated_at,
+        )
+
+        payload = transport.calls[0]["payload"]
+        self.assertIsInstance(payload, dict)
+        execution_argument = json.loads(payload["execution_argument"])
+        self.assertEqual(
+            execution_argument["delegated_at"],
+            "2026-07-29T21:15:00Z",
+        )
 
     def test_interrupted_dispatch_recovery_fails_closed_on_missing_or_drift(
         self,
@@ -494,6 +525,44 @@ class RealShuffleTransportTests(unittest.TestCase):
                 observed_at=datetime.now(timezone.utc),
             )
 
+        typed_expected = {
+            **expected,
+            "requested_scope": {"recipient_identity": "local-test-sink", "risk": 1},
+        }
+        typed_observed = {
+            **typed_expected,
+            "requested_scope": {
+                "recipient_identity": "local-test-sink",
+                "risk": True,
+            },
+        }
+        type_drift_client = ShuffleReceiptPollingClient(
+            base_url="https://proxy:8443/shuffle-api",
+            api_key="fixture-api-key",
+            api_workflow_id=API_WORKFLOW_ID,
+            transport=_QueueTransport(
+                {
+                    "executions": [
+                        {
+                            "execution_id": REAL_EXECUTION_ID,
+                            "execution_argument": typed_observed,
+                            "status": "FINISHED",
+                        }
+                    ]
+                }
+            ),
+        )
+        with self.assertRaisesRegex(
+            ShuffleTransportFailure,
+            "requested_scope_mismatch",
+        ):
+            type_drift_client.poll_normalized_receipt(
+                execution_id=REAL_EXECUTION_ID,
+                idempotency_key="idempotency-001",
+                expected_binding=typed_expected,
+                observed_at=datetime.now(timezone.utc),
+            )
+
     def test_poll_fails_closed_for_missing_malformed_and_failed_receipts(self) -> None:
         expected = {
             "action_request_id": "action-request-001",
@@ -708,6 +777,25 @@ class RealShuffleTransportTests(unittest.TestCase):
         result = validate(extra_action)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("reviewed array length changed", result.stderr)
+        extra_property = json.loads(json.dumps(observed))
+        extra_property["actions"][0]["is_skipped"] = True
+        result = validate(extra_property)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unreviewed properties", result.stderr)
+        changed_server_default = json.loads(json.dumps(observed))
+        changed_server_default["actions"][0]["execution_delay"] = 1
+        result = validate(changed_server_default)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Shuffle server default changed", result.stderr)
+        nested_type_drift = json.loads(json.dumps(observed))
+        nested_type_drift["configuration"] = {
+            "exit_on_error": 0,
+            "skip_notifications": False,
+            "start_from_top": False,
+        }
+        result = validate(nested_type_drift)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Shuffle server default changed", result.stderr)
 
 
 if __name__ == "__main__":

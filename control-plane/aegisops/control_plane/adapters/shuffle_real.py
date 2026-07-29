@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import socket
 import ssl
@@ -17,6 +17,39 @@ class ShuffleTransportFailure(RuntimeError):
         super().__init__(f"Shuffle transport failed: {category}")
         self.category = category
         self.retryable = retryable
+
+
+def _json_values_equal(left: object, right: object) -> bool:
+    try:
+        return json.dumps(
+            _json_ready(left),
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ) == json.dumps(
+            _json_ready(right),
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _json_ready(value: object) -> object:
+    if isinstance(value, Mapping):
+        if any(not isinstance(key, str) for key in value):
+            raise TypeError("JSON object keys must be strings")
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(item) for item in value]
+    return value
+
+
+def _canonical_utc_datetime(value: datetime) -> str:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("Shuffle delegated_at must be timezone-aware")
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 class ShuffleJsonTransport(Protocol):
@@ -293,7 +326,7 @@ class RealShuffleActionAdapter:
             raise ShuffleTransportFailure("duplicate_idempotency_execution")
 
         execution, observed_argument = matches[0]
-        if observed_argument != expected_argument:
+        if not _json_values_equal(observed_argument, expected_argument):
             raise ShuffleTransportFailure(
                 "interrupted_dispatch_binding_mismatch"
             )
@@ -361,7 +394,7 @@ class RealShuffleActionAdapter:
             "correlation_id": correlation_id,
             "expected_execution_receipt_id": expected_receipt_id,
             "requested_scope": dict(requested_scope),
-            "delegated_at": delegated_at.isoformat(),
+            "delegated_at": _canonical_utc_datetime(delegated_at),
             "action": {
                 "action_type": approved_payload["action_type"],
                 "recipient_identity": approved_payload["recipient_identity"],
@@ -506,7 +539,10 @@ class ShuffleReceiptPollingClient:
         expected_scope = expected_binding.get("requested_scope")
         if not isinstance(expected_scope, Mapping):
             raise ShuffleTransportFailure("requested_scope_malformed")
-        if argument.get("requested_scope") != expected_scope:
+        if not _json_values_equal(
+            argument.get("requested_scope"),
+            expected_scope,
+        ):
             raise ShuffleTransportFailure("requested_scope_mismatch")
 
         status = self._normalize_status(execution.get("status"))

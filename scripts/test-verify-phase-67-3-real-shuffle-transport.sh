@@ -105,6 +105,33 @@ assert_fails_with \
   "${without_status_normalization}" \
   'status.strip().lower()'
 
+without_strict_scope_binding="${workdir}/without-strict-scope-binding"
+copy_fixture "${without_strict_scope_binding}"
+sed -i.bak \
+  's/if not _json_values_equal(/if (/g' \
+  "${without_strict_scope_binding}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_strict_scope_binding}" \
+  'if not _json_values_equal('
+
+without_utc_delegation="${workdir}/without-utc-delegation"
+copy_fixture "${without_utc_delegation}"
+sed -i.bak \
+  's/).astimezone(timezone.utc)/)/' \
+  "${without_utc_delegation}/control-plane/aegisops/control_plane/actions/execution_coordinator_delegation.py"
+assert_fails_with \
+  "${without_utc_delegation}" \
+  ').astimezone(timezone.utc)'
+
+without_extra_property_rejection="${workdir}/without-extra-property-rejection"
+copy_fixture "${without_extra_property_rejection}"
+sed -i.bak \
+  's/unexpected = sorted(set(observed) - set(expected))/unexpected = []/' \
+  "${without_extra_property_rejection}/control-plane/deployment/phase-67-integration-lab/shuffle/validate_preserved_workflow.py"
+assert_fails_with \
+  "${without_extra_property_rejection}" \
+  'unexpected = sorted(set(observed) - set(expected))'
+
 without_orborus_identity="${workdir}/without-orborus-identity"
 copy_fixture "${without_orborus_identity}"
 sed -i.bak '/ORBORUS_CONTAINER_NAME:/d' \

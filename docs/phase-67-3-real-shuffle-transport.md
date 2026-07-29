@@ -15,8 +15,9 @@ It invokes only Shuffle Tools `repeat_back_to_me`; it has no email, ticket,
 identity, endpoint, firewall, cloud, or protected-target connector.
 Bootstrap reads the persisted workflow back from Shuffle and verifies every
 reviewed execution field before enabling `real_http`; server-added metadata is
-allowed, but missing or changed reviewed actions, parameters, branches, or
-variables fail closed.
+normalized through an explicit allowlist with neutral execution defaults, while
+unreviewed properties and missing or changed reviewed actions, parameters,
+branches, or variables fail closed.
 
 Dispatch carries the AegisOps action request, approval decision, delegation,
 payload hash, idempotency key, reviewed workflow identity/version, correlation
@@ -30,6 +31,9 @@ the record, a later request searches Shuffle by the same idempotency key,
 requires one exact immutable delegation binding, and finalizes that existing
 execution UUID without another POST. Missing, duplicate, or drifted recovery
 evidence remains `dispatching` for explicit retry or operator review.
+Delegation timestamps are canonicalized to UTC before persistence and dispatch,
+and JSON scopes are compared with type-strict canonical JSON semantics so
+Boolean and numeric substitutions cannot satisfy a reviewed binding.
 
 Receipt retrieval uses the authenticated workflow-executions API. The
 normalizer selects exactly one UUID execution ID, requires exactly one

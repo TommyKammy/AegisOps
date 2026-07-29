@@ -1,6 +1,7 @@
 from __future__ import annotations
 # ruff: noqa: E402
 
+from datetime import timedelta
 import pathlib
 import sys
 import unittest
@@ -44,7 +45,14 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
             store=store,
         )
         requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
-        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        delegated_at = datetime(
+            2026,
+            4,
+            5,
+            21,
+            5,
+            tzinfo=timezone(timedelta(hours=9)),
+        )
         expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
         approved_target_scope = {"asset_id": "workstation-001"}
         approved_payload = _phase20_notify_identity_owner_payload(
@@ -930,6 +938,10 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
         executions = store.list(ActionExecutionRecord)
         self.assertEqual(len(executions), 1)
         self.assertEqual(executions[0].lifecycle_state, "dispatching")
+        self.assertEqual(
+            executions[0].delegated_at,
+            datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
+        )
         self.assertEqual(executions[0].execution_surface_type, "automation_substrate")
         self.assertEqual(executions[0].execution_surface_id, "shuffle")
         self.assertTrue(executions[0].execution_run_id.startswith("shuffle-run-"))
@@ -973,6 +985,10 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
         )
         self.assertEqual(len(store.list(ActionExecutionRecord)), 1)
         recover_interrupted_dispatch.assert_called_once()
+        self.assertEqual(
+            recover_interrupted_dispatch.call_args.kwargs["delegated_at"],
+            datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
+        )
 
     def test_service_preserves_finalization_failure_recording_error_context(
         self,

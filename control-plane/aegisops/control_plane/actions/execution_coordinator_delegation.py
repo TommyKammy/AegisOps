@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+import json
 from typing import Mapping
 
 from .action_receipt_validation import (
@@ -20,6 +21,33 @@ from ..models import (
     ActionRequestRecord,
     ApprovalDecisionRecord,
 )
+
+
+def _json_values_equal(left: object, right: object) -> bool:
+    try:
+        return json.dumps(
+            _json_ready(left),
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ) == json.dumps(
+            _json_ready(right),
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _json_ready(value: object) -> object:
+    if isinstance(value, Mapping):
+        if any(not isinstance(key, str) for key in value):
+            raise TypeError("JSON object keys must be strings")
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(item) for item in value]
+    return value
 
 
 class ApprovedActionDelegationCoordinator:
@@ -94,7 +122,10 @@ class ApprovedActionDelegationCoordinator:
         invalid_execution_surface_id_message: str,
         delegation_label: str,
     ) -> ActionExecutionRecord:
-        delegated_at = self._service._require_aware_datetime(delegated_at, "delegated_at")
+        delegated_at = self._service._require_aware_datetime(
+            delegated_at,
+            "delegated_at",
+        ).astimezone(timezone.utc)
         action_request_id = self._service._require_non_empty_string(
             action_request_id,
             "action_request_id",
@@ -413,7 +444,7 @@ class ApprovedActionDelegationCoordinator:
             raise ValueError(
                 "shuffle delegation binding uses an unknown reviewed workflow template version"
             )
-        if requested_scope != action_request.target_scope:
+        if not _json_values_equal(requested_scope, action_request.target_scope):
             raise ValueError(
                 "shuffle delegation binding does not match approved action request scope"
             )
@@ -478,8 +509,10 @@ class ApprovedActionDelegationCoordinator:
                             "external_receipt_id",
                         )
                         != delegation_binding["expected_execution_receipt_id"],
-                        getattr(receipt, "requested_scope", None)
-                        != delegation_binding["requested_scope"],
+                        not _json_values_equal(
+                            getattr(receipt, "requested_scope", None),
+                            delegation_binding["requested_scope"],
+                        ),
                     )
                 ):
                     raise ValueError(
@@ -823,7 +856,10 @@ class ApprovedActionDelegationCoordinator:
             raise ValueError(
                 "approved payload binding does not match approved action request and approval decision"
             )
-        if approval_decision.target_snapshot != action_request.target_scope:
+        if not _json_values_equal(
+            approval_decision.target_snapshot,
+            action_request.target_scope,
+        ):
             raise ValueError(
                 "approved payload binding does not match approved action request and approval decision"
             )
