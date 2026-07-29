@@ -298,6 +298,19 @@ def _validate_phase67_invariants(manifest: Mapping[str, object]) -> None:
             "$.runtime_artifact_digest must match "
             "$.worktree_artifact_digest"
         )
+    first_delivery = _require_schema_mapping(
+        manifest.get("first_delivery"),
+        "$.first_delivery",
+    )
+    duplicate_delivery = _require_schema_mapping(
+        manifest.get("duplicate_delivery"),
+        "$.duplicate_delivery",
+    )
+    if first_delivery["finding_id"] != duplicate_delivery["finding_id"]:
+        raise EvidenceSchemaError(
+            "$.duplicate_delivery.finding_id must match "
+            "$.first_delivery.finding_id"
+        )
     negative_boundary = _require_schema_mapping(
         manifest.get("negative_boundary"),
         "$.negative_boundary",

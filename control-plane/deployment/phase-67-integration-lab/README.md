@@ -64,22 +64,25 @@ integration volume as `root:wazuh` with mode `750`.
 
 `test-wazuh-intake.sh` emits a harmless SSH invalid-user event from reserved
 address `192.0.2.67`, waits for a real Wazuh alert and HTTP 202 receipt, then
-replays the exact native alert from an exclusive mode-`600` file below the
-root-protected Wazuh queue and requires deduplication to the same AegisOps
-alert. It also verifies authenticated valid POST rejection over plain HTTP,
-proxy-bypass, credential, malformed, unsupported-source, and oversized-payload
-failures, and requires zero change to authoritative analyst-queue alert state
-across those negative tests. The mode-`600` manifest stays below the untracked
+binds the selected receipt to that event's generated username and replays the
+exact native alert from an exclusive mode-`600` file below the root-protected
+Wazuh queue. The replay must deduplicate to the same AegisOps alert. It also
+verifies authenticated valid POST rejection over plain HTTP, proxy-bypass,
+credential, malformed, unsupported-source, and oversized-payload failures.
+Every shared HTTP probe has a five-second connection timeout and a 15-second
+total timeout, and the negative probes must leave authoritative analyst-queue
+alert state unchanged. The mode-`600` manifest stays below the untracked
 runtime evidence directory. Its JSON is built in a cleanup-managed hidden
 staging file and validated against the tracked Draft 2020-12 schema before an
 atomic rename publishes the completed manifest. The validator additionally
 requires RFC 3339 timestamps, matching worktree and running artifact digests,
-and an authoritative alert delta recomputed from the captured counts. The
-trial rechecks `wazuh-analysisd` and `wazuh-integratord` immediately before
-capture, while the manager Compose healthcheck requires integratord throughout
-startup. Its schema requires `created` followed by `deduplicated` and
-represents the shared AegisOps alert identity once at the manifest boundary,
-so delivery records cannot claim different alert IDs. The admitted reviewed
+the same finding identity for the original and replay deliveries, and an
+authoritative alert delta recomputed from the captured counts. The trial
+rechecks `wazuh-analysisd` and `wazuh-integratord` immediately before capture,
+while the manager Compose healthcheck requires integratord throughout startup.
+Its schema requires `created` followed by `deduplicated` and represents the
+shared AegisOps alert identity once at the manifest boundary, so delivery
+records cannot claim different alert IDs. The admitted reviewed
 context retains the fixed Wazuh mapping version used to produce the alert.
 
 The regression fixture

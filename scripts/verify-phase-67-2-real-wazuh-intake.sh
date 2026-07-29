@@ -299,6 +299,9 @@ require_fixed_string \
   "${evidence_validator}" \
   "after_alert_count - baseline_alert_count"
 require_fixed_string \
+  "${evidence_validator}" \
+  'first_delivery["finding_id"] != duplicate_delivery["finding_id"]'
+require_fixed_string \
   "${wazuh_adapter}" \
   '"data.mapping_version"'
 require_fixed_string \
@@ -391,6 +394,13 @@ require_fixed_string "${trial}" "integrator.map_native_alert("
 require_fixed_string "${trial}" "oversized payload must return HTTP 413"
 require_fixed_string "${trial}" "direct backend bypass unexpectedly succeeded"
 require_fixed_string "${trial}" "negative_authoritative_alert_delta=0"
+require_fixed_string "${trial}" "--connect-timeout 5"
+require_fixed_string "${trial}" "--max-time 15"
+require_fixed_string \
+  "${trial}" \
+  'python3 - "${native_alert_id}" "${trial_username}"'
+require_fixed_string "${trial}" "srcuser != trial_username"
+require_fixed_string "${trial}" "trial_username not in full_log"
 require_fixed_string "${trial}" 'and .disposition == "deduplicated"'
 require_fixed_string "${trial}" '.case_id == null'
 require_fixed_string "${trial}" 'source_mode: "real_wazuh"'

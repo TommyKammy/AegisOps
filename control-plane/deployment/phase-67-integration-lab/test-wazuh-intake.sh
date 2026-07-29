@@ -107,6 +107,8 @@ http_status() {
   curl \
     --silent \
     --show-error \
+    --connect-timeout 5 \
+    --max-time 15 \
     --output "${output_file}" \
     --write-out "%{http_code}" \
     --cacert "${proxy_ca}" \
@@ -534,7 +536,7 @@ pre_replay_receipt_count="$(receipt_count)"
 native_alert_id="$(jq -er '.native_wazuh_alert_id' <<<"${first_receipt}")"
 replay_file="$(
   compose_scope wazuh exec -T wazuh-manager \
-    python3 - "${native_alert_id}" <<'PY'
+    python3 - "${native_alert_id}" "${trial_username}" <<'PY'
 from pathlib import Path
 import json
 import os
@@ -542,6 +544,7 @@ import sys
 import tempfile
 
 native_id = sys.argv[1]
+trial_username = sys.argv[2]
 alerts_path = Path("/var/ossec/logs/alerts/alerts.json")
 matched_alert = None
 for line in reversed(alerts_path.read_text(encoding="utf-8").splitlines()):
@@ -554,6 +557,16 @@ for line in reversed(alerts_path.read_text(encoding="utf-8").splitlines()):
         break
 if matched_alert is None:
     raise SystemExit(f"native alert {native_id!r} is missing from alerts.json")
+data = matched_alert.get("data")
+srcuser = data.get("srcuser") if isinstance(data, dict) else None
+full_log = matched_alert.get("full_log")
+if not isinstance(full_log, str):
+    full_log = ""
+if srcuser != trial_username and trial_username not in full_log:
+    raise SystemExit(
+        f"native alert {native_id!r} does not contain trial username "
+        f"{trial_username!r}"
+    )
 
 fd, destination_name = tempfile.mkstemp(
     prefix="aegisops-phase67-replay-",

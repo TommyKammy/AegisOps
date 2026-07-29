@@ -826,6 +826,14 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             mismatched_negative_delta
         )
 
+        mismatched_finding = self._valid_evidence_manifest()
+        mismatched_finding["duplicate_delivery"][
+            "finding_id"
+        ] = "finding-from-unrelated-delivery"
+        invalid_manifests["delivery finding identity mismatch"] = (
+            mismatched_finding
+        )
+
         invalid_const = self._valid_evidence_manifest()
         invalid_const["native_wazuh_rule_id"] = "9999"
         invalid_manifests["invalid const"] = invalid_const
@@ -927,6 +935,14 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             'trial_username="aegisops-phase67-${trial_nonce}"',
             trial,
         )
+        self.assertIn("--connect-timeout 5", trial)
+        self.assertIn("--max-time 15", trial)
+        self.assertIn(
+            'python3 - "${native_alert_id}" "${trial_username}"',
+            trial,
+        )
+        self.assertIn("srcuser != trial_username", trial)
+        self.assertIn("trial_username not in full_log", trial)
         self.assertIn('--header "@${authenticated_header_file}"', trial)
         self.assertNotIn(
             '--header "Authorization: Bearer ${shared_secret}"',

@@ -255,6 +255,15 @@ assert_fails_with \
   "${negative_delta_invariant_removed}" \
   "after_alert_count - baseline_alert_count"
 
+finding_identity_invariant_removed="${workdir}/finding-identity-invariant-removed"
+copy_fixture "${finding_identity_invariant_removed}"
+sed -i.bak \
+  's/first_delivery\["finding_id"\] != duplicate_delivery\["finding_id"\]/first_delivery["finding_id"] == duplicate_delivery["finding_id"]/' \
+  "${finding_identity_invariant_removed}/control-plane/deployment/phase-67-integration-lab/wazuh/validate_evidence_manifest.py"
+assert_fails_with \
+  "${finding_identity_invariant_removed}" \
+  'first_delivery["finding_id"] != duplicate_delivery["finding_id"]'
+
 rfc3339_lexical_guard_removed="${workdir}/rfc3339-lexical-guard-removed"
 copy_fixture "${rfc3339_lexical_guard_removed}"
 sed -i.bak \
@@ -290,6 +299,24 @@ sed -i.bak \
 assert_fails_with \
   "${integratord_health_removed}" \
   "wazuh-integratord is running"
+
+http_total_timeout_removed="${workdir}/http-total-timeout-removed"
+copy_fixture "${http_total_timeout_removed}"
+sed -i.bak \
+  's/--max-time 15/--max-time 0/' \
+  "${http_total_timeout_removed}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${http_total_timeout_removed}" \
+  "--max-time 15"
+
+receipt_nonce_binding_removed="${workdir}/receipt-nonce-binding-removed"
+copy_fixture "${receipt_nonce_binding_removed}"
+sed -i.bak \
+  's/srcuser != trial_username/False/' \
+  "${receipt_nonce_binding_removed}/control-plane/deployment/phase-67-integration-lab/test-wazuh-intake.sh"
+assert_fails_with \
+  "${receipt_nonce_binding_removed}" \
+  "srcuser != trial_username"
 
 final_manager_health_removed="${workdir}/final-manager-health-removed"
 copy_fixture "${final_manager_health_removed}"
