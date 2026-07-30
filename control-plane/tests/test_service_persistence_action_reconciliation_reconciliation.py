@@ -177,6 +177,88 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(replay.reconciliation_id, reconciliation.reconciliation_id)
         self.assertEqual(len(store.list(ReconciliationRecord)), 1)
 
+    def test_phase67_replayed_prior_receipt_does_not_roll_back_latest_status(
+        self,
+    ) -> None:
+        store, service, execution, target_scope = (
+            self._build_phase67_failed_shuffle_context()
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+
+        def receipt(status: str, observed_at: datetime) -> dict[str, object]:
+            return {
+                "execution_run_id": execution.execution_run_id,
+                "execution_surface_type": "automation_substrate",
+                "execution_surface_id": "shuffle",
+                "idempotency_key": execution.idempotency_key,
+                "approval_decision_id": execution.approval_decision_id,
+                "delegation_id": execution.delegation_id,
+                "payload_hash": execution.payload_hash,
+                "action_request_id": execution.action_request_id,
+                "workflow_id": downstream_binding["workflow_id"],
+                "workflow_version_id": downstream_binding["workflow_version_id"],
+                "correlation_id": downstream_binding["correlation_id"],
+                "expected_execution_receipt_id": downstream_binding[
+                    "expected_execution_receipt_id"
+                ],
+                "external_receipt_id": downstream_binding[
+                    "expected_execution_receipt_id"
+                ],
+                "requested_scope": target_scope,
+                "idempotency_execution_count": 1,
+                "observed_at": observed_at,
+                "status": status,
+            }
+
+        running_observed_at = datetime(2026, 7, 29, 1, 12, tzinfo=timezone.utc)
+        running_receipt = receipt("running", running_observed_at)
+        running_reconciliation = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(running_receipt,),
+            compared_at=running_observed_at,
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
+
+        success_observed_at = datetime(2026, 7, 29, 1, 13, tzinfo=timezone.utc)
+        success_receipt = receipt("success", success_observed_at)
+        success_reconciliation = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(success_receipt,),
+            compared_at=success_observed_at,
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
+        replay = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(running_receipt,),
+            compared_at=datetime(2026, 7, 29, 1, 40, tzinfo=timezone.utc),
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
+
+        stored_execution = service.get_record(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertNotEqual(
+            success_reconciliation.reconciliation_id,
+            running_reconciliation.reconciliation_id,
+        )
+        self.assertEqual(
+            replay.reconciliation_id,
+            running_reconciliation.reconciliation_id,
+        )
+        self.assertEqual(stored_execution.lifecycle_state, "succeeded")
+        self.assertEqual(
+            stored_execution.provenance["normalized_receipt"]["status"],
+            "success",
+        )
+        self.assertEqual(len(store.list(ReconciliationRecord)), 2)
+
     def test_phase67_canceled_shuffle_receipt_remains_unresolved(self) -> None:
         store, service, execution, target_scope = (
             self._build_phase67_failed_shuffle_context()

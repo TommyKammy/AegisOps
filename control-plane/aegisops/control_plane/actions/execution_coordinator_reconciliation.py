@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 import logging
@@ -173,6 +173,7 @@ class ActionExecutionReconciliationCoordinator:
         execution_run_id: str | None = None
         last_seen_at = action_request.requested_at
         persist_normalized_receipt = False
+        normalized_receipt: Mapping[str, object] | None = None
 
         if latest_execution is None:
             ingest_disposition = "missing"
@@ -395,6 +396,36 @@ class ActionExecutionReconciliationCoordinator:
                     )
                 authoritative_execution = stored_execution
 
+            candidate_normalized_receipt: Mapping[str, object] | None = None
+            if (
+                authoritative_execution is not None
+                and latest_execution is not None
+                and require_binding_identifiers
+            ):
+                candidate_normalized_receipt = self._normalized_shuffle_receipt(
+                    latest_execution
+                )
+                normalized_receipt_sha256 = candidate_normalized_receipt["sha256"]
+                if not isinstance(normalized_receipt_sha256, str):
+                    raise RuntimeError(
+                        "normalized Shuffle receipt must include a SHA-256 digest"
+                    )
+                current_normalized_receipt = (
+                    authoritative_execution.provenance.get("normalized_receipt")
+                )
+                existing_reconciliation = self._find_receipt_reconciliation(
+                    authoritative_execution.action_execution_id,
+                    latest_execution["execution_run_id"],
+                    normalized_receipt_sha256,
+                    allow_unhashed_match=(
+                        isinstance(current_normalized_receipt, Mapping)
+                        and current_normalized_receipt.get("sha256")
+                        == normalized_receipt_sha256
+                    ),
+                )
+                if existing_reconciliation is not None:
+                    return existing_reconciliation
+
             if (
                 authoritative_execution is not None
                 and latest_execution is not None
@@ -405,23 +436,11 @@ class ActionExecutionReconciliationCoordinator:
             ):
                 updated_provenance = dict(authoritative_execution.provenance)
                 if persist_normalized_receipt:
-                    normalized_receipt = self._normalized_shuffle_receipt(
-                        latest_execution
-                    )
-                    existing_receipt = authoritative_execution.provenance.get(
-                        "normalized_receipt"
-                    )
-                    if (
-                        isinstance(existing_receipt, Mapping)
-                        and existing_receipt.get("sha256")
-                        == normalized_receipt["sha256"]
-                    ):
-                        existing_reconciliation = self._find_receipt_reconciliation(
-                            authoritative_execution.action_execution_id,
-                            latest_execution["execution_run_id"],
+                    normalized_receipt = candidate_normalized_receipt
+                    if normalized_receipt is None:
+                        raise RuntimeError(
+                            "normalized Shuffle receipt is unavailable for persistence"
                         )
-                        if existing_reconciliation is not None:
-                            return existing_reconciliation
                     updated_provenance["normalized_receipt"] = normalized_receipt
                 reconciled_lifecycle_state = self._action_execution_lifecycle_from_status(
                     latest_execution.get("status"),
@@ -438,7 +457,7 @@ class ActionExecutionReconciliationCoordinator:
                             provenance=updated_provenance,
                             lifecycle_state=reconciled_lifecycle_state,
                         ),
-                        transitioned_at=latest_execution["observed_at"],
+                        transitioned_at=datetime.now(timezone.utc),
                     )
             downstream_binding: Mapping[str, object] | None = None
             if authoritative_execution is not None:
@@ -467,6 +486,10 @@ class ActionExecutionReconciliationCoordinator:
                         subject_linkage["expected_execution_receipt_ids"] = (
                             downstream_binding["expected_execution_receipt_id"],
                         )
+            if normalized_receipt is not None:
+                subject_linkage["normalized_receipt_sha256"] = (
+                    normalized_receipt["sha256"],
+                )
 
             if (
                 authoritative_execution is not None
@@ -615,6 +638,9 @@ class ActionExecutionReconciliationCoordinator:
         self,
         action_execution_id: str,
         execution_run_id: str,
+        normalized_receipt_sha256: str,
+        *,
+        allow_unhashed_match: bool,
     ) -> ReconciliationRecord | None:
         for reconciliation in reversed(
             self._service._store.list(ReconciliationRecord)
@@ -623,10 +649,24 @@ class ActionExecutionReconciliationCoordinator:
                 "action_execution_ids",
                 (),
             )
+            linked_receipt_sha256 = reconciliation.subject_linkage.get(
+                "normalized_receipt_sha256",
+                (),
+            )
             if (
                 isinstance(linked_action_execution_ids, tuple)
                 and action_execution_id in linked_action_execution_ids
                 and reconciliation.execution_run_id == execution_run_id
+                and (
+                    (
+                        isinstance(linked_receipt_sha256, tuple)
+                        and normalized_receipt_sha256 in linked_receipt_sha256
+                    )
+                    or (
+                        allow_unhashed_match
+                        and linked_receipt_sha256 == ()
+                    )
+                )
             ):
                 return reconciliation
         return None

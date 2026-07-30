@@ -120,7 +120,9 @@ require_fixed \
   "${repo_root}/control-plane/tests/test_phase67_3_real_shuffle_transport.py" \
   'self.assertNotIn("authorization", receipt)'
 require_fixed "${reconciliation}" '"normalized_receipt"'
+require_fixed "${reconciliation}" '"normalized_receipt_sha256"'
 require_fixed "${reconciliation}" '_find_receipt_reconciliation'
+require_fixed "${reconciliation}" 'allow_unhashed_match'
 require_fixed "${reconciliation}" '"downstream execution failed and requires operator review"'
 require_fixed "${reconciliation}" '"requested_scope"'
 require_fixed "${reconciliation}" 'not isinstance(value, bool)'
@@ -144,6 +146,15 @@ require_fixed "${delegation}" 'getattr(exc, "outcome_unknown", False)'
 require_fixed \
   "${delegation}" \
   'finalization_transitioned_at = datetime.now(timezone.utc)'
+require_fixed \
+  "${delegation}" \
+  'claim_transitioned_at = datetime.now(timezone.utc)'
+require_fixed \
+  "${repo_root}/control-plane/tests/test_service_persistence_action_reconciliation_delegation.py" \
+  'def test_service_uses_service_time_for_future_dated_dispatch_transitions('
+require_fixed \
+  "${repo_root}/control-plane/tests/test_service_persistence_action_reconciliation_reconciliation.py" \
+  'def test_phase67_replayed_prior_receipt_does_not_roll_back_latest_status('
 require_fixed "${compose}" 'AEGISOPS_CONTROL_PLANE_SHUFFLE_API_KEY_FILE: /run/secrets/shuffle-api-key'
 require_fixed "${compose}" 'NGINX_ENVSUBST_FILTER: ^AEGISOPS_LAB_CONTROL_PLANE_IPV4$'
 require_fixed "${compose}" './config/control-plane.conf:/etc/nginx/templates/control-plane.conf.template:ro'

@@ -11,6 +11,7 @@ if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
 import _service_persistence_support as support
+from aegisops.control_plane.actions import execution_coordinator_delegation
 from _service_persistence_support import (
     ActionExecutionRecord,
     ActionRequestRecord,
@@ -419,6 +420,93 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
         self.assertGreater(
             execution_transitions[1].transitioned_at,
             execution_transitions[0].transitioned_at,
+        )
+
+    def test_service_uses_service_time_for_future_dated_dispatch_transitions(
+        self,
+    ) -> None:
+        store, service, approved_payload, delegated_at = (
+            self._build_approved_shuffle_delegation_context(
+                approval_decision_id="approval-future-dispatch-001",
+                action_request_id="action-request-future-dispatch-001",
+                idempotency_key="idempotency-future-dispatch-001",
+            )
+        )
+        service_now = delegated_at - timedelta(minutes=1)
+
+        class ServiceDatetime(datetime):
+            @classmethod
+            def now(cls, tz: object = None) -> datetime:
+                return service_now if tz is not None else service_now.replace(tzinfo=None)
+
+        with mock.patch.object(
+            execution_coordinator_delegation,
+            "datetime",
+            ServiceDatetime,
+        ):
+            execution = service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-future-dispatch-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        execution_transitions = tuple(
+            transition
+            for transition in store.list(support.LifecycleTransitionRecord)
+            if transition.subject_record_family == "action_execution"
+            and transition.subject_record_id == execution.action_execution_id
+        )
+        self.assertEqual(execution.delegated_at, delegated_at)
+        self.assertEqual(
+            {transition.transitioned_at for transition in execution_transitions},
+            {service_now},
+        )
+
+        downstream_binding = execution.provenance["downstream_binding"]
+        receipt_observed_at = service_now + timedelta(seconds=30)
+        reconciliation = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": execution.execution_surface_type,
+                    "execution_surface_id": execution.execution_surface_id,
+                    "idempotency_key": execution.idempotency_key,
+                    "approval_decision_id": execution.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding[
+                        "workflow_version_id"
+                    ],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
+                    "external_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
+                    "requested_scope": execution.target_scope,
+                    "idempotency_execution_count": 1,
+                    "observed_at": receipt_observed_at,
+                    "status": "success",
+                },
+            ),
+            compared_at=receipt_observed_at,
+            stale_after=delegated_at + timedelta(minutes=10),
+        )
+
+        self.assertEqual(reconciliation.ingest_disposition, "matched")
+        self.assertEqual(
+            service.get_record(
+                ActionExecutionRecord,
+                execution.action_execution_id,
+            ).lifecycle_state,
+            "succeeded",
         )
 
     def test_service_serializes_action_execution_idempotency_claim(

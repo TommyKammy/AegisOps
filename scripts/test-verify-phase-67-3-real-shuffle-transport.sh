@@ -163,6 +163,42 @@ assert_fails_with \
   "${future_recovery_timestamp}" \
   'finalization_transitioned_at = datetime.now(timezone.utc)'
 
+future_initial_dispatch_timestamp="${workdir}/future-initial-dispatch-timestamp"
+copy_fixture "${future_initial_dispatch_timestamp}"
+sed -i.bak \
+  's/claim_transitioned_at = datetime.now(timezone.utc)/claim_transitioned_at = delegated_at/' \
+  "${future_initial_dispatch_timestamp}/control-plane/aegisops/control_plane/actions/execution_coordinator_delegation.py"
+assert_fails_with \
+  "${future_initial_dispatch_timestamp}" \
+  'claim_transitioned_at = datetime.now(timezone.utc)'
+
+without_receipt_history_identity="${workdir}/without-receipt-history-identity"
+copy_fixture "${without_receipt_history_identity}"
+sed -i.bak \
+  's/normalized_receipt_sha256/normalized_receipt_digest/g' \
+  "${without_receipt_history_identity}/control-plane/aegisops/control_plane/actions/execution_coordinator_reconciliation.py"
+assert_fails_with \
+  "${without_receipt_history_identity}" \
+  '"normalized_receipt_sha256"'
+
+without_future_dispatch_regression="${workdir}/without-future-dispatch-regression"
+copy_fixture "${without_future_dispatch_regression}"
+sed -i.bak \
+  's/test_service_uses_service_time_for_future_dated_dispatch_transitions/test_service_uses_caller_time_for_future_dated_dispatch_transitions/' \
+  "${without_future_dispatch_regression}/control-plane/tests/test_service_persistence_action_reconciliation_delegation.py"
+assert_fails_with \
+  "${without_future_dispatch_regression}" \
+  'def test_service_uses_service_time_for_future_dated_dispatch_transitions('
+
+without_receipt_replay_regression="${workdir}/without-receipt-replay-regression"
+copy_fixture "${without_receipt_replay_regression}"
+sed -i.bak \
+  's/test_phase67_replayed_prior_receipt_does_not_roll_back_latest_status/test_phase67_replayed_prior_receipt_can_roll_back_latest_status/' \
+  "${without_receipt_replay_regression}/control-plane/tests/test_service_persistence_action_reconciliation_reconciliation.py"
+assert_fails_with \
+  "${without_receipt_replay_regression}" \
+  'def test_phase67_replayed_prior_receipt_does_not_roll_back_latest_status('
+
 without_registration_recovery="${workdir}/without-registration-recovery"
 copy_fixture "${without_registration_recovery}"
 sed -i.bak 's|${api_origin}/api/v1/getsettings|${api_origin}/api/v1/generateapikey|' \

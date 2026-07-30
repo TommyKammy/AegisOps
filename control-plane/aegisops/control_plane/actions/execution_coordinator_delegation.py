@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import json
 from typing import Mapping
 
@@ -196,6 +196,7 @@ class ApprovedActionDelegationCoordinator:
                     delegation_label=delegation_label,
                 )
                 delegation_id = self._service._next_identifier("delegation")
+                claim_transitioned_at = datetime.now(timezone.utc)
                 predispatch_execution = self._service.persist_record(
                     ActionExecutionRecord(
                         action_execution_id=self._service._next_identifier(
@@ -221,7 +222,7 @@ class ApprovedActionDelegationCoordinator:
                         },
                         lifecycle_state="dispatching",
                     ),
-                    transitioned_at=delegated_at,
+                    transitioned_at=claim_transitioned_at,
                 )
         receipt = None
         execution_run_id: str
@@ -280,9 +281,7 @@ class ApprovedActionDelegationCoordinator:
                 )
             raise
 
-        finalization_transitioned_at = delegated_at
-        if recover_interrupted_claim:
-            finalization_transitioned_at = datetime.now(timezone.utc)
+        finalization_transitioned_at = datetime.now(timezone.utc)
         try:
             with self._service._store.transaction():
                 stored_execution = self._service._store.get(
@@ -307,11 +306,7 @@ class ApprovedActionDelegationCoordinator:
                             provenance=finalized_provenance,
                             lifecycle_state="queued",
                         ),
-                        transitioned_at=max(
-                            finalization_transitioned_at,
-                            predispatch_execution.delegated_at
-                            + timedelta(microseconds=1),
-                        ),
+                        transitioned_at=finalization_transitioned_at,
                     )
         except Exception as exc:
             try:
@@ -724,10 +719,7 @@ class ApprovedActionDelegationCoordinator:
                 dispatch_failure["observed_execution_surface_id"] = observed_surface_id
 
         failure_provenance["dispatch_failure"] = dispatch_failure
-        failure_at = max(
-            datetime.now(timezone.utc),
-            execution.delegated_at + timedelta(microseconds=1),
-        )
+        failure_at = datetime.now(timezone.utc)
         with self._service._store.transaction():
             current_execution = self._service._store.get(
                 ActionExecutionRecord,
