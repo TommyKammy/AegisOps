@@ -265,6 +265,7 @@ class ActionExecutionReconciliationCoordinator:
                     observed_expected_execution_receipt_id=(
                         observed_expected_execution_receipt_id
                     ),
+                    observed_external_receipt_id=observed_external_receipt_id,
                     observed_requested_scope=latest_execution.get(
                         "requested_scope"
                     ),
@@ -654,6 +655,7 @@ class ActionExecutionReconciliationCoordinator:
         observed_workflow_version_id: object,
         observed_correlation_id: object,
         observed_expected_execution_receipt_id: object,
+        observed_external_receipt_id: object,
         observed_requested_scope: object,
         observed_idempotency_execution_count: object,
         action_type: object,
@@ -680,6 +682,16 @@ class ActionExecutionReconciliationCoordinator:
                 continue
             if observed_value != downstream_binding[field_name]:
                 return True
+        expected_execution_receipt_id = downstream_binding.get(
+            "expected_execution_receipt_id"
+        )
+        if (
+            authoritative_execution.provenance.get("adapter")
+            == "shuffle_real_http"
+            and isinstance(expected_execution_receipt_id, str)
+            and observed_external_receipt_id != expected_execution_receipt_id
+        ):
+            return True
         expected_requested_scope = downstream_binding.get("requested_scope")
         if (
             isinstance(expected_requested_scope, Mapping)

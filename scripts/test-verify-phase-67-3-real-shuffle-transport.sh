@@ -110,6 +110,41 @@ assert_fails_with \
   "${bootstrap_password_argv}" \
   '--data-binary @-'
 
+without_external_receipt_binding="${workdir}/without-external-receipt-binding"
+copy_fixture "${without_external_receipt_binding}"
+sed -i.bak \
+  's/observed_external_receipt_id != expected_execution_receipt_id/observed_external_receipt_id == expected_execution_receipt_id/' \
+  "${without_external_receipt_binding}/control-plane/aegisops/control_plane/actions/execution_coordinator_reconciliation.py"
+assert_fails_with \
+  "${without_external_receipt_binding}" \
+  'observed_external_receipt_id != expected_execution_receipt_id'
+
+future_recovery_timestamp="${workdir}/future-recovery-timestamp"
+copy_fixture "${future_recovery_timestamp}"
+sed -i.bak \
+  's/finalization_transitioned_at = datetime.now(timezone.utc)/finalization_transitioned_at = delegated_at/' \
+  "${future_recovery_timestamp}/control-plane/aegisops/control_plane/actions/execution_coordinator_delegation.py"
+assert_fails_with \
+  "${future_recovery_timestamp}" \
+  'finalization_transitioned_at = datetime.now(timezone.utc)'
+
+without_registration_recovery="${workdir}/without-registration-recovery"
+copy_fixture "${without_registration_recovery}"
+sed -i.bak 's|${api_origin}/api/v1/getsettings|${api_origin}/api/v1/generateapikey|' \
+  "${without_registration_recovery}/control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh"
+assert_fails_with \
+  "${without_registration_recovery}" \
+  '${api_origin}/api/v1/getsettings'
+
+without_secret_remount="${workdir}/without-secret-remount"
+copy_fixture "${without_secret_remount}"
+sed -i.bak \
+  's/up --detach --wait --force-recreate control-plane/up --detach --wait control-plane/' \
+  "${without_secret_remount}/control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh"
+assert_fails_with \
+  "${without_secret_remount}" \
+  'up --detach --wait --force-recreate control-plane'
+
 without_terminal_state="${workdir}/without-terminal-state"
 copy_fixture "${without_terminal_state}"
 sed -i.bak \

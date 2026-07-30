@@ -129,6 +129,9 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
                 "expected_execution_receipt_id": downstream_binding[
                     "expected_execution_receipt_id"
                 ],
+                "external_receipt_id": downstream_binding[
+                    "expected_execution_receipt_id"
+                ],
                 "requested_scope": target_scope,
                 "idempotency_execution_count": 1,
                 "observed_at": observed_at,
@@ -206,6 +209,9 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
             "expected_execution_receipt_id": downstream_binding[
                 "expected_execution_receipt_id"
             ],
+            "external_receipt_id": downstream_binding[
+                "expected_execution_receipt_id"
+            ],
             "requested_scope": target_scope,
             "observed_at": observed_at,
             "status": "success",
@@ -269,11 +275,54 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
                         ),
                     )
 
+        receipt["idempotency_execution_count"] = 1
+        receipt["requested_scope"] = target_scope
+        external_receipt_mismatches = []
+        for index, external_receipt_id in enumerate(
+            (None, "different-external-receipt"),
+            start=1,
+        ):
+            if external_receipt_id is None:
+                receipt.pop("external_receipt_id", None)
+            else:
+                receipt["external_receipt_id"] = external_receipt_id
+            external_receipt_mismatches.append(
+                service.reconcile_action_execution(
+                    action_request_id=execution.action_request_id,
+                    execution_surface_type="automation_substrate",
+                    execution_surface_id="shuffle",
+                    observed_executions=(receipt,),
+                    compared_at=datetime(
+                        2026,
+                        7,
+                        29,
+                        1,
+                        15 + index,
+                        tzinfo=timezone.utc,
+                    ),
+                    stale_after=datetime(
+                        2026,
+                        7,
+                        29,
+                        1,
+                        30,
+                        tzinfo=timezone.utc,
+                    ),
+                )
+            )
+
         self.assertEqual(missing_count.ingest_disposition, "mismatch")
         self.assertEqual(mismatched_scope.ingest_disposition, "mismatch")
         self.assertEqual(type_drifted_scope.ingest_disposition, "mismatch")
+        self.assertEqual(
+            [
+                reconciliation.ingest_disposition
+                for reconciliation in external_receipt_mismatches
+            ],
+            ["mismatch", "mismatch"],
+        )
         self.assertNotIn("normalized_receipt", execution.provenance)
-        self.assertEqual(len(store.list(ReconciliationRecord)), 3)
+        self.assertEqual(len(store.list(ReconciliationRecord)), 5)
 
     def test_service_reconcile_action_execution_rejects_non_approved_requests(self) -> None:
         store, _ = make_store()
@@ -603,6 +652,9 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
                 "workflow_version_id": downstream_binding["workflow_version_id"],
                 "correlation_id": downstream_binding["correlation_id"],
                 "expected_execution_receipt_id": downstream_binding[
+                    "expected_execution_receipt_id"
+                ],
+                "external_receipt_id": downstream_binding[
                     "expected_execution_receipt_id"
                 ],
                 "requested_scope": downstream_binding["requested_scope"],

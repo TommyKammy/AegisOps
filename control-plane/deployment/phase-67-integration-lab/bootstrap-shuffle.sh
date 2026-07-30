@@ -3,7 +3,15 @@
 set -euo pipefail
 umask 077
 trap 'rc=$?; echo "BLOCKED: Shuffle bootstrap failed at line ${LINENO} (exit ${rc})" >&2' ERR
-trap '[[ -z "${auth_header_path:-}" ]] || rm -f -- "${auth_header_path}"' EXIT
+trap '
+  for path in \
+    "${auth_header_path:-}" \
+    "${login_response_path:-}" \
+    "${login_cookie_header_path:-}"
+  do
+    [[ -z "${path}" ]] || rm -f -- "${path}"
+  done
+' EXIT
 
 LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lab-common.sh
@@ -22,8 +30,7 @@ api_key_path="${AEGISOPS_LAB_SECRET_DIR}/shuffle-api-key"
 admin_password_path="${AEGISOPS_LAB_SECRET_DIR}/shuffle-admin-password"
 workflow_path="${LAB_DIR}/shuffle/harmless-local-log-workflow.json"
 api_origin="https://shuffle.localhost:${AEGISOPS_LAB_PROXY_PORT}"
-curl_common=(
-  --fail-with-body
+curl_transport_common=(
   --silent
   --show-error
   --cacert "${AEGISOPS_LAB_PROXY_CERT_DIR}/lab.crt"
@@ -31,24 +38,71 @@ curl_common=(
   --connect-timeout 5
   --max-time 30
 )
+curl_common=(
+  --fail-with-body
+  "${curl_transport_common[@]}"
+)
 
 api_key="$(<"${api_key_path}")"
+api_key_replaced=false
 if [[ "${api_key}" == bootstrap-pending-* ]]; then
-  registration_response="$(
+  login_response_path="$(mktemp "${api_key_path}.login.XXXXXX")"
+  login_http_status="$(
     jq -cn \
       --arg username "phase67-admin@example.invalid" \
       --rawfile password "${admin_password_path}" \
       '{username:$username,password:($password | rtrimstr("\n"))}' |
-    curl "${curl_common[@]}" \
+    curl "${curl_transport_common[@]}" \
+      --output "${login_response_path}" \
+      --write-out '%{http_code}' \
       -H 'Content-Type: application/json' \
       --data-binary @- \
-      "${api_origin}/api/v1/users/register"
+      "${api_origin}/api/v1/login"
   )"
-  api_key="$(jq -er '.apikey | select(type == "string" and length > 20)' <<<"${registration_response}")"
+  if [[ "${login_http_status}" == "200" ]] \
+    && jq -e '.success == true' "${login_response_path}" >/dev/null; then
+    login_cookie_header_path="$(mktemp "${api_key_path}.cookie-header.XXXXXX")"
+    jq -er '
+      [
+        .cookies[]
+        | select(
+            (.key == "session_token" or .key == "__session")
+            and (.value | type == "string")
+            and (.value | test("^[0-9a-fA-F-]{36}$"))
+          )
+        | {key, value}
+      ] as $cookies
+      | select(($cookies | length) == 2)
+      | select(($cookies | map(.key) | sort) == ["__session", "session_token"])
+      | "Cookie: \($cookies | map("\(.key)=\(.value)") | join("; "))"
+    ' "${login_response_path}" >"${login_cookie_header_path}"
+    chmod 600 "${login_cookie_header_path}"
+    api_key_response="$(
+      curl "${curl_common[@]}" \
+        -H "@${login_cookie_header_path}" \
+        "${api_origin}/api/v1/getsettings"
+    )"
+  elif [[ "${login_http_status}" == "403" ]] \
+    && jq -e '.success == false' "${login_response_path}" >/dev/null; then
+    api_key_response="$(
+      jq -cn \
+        --arg username "phase67-admin@example.invalid" \
+        --rawfile password "${admin_password_path}" \
+        '{username:$username,password:($password | rtrimstr("\n"))}' |
+      curl "${curl_common[@]}" \
+        -H 'Content-Type: application/json' \
+        --data-binary @- \
+        "${api_origin}/api/v1/users/register"
+    )"
+  else
+    fail "unexpected Shuffle administrator login response (${login_http_status})"
+  fi
+  api_key="$(jq -er '.apikey | select(type == "string" and length > 20)' <<<"${api_key_response}")"
   api_key_staging="$(mktemp "${api_key_path}.tmp.XXXXXX")"
   printf '%s\n' "${api_key}" >"${api_key_staging}"
   chmod 600 "${api_key_staging}"
   mv "${api_key_staging}" "${api_key_path}"
+  api_key_replaced=true
 fi
 
 auth_header_path="$(mktemp "${api_key_path}.header.XXXXXX")"
@@ -148,6 +202,10 @@ jq -n \
   }' >"${bootstrap_evidence}"
 chmod 600 "${bootstrap_evidence}"
 
+if [[ "${api_key_replaced}" == true ]]; then
+  compose_scope shuffle \
+    up --detach --wait --force-recreate control-plane
+fi
 "${LAB_DIR}/up.sh" shuffle
 echo "Shuffle workflow imported and real_http transport enabled."
 echo "workflow_api_id=${workflow_id}"

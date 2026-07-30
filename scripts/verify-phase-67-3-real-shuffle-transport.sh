@@ -103,9 +103,15 @@ require_fixed "${reconciliation}" '"requested_scope"'
 require_fixed "${reconciliation}" 'not isinstance(value, bool)'
 require_fixed "${reconciliation}" 'status.strip().lower()'
 require_fixed "${reconciliation}" 'and not _json_values_equal('
+require_fixed \
+  "${reconciliation}" \
+  'observed_external_receipt_id != expected_execution_receipt_id'
 require_fixed "${delegation}" '"recover_interrupted_dispatch"'
 require_fixed "${delegation}" ').astimezone(timezone.utc)'
 require_fixed "${delegation}" 'getattr(exc, "outcome_unknown", False)'
+require_fixed \
+  "${delegation}" \
+  'finalization_transitioned_at = datetime.now(timezone.utc)'
 require_fixed "${compose}" 'AEGISOPS_CONTROL_PLANE_SHUFFLE_API_KEY_FILE: /run/secrets/shuffle-api-key'
 require_fixed "${compose}" 'NGINX_ENVSUBST_FILTER: ^AEGISOPS_LAB_CONTROL_PLANE_IPV4$'
 require_fixed "${compose}" './config/control-plane.conf:/etc/nginx/templates/control-plane.conf.template:ro'
@@ -131,6 +137,12 @@ require_fixed "${bootstrap}" '-H "@${auth_header_path}"'
 require_fixed "${bootstrap}" 'unset api_key'
 require_fixed "${bootstrap}" '--rawfile password "${admin_password_path}"'
 require_fixed "${bootstrap}" '--data-binary @-'
+require_fixed "${bootstrap}" '${api_origin}/api/v1/login'
+require_fixed "${bootstrap}" '${api_origin}/api/v1/getsettings'
+require_fixed "${bootstrap}" '-H "@${login_cookie_header_path}"'
+require_fixed \
+  "${bootstrap}" \
+  'up --detach --wait --force-recreate control-plane'
 require_fixed \
   "${lab}/shuffle/run_real_trial.py" \
   'exc.category != "missing_receipt" and not exc.transient'

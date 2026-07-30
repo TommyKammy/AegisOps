@@ -966,12 +966,14 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
             autospec=True,
             side_effect=capture_recovery,
         ) as recover_interrupted_dispatch:
+            recovery_started_at = datetime.now(timezone.utc)
+            future_retry_at = recovery_started_at + timedelta(days=1)
             recovered = service.delegate_approved_action_to_shuffle(
                 action_request_id=(
                     "action-request-routine-finalization-failure-001"
                 ),
                 approved_payload=approved_payload,
-                delegated_at=expires_at + timedelta(minutes=1),
+                delegated_at=future_retry_at,
                 delegation_issuer="control-plane-service",
             )
 
@@ -985,6 +987,24 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(
             recover_interrupted_dispatch.call_args.kwargs["delegated_at"],
             datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
+        )
+        queued_transition = max(
+            (
+                transition
+                for transition in store.list(support.LifecycleTransitionRecord)
+                if transition.subject_record_family == "action_execution"
+                and transition.subject_record_id == recovered.action_execution_id
+                and transition.lifecycle_state == "queued"
+            ),
+            key=lambda transition: transition.transitioned_at,
+        )
+        self.assertGreaterEqual(
+            queued_transition.transitioned_at,
+            recovery_started_at,
+        )
+        self.assertLess(
+            queued_transition.transitioned_at,
+            future_retry_at,
         )
 
     def test_service_keeps_ambiguous_shuffle_post_failure_recoverable(

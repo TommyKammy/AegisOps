@@ -863,6 +863,13 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertIn("unset api_key", bootstrap_source)
         self.assertIn('--rawfile password "${admin_password_path}"', bootstrap_source)
         self.assertIn("--data-binary @-", bootstrap_source)
+        self.assertIn("${api_origin}/api/v1/login", bootstrap_source)
+        self.assertIn("${api_origin}/api/v1/getsettings", bootstrap_source)
+        self.assertIn('-H "@${login_cookie_header_path}"', bootstrap_source)
+        self.assertIn(
+            "up --detach --wait --force-recreate control-plane",
+            bootstrap_source,
+        )
         self.assertNotIn("--arg password", bootstrap_source)
         self.assertNotIn('--data-binary "${registration_payload}"', bootstrap_source)
 

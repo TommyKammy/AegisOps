@@ -280,6 +280,9 @@ class ApprovedActionDelegationCoordinator:
                 )
             raise
 
+        finalization_transitioned_at = delegated_at
+        if recover_interrupted_claim:
+            finalization_transitioned_at = datetime.now(timezone.utc)
         try:
             with self._service._store.transaction():
                 stored_execution = self._service._store.get(
@@ -305,7 +308,7 @@ class ApprovedActionDelegationCoordinator:
                             lifecycle_state="queued",
                         ),
                         transitioned_at=max(
-                            delegated_at,
+                            finalization_transitioned_at,
                             predispatch_execution.delegated_at
                             + timedelta(microseconds=1),
                         ),
