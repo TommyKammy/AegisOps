@@ -68,6 +68,32 @@ assert_fails_with \
   "${without_redirect_guard}" \
   'class _RejectRedirectHandler'
 
+without_http_framing_recovery="${workdir}/without-http-framing-recovery"
+copy_fixture "${without_http_framing_recovery}"
+sed -i.bak 's/except http_client.HTTPException as exc:/except RuntimeError as exc:/' \
+  "${without_http_framing_recovery}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_http_framing_recovery}" \
+  'except http_client.HTTPException as exc:'
+
+without_execution_id_normalization="${workdir}/without-execution-id-normalization"
+copy_fixture "${without_execution_id_normalization}"
+sed -i.bak \
+  's/observed_execution_id = _require_real_execution_id(/observed_execution_id = str(/' \
+  "${without_execution_id_normalization}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_execution_id_normalization}" \
+  'observed_execution_id = _require_real_execution_id('
+
+without_lab_profile_boundary="${workdir}/without-lab-profile-boundary"
+copy_fixture "${without_lab_profile_boundary}"
+sed -i.bak \
+  's/config.deployment_profile != "phase67-integration-lab"/config.deployment_profile != "single-customer"/' \
+  "${without_lab_profile_boundary}/control-plane/aegisops/control_plane/service_composition.py"
+assert_fails_with \
+  "${without_lab_profile_boundary}" \
+  'config.deployment_profile != "phase67-integration-lab"'
+
 without_deterministic_recovery="${workdir}/without-deterministic-recovery"
 copy_fixture "${without_deterministic_recovery}"
 sed -i.bak 's/def recover_interrupted_dispatch(/def removed_recovery(/' \

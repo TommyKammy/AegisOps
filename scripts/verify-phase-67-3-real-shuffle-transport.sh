@@ -52,6 +52,7 @@ require_executable "${lab}/test-shuffle-execution.sh"
 adapter="${repo_root}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
 deterministic_shuffle="${repo_root}/control-plane/aegisops/control_plane/adapters/shuffle.py"
 isolated_executor="${repo_root}/control-plane/aegisops/control_plane/adapters/executor.py"
+service_composition="${repo_root}/control-plane/aegisops/control_plane/service_composition.py"
 reconciliation="${repo_root}/control-plane/aegisops/control_plane/actions/execution_coordinator_reconciliation.py"
 delegation="${repo_root}/control-plane/aegisops/control_plane/actions/execution_coordinator_delegation.py"
 compose="${lab}/docker-compose.yml"
@@ -71,6 +72,8 @@ require_fixed "${adapter}" 'transient=True'
 require_fixed "${adapter}" 'class _RejectRedirectHandler'
 require_fixed "${adapter}" 'request.build_opener('
 require_fixed "${adapter}" '"redirect_rejected"'
+require_fixed "${adapter}" 'except http_client.HTTPException as exc:'
+require_fixed "${adapter}" '"invalid_http_response"'
 require_fixed "${adapter}" '"connection_not_established" if retryable'
 require_fixed "${adapter}" 'startswith(("shuffle-run-", "shuffle-receipt-"))'
 require_fixed "${adapter}" 'Shuffle execution id must be a UUID'
@@ -84,8 +87,12 @@ require_fixed "${adapter}" 'replace("+00:00", "Z")'
 require_fixed "${adapter}" '"execution_argument_mismatch"'
 require_fixed "${adapter}" '"malformed_reviewed_action_result"'
 require_fixed "${adapter}" '_REVIEWED_ACTION_NAME = "repeat_back_to_me"'
+require_fixed "${adapter}" 'observed_execution_id = _require_real_execution_id('
 require_fixed "${deterministic_shuffle}" 'def recover_interrupted_dispatch('
 require_fixed "${isolated_executor}" 'def recover_interrupted_dispatch('
+require_fixed \
+  "${service_composition}" \
+  'config.deployment_profile != "phase67-integration-lab"'
 require_fixed \
   "${repo_root}/control-plane/tests/test_phase67_3_real_shuffle_transport.py" \
   'self.assertNotIn("authorization", receipt)'

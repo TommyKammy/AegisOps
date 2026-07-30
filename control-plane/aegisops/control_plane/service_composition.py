@@ -140,6 +140,13 @@ def build_control_plane_service_composition(
     store: Any | None,
     dependencies: ControlPlaneServiceCompositionDependencies,
 ) -> ControlPlaneServiceComposition:
+    if (
+        config.shuffle_transport_mode == "real_http"
+        and config.deployment_profile != "phase67-integration-lab"
+    ):
+        raise ValueError(
+            "real Shuffle transport is restricted to the Phase 67 integration lab"
+        )
     resolved_store = (
         store if store is not None else PostgresControlPlaneStore(config.postgres_dsn)
     )

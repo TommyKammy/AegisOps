@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from http import client as http_client
 import json
 import pathlib
 import subprocess
@@ -25,6 +26,9 @@ from aegisops.control_plane.adapters.shuffle_real import (
     _RejectRedirectHandler,
 )
 from aegisops.control_plane.config import RuntimeConfig
+from aegisops.control_plane.service_composition import (
+    build_control_plane_service_composition,
+)
 
 
 API_WORKFLOW_ID = "67f30000-0000-4000-8000-000000000001"
@@ -500,13 +504,42 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertFalse(raised.exception.transient)
         self.assertTrue(raised.exception.outcome_unknown)
 
+        framing_response = mock.MagicMock()
+        opened_response = framing_response.__enter__.return_value
+        opened_response.headers.get_content_type.return_value = "application/json"
+        opened_response.read.side_effect = http_client.IncompleteRead(b"{", 1)
+        framing_opener = mock.Mock()
+        framing_opener.open.return_value = framing_response
+        with (
+            mock.patch(
+                "aegisops.control_plane.adapters.shuffle_real.ssl.create_default_context",
+                return_value=object(),
+            ),
+            mock.patch(
+                "aegisops.control_plane.adapters.shuffle_real.request.build_opener",
+                return_value=framing_opener,
+            ),
+        ):
+            with self.assertRaises(ShuffleTransportFailure) as raised:
+                transport.request_json(
+                    method="POST",
+                    url="https://proxy:8443/shuffle-api/api/v1/workflows/id/execute",
+                    api_key="fixture-api-key",
+                    payload={"fixture": True},
+                    timeout_seconds=2,
+                )
+        self.assertEqual(raised.exception.category, "invalid_http_response")
+        self.assertFalse(raised.exception.retryable)
+        self.assertTrue(raised.exception.transient)
+        self.assertTrue(raised.exception.outcome_unknown)
+
     def test_authenticated_poll_normalizes_bound_receipt(self) -> None:
         argument = _execution_argument()
         transport = _QueueTransport(
             {
                 "executions": [
                     {
-                        "execution_id": REAL_EXECUTION_ID,
+                        "execution_id": REAL_EXECUTION_ID.upper(),
                         "execution_argument": argument,
                         "status": "FINISHED",
                         "results": [_reviewed_action_result()],
@@ -856,6 +889,25 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertEqual(config.shuffle_transport_mode, "real_http")
         self.assertEqual(config.shuffle_api_key, "real-file-backed-key")
         self.assertNotIn("real-file-backed-key", repr(config))
+
+    def test_real_transport_is_restricted_to_phase67_lab_composition(
+        self,
+    ) -> None:
+        config = RuntimeConfig(
+            shuffle_transport_mode="real_http",
+            deployment_profile="single-customer",
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "restricted to the Phase 67 integration lab",
+        ):
+            build_control_plane_service_composition(
+                service=object(),
+                config=config,
+                store=object(),
+                dependencies=mock.Mock(),
+            )
 
     def test_evidence_validator_rejects_nonterminal_and_noninteger_proof(
         self,

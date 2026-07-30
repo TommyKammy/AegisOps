@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from http import client as http_client
 import json
 import socket
 import ssl
@@ -170,6 +171,12 @@ class UrllibShuffleJsonTransport:
         except TimeoutError as exc:
             raise ShuffleTransportFailure(
                 "timeout",
+                transient=True,
+                outcome_unknown=method == "POST",
+            ) from exc
+        except http_client.HTTPException as exc:
+            raise ShuffleTransportFailure(
+                "invalid_http_response",
                 transient=True,
                 outcome_unknown=method == "POST",
             ) from exc
@@ -557,11 +564,18 @@ class ShuffleReceiptPollingClient:
             raw_executions = response
         if not isinstance(raw_executions, list):
             raise ShuffleTransportFailure("malformed_receipt_collection")
-        matching = [
-            item
-            for item in raw_executions
-            if isinstance(item, Mapping) and item.get("execution_id") == execution_id
-        ]
+        matching = []
+        for item in raw_executions:
+            if not isinstance(item, Mapping):
+                continue
+            try:
+                observed_execution_id = _require_real_execution_id(
+                    item.get("execution_id")
+                )
+            except ValueError:
+                continue
+            if observed_execution_id == execution_id:
+                matching.append(item)
         if len(matching) != 1:
             category = "missing_receipt" if not matching else "duplicate_receipt"
             raise ShuffleTransportFailure(category)
