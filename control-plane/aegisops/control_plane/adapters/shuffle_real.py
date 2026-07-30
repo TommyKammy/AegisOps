@@ -258,9 +258,10 @@ class UrllibShuffleJsonTransport:
             ) from exc
         except error.URLError as exc:
             tls_response_truncated = isinstance(exc.reason, ssl.SSLEOFError)
+            tls_response_failure = isinstance(exc.reason, ssl.SSLError)
             retryable = isinstance(exc.reason, (ConnectionRefusedError, socket.gaierror))
             transient = (
-                tls_response_truncated
+                tls_response_failure
                 or isinstance(
                     exc.reason,
                     (ConnectionError, TimeoutError, socket.gaierror),
@@ -269,6 +270,8 @@ class UrllibShuffleJsonTransport:
             category = (
                 "tls_response_truncated"
                 if tls_response_truncated
+                else "tls_response_failure"
+                if tls_response_failure
                 else "connection_not_established"
                 if retryable
                 else "connection_failure"

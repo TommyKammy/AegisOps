@@ -795,48 +795,64 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertEqual(response, {})
         response_socket.settimeout.assert_called_once()
 
-    def test_http_transport_preserves_wrapped_tls_eof_failure(self) -> None:
+    def test_http_transport_preserves_wrapped_tls_failures(self) -> None:
         transport = UrllibShuffleJsonTransport(ca_file="/fixture/ca.pem")
-        for method, outcome_unknown in (("POST", True), ("GET", False)):
-            with self.subTest(method=method):
-                tls_opener = mock.Mock()
-                tls_opener.open.side_effect = error.URLError(
-                    ssl.SSLEOFError(
-                        8,
-                        "unexpected EOF while reading",
+        for tls_error, expected_category in (
+            (
+                ssl.SSLEOFError(8, "unexpected EOF while reading"),
+                "tls_response_truncated",
+            ),
+            (
+                ssl.SSLSyscallError(5, "TLS syscall failed"),
+                "tls_response_failure",
+            ),
+            (
+                ssl.SSLZeroReturnError(6, "TLS connection closed"),
+                "tls_response_failure",
+            ),
+            (ssl.SSLError(1, "TLS response failed"), "tls_response_failure"),
+        ):
+            for method, outcome_unknown in (("POST", True), ("GET", False)):
+                with self.subTest(tls_error=type(tls_error).__name__, method=method):
+                    tls_opener = mock.Mock()
+                    tls_opener.open.side_effect = error.URLError(tls_error)
+                    with (
+                        mock.patch(
+                            "aegisops.control_plane.adapters.shuffle_real."
+                            "ssl.create_default_context",
+                            return_value=object(),
+                        ),
+                        mock.patch(
+                            "aegisops.control_plane.adapters.shuffle_real."
+                            "request.build_opener",
+                            return_value=tls_opener,
+                        ),
+                    ):
+                        with self.assertRaises(ShuffleTransportFailure) as raised:
+                            transport.request_json(
+                                method=method,
+                                url=(
+                                    "https://proxy:8443/shuffle-api/api/v1/"
+                                    "workflows/id/execute"
+                                ),
+                                api_key="fixture-api-key",
+                                payload=(
+                                    {"fixture": True}
+                                    if method == "POST"
+                                    else None
+                                ),
+                                timeout_seconds=2,
+                            )
+                    self.assertEqual(
+                        raised.exception.category,
+                        expected_category,
                     )
-                )
-                with (
-                    mock.patch(
-                        "aegisops.control_plane.adapters.shuffle_real.ssl.create_default_context",
-                        return_value=object(),
-                    ),
-                    mock.patch(
-                        "aegisops.control_plane.adapters.shuffle_real.request.build_opener",
-                        return_value=tls_opener,
-                    ),
-                ):
-                    with self.assertRaises(ShuffleTransportFailure) as raised:
-                        transport.request_json(
-                            method=method,
-                            url=(
-                                "https://proxy:8443/shuffle-api/api/v1/"
-                                "workflows/id/execute"
-                            ),
-                            api_key="fixture-api-key",
-                            payload={"fixture": True} if method == "POST" else None,
-                            timeout_seconds=2,
-                        )
-                self.assertEqual(
-                    raised.exception.category,
-                    "tls_response_truncated",
-                )
-                self.assertFalse(raised.exception.retryable)
-                self.assertTrue(raised.exception.transient)
-                self.assertEqual(
-                    raised.exception.outcome_unknown,
-                    outcome_unknown,
-                )
+                    self.assertFalse(raised.exception.retryable)
+                    self.assertTrue(raised.exception.transient)
+                    self.assertEqual(
+                        raised.exception.outcome_unknown,
+                        outcome_unknown,
+                    )
 
     def test_authenticated_poll_normalizes_bound_receipt(self) -> None:
         argument = _execution_argument()

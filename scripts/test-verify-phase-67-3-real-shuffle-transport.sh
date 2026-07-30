@@ -101,6 +101,15 @@ assert_fails_with \
   "${without_wrapped_tls_response_recovery}" \
   'isinstance(exc.reason, ssl.SSLEOFError)'
 
+without_wrapped_non_eof_tls_response_recovery="${workdir}/without-wrapped-non-eof-tls-response-recovery"
+copy_fixture "${without_wrapped_non_eof_tls_response_recovery}"
+sed -i.bak \
+  's/isinstance(exc.reason, ssl.SSLError)/isinstance(exc.reason, ssl.SSLEOFError)/' \
+  "${without_wrapped_non_eof_tls_response_recovery}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_wrapped_non_eof_tls_response_recovery}" \
+  'isinstance(exc.reason, ssl.SSLError)'
+
 without_execution_id_normalization="${workdir}/without-execution-id-normalization"
 copy_fixture "${without_execution_id_normalization}"
 sed -i.bak \
