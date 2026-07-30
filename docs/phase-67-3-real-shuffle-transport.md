@@ -18,6 +18,17 @@ reviewed execution field before enabling `real_http`; server-added metadata is
 normalized through an explicit allowlist with neutral execution defaults, while
 unreviewed properties and missing or changed reviewed actions, parameters,
 branches, or variables fail closed.
+Bootstrap first discovers an existing exact reviewed workflow before creating
+one, and persists a newly returned workflow UUID before the follow-up update so
+an interrupted rerun cannot create a duplicate. Every dispatch re-fetches and
+revalidates the complete reviewed workflow immediately before its POST.
+
+The dynamic Shuffle Tools app artifact is also reviewed independently from the
+workflow's `app_version` label. The lab pulls
+`frikky/shuffle@sha256:fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8`
+for `linux/arm64`, verifies its repository digest and platform, and only then
+tags it as `frikky/shuffle:shuffle-tools_1.2.0` for Orborus. Both the runtime tag
+and immutable reference are included in bootstrap and trial evidence.
 
 Dispatch carries the AegisOps action request, approval decision, delegation,
 payload hash, idempotency key, reviewed workflow identity/version, correlation
@@ -25,6 +36,8 @@ ID, expected receipt ID, and requested scope in `execution_argument`. A bounded
 retry is allowed only when the HTTP transport proves that a connection was not
 established. Timeouts, connection resets, and gateway responses are ambiguous
 and therefore fail closed without a second POST.
+The timeout is a total monotonic wall-clock deadline across connection, headers,
+and all response-body reads; each read receives only the remaining budget.
 The durable action-execution record enters `dispatching` before the POST. If the
 process stops after Shuffle accepts the execution but before AegisOps finalizes
 the record, a later request searches Shuffle by the same idempotency key,

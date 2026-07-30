@@ -7,6 +7,14 @@ import re
 import sys
 from uuid import UUID
 
+REVIEWED_SHUFFLE_APP_IMAGE = "frikky/shuffle:shuffle-tools_1.2.0"
+REVIEWED_SHUFFLE_APP_IMAGE_DIGEST = (
+    "sha256:fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8"
+)
+REVIEWED_SHUFFLE_APP_IMAGE_IMMUTABLE_REF = (
+    "frikky/shuffle@" + REVIEWED_SHUFFLE_APP_IMAGE_DIGEST
+)
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -147,6 +155,20 @@ def main() -> int:
     workflow_id = payload.get("workflow_api_id")
     require(isinstance(workflow_id, str), "workflow_api_id is missing")
     UUID(workflow_id)
+    require(
+        payload.get("shuffle_app_image") == REVIEWED_SHUFFLE_APP_IMAGE,
+        "Shuffle app runtime tag is not reviewed",
+    )
+    require(
+        payload.get("shuffle_app_image_digest")
+        == REVIEWED_SHUFFLE_APP_IMAGE_DIGEST,
+        "Shuffle app digest is not reviewed",
+    )
+    require(
+        payload.get("shuffle_app_image_immutable_ref")
+        == REVIEWED_SHUFFLE_APP_IMAGE_IMMUTABLE_REF,
+        "Shuffle app immutable reference is not reviewed",
+    )
     execution_id = payload.get("execution_id")
     receipt_id = payload.get("expected_execution_receipt_id")
     require(

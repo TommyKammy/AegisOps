@@ -52,6 +52,7 @@ WORKFLOW_TEMPLATE = (
 WORKFLOW_VALIDATOR = WORKFLOW_TEMPLATE.with_name(
     "validate_preserved_workflow.py"
 )
+WORKFLOW_FINDER = WORKFLOW_TEMPLATE.with_name("find_reviewed_workflow.py")
 LAB_ROOT = WORKFLOW_TEMPLATE.parents[1]
 BOOTSTRAP_SHUFFLE = LAB_ROOT / "bootstrap-shuffle.sh"
 RUN_REAL_TRIAL = WORKFLOW_TEMPLATE.with_name("run_real_trial.py")
@@ -61,9 +62,18 @@ class _QueueTransport:
     def __init__(self, *responses: object) -> None:
         self.responses = list(responses)
         self.calls: list[dict[str, object]] = []
+        self.reviewed_workflow: object = _reviewed_workflow()
 
     def request_json(self, **kwargs: object) -> object:
         self.calls.append(kwargs)
+        if (
+            kwargs.get("method") == "GET"
+            and kwargs.get("url")
+            == f"https://proxy:8443/shuffle-api/api/v1/workflows/{API_WORKFLOW_ID}"
+        ):
+            if isinstance(self.reviewed_workflow, Exception):
+                raise self.reviewed_workflow
+            return self.reviewed_workflow
         response = self.responses.pop(0)
         if isinstance(response, Exception):
             raise response
@@ -126,12 +136,19 @@ def _reviewed_action_result(status: str = "SUCCESS") -> dict[str, object]:
     }
 
 
+def _reviewed_workflow() -> dict[str, object]:
+    workflow = json.loads(WORKFLOW_TEMPLATE.read_text(encoding="utf-8"))
+    workflow["id"] = API_WORKFLOW_ID
+    return workflow
+
+
 def _adapter(transport: _QueueTransport) -> RealShuffleActionAdapter:
     return RealShuffleActionAdapter(
         base_url="https://proxy:8443/shuffle-api",
         api_key="fixture-api-key",
         api_workflow_id=API_WORKFLOW_ID,
         transport=transport,
+        reviewed_workflow=_reviewed_workflow(),
         timeout_seconds=2,
         max_attempts=2,
     )
@@ -204,14 +221,38 @@ class RealShuffleTransportTests(unittest.TestCase):
 
         receipt = _dispatch(_adapter(transport))
 
-        self.assertEqual(len(transport.calls), 2)
+        self.assertEqual(len(transport.calls), 4)
         self.assertEqual(receipt.execution_run_id, REAL_EXECUTION_ID)
         self.assertEqual(receipt.external_receipt_id, "phase67-receipt-001")
         self.assertEqual(receipt.adapter, "shuffle_real_http")
-        first_payload = transport.calls[0]["payload"]
-        second_payload = transport.calls[1]["payload"]
+        first_payload = transport.calls[1]["payload"]
+        second_payload = transport.calls[3]["payload"]
         self.assertEqual(first_payload, second_payload)
         self.assertNotIn("fixture-api-key", repr(first_payload))
+
+    def test_dispatch_rejects_mutated_reviewed_workflow_before_post(self) -> None:
+        transport = _QueueTransport(
+            {"success": True, "execution_id": REAL_EXECUTION_ID}
+        )
+        mutated_workflow = _reviewed_workflow()
+        actions = mutated_workflow["actions"]
+        self.assertIsInstance(actions, list)
+        actions.append(
+            {
+                "id": "67f30000-0000-4000-8000-000000000099",
+                "name": "unreviewed_action",
+            }
+        )
+        transport.reviewed_workflow = mutated_workflow
+
+        with self.assertRaisesRegex(
+            ShuffleTransportFailure,
+            "reviewed_workflow_mismatch",
+        ):
+            _dispatch(_adapter(transport))
+
+        self.assertEqual(len(transport.calls), 1)
+        self.assertEqual(transport.calls[0]["method"], "GET")
 
     def test_interrupted_dispatch_recovers_exact_existing_execution_without_post(
         self,
@@ -282,7 +323,7 @@ class RealShuffleTransportTests(unittest.TestCase):
             delegated_at=delegated_at,
         )
 
-        payload = transport.calls[0]["payload"]
+        payload = transport.calls[1]["payload"]
         self.assertIsInstance(payload, dict)
         execution_argument = json.loads(payload["execution_argument"])
         self.assertEqual(
@@ -335,7 +376,7 @@ class RealShuffleTransportTests(unittest.TestCase):
         ):
             _dispatch(_adapter(transport))
 
-        self.assertEqual(len(transport.calls), 1)
+        self.assertEqual(len(transport.calls), 2)
 
     def test_authentication_failure_is_not_retried(self) -> None:
         transport = _QueueTransport(
@@ -348,7 +389,7 @@ class RealShuffleTransportTests(unittest.TestCase):
         ):
             _dispatch(_adapter(transport))
 
-        self.assertEqual(len(transport.calls), 1)
+        self.assertEqual(len(transport.calls), 2)
 
     def test_real_adapter_rejects_synthetic_expected_receipt(self) -> None:
         payload = _payload()
@@ -381,6 +422,7 @@ class RealShuffleTransportTests(unittest.TestCase):
                 api_key="fixture-api-key",
                 api_workflow_id=API_WORKFLOW_ID,
                 transport=transport,
+                reviewed_workflow=_reviewed_workflow(),
             )
         with self.assertRaisesRegex(ValueError, "must be a UUID"):
             RealShuffleActionAdapter(
@@ -388,6 +430,7 @@ class RealShuffleTransportTests(unittest.TestCase):
                 api_key="fixture-api-key",
                 api_workflow_id="notify_identity_owner",
                 transport=transport,
+                reviewed_workflow=_reviewed_workflow(),
             )
         with self.assertRaisesRegex(ValueError, "must not contain userinfo"):
             RealShuffleActionAdapter(
@@ -395,6 +438,7 @@ class RealShuffleTransportTests(unittest.TestCase):
                 api_key="fixture-api-key",
                 api_workflow_id=API_WORKFLOW_ID,
                 transport=transport,
+                reviewed_workflow=_reviewed_workflow(),
             )
         with self.assertRaisesRegex(
             ShuffleTransportFailure,
@@ -508,7 +552,7 @@ class RealShuffleTransportTests(unittest.TestCase):
         framing_response = mock.MagicMock()
         opened_response = framing_response.__enter__.return_value
         opened_response.headers.get_content_type.return_value = "application/json"
-        opened_response.read.side_effect = http_client.IncompleteRead(b"{", 1)
+        opened_response.read1.side_effect = http_client.IncompleteRead(b"{", 1)
         framing_opener = mock.Mock()
         framing_opener.open.return_value = framing_response
         with (
@@ -539,7 +583,7 @@ class RealShuffleTransportTests(unittest.TestCase):
         opened_tls_response.headers.get_content_type.return_value = (
             "application/json"
         )
-        opened_tls_response.read.side_effect = ssl.SSLEOFError(
+        opened_tls_response.read1.side_effect = ssl.SSLEOFError(
             8,
             "unexpected EOF while reading",
         )
@@ -567,6 +611,87 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertFalse(raised.exception.retryable)
         self.assertTrue(raised.exception.transient)
         self.assertTrue(raised.exception.outcome_unknown)
+
+    def test_http_transport_enforces_total_response_deadline(self) -> None:
+        elapsed = 0.0
+
+        def clock() -> float:
+            return elapsed
+
+        def slow_read(_: int) -> bytes:
+            nonlocal elapsed
+            elapsed += 0.6
+            return b"{"
+
+        transport = UrllibShuffleJsonTransport(
+            ca_file="/fixture/ca.pem",
+            clock=clock,
+        )
+        response_context = mock.MagicMock()
+        opened_response = response_context.__enter__.return_value
+        opened_response.headers.get_content_type.return_value = "application/json"
+        opened_response.read1.side_effect = slow_read
+        opener = mock.Mock()
+        opener.open.return_value = response_context
+        with (
+            mock.patch(
+                "aegisops.control_plane.adapters.shuffle_real.ssl.create_default_context",
+                return_value=object(),
+            ),
+            mock.patch(
+                "aegisops.control_plane.adapters.shuffle_real.request.build_opener",
+                return_value=opener,
+            ),
+        ):
+            with self.assertRaises(ShuffleTransportFailure) as raised:
+                transport.request_json(
+                    method="POST",
+                    url="https://proxy:8443/shuffle-api/api/v1/workflows/id/execute",
+                    api_key="fixture-api-key",
+                    payload={"fixture": True},
+                    timeout_seconds=1,
+                )
+
+        self.assertEqual(raised.exception.category, "timeout")
+        self.assertTrue(raised.exception.transient)
+        self.assertTrue(raised.exception.outcome_unknown)
+        settimeout = opened_response.fp.raw._sock.settimeout
+        self.assertGreaterEqual(settimeout.call_count, 2)
+        first_timeout = settimeout.call_args_list[0].args[0]
+        second_timeout = settimeout.call_args_list[1].args[0]
+        self.assertGreater(first_timeout, second_timeout)
+
+    def test_http_transport_reads_buffered_body_after_socket_close(self) -> None:
+        transport = UrllibShuffleJsonTransport(ca_file="/fixture/ca.pem")
+        response_context = mock.MagicMock()
+        opened_response = response_context.__enter__.return_value
+        opened_response.headers.get_content_type.return_value = "application/json"
+        opened_response.read1.side_effect = [b"{}", b""]
+        response_socket = opened_response.fp.raw._sock
+        response_socket.settimeout.side_effect = OSError(9, "Bad file descriptor")
+        response_socket.fileno.return_value = -1
+        opener = mock.Mock()
+        opener.open.return_value = response_context
+        with (
+            mock.patch(
+                "aegisops.control_plane.adapters.shuffle_real.ssl.create_default_context",
+                return_value=object(),
+            ),
+            mock.patch(
+                "aegisops.control_plane.adapters.shuffle_real.request.build_opener",
+                return_value=opener,
+            ),
+        ):
+            response = transport.request_json(
+                method="GET",
+                url="https://proxy:8443/shuffle-api/api/v1/workflows/id",
+                api_key="fixture-api-key",
+                payload=None,
+                timeout_seconds=2,
+            )
+
+        self.assertEqual(response, {})
+        response_socket.settimeout.assert_called_once()
 
     def test_http_transport_preserves_wrapped_tls_eof_failure(self) -> None:
         transport = UrllibShuffleJsonTransport(ca_file="/fixture/ca.pem")
@@ -952,6 +1077,18 @@ class RealShuffleTransportTests(unittest.TestCase):
             "up --detach --wait --force-recreate control-plane",
             bootstrap_source,
         )
+        self.assertIn("find_reviewed_workflow.py", bootstrap_source)
+        create_id = bootstrap_source.index('workflow_id="$(\n      jq -er')
+        persist_id = bootstrap_source.index(
+            "set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID",
+            create_id,
+        )
+        update_workflow = bootstrap_source.index(
+            'workflow_with_runtime_id="$(',
+            create_id,
+        )
+        self.assertLess(create_id, persist_id)
+        self.assertLess(persist_id, update_workflow)
         self.assertNotIn("--arg password", bootstrap_source)
         self.assertNotIn('--data-binary "${registration_payload}"', bootstrap_source)
 
@@ -1009,6 +1146,15 @@ class RealShuffleTransportTests(unittest.TestCase):
             "reviewed_template_id": "notify_identity_owner",
             "reviewed_template_version": (
                 "notify_identity_owner-v1-reviewed-2026-05-03"
+            ),
+            "shuffle_app_image": "frikky/shuffle:shuffle-tools_1.2.0",
+            "shuffle_app_image_digest": (
+                "sha256:"
+                "fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8"
+            ),
+            "shuffle_app_image_immutable_ref": (
+                "frikky/shuffle@sha256:"
+                "fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8"
             ),
             "action_request_id": "action-request-001",
             "approval_decision_id": "approval-001",
@@ -1080,6 +1226,11 @@ class RealShuffleTransportTests(unittest.TestCase):
                 1.0,
                 "$.idempotency_execution_count: value does not match const",
             ),
+            (
+                "shuffle_app_image_digest",
+                "sha256:" + ("0" * 64),
+                "$.shuffle_app_image_digest: value does not match const",
+            ),
         ):
             with self.subTest(field_name=field_name, invalid_value=invalid_value):
                 result = validate({**manifest, field_name: invalid_value})
@@ -1144,6 +1295,37 @@ class RealShuffleTransportTests(unittest.TestCase):
         result = validate(nested_type_drift)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Shuffle server default changed", result.stderr)
+
+    def test_workflow_discovery_reuses_only_one_exact_reviewed_match(self) -> None:
+        reviewed = _reviewed_workflow()
+
+        def discover(candidates: list[object]) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [
+                    sys.executable,
+                    str(WORKFLOW_FINDER),
+                    str(WORKFLOW_TEMPLATE),
+                ],
+                input=json.dumps(candidates),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        result = discover([reviewed])
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), API_WORKFLOW_ID)
+        self.assertEqual(discover([]).returncode, 3)
+
+        drifted = json.loads(json.dumps(reviewed))
+        drifted["actions"][0]["name"] = "send_email"
+        result = discover([drifted])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reviewed value changed", result.stderr)
+
+        result = discover([reviewed, reviewed])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("exactly one workflow", result.stderr)
 
 
 if __name__ == "__main__":

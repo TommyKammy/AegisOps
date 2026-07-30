@@ -11,6 +11,9 @@
     "workflow_api_id",
     "reviewed_template_id",
     "reviewed_template_version",
+    "shuffle_app_image",
+    "shuffle_app_image_digest",
+    "shuffle_app_image_immutable_ref",
     "action_request_id",
     "approval_decision_id",
     "delegation_id",
@@ -50,6 +53,15 @@
     },
     "reviewed_template_version": {
       "const": "notify_identity_owner-v1-reviewed-2026-05-03"
+    },
+    "shuffle_app_image": {
+      "const": "frikky/shuffle:shuffle-tools_1.2.0"
+    },
+    "shuffle_app_image_digest": {
+      "const": "sha256:fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8"
+    },
+    "shuffle_app_image_immutable_ref": {
+      "const": "frikky/shuffle@sha256:fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8"
     },
     "action_request_id": {
       "type": "string",

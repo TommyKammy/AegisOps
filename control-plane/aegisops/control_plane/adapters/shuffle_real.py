@@ -6,11 +6,13 @@ from http import client as http_client
 import json
 import socket
 import ssl
-from typing import Mapping, Protocol
+import time
+from typing import Callable, Mapping, Protocol
 from urllib import error, parse, request
 from uuid import UUID
 
 from .shuffle import ShuffleActionAdapter, ShuffleDelegationReceipt
+from .shuffle_workflow_contract import validate_reviewed_workflow
 
 
 _REVIEWED_ACTION_ID = "67f30000-0000-4000-8000-000000000011"
@@ -93,13 +95,68 @@ class ShuffleJsonTransport(Protocol):
         """Send one authenticated request without exposing the credential."""
 
 
+def _remaining_timeout(deadline: float, clock: Callable[[], float]) -> float:
+    remaining = deadline - clock()
+    if remaining <= 0:
+        raise TimeoutError("Shuffle HTTP request exceeded its total deadline")
+    return remaining
+
+
+def _read_response_body(
+    response: object,
+    *,
+    deadline: float,
+    clock: Callable[[], float],
+) -> bytes:
+    read1 = getattr(response, "read1", None)
+    response_fp = getattr(response, "fp", None)
+    raw = getattr(response_fp, "raw", None)
+    response_socket = getattr(raw, "_sock", None)
+    settimeout = getattr(response_socket, "settimeout", None)
+    if not callable(read1) or not callable(settimeout):
+        raise http_client.HTTPException(
+            "Shuffle response does not expose a deadline-aware stream"
+        )
+
+    chunks: list[bytes] = []
+    total_bytes = 0
+    socket_closed = False
+    while True:
+        remaining = _remaining_timeout(deadline, clock)
+        if not socket_closed:
+            try:
+                settimeout(remaining)
+            except OSError:
+                fileno = getattr(response_socket, "fileno", None)
+                if not callable(fileno) or fileno() != -1:
+                    raise
+                socket_closed = True
+        chunk = read1(min(65_536, 1_048_577 - total_bytes))
+        _remaining_timeout(deadline, clock)
+        if not isinstance(chunk, bytes):
+            raise http_client.HTTPException("Shuffle response body is not bytes")
+        if not chunk:
+            return b"".join(chunks)
+        chunks.append(chunk)
+        total_bytes += len(chunk)
+        if total_bytes > 1_048_576:
+            raise ShuffleTransportFailure("response_too_large")
+
+
 @dataclass(frozen=True)
 class UrllibShuffleJsonTransport:
     ca_file: str
+    clock: Callable[[], float] = field(
+        default=time.monotonic,
+        repr=False,
+        compare=False,
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.ca_file, str) or self.ca_file.strip() == "":
             raise ValueError("real Shuffle transport requires an explicit CA file")
+        if not callable(self.clock):
+            raise ValueError("real Shuffle transport requires a monotonic clock")
         object.__setattr__(self, "ca_file", self.ca_file.strip())
 
     def request_json(
@@ -111,6 +168,7 @@ class UrllibShuffleJsonTransport:
         payload: Mapping[str, object] | None,
         timeout_seconds: float,
     ) -> object:
+        deadline = self.clock() + timeout_seconds
         body = None
         headers = {
             "Accept": "application/json",
@@ -137,20 +195,26 @@ class UrllibShuffleJsonTransport:
         try:
             with opener.open(  # noqa: S310
                 shuffle_request,
-                timeout=timeout_seconds,
+                timeout=_remaining_timeout(deadline, self.clock),
             ) as response:
+                _remaining_timeout(deadline, self.clock)
                 content_type = response.headers.get_content_type()
                 if content_type != "application/json":
                     raise ShuffleTransportFailure(
                         "invalid_content_type",
                         outcome_unknown=method == "POST",
                     )
-                response_body = response.read(1_048_577)
-                if len(response_body) > 1_048_576:
-                    raise ShuffleTransportFailure(
-                        "response_too_large",
-                        outcome_unknown=method == "POST",
+                try:
+                    response_body = _read_response_body(
+                        response,
+                        deadline=deadline,
+                        clock=self.clock,
                     )
+                except ShuffleTransportFailure as exc:
+                    raise ShuffleTransportFailure(
+                        exc.category,
+                        outcome_unknown=method == "POST",
+                    ) from exc
         except error.HTTPError as exc:
             category = (
                 "redirect_rejected"
@@ -285,6 +349,7 @@ class RealShuffleActionAdapter:
     api_key: str = field(repr=False)
     api_workflow_id: str
     transport: ShuffleJsonTransport
+    reviewed_workflow: Mapping[str, object] = field(repr=False)
     timeout_seconds: float = 10.0
     max_attempts: int = 2
     execution_surface_type: str = "automation_substrate"
@@ -298,6 +363,8 @@ class RealShuffleActionAdapter:
             _require_api_workflow_id(self.api_workflow_id),
         )
         _require_non_empty_string(self.api_key, "API key")
+        if not isinstance(self.reviewed_workflow, Mapping):
+            raise ValueError("reviewed Shuffle workflow must be a mapping")
         if self.timeout_seconds <= 0:
             raise ValueError("Shuffle timeout must be positive")
         if self.max_attempts not in {1, 2}:
@@ -336,6 +403,7 @@ class RealShuffleActionAdapter:
         )
         response: object | None = None
         for attempt in range(1, self.max_attempts + 1):
+            self._revalidate_reviewed_workflow()
             try:
                 response = self.transport.request_json(
                     method="POST",
@@ -366,6 +434,27 @@ class RealShuffleActionAdapter:
             execution_id=execution_id,
             execution_argument=execution_argument,
         )
+
+    def _revalidate_reviewed_workflow(self) -> None:
+        observed_workflow = self.transport.request_json(
+            method="GET",
+            url=f"{self.base_url}/api/v1/workflows/{self.api_workflow_id}",
+            api_key=self.api_key,
+            payload=None,
+            timeout_seconds=self.timeout_seconds,
+        )
+        if not isinstance(observed_workflow, Mapping):
+            raise ShuffleTransportFailure("malformed_reviewed_workflow")
+        try:
+            validate_reviewed_workflow(
+                self.reviewed_workflow,
+                observed_workflow,
+                self.api_workflow_id,
+            )
+        except (TypeError, ValueError) as exc:
+            raise ShuffleTransportFailure(
+                "reviewed_workflow_mismatch"
+            ) from exc
 
     def recover_interrupted_dispatch(
         self,

@@ -27,6 +27,7 @@ files=(
   control-plane/aegisops/control_plane/adapters/executor.py
   control-plane/aegisops/control_plane/adapters/shuffle.py
   control-plane/aegisops/control_plane/adapters/shuffle_real.py
+  control-plane/aegisops/control_plane/adapters/shuffle_workflow_contract.py
   control-plane/aegisops/control_plane/config.py
   control-plane/aegisops/control_plane/service_composition.py
   control-plane/aegisops/control_plane/actions/execution_coordinator_reconciliation.py
@@ -35,8 +36,11 @@ files=(
   control-plane/deployment/phase-67-integration-lab/docker-compose.yml
   control-plane/deployment/phase-67-integration-lab/init.sh
   control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh
+  control-plane/deployment/phase-67-integration-lab/pin-shuffle-app-image.sh
   control-plane/deployment/phase-67-integration-lab/test-shuffle-execution.sh
+  control-plane/deployment/phase-67-integration-lab/shuffle/find_reviewed_workflow.py
   control-plane/deployment/phase-67-integration-lab/shuffle/harmless-local-log-workflow.json
+  control-plane/deployment/phase-67-integration-lab/shuffle/reviewed-app-image.env
   control-plane/deployment/phase-67-integration-lab/shuffle/run_real_trial.py
   control-plane/deployment/phase-67-integration-lab/shuffle/evidence-manifest.schema.json
   control-plane/deployment/phase-67-integration-lab/shuffle/validate_evidence_manifest.py
@@ -48,9 +52,11 @@ for file in "${files[@]}"; do
   require_file "${repo_root}/${file}"
 done
 require_executable "${lab}/bootstrap-shuffle.sh"
+require_executable "${lab}/pin-shuffle-app-image.sh"
 require_executable "${lab}/test-shuffle-execution.sh"
 
 adapter="${repo_root}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+workflow_contract="${repo_root}/control-plane/aegisops/control_plane/adapters/shuffle_workflow_contract.py"
 deterministic_shuffle="${repo_root}/control-plane/aegisops/control_plane/adapters/shuffle.py"
 isolated_executor="${repo_root}/control-plane/aegisops/control_plane/adapters/executor.py"
 service_composition="${repo_root}/control-plane/aegisops/control_plane/service_composition.py"
@@ -65,6 +71,9 @@ init="${lab}/init.sh"
 bootstrap="${lab}/bootstrap-shuffle.sh"
 evidence_validator="${lab}/shuffle/validate_evidence_manifest.py"
 workflow_validator="${lab}/shuffle/validate_preserved_workflow.py"
+workflow_finder="${lab}/shuffle/find_reviewed_workflow.py"
+app_image_pin="${lab}/pin-shuffle-app-image.sh"
+app_image_env="${lab}/shuffle/reviewed-app-image.env"
 
 require_fixed "${adapter}" 'parsed.scheme != "https"'
 require_fixed "${adapter}" '"Authorization": f"Bearer {api_key}"'
@@ -79,6 +88,12 @@ require_fixed "${adapter}" '"invalid_http_response"'
 require_fixed "${adapter}" 'except ssl.SSLEOFError as exc:'
 require_fixed "${adapter}" '"tls_response_truncated"'
 require_fixed "${adapter}" 'isinstance(exc.reason, ssl.SSLEOFError)'
+require_fixed "${adapter}" 'deadline = self.clock() + timeout_seconds'
+require_fixed "${adapter}" 'settimeout(remaining)'
+require_fixed "${adapter}" 'chunk = read1('
+require_fixed "${adapter}" 'validate_reviewed_workflow('
+require_fixed "${adapter}" 'self._revalidate_reviewed_workflow()'
+require_fixed "${adapter}" '"reviewed_workflow_mismatch"'
 require_fixed "${adapter}" '"connection_not_established" if retryable'
 require_fixed "${adapter}" 'startswith(("shuffle-run-", "shuffle-receipt-"))'
 require_fixed "${adapter}" 'Shuffle execution id must be a UUID'
@@ -146,7 +161,10 @@ require_fixed \
   'not isinstance(idempotency_execution_count, bool)'
 require_fixed "${evidence_validator}" '_validate_schema(payload, schema, "$")'
 require_fixed "${evidence_validator}" 'schema.get("additionalProperties") is False'
+require_fixed "${evidence_validator}" 'REVIEWED_SHUFFLE_APP_IMAGE_DIGEST'
 require_fixed "${bootstrap}" 'validate_preserved_workflow.py'
+require_fixed "${bootstrap}" 'find_reviewed_workflow.py'
+require_fixed "${bootstrap}" '"${LAB_DIR}/pin-shuffle-app-image.sh"'
 require_fixed "${bootstrap}" '-H "@${auth_header_path}"'
 require_fixed "${bootstrap}" 'unset api_key'
 require_fixed "${bootstrap}" '--rawfile password "${admin_password_path}"'
@@ -163,19 +181,47 @@ require_fixed \
 require_fixed \
   "${lab}/shuffle/run_real_trial.py" \
   'exc.category != "missing_receipt" and not exc.transient'
-require_fixed "${workflow_validator}" 'require_reviewed_definition('
-require_fixed "${workflow_validator}" 'len(observed) != len(expected)'
+require_fixed "${workflow_contract}" 'require_reviewed_definition('
+require_fixed "${workflow_contract}" 'len(observed) != len(expected)'
 require_fixed \
-  "${workflow_validator}" \
+  "${workflow_contract}" \
   'unexpected = sorted(set(observed) - set(expected))'
+require_fixed "${workflow_validator}" 'validate_reviewed_workflow('
+require_fixed "${workflow_finder}" 'NOT_FOUND_EXIT_CODE = 3'
+require_fixed "${workflow_finder}" 'len(matches) != 1'
+require_fixed "${app_image_pin}" '"${LAB_DIR}/preflight.sh" --scope shuffle'
+require_fixed "${app_image_pin}" 'docker_lab pull'
+require_fixed "${app_image_pin}" '.[0].RepoDigests | index($pinned_reference) != null'
+require_fixed "${app_image_pin}" 'docker_lab image tag'
+require_fixed \
+  "${app_image_env}" \
+  'AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST=sha256:fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8'
 require_fixed "${schema}" '"source_mode"'
 require_fixed "${schema}" '"const": "real_shuffle"'
 require_fixed "${schema}" '"idempotency_execution_count"'
 require_fixed "${schema}" '"requested_scope"'
 require_fixed "${schema}" '"pattern": "^shuffle-run-"'
 require_fixed "${schema}" '"pattern": "^shuffle-receipt-"'
+require_fixed "${schema}" '"shuffle_app_image_immutable_ref"'
 require_fixed "${workflow}" '"name": "repeat_back_to_me"'
 require_fixed "${workflow}" '"value": "$exec"'
+
+python3 - "${bootstrap}" <<'PY'
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1]).read_text(encoding="utf-8")
+create_id = source.index('workflow_id="$(\n      jq -er')
+persist_id = source.index(
+    "set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID",
+    create_id,
+)
+update_workflow = source.index('workflow_with_runtime_id="$(', create_id)
+if not create_id < persist_id < update_workflow:
+    raise SystemExit(
+        "Created Shuffle workflow ID must be persisted before workflow update"
+    )
+PY
 
 if grep -F -- '--arg password' "${bootstrap}" >/dev/null \
   || grep -F -- '--data-binary "${registration_payload}"' "${bootstrap}" >/dev/null; then

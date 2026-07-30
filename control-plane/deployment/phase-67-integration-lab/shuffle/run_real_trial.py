@@ -33,6 +33,14 @@ from aegisops.control_plane.models import (
 )
 from aegisops.control_plane.service import AegisOpsControlPlaneService
 
+REVIEWED_SHUFFLE_APP_IMAGE = "frikky/shuffle:shuffle-tools_1.2.0"
+REVIEWED_SHUFFLE_APP_IMAGE_DIGEST = (
+    "sha256:fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8"
+)
+REVIEWED_SHUFFLE_APP_IMAGE_IMMUTABLE_REF = (
+    "frikky/shuffle@" + REVIEWED_SHUFFLE_APP_IMAGE_DIGEST
+)
+
 
 def _approved_binding_hash(
     *,
@@ -58,6 +66,22 @@ def main() -> int:
         raise RuntimeError("real Shuffle trial requires the Phase 67 lab profile")
     if config.shuffle_transport_mode != "real_http":
         raise RuntimeError("real Shuffle transport is not enabled")
+    shuffle_app_image = os.environ.get("AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE", "")
+    shuffle_app_image_digest = os.environ.get(
+        "AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST",
+        "",
+    )
+    shuffle_app_image_immutable_ref = os.environ.get(
+        "AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_IMMUTABLE_REF",
+        "",
+    )
+    if (
+        shuffle_app_image != REVIEWED_SHUFFLE_APP_IMAGE
+        or shuffle_app_image_digest != REVIEWED_SHUFFLE_APP_IMAGE_DIGEST
+        or shuffle_app_image_immutable_ref
+        != REVIEWED_SHUFFLE_APP_IMAGE_IMMUTABLE_REF
+    ):
+        raise RuntimeError("Shuffle trial app image is not the reviewed artifact")
 
     now = datetime.now(timezone.utc) - timedelta(seconds=5)
     trial_id = str(uuid4())
@@ -237,6 +261,9 @@ def main() -> int:
         "workflow_api_id": config.shuffle_api_workflow_id,
         "reviewed_template_id": binding["workflow_id"],
         "reviewed_template_version": binding["workflow_version_id"],
+        "shuffle_app_image": shuffle_app_image,
+        "shuffle_app_image_digest": shuffle_app_image_digest,
+        "shuffle_app_image_immutable_ref": shuffle_app_image_immutable_ref,
         "action_request_id": action_request_id,
         "approval_decision_id": approval_decision_id,
         "delegation_id": execution.delegation_id,

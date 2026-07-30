@@ -12,11 +12,28 @@ source "${LAB_DIR}/lab-common.sh"
 require_runtime_environment
 [[ "${AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE:-}" == "real_http" ]] \
   || fail "real Shuffle transport is not enabled; run ${LAB_DIR}/bootstrap-shuffle.sh"
+# shellcheck source=shuffle/reviewed-app-image.env
+source "${LAB_DIR}/shuffle/reviewed-app-image.env"
+shuffle_tools_image="$(
+  printf '%s:%s' \
+    "${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}" \
+    "${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_TAG}"
+)"
+shuffle_tools_image_immutable_ref="$(
+  printf '%s@%s' \
+    "${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}" \
+    "${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}"
+)"
 
+"${LAB_DIR}/pin-shuffle-app-image.sh"
 "${LAB_DIR}/up.sh" shuffle
 evidence_path="${AEGISOPS_LAB_EVIDENCE_DIR}/phase67-3-real-shuffle-trial.json"
 evidence_staging="$(mktemp "${evidence_path}.tmp.XXXXXX")"
-compose_scope shuffle exec -T control-plane \
+compose_scope shuffle exec -T \
+  -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE="${shuffle_tools_image}" \
+  -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}" \
+  -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_IMMUTABLE_REF="${shuffle_tools_image_immutable_ref}" \
+  control-plane \
   python3 /opt/aegisops/phase67-shuffle/run_real_trial.py \
   >"${evidence_staging}"
 jq -e '

@@ -24,11 +24,24 @@ require_command jq
 require_command openssl
 require_command python3
 
+"${LAB_DIR}/pin-shuffle-app-image.sh"
 "${LAB_DIR}/up.sh" shuffle
 
 api_key_path="${AEGISOPS_LAB_SECRET_DIR}/shuffle-api-key"
 admin_password_path="${AEGISOPS_LAB_SECRET_DIR}/shuffle-admin-password"
 workflow_path="${LAB_DIR}/shuffle/harmless-local-log-workflow.json"
+# shellcheck source=shuffle/reviewed-app-image.env
+source "${LAB_DIR}/shuffle/reviewed-app-image.env"
+shuffle_tools_image="$(
+  printf '%s:%s' \
+    "${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}" \
+    "${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_TAG}"
+)"
+shuffle_tools_image_immutable_ref="$(
+  printf '%s@%s' \
+    "${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}" \
+    "${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}"
+)"
 api_origin="https://shuffle.localhost:${AEGISOPS_LAB_PROXY_PORT}"
 curl_transport_common=(
   --silent
@@ -109,46 +122,6 @@ auth_header_path="$(mktemp "${api_key_path}.header.XXXXXX")"
 printf 'Authorization: Bearer %s\n' "${api_key}" >"${auth_header_path}"
 chmod 600 "${auth_header_path}"
 unset api_key
-if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
-  workflow_id="${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID}"
-else
-  workflow_create_response="$(
-    curl "${curl_common[@]}" \
-      -H "@${auth_header_path}" \
-      -H 'Content-Type: application/json' \
-      --data-binary "@${workflow_path}" \
-      "${api_origin}/api/v1/workflows"
-  )"
-  workflow_id="$(
-    jq -er '
-      (.id // .workflow.id // .workflow_id)
-      | select(type == "string")
-      | select(test("^[0-9a-fA-F-]{36}$"))
-    ' <<<"${workflow_create_response}"
-  )"
-
-  workflow_with_runtime_id="$(
-    jq --arg workflow_id "${workflow_id}" '.id = $workflow_id' "${workflow_path}"
-  )"
-  curl "${curl_common[@]}" \
-    -X PUT \
-    -H "@${auth_header_path}" \
-    -H 'Content-Type: application/json' \
-    --data-binary "${workflow_with_runtime_id}" \
-    "${api_origin}/api/v1/workflows/${workflow_id}" \
-    >/dev/null
-fi
-
-preserved_workflow="$(
-  curl "${curl_common[@]}" \
-    -H "@${auth_header_path}" \
-    "${api_origin}/api/v1/workflows/${workflow_id}"
-)"
-python3 \
-  "${LAB_DIR}/shuffle/validate_preserved_workflow.py" \
-  "${workflow_path}" \
-  "${workflow_id}" \
-  <<<"${preserved_workflow}"
 
 set_runtime_value() {
   local name="$1"
@@ -174,6 +147,66 @@ set_runtime_value() {
   mv "${staging}" "${RUNTIME_ENV}"
 }
 
+if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+  workflow_id="${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID}"
+else
+  workflow_list="$(
+    curl "${curl_common[@]}" \
+      -H "@${auth_header_path}" \
+      "${api_origin}/api/v1/workflows"
+  )"
+  if workflow_id="$(
+    python3 \
+      "${LAB_DIR}/shuffle/find_reviewed_workflow.py" \
+      "${workflow_path}" \
+      <<<"${workflow_list}"
+  )"; then
+    set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID "${workflow_id}"
+  else
+    discovery_status="$?"
+    [[ "${discovery_status}" -eq 3 ]] \
+      || fail "existing Shuffle workflow discovery failed"
+
+    workflow_create_response="$(
+      curl "${curl_common[@]}" \
+        -H "@${auth_header_path}" \
+        -H 'Content-Type: application/json' \
+        --data-binary "@${workflow_path}" \
+        "${api_origin}/api/v1/workflows"
+    )"
+    workflow_id="$(
+      jq -er '
+        (.id // .workflow.id // .workflow_id)
+        | select(type == "string")
+        | select(test("^[0-9a-fA-F-]{36}$"))
+      ' <<<"${workflow_create_response}"
+    )"
+    set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID "${workflow_id}"
+
+    workflow_with_runtime_id="$(
+      jq --arg workflow_id "${workflow_id}" '.id = $workflow_id' "${workflow_path}"
+    )"
+    curl "${curl_common[@]}" \
+      -X PUT \
+      -H "@${auth_header_path}" \
+      -H 'Content-Type: application/json' \
+      --data-binary "${workflow_with_runtime_id}" \
+      "${api_origin}/api/v1/workflows/${workflow_id}" \
+      >/dev/null
+  fi
+fi
+
+preserved_workflow="$(
+  curl "${curl_common[@]}" \
+    -H "@${auth_header_path}" \
+    "${api_origin}/api/v1/workflows/${workflow_id}"
+)"
+python3 \
+  "${LAB_DIR}/shuffle/validate_preserved_workflow.py" \
+  "${workflow_path}" \
+  "${workflow_id}" \
+  <<<"${preserved_workflow}"
+
 set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID "${workflow_id}"
 set_runtime_value AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE real_http
 
@@ -185,6 +218,9 @@ jq -n \
   --arg captured_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg workflow_id "${workflow_id}" \
   --arg workflow_digest "${workflow_digest}" \
+  --arg shuffle_app_image "${shuffle_tools_image}" \
+  --arg shuffle_app_image_digest "${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}" \
+  --arg shuffle_app_image_immutable_ref "${shuffle_tools_image_immutable_ref}" \
   '{
     schema_version:"phase67.3-shuffle-bootstrap-v1",
     captured_at:$captured_at,
@@ -194,6 +230,9 @@ jq -n \
     reviewed_template_id:"notify_identity_owner",
     reviewed_template_version:"notify_identity_owner-v1-reviewed-2026-05-03",
     workflow_export_sha256:$workflow_digest,
+    shuffle_app_image:$shuffle_app_image,
+    shuffle_app_image_digest:$shuffle_app_image_digest,
+    shuffle_app_image_immutable_ref:$shuffle_app_image_immutable_ref,
     action_scope:"harmless_local_echo_only",
     authority_posture:"subordinate_shuffle_execution_surface"
   }' >"${bootstrap_evidence}"

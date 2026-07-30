@@ -289,10 +289,79 @@ without_extra_property_rejection="${workdir}/without-extra-property-rejection"
 copy_fixture "${without_extra_property_rejection}"
 sed -i.bak \
   's/unexpected = sorted(set(observed) - set(expected))/unexpected = []/' \
-  "${without_extra_property_rejection}/control-plane/deployment/phase-67-integration-lab/shuffle/validate_preserved_workflow.py"
+  "${without_extra_property_rejection}/control-plane/aegisops/control_plane/adapters/shuffle_workflow_contract.py"
 assert_fails_with \
   "${without_extra_property_rejection}" \
   'unexpected = sorted(set(observed) - set(expected))'
+
+without_total_deadline="${workdir}/without-total-deadline"
+copy_fixture "${without_total_deadline}"
+sed -i.bak \
+  's/deadline = self.clock() + timeout_seconds/deadline = float("inf")/' \
+  "${without_total_deadline}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_total_deadline}" \
+  'deadline = self.clock() + timeout_seconds'
+
+without_dispatch_workflow_revalidation="${workdir}/without-dispatch-workflow-revalidation"
+copy_fixture "${without_dispatch_workflow_revalidation}"
+sed -i.bak \
+  's/self\._revalidate_reviewed_workflow()/pass/' \
+  "${without_dispatch_workflow_revalidation}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_dispatch_workflow_revalidation}" \
+  'self._revalidate_reviewed_workflow()'
+
+without_workflow_discovery="${workdir}/without-workflow-discovery"
+copy_fixture "${without_workflow_discovery}"
+sed -i.bak \
+  's/find_reviewed_workflow.py/skip_workflow_discovery.py/' \
+  "${without_workflow_discovery}/control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh"
+assert_fails_with \
+  "${without_workflow_discovery}" \
+  'find_reviewed_workflow.py'
+
+delayed_workflow_id_persistence="${workdir}/delayed-workflow-id-persistence"
+copy_fixture "${delayed_workflow_id_persistence}"
+python3 - \
+  "${delayed_workflow_id_persistence}/control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+needle = (
+    '    set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID "${workflow_id}"\n\n'
+    '    workflow_with_runtime_id="$('
+)
+replacement = (
+    '    workflow_with_runtime_id="$('
+)
+if needle not in source:
+    raise SystemExit("workflow creation persistence fixture changed")
+path.write_text(source.replace(needle, replacement, 1), encoding="utf-8")
+PY
+assert_fails_with \
+  "${delayed_workflow_id_persistence}" \
+  'Created Shuffle workflow ID must be persisted before workflow update'
+
+without_app_image_pin="${workdir}/without-app-image-pin"
+copy_fixture "${without_app_image_pin}"
+sed -i.bak \
+  's#"${LAB_DIR}/pin-shuffle-app-image.sh"#"${LAB_DIR}/skip-app-image-pin.sh"#' \
+  "${without_app_image_pin}/control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh"
+assert_fails_with \
+  "${without_app_image_pin}" \
+  '"${LAB_DIR}/pin-shuffle-app-image.sh"'
+
+drifted_app_image_digest="${workdir}/drifted-app-image-digest"
+copy_fixture "${drifted_app_image_digest}"
+sed -i.bak \
+  's/fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8/0000000000000000000000000000000000000000000000000000000000000000/' \
+  "${drifted_app_image_digest}/control-plane/deployment/phase-67-integration-lab/shuffle/reviewed-app-image.env"
+assert_fails_with \
+  "${drifted_app_image_digest}" \
+  'AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST=sha256:fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8'
 
 without_orborus_identity="${workdir}/without-orborus-identity"
 copy_fixture "${without_orborus_identity}"

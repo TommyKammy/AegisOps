@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Type
 
 from .adapters.endpoint_evidence import EndpointEvidencePackAdapter
@@ -46,6 +48,23 @@ from .runtime.runtime_boundary import RuntimeBoundaryService
 from .runtime.runtime_restore_readiness_diagnostics import (
     RuntimeRestoreReadinessDiagnosticsService,
 )
+
+_PHASE67_REVIEWED_SHUFFLE_WORKFLOW = (
+    Path(__file__).resolve().parents[2]
+    / "deployment"
+    / "phase-67-integration-lab"
+    / "shuffle"
+    / "harmless-local-log-workflow.json"
+)
+
+
+def _load_phase67_reviewed_shuffle_workflow() -> Mapping[str, object]:
+    workflow = json.loads(
+        _PHASE67_REVIEWED_SHUFFLE_WORKFLOW.read_text(encoding="utf-8")
+    )
+    if not isinstance(workflow, Mapping):
+        raise ValueError("reviewed Phase 67 Shuffle workflow must be an object")
+    return workflow
 
 
 @dataclass(frozen=True)
@@ -157,6 +176,7 @@ def build_control_plane_service_composition(
             api_key=config.shuffle_api_key,
             api_workflow_id=config.shuffle_api_workflow_id,
             transport=UrllibShuffleJsonTransport(config.shuffle_ca_file),
+            reviewed_workflow=_load_phase67_reviewed_shuffle_workflow(),
         )
     else:
         shuffle = ShuffleActionAdapter(config.shuffle_base_url)
