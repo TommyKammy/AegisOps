@@ -84,6 +84,14 @@ assert_fails_with \
   "${without_tls_response_recovery}" \
   'except ssl.SSLEOFError as exc:'
 
+without_non_eof_tls_response_recovery="${workdir}/without-non-eof-tls-response-recovery"
+copy_fixture "${without_non_eof_tls_response_recovery}"
+sed -i.bak 's/except ssl.SSLError as exc:/except RuntimeError as exc:/' \
+  "${without_non_eof_tls_response_recovery}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_non_eof_tls_response_recovery}" \
+  'except ssl.SSLError as exc:'
+
 without_wrapped_tls_response_recovery="${workdir}/without-wrapped-tls-response-recovery"
 copy_fixture "${without_wrapped_tls_response_recovery}"
 sed -i.bak \
@@ -217,8 +225,8 @@ import sys
 path = Path(sys.argv[1])
 source = path.read_text(encoding="utf-8")
 source = source.replace(
-    'if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~',
-    'if [[ "${AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE:-}" == "real_http" '
+    'elif [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~',
+    'elif [[ "${AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE:-}" == "real_http" '
     '&& "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~',
     1,
 )
@@ -226,7 +234,16 @@ path.write_text(source, encoding="utf-8")
 PY
 assert_fails_with \
   "${workflow_id_mode_coupling}" \
-  'if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~'
+  'elif [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~'
+
+without_pending_workflow_recovery="${workdir}/without-pending-workflow-recovery"
+copy_fixture "${without_pending_workflow_recovery}"
+sed -i.bak \
+  's/AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID/AEGISOPS_LAB_SHUFFLE_ABANDONED_WORKFLOW_ID/g' \
+  "${without_pending_workflow_recovery}/control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh"
+assert_fails_with \
+  "${without_pending_workflow_recovery}" \
+  'AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID'
 
 init_workflow_id_mode_coupling="${workdir}/init-workflow-id-mode-coupling"
 copy_fixture "${init_workflow_id_mode_coupling}"
@@ -376,19 +393,17 @@ import sys
 path = Path(sys.argv[1])
 source = path.read_text(encoding="utf-8")
 needle = (
-    '    set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID "${workflow_id}"\n\n'
-    '    workflow_with_runtime_id="$('
+    '    set_runtime_value AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID '
+    '"${workflow_id}"\n'
 )
-replacement = (
-    '    workflow_with_runtime_id="$('
-)
+replacement = ""
 if needle not in source:
     raise SystemExit("workflow creation persistence fixture changed")
 path.write_text(source.replace(needle, replacement, 1), encoding="utf-8")
 PY
 assert_fails_with \
   "${delayed_workflow_id_persistence}" \
-  'Created Shuffle workflow ID must be persisted before workflow update'
+  'Created Shuffle workflow ID must remain pending until workflow update'
 
 without_app_image_pin="${workdir}/without-app-image-pin"
 copy_fixture "${without_app_image_pin}"

@@ -174,6 +174,17 @@ require_fixed_string "${common}" 'pathlib.Path(sys.argv[1]).resolve(strict=False
 require_fixed_string "${common}" 'assert_phase67_compose_project_ownership'
 require_fixed_string "${common}" 'excluded_services_for_scope'
 require_fixed_string "${common}" 'assert_no_running_excluded_services'
+for scope in core wazuh; do
+  excluded_scope_services="$(
+    bash -c 'source "$1"; excluded_services_for_scope "$2"' \
+      phase67-scope-verifier \
+      "${common}" \
+      "${scope}"
+  )"
+  if ! grep -Fxq 'shuffle-orborus' <<<"${excluded_scope_services}"; then
+    fail "Phase 67 ${scope} scope must exclude the Shuffle Orborus service."
+  fi
+done
 require_fixed_string "${common}" 'assert_no_preserved_phase67_volumes'
 require_fixed_string "${common}" 'repository_runtime_state='
 require_fixed_string "${common}" 'repository_runtime_artifact_sha256='

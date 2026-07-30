@@ -667,6 +667,53 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertTrue(raised.exception.transient)
         self.assertTrue(raised.exception.outcome_unknown)
 
+    def test_http_transport_preserves_non_eof_tls_response_failures(self) -> None:
+        transport = UrllibShuffleJsonTransport(ca_file="/fixture/ca.pem")
+        for tls_error in (
+            ssl.SSLSyscallError(5, "TLS syscall failed"),
+            ssl.SSLZeroReturnError(6, "TLS connection closed"),
+            ssl.SSLError(1, "TLS response failed"),
+        ):
+            with self.subTest(tls_error=type(tls_error).__name__):
+                response_context = mock.MagicMock()
+                opened_response = response_context.__enter__.return_value
+                opened_response.headers.get_content_type.return_value = (
+                    "application/json"
+                )
+                opened_response.read1.side_effect = tls_error
+                opener = mock.Mock()
+                opener.open.return_value = response_context
+                with (
+                    mock.patch(
+                        "aegisops.control_plane.adapters.shuffle_real."
+                        "ssl.create_default_context",
+                        return_value=object(),
+                    ),
+                    mock.patch(
+                        "aegisops.control_plane.adapters.shuffle_real."
+                        "request.build_opener",
+                        return_value=opener,
+                    ),
+                ):
+                    with self.assertRaises(ShuffleTransportFailure) as raised:
+                        transport.request_json(
+                            method="POST",
+                            url=(
+                                "https://proxy:8443/shuffle-api/api/v1/"
+                                "workflows/id/execute"
+                            ),
+                            api_key="fixture-api-key",
+                            payload={"fixture": True},
+                            timeout_seconds=2,
+                        )
+                self.assertEqual(
+                    raised.exception.category,
+                    "tls_response_failure",
+                )
+                self.assertFalse(raised.exception.retryable)
+                self.assertTrue(raised.exception.transient)
+                self.assertTrue(raised.exception.outcome_unknown)
+
     def test_http_transport_enforces_total_response_deadline(self) -> None:
         elapsed = 0.0
 
@@ -1125,7 +1172,7 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertIn("${api_origin}/api/v1/getsettings", bootstrap_source)
         self.assertIn('-H "@${login_cookie_header_path}"', bootstrap_source)
         self.assertIn(
-            'if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~',
+            'elif [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~',
             bootstrap_source,
         )
         self.assertIn(
@@ -1134,16 +1181,25 @@ class RealShuffleTransportTests(unittest.TestCase):
         )
         self.assertIn("find_reviewed_workflow.py", bootstrap_source)
         create_id = bootstrap_source.index('workflow_id="$(\n      jq -er')
-        persist_id = bootstrap_source.index(
-            "set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID",
+        persist_pending_id = bootstrap_source.index(
+            "set_runtime_value AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID",
             create_id,
         )
         update_workflow = bootstrap_source.index(
             'workflow_with_runtime_id="$(',
             create_id,
         )
-        self.assertLess(create_id, persist_id)
-        self.assertLess(persist_id, update_workflow)
+        persist_authoritative_id = bootstrap_source.index(
+            "set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID",
+            update_workflow,
+        )
+        self.assertLess(create_id, persist_pending_id)
+        self.assertLess(persist_pending_id, update_workflow)
+        self.assertLess(update_workflow, persist_authoritative_id)
+        self.assertIn(
+            'set_runtime_value AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID ""',
+            bootstrap_source,
+        )
         self.assertNotIn("--arg password", bootstrap_source)
         self.assertNotIn('--data-binary "${registration_payload}"', bootstrap_source)
 

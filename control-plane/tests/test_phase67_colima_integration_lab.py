@@ -848,7 +848,9 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         )
         for scope, running_service in (
             ("core", "wazuh-dashboard"),
+            ("core", "shuffle-orborus"),
             ("wazuh", "shuffle-frontend"),
+            ("wazuh", "shuffle-orborus"),
             ("shuffle", "wazuh-manager"),
         ):
             with self.subTest(scope=scope, running_service=running_service):

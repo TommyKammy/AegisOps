@@ -289,13 +289,15 @@ excluded_services_for_scope() {
         wazuh-dashboard \
         shuffle-opensearch \
         shuffle-backend \
-        shuffle-frontend
+        shuffle-frontend \
+        shuffle-orborus
       ;;
     wazuh)
       printf '%s\n' \
         shuffle-opensearch \
         shuffle-backend \
-        shuffle-frontend
+        shuffle-frontend \
+        shuffle-orborus
       ;;
     shuffle)
       printf '%s\n' \

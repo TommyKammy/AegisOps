@@ -185,6 +185,14 @@ perl -0pi -e 's/assert_no_running_excluded_services/assert_removed_running_exclu
   "${scope_narrowing_drift}/control-plane/deployment/phase-67-integration-lab/up.sh"
 assert_fails_with "${scope_narrowing_drift}" 'assert_no_running_excluded_services'
 
+orborus_scope_drift="${workdir}/orborus-scope-drift"
+copy_fixture "${orborus_scope_drift}"
+sed -i.bak '/        shuffle-orborus/d' \
+  "${orborus_scope_drift}/control-plane/deployment/phase-67-integration-lab/lab-common.sh"
+assert_fails_with \
+  "${orborus_scope_drift}" \
+  'scope must exclude the Shuffle Orborus service'
+
 wazuh_upstream_tls_drift="${workdir}/wazuh-upstream-tls-drift"
 copy_fixture "${wazuh_upstream_tls_drift}"
 perl -0pi -e 's/proxy_ssl_verify on;/proxy_ssl_verify off;/' \

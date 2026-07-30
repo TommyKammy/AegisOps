@@ -87,6 +87,8 @@ require_fixed "${adapter}" 'except http_client.HTTPException as exc:'
 require_fixed "${adapter}" '"invalid_http_response"'
 require_fixed "${adapter}" 'except ssl.SSLEOFError as exc:'
 require_fixed "${adapter}" '"tls_response_truncated"'
+require_fixed "${adapter}" 'except ssl.SSLError as exc:'
+require_fixed "${adapter}" '"tls_response_failure"'
 require_fixed "${adapter}" 'isinstance(exc.reason, ssl.SSLEOFError)'
 require_fixed "${adapter}" 'deadline = self.clock() + timeout_seconds'
 require_fixed "${adapter}" 'settimeout(remaining)'
@@ -188,7 +190,11 @@ require_fixed "${bootstrap}" '${api_origin}/api/v1/getsettings'
 require_fixed "${bootstrap}" '-H "@${login_cookie_header_path}"'
 require_fixed \
   "${bootstrap}" \
-  'if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~'
+  'elif [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~'
+require_fixed \
+  "${bootstrap}" \
+  'AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID'
+require_fixed "${bootstrap}" 'workflow_update_required=true'
 require_fixed \
   "${bootstrap}" \
   'up --detach --wait --force-recreate control-plane'
@@ -226,14 +232,18 @@ import sys
 
 source = Path(sys.argv[1]).read_text(encoding="utf-8")
 create_id = source.index('workflow_id="$(\n      jq -er')
-persist_id = source.index(
-    "set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID",
+persist_pending_id = source.index(
+    "set_runtime_value AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID",
     create_id,
 )
 update_workflow = source.index('workflow_with_runtime_id="$(', create_id)
-if not create_id < persist_id < update_workflow:
+persist_authoritative_id = source.index(
+    "set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID",
+    update_workflow,
+)
+if not create_id < persist_pending_id < update_workflow < persist_authoritative_id:
     raise SystemExit(
-        "Created Shuffle workflow ID must be persisted before workflow update"
+        "Created Shuffle workflow ID must remain pending until workflow update"
     )
 PY
 

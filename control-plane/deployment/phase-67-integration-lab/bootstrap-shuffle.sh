@@ -147,7 +147,17 @@ set_runtime_value() {
   mv "${staging}" "${RUNTIME_ENV}"
 }
 
-if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+pending_workflow_id="${AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID:-}"
+workflow_update_required=false
+if [[ -n "${pending_workflow_id}" ]] \
+  && [[ ! "${pending_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+  fail "pending Shuffle workflow id must be a canonical UUID"
+fi
+
+if [[ "${pending_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+  workflow_id="${pending_workflow_id}"
+  workflow_update_required=true
+elif [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
   workflow_id="${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID}"
 else
   workflow_list="$(
@@ -181,19 +191,22 @@ else
         | select(test("^[0-9a-fA-F-]{36}$"))
       ' <<<"${workflow_create_response}"
     )"
-    set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID "${workflow_id}"
-
-    workflow_with_runtime_id="$(
-      jq --arg workflow_id "${workflow_id}" '.id = $workflow_id' "${workflow_path}"
-    )"
-    curl "${curl_common[@]}" \
-      -X PUT \
-      -H "@${auth_header_path}" \
-      -H 'Content-Type: application/json' \
-      --data-binary "${workflow_with_runtime_id}" \
-      "${api_origin}/api/v1/workflows/${workflow_id}" \
-      >/dev/null
+    set_runtime_value AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID "${workflow_id}"
+    workflow_update_required=true
   fi
+fi
+
+if [[ "${workflow_update_required}" == true ]]; then
+  workflow_with_runtime_id="$(
+    jq --arg workflow_id "${workflow_id}" '.id = $workflow_id' "${workflow_path}"
+  )"
+  curl "${curl_common[@]}" \
+    -X PUT \
+    -H "@${auth_header_path}" \
+    -H 'Content-Type: application/json' \
+    --data-binary "${workflow_with_runtime_id}" \
+    "${api_origin}/api/v1/workflows/${workflow_id}" \
+    >/dev/null
 fi
 
 preserved_workflow="$(
@@ -208,6 +221,7 @@ python3 \
   <<<"${preserved_workflow}"
 
 set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID "${workflow_id}"
+set_runtime_value AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID ""
 set_runtime_value AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE real_http
 
 workflow_digest="$(
