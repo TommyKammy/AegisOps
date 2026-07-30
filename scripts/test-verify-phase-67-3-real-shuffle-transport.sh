@@ -312,6 +312,15 @@ assert_fails_with \
   "${without_dispatch_workflow_revalidation}" \
   'self._revalidate_reviewed_workflow()'
 
+without_transient_validation_retry="${workdir}/without-transient-validation-retry"
+copy_fixture "${without_transient_validation_retry}"
+sed -i.bak \
+  's/if not exc.transient or attempt == self.max_attempts:/if True:/' \
+  "${without_transient_validation_retry}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_transient_validation_retry}" \
+  'if not exc.transient or attempt == self.max_attempts:'
+
 without_workflow_discovery="${workdir}/without-workflow-discovery"
 copy_fixture "${without_workflow_discovery}"
 sed -i.bak \

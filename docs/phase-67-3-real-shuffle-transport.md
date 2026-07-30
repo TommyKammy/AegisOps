@@ -22,6 +22,8 @@ Bootstrap first discovers an existing exact reviewed workflow before creating
 one, and persists a newly returned workflow UUID before the follow-up update so
 an interrupted rerun cannot create a duplicate. Every dispatch re-fetches and
 revalidates the complete reviewed workflow immediately before its POST.
+Transient validation GET failures use the bounded attempt budget without
+issuing a POST; authentication failures and definition drift fail immediately.
 
 The dynamic Shuffle Tools app artifact is also reviewed independently from the
 workflow's `app_version` label. The lab pulls

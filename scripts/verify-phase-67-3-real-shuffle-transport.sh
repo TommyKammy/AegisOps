@@ -93,6 +93,9 @@ require_fixed "${adapter}" 'settimeout(remaining)'
 require_fixed "${adapter}" 'chunk = read1('
 require_fixed "${adapter}" 'validate_reviewed_workflow('
 require_fixed "${adapter}" 'self._revalidate_reviewed_workflow()'
+require_fixed \
+  "${adapter}" \
+  'if not exc.transient or attempt == self.max_attempts:'
 require_fixed "${adapter}" '"reviewed_workflow_mismatch"'
 require_fixed "${adapter}" '"connection_not_established" if retryable'
 require_fixed "${adapter}" 'startswith(("shuffle-run-", "shuffle-receipt-"))'

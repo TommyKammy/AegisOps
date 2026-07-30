@@ -403,7 +403,12 @@ class RealShuffleActionAdapter:
         )
         response: object | None = None
         for attempt in range(1, self.max_attempts + 1):
-            self._revalidate_reviewed_workflow()
+            try:
+                self._revalidate_reviewed_workflow()
+            except ShuffleTransportFailure as exc:
+                if not exc.transient or attempt == self.max_attempts:
+                    raise
+                continue
             try:
                 response = self.transport.request_json(
                     method="POST",

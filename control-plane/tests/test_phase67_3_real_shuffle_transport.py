@@ -71,9 +71,12 @@ class _QueueTransport:
             and kwargs.get("url")
             == f"https://proxy:8443/shuffle-api/api/v1/workflows/{API_WORKFLOW_ID}"
         ):
-            if isinstance(self.reviewed_workflow, Exception):
-                raise self.reviewed_workflow
-            return self.reviewed_workflow
+            reviewed_workflow = self.reviewed_workflow
+            if isinstance(reviewed_workflow, list):
+                reviewed_workflow = reviewed_workflow.pop(0)
+            if isinstance(reviewed_workflow, Exception):
+                raise reviewed_workflow
+            return reviewed_workflow
         response = self.responses.pop(0)
         if isinstance(response, Exception):
             raise response
@@ -229,6 +232,58 @@ class RealShuffleTransportTests(unittest.TestCase):
         second_payload = transport.calls[3]["payload"]
         self.assertEqual(first_payload, second_payload)
         self.assertNotIn("fixture-api-key", repr(first_payload))
+
+    def test_dispatch_retries_transient_workflow_validation_before_post(
+        self,
+    ) -> None:
+        transport = _QueueTransport(
+            {"success": True, "execution_id": REAL_EXECUTION_ID}
+        )
+        transport.reviewed_workflow = [
+            ShuffleTransportFailure("timeout", transient=True),
+            _reviewed_workflow(),
+        ]
+
+        receipt = _dispatch(_adapter(transport))
+
+        self.assertEqual(receipt.execution_run_id, REAL_EXECUTION_ID)
+        self.assertEqual(
+            [call["method"] for call in transport.calls],
+            ["GET", "GET", "POST"],
+        )
+
+    def test_dispatch_never_posts_when_transient_validation_retries_exhaust(
+        self,
+    ) -> None:
+        transport = _QueueTransport()
+        transport.reviewed_workflow = [
+            ShuffleTransportFailure("timeout", transient=True),
+            ShuffleTransportFailure("http_503", transient=True),
+        ]
+
+        with self.assertRaises(ShuffleTransportFailure) as raised:
+            _dispatch(_adapter(transport))
+
+        self.assertEqual(raised.exception.category, "http_503")
+        self.assertEqual(
+            [call["method"] for call in transport.calls],
+            ["GET", "GET"],
+        )
+
+    def test_dispatch_does_not_retry_nontransient_validation_failure(self) -> None:
+        transport = _QueueTransport()
+        transport.reviewed_workflow = ShuffleTransportFailure(
+            "authentication_rejected"
+        )
+
+        with self.assertRaises(ShuffleTransportFailure) as raised:
+            _dispatch(_adapter(transport))
+
+        self.assertEqual(raised.exception.category, "authentication_rejected")
+        self.assertEqual(
+            [call["method"] for call in transport.calls],
+            ["GET"],
+        )
 
     def test_dispatch_rejects_mutated_reviewed_workflow_before_post(self) -> None:
         transport = _QueueTransport(
