@@ -19,9 +19,13 @@ normalized through an explicit allowlist with neutral execution defaults, while
 unreviewed properties and missing or changed reviewed actions, parameters,
 branches, or variables fail closed.
 Bootstrap first discovers an existing exact reviewed workflow before creating
-one, and persists a newly returned workflow UUID before the follow-up update so
-an interrupted rerun cannot create a duplicate. Every dispatch re-fetches and
-revalidates the complete reviewed workflow immediately before its POST.
+one. The runtime persists active ID, pending ID, and transport mode in one
+atomic transition: fresh initialization has no workflow ID, a newly returned
+UUID remains pending through the follow-up update, and only successful readback
+validation promotes it to active `real_http`. Interrupted reruns resume the
+pending UUID instead of creating a duplicate; the retired placeholder UUID is
+migrated to the uninitialized state. Every dispatch re-fetches and revalidates
+the complete reviewed workflow immediately before its POST.
 Transient validation GET failures use the bounded attempt budget without
 issuing a POST; authentication failures and definition drift fail immediately.
 

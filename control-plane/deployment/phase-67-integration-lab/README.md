@@ -112,13 +112,16 @@ Bootstrap creates the first local Shuffle admin only when the preserved
 substrate has no API credential, stores the returned API key in the untracked
 mode-`600` secret directory, imports the tracked local-echo workflow, records
 its runtime UUID and export digest, and recreates AegisOps with `real_http`
-selected. The API path from AegisOps is TLS-terminated at the proxy and
-source-address restricted to the control-plane container. The trial persists
-a real execution UUID, the single-execution idempotency count, requested scope,
-normalized receipt digest, and AegisOps reconciliation ID; exact receipt replay
-must return the same reconciliation record. Orborus uses the project-scoped
-Compose identity to join its Swarm overlay and deterministically recreates
-dynamic Shuffle worker/app services after an Orborus restart.
+selected. Workflow state is persisted atomically as active ID, pending ID, and
+transport mode: fresh initialization has no workflow ID, interrupted creation
+resumes the pending ID, and only a validated workflow becomes active. The API
+path from AegisOps is TLS-terminated at the proxy and source-address restricted
+to the control-plane container. The trial persists a real execution UUID, the
+single-execution idempotency count, requested scope, normalized receipt digest,
+and AegisOps reconciliation ID; exact receipt replay must return the same
+reconciliation record. Orborus uses the project-scoped Compose identity to join
+its Swarm overlay and deterministically recreates dynamic Shuffle worker/app
+services after an Orborus restart.
 
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 

@@ -32,7 +32,7 @@ from aegisops.control_plane.service_composition import (
 )
 
 
-API_WORKFLOW_ID = "67f30000-0000-4000-8000-000000000001"
+API_WORKFLOW_ID = "793f1705-46fe-4862-90b6-d26ff2be70a0"
 REAL_EXECUTION_ID = "67f30000-0000-4000-8000-000000000002"
 SECOND_REAL_EXECUTION_ID = "67f30000-0000-4000-8000-000000000003"
 EVIDENCE_VALIDATOR = (
@@ -1172,7 +1172,11 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertIn("${api_origin}/api/v1/getsettings", bootstrap_source)
         self.assertIn('-H "@${login_cookie_header_path}"', bootstrap_source)
         self.assertIn(
-            'elif [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~',
+            "classify_shuffle_workflow_runtime_state",
+            bootstrap_source,
+        )
+        self.assertIn(
+            "set_shuffle_workflow_runtime_state()",
             bootstrap_source,
         )
         self.assertIn(
@@ -1180,9 +1184,10 @@ class RealShuffleTransportTests(unittest.TestCase):
             bootstrap_source,
         )
         self.assertIn("find_reviewed_workflow.py", bootstrap_source)
-        create_id = bootstrap_source.index('workflow_id="$(\n      jq -er')
+        create_id = bootstrap_source.index('workflow_id="$(\n        jq -er')
         persist_pending_id = bootstrap_source.index(
-            "set_runtime_value AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID",
+            'set_shuffle_workflow_runtime_state "" '
+            '"${workflow_id}" deterministic',
             create_id,
         )
         update_workflow = bootstrap_source.index(
@@ -1190,16 +1195,12 @@ class RealShuffleTransportTests(unittest.TestCase):
             create_id,
         )
         persist_authoritative_id = bootstrap_source.index(
-            "set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID",
+            'set_shuffle_workflow_runtime_state "${workflow_id}" "" real_http',
             update_workflow,
         )
         self.assertLess(create_id, persist_pending_id)
         self.assertLess(persist_pending_id, update_workflow)
         self.assertLess(update_workflow, persist_authoritative_id)
-        self.assertIn(
-            'set_runtime_value AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID ""',
-            bootstrap_source,
-        )
         self.assertNotIn("--arg password", bootstrap_source)
         self.assertNotIn('--data-binary "${registration_payload}"', bootstrap_source)
 

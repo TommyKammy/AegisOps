@@ -70,6 +70,12 @@ the first local admin if needed, stores the returned API key only below the
 untracked runtime secret directory, imports the tracked harmless local-echo
 workflow, and restarts AegisOps in `real_http` mode. Reruns validate the
 preserved credential and workflow instead of creating another workflow.
+`runtime.env` stores the workflow transition as one atomic
+active-ID/pending-ID/transport-mode state. A first initialization leaves both
+IDs empty; if bootstrap stops after creation, the pending ID is resumed on the
+next run, and `real_http` is selected only after the preserved workflow passes
+validation. The retired placeholder UUID is treated as uninitialized and
+removed by the next `init.sh` run.
 
 `test-shuffle-execution.sh` creates one explicitly approved local-sink action,
 dispatches it through the authenticated API with at most two attempts, polls

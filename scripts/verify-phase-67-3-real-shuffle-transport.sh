@@ -35,6 +35,7 @@ files=(
   control-plane/tests/test_phase67_3_real_shuffle_transport.py
   control-plane/deployment/phase-67-integration-lab/docker-compose.yml
   control-plane/deployment/phase-67-integration-lab/init.sh
+  control-plane/deployment/phase-67-integration-lab/lab-common.sh
   control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh
   control-plane/deployment/phase-67-integration-lab/pin-shuffle-app-image.sh
   control-plane/deployment/phase-67-integration-lab/test-shuffle-execution.sh
@@ -68,12 +69,18 @@ trial="${lab}/test-shuffle-execution.sh"
 schema="${lab}/shuffle/evidence-manifest.schema.json"
 workflow="${lab}/shuffle/harmless-local-log-workflow.json"
 init="${lab}/init.sh"
+common="${lab}/lab-common.sh"
 bootstrap="${lab}/bootstrap-shuffle.sh"
 evidence_validator="${lab}/shuffle/validate_evidence_manifest.py"
 workflow_validator="${lab}/shuffle/validate_preserved_workflow.py"
 workflow_finder="${lab}/shuffle/find_reviewed_workflow.py"
 app_image_pin="${lab}/pin-shuffle-app-image.sh"
 app_image_env="${lab}/shuffle/reviewed-app-image.env"
+
+legacy_placeholder_id="67f30000-0000-4000-8000-000000000001"
+if grep -F "${legacy_placeholder_id}" "${init}" "${compose}" >/dev/null; then
+  fail "Fresh Phase 67.3 runtime must not seed the legacy Shuffle workflow placeholder."
+fi
 
 require_fixed "${adapter}" 'parsed.scheme != "https"'
 require_fixed "${adapter}" '"Authorization": f"Bearer {api_key}"'
@@ -141,8 +148,18 @@ require_fixed \
   'observed_external_receipt_id != expected_execution_receipt_id'
 require_fixed "${delegation}" '"recover_interrupted_dispatch"'
 require_fixed \
+  "${common}" \
+  'LEGACY_SHUFFLE_PLACEHOLDER_WORKFLOW_ID='
+require_fixed "${common}" 'classify_shuffle_workflow_runtime_state()'
+require_fixed "${common}" 'active and pending Shuffle workflow ids conflict'
+require_fixed "${init}" 'shuffle_api_workflow_id=""'
+require_fixed "${init}" 'shuffle_pending_workflow_id=""'
+require_fixed \
   "${init}" \
-  'if [[ "${existing_shuffle_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]]; then'
+  'classify_shuffle_workflow_runtime_state \'
+require_fixed \
+  "${init}" \
+  'write_runtime_env_assignment AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID'
 require_fixed "${delegation}" ').astimezone(timezone.utc)'
 require_fixed "${delegation}" 'getattr(exc, "outcome_unknown", False)'
 require_fixed \
@@ -158,6 +175,9 @@ require_fixed \
   "${repo_root}/control-plane/tests/test_service_persistence_action_reconciliation_reconciliation.py" \
   'def test_phase67_replayed_prior_receipt_does_not_roll_back_latest_status('
 require_fixed "${compose}" 'AEGISOPS_CONTROL_PLANE_SHUFFLE_API_KEY_FILE: /run/secrets/shuffle-api-key'
+require_fixed \
+  "${compose}" \
+  'AEGISOPS_CONTROL_PLANE_SHUFFLE_API_WORKFLOW_ID: "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}"'
 require_fixed "${compose}" 'NGINX_ENVSUBST_FILTER: ^AEGISOPS_LAB_CONTROL_PLANE_IPV4$'
 require_fixed "${compose}" './config/control-plane.conf:/etc/nginx/templates/control-plane.conf.template:ro'
 require_fixed "${compose}" 'ghcr.io/shuffle/shuffle-orborus:2.2.1@sha256:'
@@ -190,10 +210,16 @@ require_fixed "${bootstrap}" '${api_origin}/api/v1/getsettings'
 require_fixed "${bootstrap}" '-H "@${login_cookie_header_path}"'
 require_fixed \
   "${bootstrap}" \
-  'elif [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~'
+  'AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID'
 require_fixed \
   "${bootstrap}" \
-  'AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID'
+  'workflow_runtime_state="$('
+require_fixed \
+  "${bootstrap}" \
+  'set_shuffle_workflow_runtime_state "" "${workflow_id}" deterministic'
+require_fixed \
+  "${bootstrap}" \
+  'set_shuffle_workflow_runtime_state "${workflow_id}" "" real_http'
 require_fixed "${bootstrap}" 'workflow_update_required=true'
 require_fixed \
   "${bootstrap}" \
@@ -231,14 +257,14 @@ from pathlib import Path
 import sys
 
 source = Path(sys.argv[1]).read_text(encoding="utf-8")
-create_id = source.index('workflow_id="$(\n      jq -er')
+create_id = source.index('workflow_id="$(\n        jq -er')
 persist_pending_id = source.index(
-    "set_runtime_value AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID",
+    'set_shuffle_workflow_runtime_state "" "${workflow_id}" deterministic',
     create_id,
 )
 update_workflow = source.index('workflow_with_runtime_id="$(', create_id)
 persist_authoritative_id = source.index(
-    "set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID",
+    'set_shuffle_workflow_runtime_state "${workflow_id}" "" real_http',
     update_workflow,
 )
 if not create_id < persist_pending_id < update_workflow < persist_authoritative_id:
@@ -246,6 +272,16 @@ if not create_id < persist_pending_id < update_workflow < persist_authoritative_
         "Created Shuffle workflow ID must remain pending until workflow update"
     )
 PY
+
+classified_state="$(
+  bash -c \
+    'source "$1"; classify_shuffle_workflow_runtime_state "$2" "" deterministic' \
+    phase67-workflow-state-verifier \
+    "${common}" \
+    "${legacy_placeholder_id}"
+)"
+[[ "${classified_state}" == "uninitialized" ]] \
+  || fail "Legacy Shuffle workflow placeholder must migrate to uninitialized state."
 
 if grep -F -- '--arg password' "${bootstrap}" >/dev/null \
   || grep -F -- '--data-binary "${registration_payload}"' "${bootstrap}" >/dev/null; then

@@ -123,78 +123,98 @@ printf 'Authorization: Bearer %s\n' "${api_key}" >"${auth_header_path}"
 chmod 600 "${auth_header_path}"
 unset api_key
 
-set_runtime_value() {
-  local name="$1"
-  local value="$2"
+set_shuffle_workflow_runtime_state() {
+  local active_id="$1"
+  local pending_id="$2"
+  local transport_mode="$3"
   local staging
 
+  classify_shuffle_workflow_runtime_state \
+    "${active_id}" \
+    "${pending_id}" \
+    "${transport_mode}" \
+    >/dev/null
   staging="$(mktemp "${RUNTIME_ENV}.tmp.XXXXXX")"
-  awk -v key="${name}" -v replacement="${name}=\"${value}\"" '
-    BEGIN { replaced = 0 }
-    index($0, key "=") == 1 {
-      print replacement
-      replaced = 1
+  awk \
+    -v active_id="${active_id}" \
+    -v pending_id="${pending_id}" \
+    -v transport_mode="${transport_mode}" '
+    index($0, "AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID=") == 1 {
+      next
+    }
+    index($0, "AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID=") == 1 {
+      next
+    }
+    index($0, "AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE=") == 1 {
       next
     }
     { print }
     END {
-      if (!replaced) {
-        print replacement
-      }
+      print "AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID=\"" active_id "\""
+      print "AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID=\"" pending_id "\""
+      print "AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE=\"" transport_mode "\""
     }
   ' "${RUNTIME_ENV}" >"${staging}"
   chmod 600 "${staging}"
   mv "${staging}" "${RUNTIME_ENV}"
 }
 
+active_workflow_id="${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}"
 pending_workflow_id="${AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID:-}"
+workflow_runtime_state="$(
+  classify_shuffle_workflow_runtime_state \
+    "${active_workflow_id}" \
+    "${pending_workflow_id}" \
+    "${AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE:-deterministic}"
+)"
 workflow_update_required=false
-if [[ -n "${pending_workflow_id}" ]] \
-  && [[ ! "${pending_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
-  fail "pending Shuffle workflow id must be a canonical UUID"
-fi
 
-if [[ "${pending_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
-  workflow_id="${pending_workflow_id}"
-  workflow_update_required=true
-elif [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
-  workflow_id="${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID}"
-else
-  workflow_list="$(
-    curl "${curl_common[@]}" \
-      -H "@${auth_header_path}" \
-      "${api_origin}/api/v1/workflows"
-  )"
-  if workflow_id="$(
-    python3 \
-      "${LAB_DIR}/shuffle/find_reviewed_workflow.py" \
-      "${workflow_path}" \
-      <<<"${workflow_list}"
-  )"; then
-    set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID "${workflow_id}"
-  else
-    discovery_status="$?"
-    [[ "${discovery_status}" -eq 3 ]] \
-      || fail "existing Shuffle workflow discovery failed"
-
-    workflow_create_response="$(
+case "${workflow_runtime_state}" in
+  update_pending)
+    workflow_id="${pending_workflow_id}"
+    workflow_update_required=true
+    ;;
+  validation_pending | active)
+    workflow_id="${active_workflow_id}"
+    ;;
+  uninitialized)
+    workflow_list="$(
       curl "${curl_common[@]}" \
         -H "@${auth_header_path}" \
-        -H 'Content-Type: application/json' \
-        --data-binary "@${workflow_path}" \
         "${api_origin}/api/v1/workflows"
     )"
-    workflow_id="$(
-      jq -er '
-        (.id // .workflow.id // .workflow_id)
-        | select(type == "string")
-        | select(test("^[0-9a-fA-F-]{36}$"))
-      ' <<<"${workflow_create_response}"
-    )"
-    set_runtime_value AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID "${workflow_id}"
-    workflow_update_required=true
-  fi
-fi
+    if workflow_id="$(
+      python3 \
+        "${LAB_DIR}/shuffle/find_reviewed_workflow.py" \
+        "${workflow_path}" \
+        <<<"${workflow_list}"
+    )"; then
+      :
+    else
+      discovery_status="$?"
+      [[ "${discovery_status}" -eq 3 ]] \
+        || fail "existing Shuffle workflow discovery failed"
+
+      workflow_create_response="$(
+        curl "${curl_common[@]}" \
+          -H "@${auth_header_path}" \
+          -H 'Content-Type: application/json' \
+          --data-binary "@${workflow_path}" \
+          "${api_origin}/api/v1/workflows"
+      )"
+      workflow_id="$(
+        jq -er '
+          (.id // .workflow.id // .workflow_id)
+          | select(type == "string")
+          | select(test("^[0-9a-fA-F-]{36}$"))
+        ' <<<"${workflow_create_response}"
+      )"
+      set_shuffle_workflow_runtime_state "" "${workflow_id}" deterministic
+      workflow_update_required=true
+    fi
+    ;;
+  *) fail "unknown Shuffle workflow runtime state" ;;
+esac
 
 if [[ "${workflow_update_required}" == true ]]; then
   workflow_with_runtime_id="$(
@@ -220,9 +240,7 @@ python3 \
   "${workflow_id}" \
   <<<"${preserved_workflow}"
 
-set_runtime_value AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID "${workflow_id}"
-set_runtime_value AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID ""
-set_runtime_value AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE real_http
+set_shuffle_workflow_runtime_state "${workflow_id}" "" real_http
 
 workflow_digest="$(
   openssl dgst -sha256 -r "${workflow_path}" | awk '{print $1}'

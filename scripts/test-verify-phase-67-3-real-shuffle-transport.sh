@@ -215,26 +215,14 @@ assert_fails_with \
   "${without_registration_recovery}" \
   '${api_origin}/api/v1/getsettings'
 
-workflow_id_mode_coupling="${workdir}/workflow-id-mode-coupling"
-copy_fixture "${workflow_id_mode_coupling}"
-python3 - \
-  "${workflow_id_mode_coupling}/control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-source = path.read_text(encoding="utf-8")
-source = source.replace(
-    'elif [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~',
-    'elif [[ "${AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE:-}" == "real_http" '
-    '&& "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~',
-    1,
-)
-path.write_text(source, encoding="utf-8")
-PY
+without_workflow_state_classifier="${workdir}/without-workflow-state-classifier"
+copy_fixture "${without_workflow_state_classifier}"
+sed -i.bak \
+  's/classify_shuffle_workflow_runtime_state()/classify_legacy_workflow_runtime_state()/' \
+  "${without_workflow_state_classifier}/control-plane/deployment/phase-67-integration-lab/lab-common.sh"
 assert_fails_with \
-  "${workflow_id_mode_coupling}" \
-  'elif [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~'
+  "${without_workflow_state_classifier}" \
+  'classify_shuffle_workflow_runtime_state()'
 
 without_pending_workflow_recovery="${workdir}/without-pending-workflow-recovery"
 copy_fixture "${without_pending_workflow_recovery}"
@@ -245,26 +233,14 @@ assert_fails_with \
   "${without_pending_workflow_recovery}" \
   'AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID'
 
-init_workflow_id_mode_coupling="${workdir}/init-workflow-id-mode-coupling"
-copy_fixture "${init_workflow_id_mode_coupling}"
-python3 - \
-  "${init_workflow_id_mode_coupling}/control-plane/deployment/phase-67-integration-lab/init.sh" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-source = path.read_text(encoding="utf-8")
-source = source.replace(
-    'if [[ "${existing_shuffle_workflow_id}" =~',
-    'if [[ "${existing_shuffle_transport_mode}" == "real_http" '
-    '&& "${existing_shuffle_workflow_id}" =~',
-    1,
-)
-path.write_text(source, encoding="utf-8")
-PY
+legacy_placeholder_reintroduced="${workdir}/legacy-placeholder-reintroduced"
+copy_fixture "${legacy_placeholder_reintroduced}"
+sed -i.bak \
+  's/shuffle_api_workflow_id=""/shuffle_api_workflow_id="67f30000-0000-4000-8000-000000000001"/' \
+  "${legacy_placeholder_reintroduced}/control-plane/deployment/phase-67-integration-lab/init.sh"
 assert_fails_with \
-  "${init_workflow_id_mode_coupling}" \
-  'if [[ "${existing_shuffle_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]]; then'
+  "${legacy_placeholder_reintroduced}" \
+  'Fresh Phase 67.3 runtime must not seed the legacy Shuffle workflow placeholder.'
 
 without_secret_remount="${workdir}/without-secret-remount"
 copy_fixture "${without_secret_remount}"
@@ -393,8 +369,8 @@ import sys
 path = Path(sys.argv[1])
 source = path.read_text(encoding="utf-8")
 needle = (
-    '    set_runtime_value AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID '
-    '"${workflow_id}"\n'
+    '    set_shuffle_workflow_runtime_state "" '
+    '"${workflow_id}" deterministic\n'
 )
 replacement = ""
 if needle not in source:
@@ -403,7 +379,7 @@ path.write_text(source.replace(needle, replacement, 1), encoding="utf-8")
 PY
 assert_fails_with \
   "${delayed_workflow_id_persistence}" \
-  'Created Shuffle workflow ID must remain pending until workflow update'
+  'set_shuffle_workflow_runtime_state "" "${workflow_id}" deterministic'
 
 without_app_image_pin="${workdir}/without-app-image-pin"
 copy_fixture "${without_app_image_pin}"

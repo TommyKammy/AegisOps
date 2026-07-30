@@ -22,8 +22,21 @@ wazuh_manager_config="${AEGISOPS_LAB_RUNTIME_ROOT}/wazuh/manager-ossec.conf"
 shuffle_app_dir="${AEGISOPS_LAB_RUNTIME_ROOT}/shuffle/apps"
 shuffle_file_dir="${AEGISOPS_LAB_RUNTIME_ROOT}/shuffle/files"
 runtime_previously_initialized=false
-shuffle_api_workflow_id="67f30000-0000-4000-8000-000000000001"
+shuffle_api_workflow_id=""
+shuffle_pending_workflow_id=""
 shuffle_transport_mode="deterministic"
+
+read_runtime_env_assignment() {
+  local name="$1"
+
+  awk -F'"' -v key="${name}=" '
+    index($0, key) == 1 {
+      print $2
+      exit
+    }
+  ' "${RUNTIME_ENV}"
+}
+
 if [[ -f "${RUNTIME_ENV}" ]]; then
   runtime_previously_initialized=true
   for credential in \
@@ -45,37 +58,47 @@ if [[ -f "${RUNTIME_ENV}" ]]; then
     [[ -s "${secret_dir}/wazuh-dashboard-password" ]] \
       || fail "initialized runtime is missing credential wazuh-dashboard-password; restore it before reuse, or destroy preserved lab volumes and remove ${RUNTIME_ENV} before reinitializing"
   fi
-  if grep -Fq 'AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID=' "${RUNTIME_ENV}"; then
+  if grep -Eq \
+    '^AEGISOPS_LAB_SHUFFLE_(API_WORKFLOW_ID|PENDING_WORKFLOW_ID|TRANSPORT_MODE)=' \
+    "${RUNTIME_ENV}"; then
     for credential in shuffle-admin-password shuffle-api-key; do
       [[ -s "${secret_dir}/${credential}" ]] \
         || fail "initialized runtime is missing credential ${credential}; restore it before reuse, or destroy preserved lab volumes and remove ${RUNTIME_ENV} before reinitializing"
     done
     existing_shuffle_workflow_id="$(
-      awk -F'"' '
-        index($0, "AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID=") == 1 {
-          print $2
-          exit
-        }
-      ' "${RUNTIME_ENV}"
+      read_runtime_env_assignment AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID
+    )"
+    existing_shuffle_pending_workflow_id="$(
+      read_runtime_env_assignment AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID
     )"
     existing_shuffle_transport_mode="$(
-      awk -F'"' '
-        index($0, "AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE=") == 1 {
-          print $2
-          exit
-        }
-      ' "${RUNTIME_ENV}"
+      read_runtime_env_assignment AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE
     )"
-    if [[ "${existing_shuffle_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
-      shuffle_api_workflow_id="${existing_shuffle_workflow_id}"
-    fi
-    if [[
-      "${existing_shuffle_transport_mode}" == "real_http" &&
-        "${existing_shuffle_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ &&
-        "$(<"${secret_dir}/shuffle-api-key")" != bootstrap-pending-*
-    ]]; then
-      shuffle_transport_mode="real_http"
-    fi
+    existing_shuffle_transport_mode="${existing_shuffle_transport_mode:-deterministic}"
+    shuffle_workflow_runtime_state="$(
+      classify_shuffle_workflow_runtime_state \
+        "${existing_shuffle_workflow_id}" \
+        "${existing_shuffle_pending_workflow_id}" \
+        "${existing_shuffle_transport_mode}"
+    )"
+    case "${shuffle_workflow_runtime_state}" in
+      uninitialized) ;;
+      update_pending)
+        shuffle_pending_workflow_id="${existing_shuffle_pending_workflow_id}"
+        ;;
+      validation_pending)
+        shuffle_api_workflow_id="${existing_shuffle_workflow_id}"
+        ;;
+      active)
+        shuffle_api_workflow_id="${existing_shuffle_workflow_id}"
+        if [[
+          "$(<"${secret_dir}/shuffle-api-key")" != bootstrap-pending-*
+        ]]; then
+          shuffle_transport_mode="real_http"
+        fi
+        ;;
+      *) fail "unknown Shuffle workflow runtime state" ;;
+    esac
   fi
 else
   assert_no_preserved_phase67_volumes
@@ -375,6 +398,7 @@ trap cleanup_runtime_env_staging EXIT
   write_runtime_env_assignment AEGISOPS_LAB_WAZUH_DOCKER_COMMIT "${AEGISOPS_LAB_WAZUH_DOCKER_COMMIT}"
   write_runtime_env_assignment AEGISOPS_LAB_SHUFFLE_VERSION "${AEGISOPS_LAB_SHUFFLE_VERSION}"
   write_runtime_env_assignment AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID "${shuffle_api_workflow_id}"
+  write_runtime_env_assignment AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID "${shuffle_pending_workflow_id}"
   write_runtime_env_assignment AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE "${shuffle_transport_mode}"
   write_runtime_env_assignment AEGISOPS_LAB_WAZUH_INDEXER_PASSWORD "$(<"${secret_dir}/wazuh-indexer-password")"
   write_runtime_env_assignment AEGISOPS_LAB_WAZUH_API_PASSWORD "$(<"${secret_dir}/wazuh-api-password")"
