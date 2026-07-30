@@ -336,7 +336,8 @@ class ActionExecutionReconciliationCoordinator:
                 )
             elif (
                 require_binding_identifiers
-                and latest_execution.get("status") in {"failed", "error"}
+                and latest_execution.get("status")
+                in {"failed", "error", "canceled", "cancelled"}
             ):
                 ingest_disposition = "mismatch"
                 lifecycle_state = "mismatched"

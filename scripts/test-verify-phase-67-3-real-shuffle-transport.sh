@@ -76,6 +76,14 @@ assert_fails_with \
   "${without_http_framing_recovery}" \
   'except http_client.HTTPException as exc:'
 
+without_tls_response_recovery="${workdir}/without-tls-response-recovery"
+copy_fixture "${without_tls_response_recovery}"
+sed -i.bak 's/except ssl.SSLEOFError as exc:/except RuntimeError as exc:/' \
+  "${without_tls_response_recovery}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_tls_response_recovery}" \
+  'except ssl.SSLEOFError as exc:'
+
 without_execution_id_normalization="${workdir}/without-execution-id-normalization"
 copy_fixture "${without_execution_id_normalization}"
 sed -i.bak \
@@ -119,6 +127,15 @@ assert_fails_with \
   "${without_external_receipt_binding}" \
   'observed_external_receipt_id != expected_execution_receipt_id'
 
+without_canceled_receipt_rejection="${workdir}/without-canceled-receipt-rejection"
+copy_fixture "${without_canceled_receipt_rejection}"
+sed -i.bak \
+  's/{"failed", "error", "canceled", "cancelled"}/{"failed", "error"}/' \
+  "${without_canceled_receipt_rejection}/control-plane/aegisops/control_plane/actions/execution_coordinator_reconciliation.py"
+assert_fails_with \
+  "${without_canceled_receipt_rejection}" \
+  '{"failed", "error", "canceled", "cancelled"}'
+
 future_recovery_timestamp="${workdir}/future-recovery-timestamp"
 copy_fixture "${future_recovery_timestamp}"
 sed -i.bak \
@@ -135,6 +152,27 @@ sed -i.bak 's|${api_origin}/api/v1/getsettings|${api_origin}/api/v1/generateapik
 assert_fails_with \
   "${without_registration_recovery}" \
   '${api_origin}/api/v1/getsettings'
+
+workflow_id_mode_coupling="${workdir}/workflow-id-mode-coupling"
+copy_fixture "${workflow_id_mode_coupling}"
+python3 - \
+  "${workflow_id_mode_coupling}/control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+source = source.replace(
+    'if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~',
+    'if [[ "${AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE:-}" == "real_http" '
+    '&& "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~',
+    1,
+)
+path.write_text(source, encoding="utf-8")
+PY
+assert_fails_with \
+  "${workflow_id_mode_coupling}" \
+  'if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~'
 
 without_secret_remount="${workdir}/without-secret-remount"
 copy_fixture "${without_secret_remount}"

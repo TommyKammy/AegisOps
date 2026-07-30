@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from http import client as http_client
 import json
 import pathlib
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -533,6 +534,40 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertTrue(raised.exception.transient)
         self.assertTrue(raised.exception.outcome_unknown)
 
+        tls_response = mock.MagicMock()
+        opened_tls_response = tls_response.__enter__.return_value
+        opened_tls_response.headers.get_content_type.return_value = (
+            "application/json"
+        )
+        opened_tls_response.read.side_effect = ssl.SSLEOFError(
+            8,
+            "unexpected EOF while reading",
+        )
+        tls_opener = mock.Mock()
+        tls_opener.open.return_value = tls_response
+        with (
+            mock.patch(
+                "aegisops.control_plane.adapters.shuffle_real.ssl.create_default_context",
+                return_value=object(),
+            ),
+            mock.patch(
+                "aegisops.control_plane.adapters.shuffle_real.request.build_opener",
+                return_value=tls_opener,
+            ),
+        ):
+            with self.assertRaises(ShuffleTransportFailure) as raised:
+                transport.request_json(
+                    method="POST",
+                    url="https://proxy:8443/shuffle-api/api/v1/workflows/id/execute",
+                    api_key="fixture-api-key",
+                    payload={"fixture": True},
+                    timeout_seconds=2,
+                )
+        self.assertEqual(raised.exception.category, "tls_response_truncated")
+        self.assertFalse(raised.exception.retryable)
+        self.assertTrue(raised.exception.transient)
+        self.assertTrue(raised.exception.outcome_unknown)
+
     def test_authenticated_poll_normalizes_bound_receipt(self) -> None:
         argument = _execution_argument()
         transport = _QueueTransport(
@@ -866,6 +901,10 @@ class RealShuffleTransportTests(unittest.TestCase):
         self.assertIn("${api_origin}/api/v1/login", bootstrap_source)
         self.assertIn("${api_origin}/api/v1/getsettings", bootstrap_source)
         self.assertIn('-H "@${login_cookie_header_path}"', bootstrap_source)
+        self.assertIn(
+            'if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~',
+            bootstrap_source,
+        )
         self.assertIn(
             "up --detach --wait --force-recreate control-plane",
             bootstrap_source,

@@ -109,10 +109,7 @@ auth_header_path="$(mktemp "${api_key_path}.header.XXXXXX")"
 printf 'Authorization: Bearer %s\n' "${api_key}" >"${auth_header_path}"
 chmod 600 "${auth_header_path}"
 unset api_key
-if [[
-  "${AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE:-}" == "real_http" &&
-    "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~ ^[0-9a-fA-F-]{36}$
-]]; then
+if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
   workflow_id="${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID}"
 else
   workflow_create_response="$(

@@ -74,6 +74,8 @@ require_fixed "${adapter}" 'request.build_opener('
 require_fixed "${adapter}" '"redirect_rejected"'
 require_fixed "${adapter}" 'except http_client.HTTPException as exc:'
 require_fixed "${adapter}" '"invalid_http_response"'
+require_fixed "${adapter}" 'except ssl.SSLEOFError as exc:'
+require_fixed "${adapter}" '"tls_response_truncated"'
 require_fixed "${adapter}" '"connection_not_established" if retryable'
 require_fixed "${adapter}" 'startswith(("shuffle-run-", "shuffle-receipt-"))'
 require_fixed "${adapter}" 'Shuffle execution id must be a UUID'
@@ -102,6 +104,9 @@ require_fixed "${reconciliation}" '"downstream execution failed and requires ope
 require_fixed "${reconciliation}" '"requested_scope"'
 require_fixed "${reconciliation}" 'not isinstance(value, bool)'
 require_fixed "${reconciliation}" 'status.strip().lower()'
+require_fixed \
+  "${reconciliation}" \
+  '{"failed", "error", "canceled", "cancelled"}'
 require_fixed "${reconciliation}" 'and not _json_values_equal('
 require_fixed \
   "${reconciliation}" \
@@ -140,6 +145,9 @@ require_fixed "${bootstrap}" '--data-binary @-'
 require_fixed "${bootstrap}" '${api_origin}/api/v1/login'
 require_fixed "${bootstrap}" '${api_origin}/api/v1/getsettings'
 require_fixed "${bootstrap}" '-H "@${login_cookie_header_path}"'
+require_fixed \
+  "${bootstrap}" \
+  'if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~'
 require_fixed \
   "${bootstrap}" \
   'up --detach --wait --force-recreate control-plane'
