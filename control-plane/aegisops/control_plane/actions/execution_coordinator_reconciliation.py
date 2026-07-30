@@ -19,6 +19,26 @@ from ..models import (
     ReconciliationRecord,
 )
 
+_SHUFFLE_STATUS_TO_LIFECYCLE = {
+    "queued": "queued",
+    "pending": "queued",
+    "running": "running",
+    "in_progress": "running",
+    "success": "succeeded",
+    "succeeded": "succeeded",
+    "completed": "succeeded",
+    "failed": "failed",
+    "error": "failed",
+    "canceled": "canceled",
+    "cancelled": "canceled",
+}
+_SHUFFLE_FAILURE_STATUSES = frozenset(
+    {"failed", "error", "canceled", "cancelled"}
+)
+_SHUFFLE_NON_FAILURE_STATUSES = frozenset(_SHUFFLE_STATUS_TO_LIFECYCLE).difference(
+    _SHUFFLE_FAILURE_STATUSES
+)
+
 
 def _json_values_equal(left: object, right: object) -> bool:
     try:
@@ -336,13 +356,23 @@ class ActionExecutionReconciliationCoordinator:
                 )
             elif (
                 require_binding_identifiers
-                and latest_execution.get("status")
-                in {"failed", "error", "canceled", "cancelled"}
+                and latest_execution.get("status") in _SHUFFLE_FAILURE_STATUSES
             ):
                 ingest_disposition = "mismatch"
                 lifecycle_state = "mismatched"
                 mismatch_summary = (
                     "downstream execution failed and requires operator review"
+                )
+                persist_normalized_receipt = require_binding_identifiers
+            elif (
+                require_binding_identifiers
+                and latest_execution.get("status")
+                not in _SHUFFLE_NON_FAILURE_STATUSES
+            ):
+                ingest_disposition = "mismatch"
+                lifecycle_state = "mismatched"
+                mismatch_summary = (
+                    "unrecognized downstream execution status requires operator review"
                 )
                 persist_normalized_receipt = require_binding_identifiers
             else:
@@ -511,19 +541,7 @@ class ActionExecutionReconciliationCoordinator:
             return current_lifecycle_state
 
         normalized_status = status.strip().lower()
-        observed_state = {
-            "queued": "queued",
-            "pending": "queued",
-            "running": "running",
-            "in_progress": "running",
-            "success": "succeeded",
-            "succeeded": "succeeded",
-            "completed": "succeeded",
-            "failed": "failed",
-            "error": "failed",
-            "canceled": "canceled",
-            "cancelled": "canceled",
-        }.get(normalized_status)
+        observed_state = _SHUFFLE_STATUS_TO_LIFECYCLE.get(normalized_status)
         if observed_state is None:
             return current_lifecycle_state
 

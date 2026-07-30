@@ -136,6 +136,15 @@ assert_fails_with \
   "${without_canceled_receipt_rejection}" \
   '{"failed", "error", "canceled", "cancelled"}'
 
+without_unknown_status_rejection="${workdir}/without-unknown-status-rejection"
+copy_fixture "${without_unknown_status_rejection}"
+sed -i.bak \
+  's/not in _SHUFFLE_NON_FAILURE_STATUSES/in _SHUFFLE_NON_FAILURE_STATUSES/' \
+  "${without_unknown_status_rejection}/control-plane/aegisops/control_plane/actions/execution_coordinator_reconciliation.py"
+assert_fails_with \
+  "${without_unknown_status_rejection}" \
+  'not in _SHUFFLE_NON_FAILURE_STATUSES'
+
 future_recovery_timestamp="${workdir}/future-recovery-timestamp"
 copy_fixture "${future_recovery_timestamp}"
 sed -i.bak \
@@ -173,6 +182,27 @@ PY
 assert_fails_with \
   "${workflow_id_mode_coupling}" \
   'if [[ "${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID:-}" =~'
+
+init_workflow_id_mode_coupling="${workdir}/init-workflow-id-mode-coupling"
+copy_fixture "${init_workflow_id_mode_coupling}"
+python3 - \
+  "${init_workflow_id_mode_coupling}/control-plane/deployment/phase-67-integration-lab/init.sh" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+source = source.replace(
+    'if [[ "${existing_shuffle_workflow_id}" =~',
+    'if [[ "${existing_shuffle_transport_mode}" == "real_http" '
+    '&& "${existing_shuffle_workflow_id}" =~',
+    1,
+)
+path.write_text(source, encoding="utf-8")
+PY
+assert_fails_with \
+  "${init_workflow_id_mode_coupling}" \
+  'if [[ "${existing_shuffle_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]]; then'
 
 without_secret_remount="${workdir}/without-secret-remount"
 copy_fixture "${without_secret_remount}"

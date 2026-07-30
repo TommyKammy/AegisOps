@@ -230,6 +230,85 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(stored_execution.lifecycle_state, "canceled")
         self.assertEqual(len(store.list(ReconciliationRecord)), 1)
 
+    def test_phase67_unrecognized_shuffle_receipt_status_remains_unresolved(
+        self,
+    ) -> None:
+        for status in (None, "", "TIMED_OUT"):
+            with self.subTest(status=status):
+                store, service, execution, target_scope = (
+                    self._build_phase67_failed_shuffle_context()
+                )
+                downstream_binding = execution.provenance["downstream_binding"]
+                observed_at = datetime(
+                    2026,
+                    7,
+                    29,
+                    1,
+                    12,
+                    tzinfo=timezone.utc,
+                )
+                receipt = {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": execution.idempotency_key,
+                    "approval_decision_id": execution.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding[
+                        "workflow_version_id"
+                    ],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
+                    "external_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
+                    "requested_scope": target_scope,
+                    "idempotency_execution_count": 1,
+                    "observed_at": observed_at,
+                }
+                if status is not None:
+                    receipt["status"] = status
+
+                reconciliation = service.reconcile_action_execution(
+                    action_request_id=execution.action_request_id,
+                    execution_surface_type="automation_substrate",
+                    execution_surface_id="shuffle",
+                    observed_executions=(receipt,),
+                    compared_at=observed_at,
+                    stale_after=datetime(
+                        2026,
+                        7,
+                        29,
+                        1,
+                        30,
+                        tzinfo=timezone.utc,
+                    ),
+                )
+
+                stored_execution = service.get_record(
+                    ActionExecutionRecord,
+                    execution.action_execution_id,
+                )
+                self.assertEqual(
+                    reconciliation.ingest_disposition,
+                    "mismatch",
+                )
+                self.assertEqual(
+                    reconciliation.lifecycle_state,
+                    "mismatched",
+                )
+                self.assertIn(
+                    "unrecognized downstream execution status",
+                    reconciliation.mismatch_summary,
+                )
+                self.assertEqual(stored_execution.lifecycle_state, "queued")
+                self.assertEqual(len(store.list(ReconciliationRecord)), 1)
+
     def test_phase67_real_shuffle_receipt_requires_exact_scope_and_single_execution(
         self,
     ) -> None:

@@ -33,6 +33,7 @@ files=(
   control-plane/aegisops/control_plane/actions/execution_coordinator_delegation.py
   control-plane/tests/test_phase67_3_real_shuffle_transport.py
   control-plane/deployment/phase-67-integration-lab/docker-compose.yml
+  control-plane/deployment/phase-67-integration-lab/init.sh
   control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh
   control-plane/deployment/phase-67-integration-lab/test-shuffle-execution.sh
   control-plane/deployment/phase-67-integration-lab/shuffle/harmless-local-log-workflow.json
@@ -60,6 +61,7 @@ proxy="${lab}/config/control-plane.conf"
 trial="${lab}/test-shuffle-execution.sh"
 schema="${lab}/shuffle/evidence-manifest.schema.json"
 workflow="${lab}/shuffle/harmless-local-log-workflow.json"
+init="${lab}/init.sh"
 bootstrap="${lab}/bootstrap-shuffle.sh"
 evidence_validator="${lab}/shuffle/validate_evidence_manifest.py"
 workflow_validator="${lab}/shuffle/validate_preserved_workflow.py"
@@ -107,11 +109,17 @@ require_fixed "${reconciliation}" 'status.strip().lower()'
 require_fixed \
   "${reconciliation}" \
   '{"failed", "error", "canceled", "cancelled"}'
+require_fixed \
+  "${reconciliation}" \
+  'not in _SHUFFLE_NON_FAILURE_STATUSES'
 require_fixed "${reconciliation}" 'and not _json_values_equal('
 require_fixed \
   "${reconciliation}" \
   'observed_external_receipt_id != expected_execution_receipt_id'
 require_fixed "${delegation}" '"recover_interrupted_dispatch"'
+require_fixed \
+  "${init}" \
+  'if [[ "${existing_shuffle_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]]; then'
 require_fixed "${delegation}" ').astimezone(timezone.utc)'
 require_fixed "${delegation}" 'getattr(exc, "outcome_unknown", False)'
 require_fixed \

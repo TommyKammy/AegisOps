@@ -66,12 +66,14 @@ if [[ -f "${RUNTIME_ENV}" ]]; then
         }
       ' "${RUNTIME_ENV}"
     )"
+    if [[ "${existing_shuffle_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+      shuffle_api_workflow_id="${existing_shuffle_workflow_id}"
+    fi
     if [[
       "${existing_shuffle_transport_mode}" == "real_http" &&
         "${existing_shuffle_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ &&
         "$(<"${secret_dir}/shuffle-api-key")" != bootstrap-pending-*
     ]]; then
-      shuffle_api_workflow_id="${existing_shuffle_workflow_id}"
       shuffle_transport_mode="real_http"
     fi
   fi
