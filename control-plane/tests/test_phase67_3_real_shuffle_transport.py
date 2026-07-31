@@ -714,6 +714,52 @@ class RealShuffleTransportTests(unittest.TestCase):
                 self.assertTrue(raised.exception.transient)
                 self.assertTrue(raised.exception.outcome_unknown)
 
+    def test_http_transport_treats_tls_handshake_rejection_as_preconnect(
+        self,
+    ) -> None:
+        transport = UrllibShuffleJsonTransport(ca_file="/fixture/ca.pem")
+        certificate_error = ssl.SSLCertVerificationError(
+            1,
+            "certificate verify failed",
+        )
+        for opener_error in (
+            certificate_error,
+            error.URLError(certificate_error),
+        ):
+            with self.subTest(error_type=type(opener_error).__name__):
+                opener = mock.Mock()
+                opener.open.side_effect = opener_error
+                with (
+                    mock.patch(
+                        "aegisops.control_plane.adapters.shuffle_real."
+                        "ssl.create_default_context",
+                        return_value=object(),
+                    ),
+                    mock.patch(
+                        "aegisops.control_plane.adapters.shuffle_real."
+                        "request.build_opener",
+                        return_value=opener,
+                    ),
+                ):
+                    with self.assertRaises(ShuffleTransportFailure) as raised:
+                        transport.request_json(
+                            method="POST",
+                            url=(
+                                "https://proxy:8443/shuffle-api/api/v1/"
+                                "workflows/id/execute"
+                            ),
+                            api_key="fixture-api-key",
+                            payload={"fixture": True},
+                            timeout_seconds=2,
+                        )
+                self.assertEqual(
+                    raised.exception.category,
+                    "tls_handshake_rejected",
+                )
+                self.assertTrue(raised.exception.retryable)
+                self.assertTrue(raised.exception.transient)
+                self.assertFalse(raised.exception.outcome_unknown)
+
     def test_http_transport_enforces_total_response_deadline(self) -> None:
         elapsed = 0.0
 

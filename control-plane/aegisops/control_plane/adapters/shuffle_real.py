@@ -244,6 +244,12 @@ class UrllibShuffleJsonTransport:
                 transient=True,
                 outcome_unknown=method == "POST",
             ) from exc
+        except ssl.SSLCertVerificationError as exc:
+            raise ShuffleTransportFailure(
+                "tls_handshake_rejected",
+                retryable=True,
+                transient=True,
+            ) from exc
         except ssl.SSLEOFError as exc:
             raise ShuffleTransportFailure(
                 "tls_response_truncated",
@@ -257,18 +263,31 @@ class UrllibShuffleJsonTransport:
                 outcome_unknown=method == "POST",
             ) from exc
         except error.URLError as exc:
+            tls_handshake_rejected = isinstance(
+                exc.reason,
+                ssl.SSLCertVerificationError,
+            )
             tls_response_truncated = isinstance(exc.reason, ssl.SSLEOFError)
-            tls_response_failure = isinstance(exc.reason, ssl.SSLError)
-            retryable = isinstance(exc.reason, (ConnectionRefusedError, socket.gaierror))
+            tls_response_failure = (
+                isinstance(exc.reason, ssl.SSLError)
+                and not tls_handshake_rejected
+            )
+            retryable = tls_handshake_rejected or isinstance(
+                exc.reason,
+                (ConnectionRefusedError, socket.gaierror),
+            )
             transient = (
-                tls_response_failure
+                tls_handshake_rejected
+                or tls_response_failure
                 or isinstance(
                     exc.reason,
                     (ConnectionError, TimeoutError, socket.gaierror),
                 )
             )
             category = (
-                "tls_response_truncated"
+                "tls_handshake_rejected"
+                if tls_handshake_rejected
+                else "tls_response_truncated"
                 if tls_response_truncated
                 else "tls_response_failure"
                 if tls_response_failure

@@ -76,6 +76,42 @@ assert_fails_with \
   "${without_http_framing_recovery}" \
   'except http_client.HTTPException as exc:'
 
+without_tls_handshake_classification="${workdir}/without-tls-handshake-classification"
+copy_fixture "${without_tls_handshake_classification}"
+sed -i.bak \
+  's/except ssl.SSLCertVerificationError as exc:/except RuntimeError as exc:/' \
+  "${without_tls_handshake_classification}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_tls_handshake_classification}" \
+  'except ssl.SSLCertVerificationError as exc:'
+
+without_wrapped_tls_handshake_classification="${workdir}/without-wrapped-tls-handshake-classification"
+copy_fixture "${without_wrapped_tls_handshake_classification}"
+sed -i.bak \
+  's/and not tls_handshake_rejected/and tls_handshake_rejected/' \
+  "${without_wrapped_tls_handshake_classification}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_wrapped_tls_handshake_classification}" \
+  'and not tls_handshake_rejected'
+
+without_wrapped_certificate_detection="${workdir}/without-wrapped-certificate-detection"
+copy_fixture "${without_wrapped_certificate_detection}"
+sed -i.bak \
+  's/ssl.SSLCertVerificationError,/RuntimeError,/' \
+  "${without_wrapped_certificate_detection}/control-plane/aegisops/control_plane/adapters/shuffle_real.py"
+assert_fails_with \
+  "${without_wrapped_certificate_detection}" \
+  'ssl.SSLCertVerificationError,'
+
+without_tls_handshake_regression="${workdir}/without-tls-handshake-regression"
+copy_fixture "${without_tls_handshake_regression}"
+sed -i.bak \
+  's/test_http_transport_treats_tls_handshake_rejection_as_preconnect/test_http_transport_treats_tls_handshake_rejection_as_unknown/' \
+  "${without_tls_handshake_regression}/control-plane/tests/test_phase67_3_real_shuffle_transport.py"
+assert_fails_with \
+  "${without_tls_handshake_regression}" \
+  'def test_http_transport_treats_tls_handshake_rejection_as_preconnect('
+
 without_tls_response_recovery="${workdir}/without-tls-response-recovery"
 copy_fixture "${without_tls_response_recovery}"
 sed -i.bak 's/except ssl.SSLEOFError as exc:/except RuntimeError as exc:/' \

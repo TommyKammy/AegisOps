@@ -92,6 +92,11 @@ require_fixed "${adapter}" 'request.build_opener('
 require_fixed "${adapter}" '"redirect_rejected"'
 require_fixed "${adapter}" 'except http_client.HTTPException as exc:'
 require_fixed "${adapter}" '"invalid_http_response"'
+require_fixed "${adapter}" 'except ssl.SSLCertVerificationError as exc:'
+require_fixed "${adapter}" '"tls_handshake_rejected"'
+require_fixed "${adapter}" 'tls_handshake_rejected = isinstance('
+require_fixed "${adapter}" 'ssl.SSLCertVerificationError,'
+require_fixed "${adapter}" 'and not tls_handshake_rejected'
 require_fixed "${adapter}" 'except ssl.SSLEOFError as exc:'
 require_fixed "${adapter}" '"tls_response_truncated"'
 require_fixed "${adapter}" 'except ssl.SSLError as exc:'
@@ -129,6 +134,9 @@ require_fixed \
 require_fixed \
   "${repo_root}/control-plane/tests/test_phase67_3_real_shuffle_transport.py" \
   'self.assertNotIn("authorization", receipt)'
+require_fixed \
+  "${repo_root}/control-plane/tests/test_phase67_3_real_shuffle_transport.py" \
+  'def test_http_transport_treats_tls_handshake_rejection_as_preconnect('
 require_fixed "${reconciliation}" '"normalized_receipt"'
 require_fixed "${reconciliation}" '"normalized_receipt_sha256"'
 require_fixed "${reconciliation}" '_find_receipt_reconciliation'
