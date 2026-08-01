@@ -78,7 +78,7 @@ snapshot_id="phase67-snapshot-$(
 container_ids="$(compose_scope full ps -q)"
 [[ -n "${container_ids}" ]] || fail "full lab started no containers"
 # shellcheck disable=SC2086
-docker inspect ${container_ids} |
+docker_lab inspect ${container_ids} |
   jq -S '
     map(
       . as $container
@@ -141,7 +141,7 @@ jq -c '.journey' "${journey_output}" |
 [[ "$(git -C "${REPO_ROOT}" rev-parse HEAD)" == "${repository_revision}" ]] \
   || fail "repository revision changed during the E2E trial"
 runtime_artifact_sha256="$(jq -er '.runtime_artifact_digest' "${wazuh_evidence}")"
-docker_context="$(docker context show)"
+docker_context="${AEGISOPS_LAB_DOCKER_CONTEXT}"
 colima_profile="${COLIMA_PROFILE:-default}"
 jq -n \
   --arg trial_run_id "${trial_run_id}" \

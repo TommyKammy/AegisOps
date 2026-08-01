@@ -64,6 +64,8 @@ require_fixed "${e2e_root}/run_real_journey.py" 'APPROVER_IDENTITY = "phase67-la
 require_fixed "${e2e_root}/run_real_journey.py" 'if not rejected or execution_count != 0:'
 require_fixed "${e2e_root}/run_real_journey.py" 'export_audit_retention_baseline('
 require_fixed "${lab_root}/run-e2e-trial.sh" 'verify-restart'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab inspect ${container_ids}'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_context="${AEGISOPS_LAB_DOCKER_CONTEXT}"'
 require_fixed "${lab_root}/run-e2e-trial.sh" '"${LAB_DIR}/cleanup.sh"'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'status --porcelain=v1'
 
