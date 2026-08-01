@@ -1,0 +1,326 @@
+{
+  "authority_posture": "aegisops_records_remain_authoritative",
+  "captured_at": "2026-08-01T10:13:49.959152Z",
+  "cleanup": {
+    "containers_stopped": true,
+    "data_preserved": true,
+    "mode": "non_destructive"
+  },
+  "human_control": {
+    "approval_source": "aegisops_approval_decision_record",
+    "approver_identity": "phase67-lab-approver",
+    "denied_action_execution_count": 0,
+    "denied_dispatch_rejected": true,
+    "requester_identity": "phase67-lab-requester"
+  },
+  "idempotency": {
+    "receipt_identity_preserved": true,
+    "receipt_replay_reconciliation_id": "reconciliation-0c4778ef-7804-48dc-898c-df5b44a00c8d",
+    "shuffle_execution_count": 1,
+    "wazuh_alert_identity_preserved": true,
+    "wazuh_duplicate_disposition": "deduplicated",
+    "wazuh_first_disposition": "created"
+  },
+  "identifiers": {
+    "action_execution_id": "action-execution-f7144974-243b-496f-ac36-e12e4dc01dad",
+    "action_request_id": "phase67-action-bdc719aa610416d6a288",
+    "aegisops_alert_id": "alert-df4a0b6e-937a-43a5-9b6b-c7fee1297848",
+    "approval_decision_id": "phase67-approval-bdc719aa610416d6a288",
+    "case_id": "phase67-case-bdc719aa610416d6a288",
+    "delegation_id": "delegation-e4cdec9e-8e72-41f5-8783-1fa75e6144b4",
+    "denied_action_request_id": "phase67-denied-action-bdc719aa610416d6a288",
+    "denied_approval_decision_id": "phase67-denied-approval-bdc719aa610416d6a288",
+    "expected_receipt_id": "phase67-receipt-bdc719aa610416d6a288",
+    "finding_id": "finding:wazuh:rule:5710:source:agent:000:alert:1785579078.705868",
+    "native_wazuh_alert_id": "1785579078.705868",
+    "reconciliation_id": "reconciliation-0c4778ef-7804-48dc-898c-df5b44a00c8d",
+    "report_id": "phase67-report-bdc719aa610416d6a288",
+    "shuffle_execution_id": "1f19efa8-24b1-4713-b9f5-42da43a6a2bd",
+    "shuffle_workflow_id": "793f1705-46fe-4862-90b6-d26ff2be70a0",
+    "shuffle_workflow_version": "notify_identity_owner-v1-reviewed-2026-05-03",
+    "wazuh_agent_id": "000",
+    "wazuh_manager_id": "295eb7c9b663",
+    "wazuh_rule_id": "5710"
+  },
+  "limitations": [
+    {
+      "description": "Evidence covers one non-production single-host Colima lab.",
+      "follow_up_issue": null,
+      "limitation_id": "phase67-single-host",
+      "owner": "AegisOps platform operations",
+      "status": "accepted"
+    },
+    {
+      "description": "Evidence covers one Wazuh rule and one reviewed harmless Shuffle workflow.",
+      "follow_up_issue": null,
+      "limitation_id": "phase67-bounded-connectors",
+      "owner": "AegisOps integration engineering",
+      "status": "follow_up_required"
+    },
+    {
+      "description": "Production operations, design-partner evidence, scale, HA, and disaster recovery gates remain open.",
+      "follow_up_issue": null,
+      "limitation_id": "phase67-ga-gates-open",
+      "owner": "AegisOps release owner",
+      "status": "blocking"
+    }
+  ],
+  "negative_cases": {
+    "failed_execution": {
+      "authority_delta": 0,
+      "evidence_ref": "journey:negative_probes.failed_execution:failed_receipt_not_reconciled",
+      "status": "contained"
+    },
+    "invalid_credential": {
+      "authority_delta": 0,
+      "evidence_ref": "wazuh-command:invalid_bearer_secret=403",
+      "status": "rejected"
+    },
+    "malformed_receipt": {
+      "authority_delta": 0,
+      "evidence_ref": "journey:negative_probes.malformed_receipt:malformed_receipt",
+      "status": "rejected"
+    },
+    "proxy_bypass": {
+      "authority_delta": 0,
+      "evidence_ref": "wazuh-command:proxy_bypass=403",
+      "status": "rejected"
+    },
+    "reconciliation_mismatch": {
+      "authority_delta": 0,
+      "evidence_ref": "journey:negative_probes.reconciliation_mismatch:payload_hash_mismatch",
+      "status": "rejected"
+    }
+  },
+  "report": {
+    "redacted": true,
+    "report_id": "phase67-report-bdc719aa610416d6a288",
+    "sha256": "70466c0d8ef8c10e970f47c7e5ca9d826223b604c7af705102e2c447744a330c",
+    "source_of_truth": "aegisops_authoritative_records"
+  },
+  "restart": {
+    "checked_identifiers": [
+      "aegisops_alert_id",
+      "case_id",
+      "denied_action_request_id",
+      "denied_approval_decision_id",
+      "action_request_id",
+      "approval_decision_id",
+      "action_execution_id",
+      "reconciliation_id"
+    ],
+    "performed": true,
+    "records_persisted": true
+  },
+  "schema_version": "phase67.4-real-service-e2e-evidence-v1",
+  "snapshot": {
+    "colima_profile": "default",
+    "compose_sha256": "9d2574c9af7f02c9c8726198db3d47a6a97b1cc47069e16190faa0b76330d27f",
+    "docker_context": "colima-aegisops-phase67",
+    "evidence_schema_sha256": "9c74e47ebe574378b273a2a7c5bef4f3665fdfeab7fa1eb9d700e1c3a09b3c5e",
+    "host_architecture": "arm64",
+    "images": [
+      {
+        "immutable_reference": "control-plane@sha256:3300ce824726946a308834836837fe0d68bb12af97bd9554d7ba16cf41018d60",
+        "service": "control-plane"
+      },
+      {
+        "immutable_reference": "postgres:16.4@sha256:e62fbf9d3e2b49816a32c400ed2dba83e3b361e6833e624024309c35d334b412",
+        "service": "postgres"
+      },
+      {
+        "immutable_reference": "nginx:1.27.0@sha256:98f8ec75657d21b924fe4f69b6b9bff2f6550ea48838af479d8894a852000e40",
+        "service": "proxy"
+      },
+      {
+        "immutable_reference": "ghcr.io/shuffle/shuffle-backend:2.2.1@sha256:0cc1775e48b7d94b7f16d0be713aa274ced52be24ad521beaaf58c67023fd2e5",
+        "service": "shuffle-backend"
+      },
+      {
+        "immutable_reference": "ghcr.io/shuffle/shuffle-frontend:2.2.1@sha256:0561dd421382f70d15cada11a324b40762f0930522fcc1b51edcce9c87cc0f00",
+        "service": "shuffle-frontend"
+      },
+      {
+        "immutable_reference": "opensearchproject/opensearch:3.2.0@sha256:23297b8d8545e129dd58c254ed08d786dc552410ba772983ad2af31048d2f04b",
+        "service": "shuffle-opensearch"
+      },
+      {
+        "immutable_reference": "ghcr.io/shuffle/shuffle-orborus:2.2.1@sha256:3519810b3ca4fe568acefdf15ce6f2deba0ae6f0ff6b84412354d59d663dff31",
+        "service": "shuffle-orborus"
+      },
+      {
+        "immutable_reference": "wazuh/wazuh-dashboard:4.14.6@sha256:16aa978eaa6355fe3965e310ef8eaaed4df6f701dcf5885ebd0783fcd5ee6f16",
+        "service": "wazuh-dashboard"
+      },
+      {
+        "immutable_reference": "wazuh/wazuh-indexer:4.14.6@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5",
+        "service": "wazuh-indexer"
+      },
+      {
+        "immutable_reference": "wazuh/wazuh-manager:4.14.6@sha256:4683ddc88474c79ae6171d9132adbd45fda86bdfb22ad0d8ddee167654c9e841",
+        "service": "wazuh-manager"
+      }
+    ],
+    "repository_revision": "afd494452ea85ba4f81844f564190833d2c99fb0",
+    "runtime_artifact_sha256": "fc6e19aea49348ea033c1fde2bde12b38121b22f86db4739472f323abdcebf76",
+    "selected_profile": "full",
+    "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc"
+  },
+  "source_mode": "real_services",
+  "steps": [
+    {
+      "evidence_refs": [
+        "snapshot"
+      ],
+      "name": "capture_immutable_snapshot",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 1
+    },
+    {
+      "evidence_refs": [
+        "lab-status:full"
+      ],
+      "name": "start_lab_and_record_health",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 2
+    },
+    {
+      "evidence_refs": [
+        "wazuh-manifest:native_wazuh_alert_id"
+      ],
+      "name": "trigger_real_wazuh_detection",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 3
+    },
+    {
+      "evidence_refs": [
+        "wazuh-manifest:aegisops_alert_id"
+      ],
+      "name": "admit_wazuh_alert",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 4
+    },
+    {
+      "evidence_refs": [
+        "journey:case_id"
+      ],
+      "name": "promote_alert_to_case",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 5
+    },
+    {
+      "evidence_refs": [
+        "journey:action_request_id"
+      ],
+      "name": "create_reviewed_action_request",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 6
+    },
+    {
+      "evidence_refs": [
+        "journey:denied_dispatch"
+      ],
+      "name": "prove_denied_action_non_dispatch",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 7
+    },
+    {
+      "evidence_refs": [
+        "journey:execution_id"
+      ],
+      "name": "approve_and_dispatch_real_shuffle_action",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 8
+    },
+    {
+      "evidence_refs": [
+        "journey:expected_receipt_id"
+      ],
+      "name": "capture_authenticated_shuffle_receipt",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 9
+    },
+    {
+      "evidence_refs": [
+        "journey:reconciliation_id"
+      ],
+      "name": "reconcile_from_aegisops_records",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 10
+    },
+    {
+      "evidence_refs": [
+        "report:sha256"
+      ],
+      "name": "export_redacted_aegisops_report",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 11
+    },
+    {
+      "evidence_refs": [
+        "wazuh-manifest:duplicate_delivery",
+        "journey:replay_reconciliation_id"
+      ],
+      "name": "replay_deliveries_for_idempotency",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 12
+    },
+    {
+      "evidence_refs": [
+        "wazuh-command:negative-boundaries",
+        "journey:negative_probes"
+      ],
+      "name": "run_negative_cases",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 13
+    },
+    {
+      "evidence_refs": [
+        "restart:checked_identifiers"
+      ],
+      "name": "restart_and_verify_persistence",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 14
+    },
+    {
+      "evidence_refs": [
+        "docs:phase-67-prerequisite-evaluation"
+      ],
+      "name": "publish_prerequisite_evaluation",
+      "observed_at": "2026-08-01T10:13:49.959152Z",
+      "snapshot_id": "phase67-snapshot-91d9f7ae646a86cc",
+      "status": "passed",
+      "step": 15
+    }
+  ],
+  "trial_run_id": "phase67-e2e-20260801T101013Z-3f1ab3cf5906",
+  "verdict": "integration_trial_passed_with_owned_limitations"
+}

@@ -23,6 +23,13 @@ rollout, autonomous remediation, or a GA claim.
 - Raw service logs, command output, and the full redacted report remain under
   the mode-`0600` local runtime evidence directory and are not committed.
 
+The published packet records trial
+`phase67-e2e-20260801T101013Z-3f1ab3cf5906`, captured at
+`2026-08-01T10:13:49.959152Z` against repository revision
+`afd494452ea85ba4f81844f564190833d2c99fb0` and snapshot
+`phase67-snapshot-91d9f7ae646a86cc`. All 15 required journey steps passed on
+the dedicated `colima-aegisops-phase67` Docker context.
+
 The evidence packet binds every journey step to one full repository revision,
 one rendered Compose digest, one schema digest, one runtime artifact digest,
 one set of image digests, and one trial run ID. Service health is recorded only
