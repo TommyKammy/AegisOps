@@ -74,7 +74,7 @@ assert_fails_with \
 assert_fails_with \
   private-host-path \
   'contains a secret value or private host path' \
-  mutate_json '.limitations[0].description = "/Users/operator/private/evidence.json"'
+  mutate_json '.limitations[0].description = "/Users/operator/private/evidence.json"' # publishable-path-hygiene: allowlist -- adversarial fixture
 assert_fails_with \
   inferred-report \
   'report must be redacted and AegisOps-derived' \

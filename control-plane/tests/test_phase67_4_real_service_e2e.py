@@ -229,7 +229,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
     def test_validator_rejects_secret_values_and_private_host_paths(self) -> None:
         for description in (
             "Bearer secret-value",
-            "Read the capture under /Users/alice/private/evidence.json",
+            "Read the capture under /Users/alice/private/evidence.json",  # publishable-path-hygiene: allowlist -- adversarial fixture
             "https://operator:password@shuffle.local/api",
         ):
             with self.subTest(description=description):
