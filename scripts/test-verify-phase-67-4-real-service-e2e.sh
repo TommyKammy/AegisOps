@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+schema="${repo_root}/control-plane/deployment/phase-67-integration-lab/e2e/evidence-manifest.schema.json"
+sample="${repo_root}/control-plane/deployment/phase-67-integration-lab/e2e/sample-evidence.json"
+validator="${repo_root}/control-plane/deployment/phase-67-integration-lab/e2e/validate_evidence_manifest.py"
+workdir="$(mktemp -d)"
+trap 'rm -rf "${workdir}"' EXIT
+
+assert_fails_with() {
+  local name="$1"
+  local expected="$2"
+  local manifest="${workdir}/${name}.json"
+  shift 2
+  cp "${sample}" "${manifest}"
+  "$@" "${manifest}"
+  if python3 "${validator}" "${schema}" "${manifest}" \
+    >"${workdir}/${name}.out" 2>"${workdir}/${name}.err"; then
+    echo "self-test expected rejection for ${name}" >&2
+    exit 1
+  fi
+  grep -Fq -- "${expected}" "${workdir}/${name}.err" \
+    || {
+      cat "${workdir}/${name}.err" >&2
+      echo "self-test ${name} missed expected diagnostic: ${expected}" >&2
+      exit 1
+    }
+}
+
+mutate_json() {
+  local expression="$1"
+  local path="$2"
+  local staging="${path}.tmp"
+  jq "${expression}" "${path}" >"${staging}"
+  mv "${staging}" "${path}"
+}
+
+python3 "${validator}" "${schema}" "${sample}"
+
+assert_fails_with \
+  placeholder-id \
+  'looks synthetic or placeholder-derived' \
+  mutate_json '.identifiers.native_wazuh_alert_id = "fixture-alert-1"'
+assert_fails_with \
+  synthetic-shuffle-id \
+  'synthetic Shuffle execution ID' \
+  mutate_json '.identifiers.shuffle_execution_id = "shuffle-run-123"'
+assert_fails_with \
+  missing-step \
+  'exactly 15 steps' \
+  mutate_json 'del(.steps[14])'
+assert_fails_with \
+  mixed-snapshot \
+  'mixed snapshot' \
+  mutate_json '.steps[8].snapshot_id = "phase67-snapshot-fedcba9876543210"'
+assert_fails_with \
+  same-actor \
+  'requester and approver must be distinct' \
+  mutate_json '.human_control.approver_identity = .human_control.requester_identity'
+assert_fails_with \
+  denied-dispatch \
+  'denied action must produce no dispatch' \
+  mutate_json '.human_control.denied_action_execution_count = 1'
+assert_fails_with \
+  inferred-reconciliation \
+  'receipt replay must reuse the reconciliation ID' \
+  mutate_json '.idempotency.receipt_replay_reconciliation_id = "reconciliation-second"'
+assert_fails_with \
+  secret-exposure \
+  'contains a secret value or private host path' \
+  mutate_json '.limitations[0].description = "Bearer leaked-value"'
+assert_fails_with \
+  private-host-path \
+  'contains a secret value or private host path' \
+  mutate_json '.limitations[0].description = "/Users/operator/private/evidence.json"'
+assert_fails_with \
+  inferred-report \
+  'report must be redacted and AegisOps-derived' \
+  mutate_json '.report.source_of_truth = "shuffle_execution_state"'
+assert_fails_with \
+  ga-overclaim \
+  'not in the reviewed vocabulary' \
+  mutate_json '.verdict = "ga_accepted"'
+
+echo "PASS: Phase 67.4 verifier adversarial self-tests passed."

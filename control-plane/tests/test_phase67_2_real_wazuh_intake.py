@@ -90,6 +90,7 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             "wazuh_manager_health": "healthy",
             "native_wazuh_alert_id": "phase67-native-alert",
             "native_wazuh_manager_id": "wazuh.manager",
+            "native_wazuh_agent_id": "000",
             "native_wazuh_rule_id": "5710",
             "native_event_timestamp": "2026-07-29T00:00:00+00:00",
             "aegisops_alert_id": "alert-phase67",
@@ -992,7 +993,10 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
         )
         plaintext_probe = trial[
             trial.index('http_probe_status="$(') :
-            trial.index("compose_scope wazuh exec -T wazuh-manager python3 - <<'PY'")
+            trial.index(
+                'compose_scope "${trial_scope}" exec -T '
+                "wazuh-manager python3 - <<'PY'"
+            )
         ]
         self.assertIn("--request POST", plaintext_probe)
         self.assertIn(
@@ -1000,6 +1004,8 @@ class Phase672RealWazuhIntakeTests(unittest.TestCase):
             plaintext_probe,
         )
         self.assertIn('--data-binary "@${mapped_fixture}"', plaintext_probe)
+        self.assertIn('trial_scope="${AEGISOPS_LAB_TRIAL_SCOPE:-wazuh}"', trial)
+        self.assertIn('wazuh | full', trial)
         self.assertIn(
             '"${http_probe_rc}" -eq 0 && "${http_probe_status}" == "400"',
             plaintext_probe,

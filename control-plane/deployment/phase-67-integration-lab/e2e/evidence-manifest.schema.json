@@ -1,0 +1,343 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aegisops.local/schemas/phase67-4-real-service-e2e-evidence-v1.json",
+  "title": "Phase 67.4 real-service E2E evidence manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "captured_at",
+    "source_mode",
+    "trial_run_id",
+    "snapshot",
+    "steps",
+    "identifiers",
+    "human_control",
+    "idempotency",
+    "negative_cases",
+    "restart",
+    "report",
+    "cleanup",
+    "authority_posture",
+    "verdict",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "phase67.4-real-service-e2e-evidence-v1"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_mode": {
+      "const": "real_services"
+    },
+    "trial_run_id": {
+      "type": "string",
+      "pattern": "^phase67-e2e-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id",
+        "repository_revision",
+        "compose_sha256",
+        "evidence_schema_sha256",
+        "runtime_artifact_sha256",
+        "host_architecture",
+        "docker_context",
+        "colima_profile",
+        "selected_profile",
+        "images"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^phase67-snapshot-[0-9a-f]{16}$"
+        },
+        "repository_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "compose_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "evidence_schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "runtime_artifact_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "host_architecture": {
+          "type": "string",
+          "enum": ["arm64", "aarch64"]
+        },
+        "docker_context": {
+          "type": "string",
+          "minLength": 1
+        },
+        "colima_profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selected_profile": {
+          "const": "full"
+        },
+        "images": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["service", "immutable_reference"],
+            "properties": {
+              "service": {"type": "string", "minLength": 1},
+              "immutable_reference": {
+                "type": "string",
+                "pattern": "^.+@sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "step",
+          "name",
+          "status",
+          "snapshot_id",
+          "observed_at",
+          "evidence_refs"
+        ],
+        "properties": {
+          "step": {"type": "integer", "minimum": 1, "maximum": 15},
+          "name": {"type": "string", "minLength": 1},
+          "status": {
+            "type": "string",
+            "enum": ["passed", "failed", "blocked", "not_run"]
+          },
+          "snapshot_id": {"type": "string", "minLength": 1},
+          "observed_at": {"type": "string", "format": "date-time"},
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "blocker": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["owner", "reason"],
+            "properties": {
+              "owner": {"type": "string", "minLength": 1},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wazuh_manager_id",
+        "wazuh_agent_id",
+        "wazuh_rule_id",
+        "native_wazuh_alert_id",
+        "aegisops_alert_id",
+        "finding_id",
+        "case_id",
+        "denied_action_request_id",
+        "denied_approval_decision_id",
+        "action_request_id",
+        "approval_decision_id",
+        "delegation_id",
+        "shuffle_workflow_id",
+        "shuffle_workflow_version",
+        "shuffle_execution_id",
+        "expected_receipt_id",
+        "action_execution_id",
+        "reconciliation_id",
+        "report_id"
+      ],
+      "properties": {
+        "wazuh_manager_id": {"type": ["string", "null"]},
+        "wazuh_agent_id": {"type": ["string", "null"]},
+        "wazuh_rule_id": {"type": ["string", "null"]},
+        "native_wazuh_alert_id": {"type": ["string", "null"]},
+        "aegisops_alert_id": {"type": ["string", "null"]},
+        "finding_id": {"type": ["string", "null"]},
+        "case_id": {"type": ["string", "null"]},
+        "denied_action_request_id": {"type": ["string", "null"]},
+        "denied_approval_decision_id": {"type": ["string", "null"]},
+        "action_request_id": {"type": ["string", "null"]},
+        "approval_decision_id": {"type": ["string", "null"]},
+        "delegation_id": {"type": ["string", "null"]},
+        "shuffle_workflow_id": {"type": ["string", "null"]},
+        "shuffle_workflow_version": {"type": ["string", "null"]},
+        "shuffle_execution_id": {"type": ["string", "null"]},
+        "expected_receipt_id": {"type": ["string", "null"]},
+        "action_execution_id": {"type": ["string", "null"]},
+        "reconciliation_id": {"type": ["string", "null"]},
+        "report_id": {"type": ["string", "null"]}
+      }
+    },
+    "human_control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requester_identity",
+        "approver_identity",
+        "denied_action_execution_count",
+        "denied_dispatch_rejected",
+        "approval_source"
+      ],
+      "properties": {
+        "requester_identity": {"type": ["string", "null"]},
+        "approver_identity": {"type": ["string", "null"]},
+        "denied_action_execution_count": {"type": ["integer", "null"]},
+        "denied_dispatch_rejected": {"type": ["boolean", "null"]},
+        "approval_source": {
+          "type": ["string", "null"],
+          "enum": ["aegisops_approval_decision_record", null]
+        }
+      }
+    },
+    "idempotency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wazuh_first_disposition",
+        "wazuh_duplicate_disposition",
+        "wazuh_alert_identity_preserved",
+        "shuffle_execution_count",
+        "receipt_replay_reconciliation_id",
+        "receipt_identity_preserved"
+      ],
+      "properties": {
+        "wazuh_first_disposition": {"type": ["string", "null"]},
+        "wazuh_duplicate_disposition": {"type": ["string", "null"]},
+        "wazuh_alert_identity_preserved": {"type": ["boolean", "null"]},
+        "shuffle_execution_count": {"type": ["integer", "null"]},
+        "receipt_replay_reconciliation_id": {"type": ["string", "null"]},
+        "receipt_identity_preserved": {"type": ["boolean", "null"]}
+      }
+    },
+    "negative_cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invalid_credential",
+        "proxy_bypass",
+        "failed_execution",
+        "malformed_receipt",
+        "reconciliation_mismatch"
+      ],
+      "properties": {
+        "invalid_credential": {"$ref": "#/$defs/negative_case"},
+        "proxy_bypass": {"$ref": "#/$defs/negative_case"},
+        "failed_execution": {"$ref": "#/$defs/negative_case"},
+        "malformed_receipt": {"$ref": "#/$defs/negative_case"},
+        "reconciliation_mismatch": {"$ref": "#/$defs/negative_case"}
+      }
+    },
+    "restart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["performed", "records_persisted", "checked_identifiers"],
+      "properties": {
+        "performed": {"type": ["boolean", "null"]},
+        "records_persisted": {"type": ["boolean", "null"]},
+        "checked_identifiers": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["report_id", "sha256", "source_of_truth", "redacted"],
+      "properties": {
+        "report_id": {"type": ["string", "null"]},
+        "sha256": {"type": ["string", "null"]},
+        "source_of_truth": {
+          "type": ["string", "null"],
+          "enum": ["aegisops_authoritative_records", null]
+        },
+        "redacted": {"type": ["boolean", "null"]}
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "containers_stopped", "data_preserved"],
+      "properties": {
+        "mode": {
+          "type": ["string", "null"],
+          "enum": ["non_destructive", null]
+        },
+        "containers_stopped": {"type": ["boolean", "null"]},
+        "data_preserved": {"type": ["boolean", "null"]}
+      }
+    },
+    "authority_posture": {
+      "const": "aegisops_records_remain_authoritative"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "integration_trial_passed_ga_not_accepted",
+        "integration_trial_passed_with_owned_limitations",
+        "integration_trial_blocked",
+        "integration_trial_failed"
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["limitation_id", "owner", "status", "description"],
+        "properties": {
+          "limitation_id": {"type": "string", "minLength": 1},
+          "owner": {"type": "string", "minLength": 1},
+          "status": {
+            "type": "string",
+            "enum": ["accepted", "follow_up_required", "blocking"]
+          },
+          "description": {"type": "string", "minLength": 1},
+          "follow_up_issue": {"type": ["string", "null"]}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "negative_case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "authority_delta", "evidence_ref"],
+      "properties": {
+        "status": {
+          "type": ["string", "null"],
+          "enum": ["rejected", "contained", null]
+        },
+        "authority_delta": {"type": ["integer", "null"]},
+        "evidence_ref": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

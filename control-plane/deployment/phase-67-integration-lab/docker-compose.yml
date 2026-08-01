@@ -69,6 +69,7 @@ services:
     volumes:
       - ./control-plane-entrypoint.sh:/opt/aegisops/bin/phase-67-lab-entrypoint.sh:ro
       - ./shuffle:/opt/aegisops/phase67-shuffle:ro
+      - ./e2e:/opt/aegisops/phase67-e2e:ro
     depends_on:
       postgres:
         condition: service_healthy

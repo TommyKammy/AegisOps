@@ -92,6 +92,38 @@ project name so Orborus joins the worker overlay without a global
 `container_name`. Wait for the bounded Orborus startup window before treating a
 queued execution as stalled.
 
+## Complete Phase 67.4 E2E Trial
+
+Run this only after Wazuh substrate preparation and Shuffle bootstrap have
+completed, and only from a clean committed revision:
+
+```bash
+control-plane/deployment/phase-67-integration-lab/run-e2e-trial.sh
+```
+
+The runner uses the `full` profile and one generated trial run ID. It hashes
+the repository revision, rendered Compose model, evidence schema, runtime
+artifacts, and running image identities before it combines any evidence. It
+then executes the real Wazuh trial, promotes that exact admitted alert to a
+case, records a requester and distinct approver, proves a denied action has
+zero executions, and dispatches one approved harmless action to real Shuffle.
+Receipt success is passed through AegisOps reconciliation instead of inferred
+from Shuffle state.
+
+After report export and delivery replay, the runner stops and starts the lab,
+checks the persisted authoritative identifiers and one-execution count, and
+runs `cleanup.sh`. Raw captures and the complete redacted report remain mode
+`0600` below `${AEGISOPS_LAB_EVIDENCE_DIR}`. Only a separately reviewed,
+redacted manifest may be copied to the tracked sample path. Do not commit the
+raw command output, report, service logs, runtime env, or host-local paths.
+
+The evidence validator fails closed on missing or reordered steps, mixed
+snapshots, placeholder or synthetic live IDs, same-actor request and approval,
+denied dispatch, inferred receipt or reconciliation success, secret exposure,
+private host paths, mutable branch references, and a verdict that exceeds the
+recorded journey. A passing trial selects
+`integration_trial_passed_with_owned_limitations`; it does not accept GA.
+
 ## Inspect
 
 ```bash
@@ -156,5 +188,6 @@ That command applies the same ownership proof before deleting only volumes attac
   failed evidence and do not mark the action reconciled or rerun dispatch
   manually.
 - Shuffle amd64 execution unavailable: preserve the profile settings and use the exact `colima stop` plus `colima start --vm-type vz --vz-rosetta ... --activate=false` command printed by `preflight.sh --scope shuffle`. This host-level change interrupts every workload in that Colima profile, so the lab reports it as a blocker and never applies it automatically. Do not remove the explicit `linux/amd64` platform.
+- Phase 67.4 E2E failure: preserve the hidden staging directory printed by the runner, collect bounded `status.sh full --write-evidence` and `logs.sh` output, and record the exact failed step and owner. Do not convert partial component success into a passed E2E verdict.
 
 When a blocker remains, save the relevant scoped preflight, `status.sh ... --write-evidence`, and a bounded `logs.sh` snapshot before changing the lab configuration.

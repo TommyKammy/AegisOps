@@ -490,12 +490,19 @@ if (
     )
 probe_start = trial.find('http_probe_status="$(')
 probe_end = trial.find(
-    "compose_scope wazuh exec -T wazuh-manager python3 - <<'PY'",
+    'compose_scope "${trial_scope}" exec -T '
+    "wazuh-manager python3 - <<'PY'",
     probe_start,
 )
 if probe_start < 0 or probe_end < 0:
     raise SystemExit("Phase 67.2 trial must retain the plaintext boundary probe")
 plaintext_probe = trial[probe_start:probe_end]
+for required in (
+    'trial_scope="${AEGISOPS_LAB_TRIAL_SCOPE:-wazuh}"',
+    'wazuh | full',
+):
+    if required not in trial:
+        raise SystemExit("Phase 67.2 trial scope contract is incomplete")
 for required in (
     "--request POST",
     '--header "@${authenticated_header_file}"',

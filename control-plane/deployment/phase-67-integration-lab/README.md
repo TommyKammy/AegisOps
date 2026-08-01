@@ -32,6 +32,17 @@ adapter requires an explicit reviewed delegation binding, rejects synthetic
 execution and receipt identifiers, and never persists Shuffle's
 per-execution authorization token.
 
+Phase 67.4 binds both component paths into one authority-preserving journey:
+
+`native Wazuh alert -> AegisOps admission and case -> distinct human approval -> real Shuffle execution and receipt -> AegisOps reconciliation -> redacted report -> restart proof`
+
+The combined runner requires a clean immutable repository revision and the
+`full` profile. It records digest-pinned services, all 15 reviewed journey
+steps, denied-action non-dispatch, duplicate delivery behavior, selected
+negative probes, persistence after restart, and non-destructive cleanup. The
+publishable sample omits raw logs, secret values, private host paths, and the
+full local report.
+
 ## Runtime Shape
 
 The default `core` scope starts PostgreSQL, applies the reviewed first-boot migrations plus current runtime migrations through `0015`, starts the AegisOps control plane, and starts the TLS reverse proxy. Later migration checksums are recorded in the same bootstrap metadata table and fail closed on checksum or recorded-schema drift, including reviewed column, constraint type, validated constraint definition, and index definitions. Before service handoff, the lab also hashes the complete final column, constraint, and index catalogs to reprove the definitions introduced by delegated migrations `0001` through `0007` after their reviewed later evolution. Wazuh and Shuffle are opt-in Compose profiles:
@@ -123,6 +134,19 @@ reconciliation record. Orborus uses the project-scoped Compose identity to join
 its Swarm overlay and deterministically recreates dynamic Shuffle worker/app
 services after an Orborus restart.
 
+After both component trials are initialized, run the complete Phase 67.4
+journey from a clean commit:
+
+```bash
+control-plane/deployment/phase-67-integration-lab/run-e2e-trial.sh
+```
+
+The command starts `full`, reuses the real Wazuh intake boundary, promotes that
+exact admitted alert, proves a denied action has no Shuffle execution, records
+a separate approved real execution, reconciles its authenticated receipt,
+exports a redacted AegisOps report, restarts the lab, checks authoritative
+record persistence, and stops the lab without deleting volumes or evidence.
+
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 
 `up.sh` will not represent a narrower scope while services from another optional profile remain running. Run `down.sh` before changing from `full` to `core`, `wazuh`, or `shuffle`, or when switching directly between the two optional scopes.
@@ -182,6 +206,9 @@ python3 -m unittest control-plane.tests.test_phase67_2_real_wazuh_intake
 bash scripts/verify-phase-67-3-real-shuffle-transport.sh
 bash scripts/test-verify-phase-67-3-real-shuffle-transport.sh
 python3 -m unittest control-plane.tests.test_phase67_3_real_shuffle_transport
+bash scripts/verify-phase-67-4-real-service-e2e.sh
+bash scripts/test-verify-phase-67-4-real-service-e2e.sh
+python3 -m unittest control-plane.tests.test_phase67_4_real_service_e2e
 ```
 
 The real-host core smoke boundary requires the selected Colima profile and
@@ -192,4 +219,6 @@ immutable image ID used by the running control-plane container, so locally
 resolved build dependencies remain attributable. The Phase 67.2 Wazuh receipt
 and manifest remain subordinate transport evidence. Only AegisOps admission
 creates authoritative alert state; the trial does not promote a case or accept
-a readiness gate. Reviewed Shuffle execution belongs to Phase 67.3.
+a readiness gate. Reviewed Shuffle execution belongs to Phase 67.3. The
+Phase 67.4 packet links those subordinate identifiers to AegisOps records but
+still does not accept GA.

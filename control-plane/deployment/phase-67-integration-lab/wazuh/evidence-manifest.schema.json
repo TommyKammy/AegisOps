@@ -15,6 +15,7 @@
     "wazuh_manager_health",
     "native_wazuh_alert_id",
     "native_wazuh_manager_id",
+    "native_wazuh_agent_id",
     "native_wazuh_rule_id",
     "native_event_timestamp",
     "aegisops_alert_id",
@@ -64,6 +65,10 @@
     "native_wazuh_manager_id": {
       "type": "string",
       "minLength": 1
+    },
+    "native_wazuh_agent_id": {
+      "type": "string",
+      "pattern": "^[0-9]{3,}$"
     },
     "native_wazuh_rule_id": {
       "const": "5710"
