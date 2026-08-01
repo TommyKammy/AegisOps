@@ -129,7 +129,7 @@ PY
 
 "${LAB_DIR}/down.sh"
 "${LAB_DIR}/up.sh" full
-jq -c '.journey' "${journey_output}" |
+jq -c '.journey | .aegisops_alert_id = .alert_id' "${journey_output}" |
   compose_scope full exec -T \
     -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE="${shuffle_tools_image}" \
     -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}" \

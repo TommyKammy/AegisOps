@@ -310,6 +310,10 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertNotIn("docker inspect ${container_ids}", runner)
         self.assertNotIn("docker context show", runner)
         self.assertIn("verify-restart", runner)
+        self.assertIn(
+            ".journey | .aegisops_alert_id = .alert_id",
+            runner,
+        )
         self.assertIn('"${LAB_DIR}/cleanup.sh"', runner)
         self.assertNotIn("destroy-data.sh", runner)
         real_journey = (E2E_ROOT / "run_real_journey.py").read_text(

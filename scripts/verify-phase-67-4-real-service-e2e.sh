@@ -65,6 +65,7 @@ require_fixed "${e2e_root}/run_real_journey.py" 'if not rejected or execution_co
 require_fixed "${e2e_root}/run_real_journey.py" 'lifecycle_state="rejected"'
 require_fixed "${e2e_root}/run_real_journey.py" 'export_audit_retention_baseline('
 require_fixed "${lab_root}/run-e2e-trial.sh" 'verify-restart'
+require_fixed "${lab_root}/run-e2e-trial.sh" '.journey | .aegisops_alert_id = .alert_id'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab inspect ${container_ids}'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_context="${AEGISOPS_LAB_DOCKER_CONTEXT}"'
 require_fixed "${lab_root}/run-e2e-trial.sh" '"${LAB_DIR}/cleanup.sh"'
