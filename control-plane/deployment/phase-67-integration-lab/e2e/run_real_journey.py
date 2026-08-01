@@ -233,7 +233,7 @@ def _prove_denied_action_non_dispatch(
             target_snapshot=target_scope,
             payload_hash=payload_hash,
             decided_at=requested_at + timedelta(seconds=1),
-            lifecycle_state="denied",
+            lifecycle_state="rejected",
             decision_rationale="Denied control action for Phase 67.4 proof.",
             approved_expires_at=None,
         ),
@@ -243,7 +243,7 @@ def _prove_denied_action_non_dispatch(
         replace(
             action,
             approval_decision_id=decision.approval_decision_id,
-            lifecycle_state="denied",
+            lifecycle_state="rejected",
         ),
         transitioned_at=requested_at + timedelta(seconds=1),
     )

@@ -312,6 +312,11 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn("verify-restart", runner)
         self.assertIn('"${LAB_DIR}/cleanup.sh"', runner)
         self.assertNotIn("destroy-data.sh", runner)
+        real_journey = (E2E_ROOT / "run_real_journey.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('lifecycle_state="rejected"', real_journey)
+        self.assertNotIn('lifecycle_state="denied"', real_journey)
         compose = (LAB_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
         self.assertIn("./e2e:/opt/aegisops/phase67-e2e:ro", compose)
 
