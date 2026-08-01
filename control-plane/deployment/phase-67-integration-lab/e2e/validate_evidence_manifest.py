@@ -187,11 +187,6 @@ def require_nullable_boolean(value: object, path: str) -> bool | None:
     return value  # type: ignore[return-value]
 
 
-def require_boolean(value: object, path: str) -> bool:
-    require(isinstance(value, bool), f"{path} must be a boolean")
-    return value  # type: ignore[return-value]
-
-
 def require_datetime(value: object, path: str) -> str:
     text = require_string(value, path)
     normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
@@ -284,7 +279,11 @@ def _validate_snapshot(value: object) -> Mapping[str, object]:
     return snapshot
 
 
-def _validate_steps(value: object, snapshot_id: str, verdict: str) -> None:
+def _validate_steps(
+    value: object,
+    snapshot_id: str,
+    verdict: str,
+) -> tuple[str, ...]:
     require(isinstance(value, list) and len(value) == len(STEP_NAMES), "$.steps must contain exactly 15 steps")
     statuses: list[str] = []
     for index, expected_name in enumerate(STEP_NAMES):
@@ -323,6 +322,7 @@ def _validate_steps(value: object, snapshot_id: str, verdict: str) -> None:
         require(all(status == "not_run" for status in statuses[blocked_index + 1 :]), "steps after a blocker must be not_run")
     elif verdict == "integration_trial_failed":
         require(statuses.count("failed") >= 1, "a failed verdict requires a failed step")
+    return tuple(statuses)
 
 
 def validate_manifest(manifest: object, schema: object) -> None:
@@ -357,7 +357,7 @@ def validate_manifest(manifest: object, schema: object) -> None:
     require(verdict in VERDICTS, "$.verdict is not in the reviewed vocabulary")
     snapshot = _validate_snapshot(root["snapshot"])
     snapshot_id = require_string(snapshot["snapshot_id"], "$.snapshot.snapshot_id")
-    _validate_steps(root["steps"], snapshot_id, verdict)
+    step_statuses = _validate_steps(root["steps"], snapshot_id, verdict)
 
     identifiers = require_mapping(root["identifiers"], "$.identifiers")
     require_exact_keys(identifiers, required=IDENTIFIER_KEYS, path="$.identifiers")
@@ -387,16 +387,29 @@ def validate_manifest(manifest: object, schema: object) -> None:
     approval_method = require_nullable_string(human["approval_method"], "$.human_control.approval_method")
     approval_challenge_sha256 = require_nullable_string(human["approval_challenge_sha256"], "$.human_control.approval_challenge_sha256")
     approval_confirmed_at = human["approval_confirmed_at"]
-    if verdict.startswith("integration_trial_passed"):
+    if step_statuses[6] == "passed":
+        require(denied_count == 0 and denied_rejected is True, "denied action must produce no dispatch")
+    if step_statuses[7] == "passed":
         require(requester != approver, "requester and approver must be distinct")
         require(approver == authenticated_approver, "approver must match the authenticated local operator")
-        require(denied_count == 0 and denied_rejected is True, "denied action must produce no dispatch")
         require(approval_source == "interactive_local_operator_ceremony", "approval must come from the interactive ceremony")
         require(approval_method in {"macos_operator_dialog", "tty_challenge"}, "approval method is not independently interactive")
         require(approval_challenge_sha256 is not None and SHA256.fullmatch(approval_challenge_sha256) is not None, "approval challenge digest must be SHA-256")
         require_datetime(approval_confirmed_at, "$.human_control.approval_confirmed_at")
     else:
-        require(approval_confirmed_at is None or isinstance(approval_confirmed_at, str), "$.human_control.approval_confirmed_at must be a date-time or null")
+        require(
+            all(
+                value is None
+                for value in (
+                    approver,
+                    authenticated_approver,
+                    approval_source,
+                    approval_method,
+                    approval_confirmed_at,
+                )
+            ),
+            "a non-passed approval step cannot claim an approver or approval event",
+        )
 
     idempotency = require_mapping(root["idempotency"], "$.idempotency")
     require_exact_keys(idempotency, required=("wazuh_first_disposition", "wazuh_duplicate_disposition", "wazuh_alert_identity_preserved", "shuffle_execution_count", "receipt_replay_reconciliation_id", "receipt_identity_preserved"), path="$.idempotency")
@@ -406,10 +419,15 @@ def validate_manifest(manifest: object, schema: object) -> None:
     execution_count = require_nullable_integer(idempotency["shuffle_execution_count"], "$.idempotency.shuffle_execution_count")
     replay_id = require_nullable_string(idempotency["receipt_replay_reconciliation_id"], "$.idempotency.receipt_replay_reconciliation_id")
     receipt_preserved = require_nullable_boolean(idempotency["receipt_identity_preserved"], "$.idempotency.receipt_identity_preserved")
-    if verdict.startswith("integration_trial_passed"):
+    if step_statuses[11] == "passed":
         require(first_disposition == "created" and duplicate_disposition == "deduplicated" and wazuh_preserved is True, "Wazuh replay must preserve one admitted alert")
         require(execution_count == 1 and receipt_preserved is True, "Shuffle replay must preserve one execution and receipt")
         require(replay_id == normalized_ids["reconciliation_id"], "receipt replay must reuse the reconciliation ID")
+    else:
+        require(
+            execution_count is None and replay_id is None and receipt_preserved is None,
+            "a non-passed receipt replay step cannot claim Shuffle replay success",
+        )
 
     negative_cases = require_mapping(root["negative_cases"], "$.negative_cases")
     require_exact_keys(negative_cases, required=NEGATIVE_CASE_KEYS, path="$.negative_cases")
@@ -422,7 +440,7 @@ def validate_manifest(manifest: object, schema: object) -> None:
         delta = require_nullable_integer(case["authority_delta"], f"$.negative_cases.{key}.authority_delta")
         measurement_source = require_nullable_string(case["measurement_source"], f"$.negative_cases.{key}.measurement_source")
         evidence_ref = require_nullable_string(case["evidence_ref"], f"$.negative_cases.{key}.evidence_ref")
-        if verdict.startswith("integration_trial_passed"):
+        if status is not None:
             require(status in {"rejected", "contained"}, f"$.negative_cases.{key} did not reject or contain the probe")
             require(before is not None and before >= 0 and after is not None and after >= 0, f"$.negative_cases.{key} lacks authoritative before/after counts")
             require(delta == after - before, f"$.negative_cases.{key} authority delta is not measured")
@@ -435,6 +453,10 @@ def validate_manifest(manifest: object, schema: object) -> None:
             if key in {"invalid_credential", "proxy_bypass", "malformed_receipt"}:
                 require(delta == 0, f"$.negative_cases.{key} unexpectedly persisted authoritative state")
             require(evidence_ref is not None, f"$.negative_cases.{key} lacks evidence")
+        elif step_statuses[12] == "passed":
+            raise EvidenceValidationError(
+                f"$.negative_cases.{key} is missing from a passed negative-case step"
+            )
 
     restart = require_mapping(root["restart"], "$.restart")
     require_exact_keys(restart, required=("performed", "records_persisted", "checked_identifiers"), path="$.restart")
@@ -442,9 +464,11 @@ def validate_manifest(manifest: object, schema: object) -> None:
     records_persisted = require_nullable_boolean(restart["records_persisted"], "$.restart.records_persisted")
     checked = restart["checked_identifiers"]
     require(isinstance(checked, list), "$.restart.checked_identifiers must be an array")
-    if verdict.startswith("integration_trial_passed"):
+    if step_statuses[13] == "passed":
         require(restart_performed is True and records_persisted is True, "passed trial requires restart persistence proof")
         require(set(checked) >= {"aegisops_alert_id", "case_id", "action_request_id", "action_execution_id", "reconciliation_id"}, "restart proof omits authoritative identifiers")
+    else:
+        require(restart_performed is None and records_persisted is None and checked == [], "a non-passed restart step cannot claim persistence proof")
 
     report = require_mapping(root["report"], "$.report")
     require_exact_keys(report, required=("report_id", "sha256", "source_of_truth", "redacted"), path="$.report")
@@ -452,10 +476,18 @@ def validate_manifest(manifest: object, schema: object) -> None:
     report_sha = require_nullable_string(report["sha256"], "$.report.sha256")
     report_source = require_nullable_string(report["source_of_truth"], "$.report.source_of_truth")
     report_redacted = require_nullable_boolean(report["redacted"], "$.report.redacted")
-    if verdict.startswith("integration_trial_passed"):
+    if step_statuses[10] == "passed":
         require(report_id == normalized_ids["report_id"], "report ID is not bound to journey identifiers")
         require(report_sha is not None and SHA256.fullmatch(report_sha) is not None, "report digest must be SHA-256")
         require(report_source == "aegisops_authoritative_records" and report_redacted is True, "report must be redacted and AegisOps-derived")
+    else:
+        require(
+            report_id is None
+            and report_sha is None
+            and report_source is None
+            and report_redacted is None,
+            "a non-passed report step cannot claim a report export",
+        )
 
     evaluation = require_mapping(root["evaluation"], "$.evaluation")
     require_exact_keys(evaluation, required=("trial_run_id", "snapshot_id", "repository_revision", "evaluated_at", "verdict", "ga_accepted", "sha256"), path="$.evaluation")
@@ -465,7 +497,18 @@ def validate_manifest(manifest: object, schema: object) -> None:
     evaluation_verdict = require_nullable_string(evaluation["verdict"], "$.evaluation.verdict")
     evaluation_ga = require_nullable_boolean(evaluation["ga_accepted"], "$.evaluation.ga_accepted")
     evaluation_sha = require_nullable_string(evaluation["sha256"], "$.evaluation.sha256")
-    if verdict.startswith("integration_trial_passed"):
+    if any(
+        value is not None
+        for value in (
+            evaluation_trial,
+            evaluation_snapshot,
+            evaluation_revision,
+            evaluation["evaluated_at"],
+            evaluation_verdict,
+            evaluation_ga,
+            evaluation_sha,
+        )
+    ):
         require(evaluation_trial == root["trial_run_id"], "evaluation is not bound to this trial")
         require(evaluation_snapshot == snapshot_id, "evaluation is not bound to this snapshot")
         require(evaluation_revision == snapshot["repository_revision"], "evaluation is not bound to this repository revision")
@@ -473,6 +516,8 @@ def validate_manifest(manifest: object, schema: object) -> None:
         require(evaluation_verdict == verdict, "evaluation verdict does not match the manifest")
         require(evaluation_ga is False, "Phase 67 evidence cannot accept GA")
         require(evaluation_sha is not None and SHA256.fullmatch(evaluation_sha) is not None, "evaluation record digest must be SHA-256")
+    elif step_statuses[14] == "passed":
+        raise EvidenceValidationError("a passed evaluation step requires a bound evaluation record")
 
     artifacts = require_mapping(root["artifacts"], "$.artifacts")
     require_exact_keys(artifacts, required=("retention", "directory_name", "files"), path="$.artifacts")

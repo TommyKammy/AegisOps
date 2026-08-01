@@ -2,13 +2,15 @@
 
 ## Direct Verdict
 
-`integration_trial_passed_with_owned_limitations`
+`integration_trial_blocked`
 
 GA acceptance: not accepted.
 
-This verdict is limited to one non-production, single-host, real-service trial.
-It records demonstrated interoperability and does not authorize production
-rollout, autonomous remediation, or a GA claim.
+The current trial reached the independent approval boundary and stopped before
+Shuffle dispatch because no distinct human approval event was granted. A later
+completed trial may emit `integration_trial_passed_with_owned_limitations` only
+after that event and every subsequent step are evidenced. Neither verdict
+authorizes production rollout, autonomous remediation, or a GA claim.
 
 ## Evaluation Basis
 
@@ -44,34 +46,20 @@ as subordinate evidence and is never used as workflow truth.
   finding identifiers.
 - The admitted alert is promoted to a case through the AegisOps service record
   path.
-- A requester and a distinct, authenticated local operator are recorded. The
-  operator must confirm a challenge bound to the trial, action request, and
-  payload through a macOS dialog or exact TTY response before approval is
-  persisted. A denied action request is rejected before dispatch and produces
-  zero Shuffle executions.
-- The approved low-risk action reaches one reviewed real Shuffle workflow. The
-  native execution and receipt identifiers are persisted as subordinate
+- A requester and an approval challenge bound to the trial, action request, and
+  payload are recorded. A denied action request is rejected before dispatch
+  and produces zero Shuffle executions.
+- Invalid credential and proxy bypass probes are rejected with measured
+  authoritative alert counts and zero alert delta.
+- Non-destructive cleanup stops containers while preserving volumes and local
   evidence.
-- AegisOps reconciliation compares the received binding with its authoritative
-  action, approval, delegation, and execution records. Shuffle success alone is
-  insufficient.
-- Replaying the receipt preserves one execution and one reconciliation record.
-- Invalid credential, proxy bypass, failed execution, malformed receipt, and
-  reconciliation mismatch probes are sent through their real AegisOps
-  boundaries. The packet records authoritative before/after counts and the
-  measured delta; rejected reconciliation observations may add explicit
-  reconciliation evidence but cannot become accepted execution truth.
-- A redacted report is derived from AegisOps records under a repeatable-read
-  snapshot.
-- A stop/start cycle preserves the alert, case, action, approval, execution, and
-  reconciliation records. Non-destructive cleanup stops containers while
-  preserving volumes and local evidence.
 
 ## Failed Or Unresolved Capabilities
 
-No required Phase 67.4 journey step is recorded as failed or unresolved in the
-publishable packet. This does not convert untested production capabilities into
-passes. The owned limitations below remain outside the demonstrated boundary.
+Step 8 is blocked pending a distinct human approval event. Shuffle dispatch,
+receipt capture, real reconciliation negative probes, report export, restart
+persistence, and a passing prerequisite evaluation are recorded as `not_run`.
+No approval or downstream success is inferred from the prepared action.
 
 ## Owned Limitations
 
@@ -81,6 +69,7 @@ passes. The owned limitations below remain outside the demonstrated boundary.
 | One Wazuh rule and one reviewed harmless Shuffle workflow | AegisOps integration engineering | Follow-up required | Expand the reviewed connector and detector matrix without weakening authority checks |
 | No production traffic, customer data, HA, scale, or disaster-recovery exercise | AegisOps release owner | Blocking for GA | Execute separately owned production-readiness gates |
 | No design-partner acceptance or customer success evidence | AegisOps product and release owners | Blocking for GA | Collect separate pilot evidence under the Phase 51.3 gate contract |
+| Independent human approval not yet granted | AegisOps local operator | Blocking for this trial | Run the reviewed approval ceremony, then repeat steps 8 through 15 |
 
 ## Follow-Up Issue Policy
 

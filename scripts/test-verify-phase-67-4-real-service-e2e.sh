@@ -57,7 +57,7 @@ assert_fails_with \
   mutate_json '.steps[8].snapshot_id = "phase67-snapshot-fedcba9876543210"'
 assert_fails_with \
   same-actor \
-  'requester and approver must be distinct' \
+  'a non-passed approval step cannot claim an approver or approval event' \
   mutate_json '.human_control.approver_identity = .human_control.requester_identity'
 assert_fails_with \
   denied-dispatch \
@@ -65,7 +65,7 @@ assert_fails_with \
   mutate_json '.human_control.denied_action_execution_count = 1'
 assert_fails_with \
   inferred-reconciliation \
-  'receipt replay must reuse the reconciliation ID' \
+  'a non-passed receipt replay step cannot claim Shuffle replay success' \
   mutate_json '.idempotency.receipt_replay_reconciliation_id = "reconciliation-second"'
 assert_fails_with \
   secret-exposure \
@@ -77,7 +77,7 @@ assert_fails_with \
   mutate_json '.limitations[0].description = "/Users/operator/private/evidence.json"' # publishable-path-hygiene: allowlist -- adversarial fixture
 assert_fails_with \
   inferred-report \
-  'report must be redacted and AegisOps-derived' \
+  'a non-passed report step cannot claim a report export' \
   mutate_json '.report.source_of_truth = "shuffle_execution_state"'
 assert_fails_with \
   ga-overclaim \
