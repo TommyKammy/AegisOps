@@ -4,6 +4,7 @@ from __future__ import annotations
 import pathlib
 import sys
 import unittest
+from dataclasses import replace
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 if str(TESTS_ROOT) not in sys.path:
@@ -14,6 +15,7 @@ from _service_persistence_support import (
     ActionRequestRecord,
     AegisOpsControlPlaneService,
     ApprovalDecisionRecord,
+    ReconciliationRecord,
     RuntimeConfig,
     ServicePersistenceTestBase,
     _approved_binding_hash,
@@ -24,6 +26,518 @@ from _service_persistence_support import (
 )
 
 class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
+    def _build_phase67_failed_shuffle_context(
+        self,
+    ) -> tuple[
+        object,
+        AegisOpsControlPlaneService,
+        ActionExecutionRecord,
+        dict[str, str],
+    ]:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 7, 29, 1, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 7, 29, 1, 5, tzinfo=timezone.utc)
+        target_scope = {
+            "recipient_identity": "local-test-sink",
+            "risk": 1,
+        }
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="local-test-sink",
+            case_id="case-phase67-failed-001",
+            alert_id="alert-phase67-failed-001",
+            finding_id="finding-phase67-failed-001",
+        )
+        approved_payload["shuffle_delegation_binding"] = {
+            "workflow_id": "notify_identity_owner",
+            "workflow_version_id": "notify_identity_owner-v1-reviewed-2026-05-03",
+            "correlation_id": "phase67-failed-correlation-001",
+            "expected_execution_receipt_id": "phase67-failed-receipt-001",
+            "requested_scope": target_scope,
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="phase67-failed-approval-001",
+                action_request_id="phase67-failed-action-001",
+                approver_identities=("phase67-lab-operator",),
+                target_snapshot=target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="phase67-failed-action-001",
+                approval_decision_id="phase67-failed-approval-001",
+                case_id="case-phase67-failed-001",
+                alert_id="alert-phase67-failed-001",
+                finding_id="finding-phase67-failed-001",
+                idempotency_key="phase67-failed-idempotency-001",
+                target_scope=target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id="phase67-failed-action-001",
+            approved_payload=approved_payload,
+            delegated_at=delegated_at,
+            delegation_issuer="phase67-lab-operator",
+        )
+        return store, service, execution, target_scope
+
+    def test_phase67_failed_shuffle_receipt_remains_unresolved_and_idempotent(
+        self,
+    ) -> None:
+        store, service, execution, target_scope = (
+            self._build_phase67_failed_shuffle_context()
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+        observed_at = datetime(2026, 7, 29, 1, 12, tzinfo=timezone.utc)
+        failed_receipt = (
+            {
+                "execution_run_id": execution.execution_run_id,
+                "execution_surface_type": "automation_substrate",
+                "execution_surface_id": "shuffle",
+                "idempotency_key": execution.idempotency_key,
+                "approval_decision_id": execution.approval_decision_id,
+                "delegation_id": execution.delegation_id,
+                "payload_hash": execution.payload_hash,
+                "action_request_id": execution.action_request_id,
+                "workflow_id": downstream_binding["workflow_id"],
+                "workflow_version_id": downstream_binding["workflow_version_id"],
+                "correlation_id": downstream_binding["correlation_id"],
+                "expected_execution_receipt_id": downstream_binding[
+                    "expected_execution_receipt_id"
+                ],
+                "external_receipt_id": downstream_binding[
+                    "expected_execution_receipt_id"
+                ],
+                "requested_scope": target_scope,
+                "idempotency_execution_count": 1,
+                "observed_at": observed_at,
+                "status": " ERROR ",
+            },
+        )
+
+        reconciliation = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=failed_receipt,
+            compared_at=observed_at,
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
+        replay = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=failed_receipt,
+            compared_at=datetime(2026, 7, 29, 1, 13, tzinfo=timezone.utc),
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
+
+        stored_execution = service.get_record(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertEqual(reconciliation.ingest_disposition, "mismatch")
+        self.assertEqual(reconciliation.lifecycle_state, "mismatched")
+        self.assertIn("requires operator review", reconciliation.mismatch_summary)
+        self.assertEqual(stored_execution.lifecycle_state, "failed")
+        self.assertEqual(
+            stored_execution.provenance["normalized_receipt"]["requested_scope"],
+            target_scope,
+        )
+        self.assertEqual(
+            stored_execution.provenance["normalized_receipt"][
+                "idempotency_execution_count"
+            ],
+            1,
+        )
+        self.assertEqual(replay.reconciliation_id, reconciliation.reconciliation_id)
+        self.assertEqual(len(store.list(ReconciliationRecord)), 1)
+
+    def test_phase67_replayed_prior_receipt_does_not_roll_back_latest_status(
+        self,
+    ) -> None:
+        store, service, execution, target_scope = (
+            self._build_phase67_failed_shuffle_context()
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+
+        def receipt(status: str, observed_at: datetime) -> dict[str, object]:
+            return {
+                "execution_run_id": execution.execution_run_id,
+                "execution_surface_type": "automation_substrate",
+                "execution_surface_id": "shuffle",
+                "idempotency_key": execution.idempotency_key,
+                "approval_decision_id": execution.approval_decision_id,
+                "delegation_id": execution.delegation_id,
+                "payload_hash": execution.payload_hash,
+                "action_request_id": execution.action_request_id,
+                "workflow_id": downstream_binding["workflow_id"],
+                "workflow_version_id": downstream_binding["workflow_version_id"],
+                "correlation_id": downstream_binding["correlation_id"],
+                "expected_execution_receipt_id": downstream_binding[
+                    "expected_execution_receipt_id"
+                ],
+                "external_receipt_id": downstream_binding[
+                    "expected_execution_receipt_id"
+                ],
+                "requested_scope": target_scope,
+                "idempotency_execution_count": 1,
+                "observed_at": observed_at,
+                "status": status,
+            }
+
+        running_observed_at = datetime(2026, 7, 29, 1, 12, tzinfo=timezone.utc)
+        running_receipt = receipt("running", running_observed_at)
+        running_reconciliation = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(running_receipt,),
+            compared_at=running_observed_at,
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
+
+        success_observed_at = datetime(2026, 7, 29, 1, 13, tzinfo=timezone.utc)
+        success_receipt = receipt("success", success_observed_at)
+        success_reconciliation = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(success_receipt,),
+            compared_at=success_observed_at,
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
+        replay = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(running_receipt,),
+            compared_at=datetime(2026, 7, 29, 1, 40, tzinfo=timezone.utc),
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
+
+        stored_execution = service.get_record(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertNotEqual(
+            success_reconciliation.reconciliation_id,
+            running_reconciliation.reconciliation_id,
+        )
+        self.assertEqual(
+            replay.reconciliation_id,
+            running_reconciliation.reconciliation_id,
+        )
+        self.assertEqual(stored_execution.lifecycle_state, "succeeded")
+        self.assertEqual(
+            stored_execution.provenance["normalized_receipt"]["status"],
+            "success",
+        )
+        self.assertEqual(len(store.list(ReconciliationRecord)), 2)
+
+    def test_phase67_canceled_shuffle_receipt_remains_unresolved(self) -> None:
+        store, service, execution, target_scope = (
+            self._build_phase67_failed_shuffle_context()
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+        observed_at = datetime(2026, 7, 29, 1, 12, tzinfo=timezone.utc)
+        canceled_receipt = (
+            {
+                "execution_run_id": execution.execution_run_id,
+                "execution_surface_type": "automation_substrate",
+                "execution_surface_id": "shuffle",
+                "idempotency_key": execution.idempotency_key,
+                "approval_decision_id": execution.approval_decision_id,
+                "delegation_id": execution.delegation_id,
+                "payload_hash": execution.payload_hash,
+                "action_request_id": execution.action_request_id,
+                "workflow_id": downstream_binding["workflow_id"],
+                "workflow_version_id": downstream_binding[
+                    "workflow_version_id"
+                ],
+                "correlation_id": downstream_binding["correlation_id"],
+                "expected_execution_receipt_id": downstream_binding[
+                    "expected_execution_receipt_id"
+                ],
+                "external_receipt_id": downstream_binding[
+                    "expected_execution_receipt_id"
+                ],
+                "requested_scope": target_scope,
+                "idempotency_execution_count": 1,
+                "observed_at": observed_at,
+                "status": " CANCELLED ",
+            },
+        )
+
+        reconciliation = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=canceled_receipt,
+            compared_at=observed_at,
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
+
+        stored_execution = service.get_record(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertEqual(reconciliation.ingest_disposition, "mismatch")
+        self.assertEqual(reconciliation.lifecycle_state, "mismatched")
+        self.assertIn("requires operator review", reconciliation.mismatch_summary)
+        self.assertEqual(stored_execution.lifecycle_state, "canceled")
+        self.assertEqual(len(store.list(ReconciliationRecord)), 1)
+
+    def test_phase67_unrecognized_shuffle_receipt_status_remains_unresolved(
+        self,
+    ) -> None:
+        for status in (None, "", "TIMED_OUT"):
+            with self.subTest(status=status):
+                store, service, execution, target_scope = (
+                    self._build_phase67_failed_shuffle_context()
+                )
+                downstream_binding = execution.provenance["downstream_binding"]
+                observed_at = datetime(
+                    2026,
+                    7,
+                    29,
+                    1,
+                    12,
+                    tzinfo=timezone.utc,
+                )
+                receipt = {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": execution.idempotency_key,
+                    "approval_decision_id": execution.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding[
+                        "workflow_version_id"
+                    ],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
+                    "external_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
+                    "requested_scope": target_scope,
+                    "idempotency_execution_count": 1,
+                    "observed_at": observed_at,
+                }
+                if status is not None:
+                    receipt["status"] = status
+
+                reconciliation = service.reconcile_action_execution(
+                    action_request_id=execution.action_request_id,
+                    execution_surface_type="automation_substrate",
+                    execution_surface_id="shuffle",
+                    observed_executions=(receipt,),
+                    compared_at=observed_at,
+                    stale_after=datetime(
+                        2026,
+                        7,
+                        29,
+                        1,
+                        30,
+                        tzinfo=timezone.utc,
+                    ),
+                )
+
+                stored_execution = service.get_record(
+                    ActionExecutionRecord,
+                    execution.action_execution_id,
+                )
+                self.assertEqual(
+                    reconciliation.ingest_disposition,
+                    "mismatch",
+                )
+                self.assertEqual(
+                    reconciliation.lifecycle_state,
+                    "mismatched",
+                )
+                self.assertIn(
+                    "unrecognized downstream execution status",
+                    reconciliation.mismatch_summary,
+                )
+                self.assertEqual(stored_execution.lifecycle_state, "queued")
+                self.assertEqual(len(store.list(ReconciliationRecord)), 1)
+
+    def test_phase67_real_shuffle_receipt_requires_exact_scope_and_single_execution(
+        self,
+    ) -> None:
+        store, service, execution, target_scope = (
+            self._build_phase67_failed_shuffle_context()
+        )
+        execution = store.save(
+            replace(
+                execution,
+                provenance={
+                    **execution.provenance,
+                    "adapter": "shuffle_real_http",
+                },
+            )
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+        observed_at = datetime(2026, 7, 29, 1, 12, tzinfo=timezone.utc)
+        receipt = {
+            "execution_run_id": execution.execution_run_id,
+            "execution_surface_type": "automation_substrate",
+            "execution_surface_id": "shuffle",
+            "idempotency_key": execution.idempotency_key,
+            "approval_decision_id": execution.approval_decision_id,
+            "delegation_id": execution.delegation_id,
+            "payload_hash": execution.payload_hash,
+            "action_request_id": execution.action_request_id,
+            "workflow_id": downstream_binding["workflow_id"],
+            "workflow_version_id": downstream_binding["workflow_version_id"],
+            "correlation_id": downstream_binding["correlation_id"],
+            "expected_execution_receipt_id": downstream_binding[
+                "expected_execution_receipt_id"
+            ],
+            "external_receipt_id": downstream_binding[
+                "expected_execution_receipt_id"
+            ],
+            "requested_scope": target_scope,
+            "observed_at": observed_at,
+            "status": "success",
+        }
+
+        missing_count = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(receipt,),
+            compared_at=observed_at,
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
+        receipt["idempotency_execution_count"] = 1
+        receipt["requested_scope"] = {"recipient_identity": "other-test-sink"}
+        mismatched_scope = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(receipt,),
+            compared_at=datetime(2026, 7, 29, 1, 13, tzinfo=timezone.utc),
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
+        receipt["requested_scope"] = {
+            "recipient_identity": "local-test-sink",
+            "risk": True,
+        }
+        type_drifted_scope = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(receipt,),
+            compared_at=datetime(2026, 7, 29, 1, 13, 30, tzinfo=timezone.utc),
+            stale_after=datetime(2026, 7, 29, 1, 30, tzinfo=timezone.utc),
+        )
+        receipt["requested_scope"] = target_scope
+        for malformed_count in (True, 1.0):
+            with self.subTest(idempotency_execution_count=malformed_count):
+                receipt["idempotency_execution_count"] = malformed_count
+                with self.assertRaisesRegex(ValueError, "must be integer one"):
+                    service.reconcile_action_execution(
+                        action_request_id=execution.action_request_id,
+                        execution_surface_type="automation_substrate",
+                        execution_surface_id="shuffle",
+                        observed_executions=(receipt,),
+                        compared_at=datetime(
+                            2026,
+                            7,
+                            29,
+                            1,
+                            14,
+                            tzinfo=timezone.utc,
+                        ),
+                        stale_after=datetime(
+                            2026,
+                            7,
+                            29,
+                            1,
+                            30,
+                            tzinfo=timezone.utc,
+                        ),
+                    )
+
+        receipt["idempotency_execution_count"] = 1
+        receipt["requested_scope"] = target_scope
+        external_receipt_mismatches = []
+        for index, external_receipt_id in enumerate(
+            (None, "different-external-receipt"),
+            start=1,
+        ):
+            if external_receipt_id is None:
+                receipt.pop("external_receipt_id", None)
+            else:
+                receipt["external_receipt_id"] = external_receipt_id
+            external_receipt_mismatches.append(
+                service.reconcile_action_execution(
+                    action_request_id=execution.action_request_id,
+                    execution_surface_type="automation_substrate",
+                    execution_surface_id="shuffle",
+                    observed_executions=(receipt,),
+                    compared_at=datetime(
+                        2026,
+                        7,
+                        29,
+                        1,
+                        15 + index,
+                        tzinfo=timezone.utc,
+                    ),
+                    stale_after=datetime(
+                        2026,
+                        7,
+                        29,
+                        1,
+                        30,
+                        tzinfo=timezone.utc,
+                    ),
+                )
+            )
+
+        self.assertEqual(missing_count.ingest_disposition, "mismatch")
+        self.assertEqual(mismatched_scope.ingest_disposition, "mismatch")
+        self.assertEqual(type_drifted_scope.ingest_disposition, "mismatch")
+        self.assertEqual(
+            [
+                reconciliation.ingest_disposition
+                for reconciliation in external_receipt_mismatches
+            ],
+            ["mismatch", "mismatch"],
+        )
+        self.assertNotIn("normalized_receipt", execution.provenance)
+        self.assertEqual(len(store.list(ReconciliationRecord)), 5)
+
     def test_service_reconcile_action_execution_rejects_non_approved_requests(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -338,31 +852,44 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
         )
         downstream_binding = execution.provenance["downstream_binding"]
 
+        observed_receipt = (
+            {
+                "execution_run_id": execution.execution_run_id,
+                "execution_surface_type": "automation_substrate",
+                "execution_surface_id": "shuffle",
+                "idempotency_key": "idempotency-routine-reconcile-001",
+                "approval_decision_id": execution.approval_decision_id,
+                "delegation_id": execution.delegation_id,
+                "payload_hash": execution.payload_hash,
+                "action_request_id": execution.action_request_id,
+                "workflow_id": downstream_binding["workflow_id"],
+                "workflow_version_id": downstream_binding["workflow_version_id"],
+                "correlation_id": downstream_binding["correlation_id"],
+                "expected_execution_receipt_id": downstream_binding[
+                    "expected_execution_receipt_id"
+                ],
+                "external_receipt_id": downstream_binding[
+                    "expected_execution_receipt_id"
+                ],
+                "requested_scope": downstream_binding["requested_scope"],
+                "observed_at": compared_at,
+                "status": "success",
+            },
+        )
         reconciliation = service.reconcile_action_execution(
             action_request_id="action-request-routine-reconcile-001",
             execution_surface_type="automation_substrate",
             execution_surface_id="shuffle",
-            observed_executions=(
-                {
-                    "execution_run_id": execution.execution_run_id,
-                    "execution_surface_type": "automation_substrate",
-                    "execution_surface_id": "shuffle",
-                    "idempotency_key": "idempotency-routine-reconcile-001",
-                    "approval_decision_id": execution.approval_decision_id,
-                    "delegation_id": execution.delegation_id,
-                    "payload_hash": execution.payload_hash,
-                    "action_request_id": execution.action_request_id,
-                    "workflow_id": downstream_binding["workflow_id"],
-                    "workflow_version_id": downstream_binding["workflow_version_id"],
-                    "correlation_id": downstream_binding["correlation_id"],
-                    "expected_execution_receipt_id": downstream_binding[
-                        "expected_execution_receipt_id"
-                    ],
-                    "observed_at": compared_at,
-                    "status": "success",
-                },
-            ),
+            observed_executions=observed_receipt,
             compared_at=compared_at,
+            stale_after=datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc),
+        )
+        replay = service.reconcile_action_execution(
+            action_request_id="action-request-routine-reconcile-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=observed_receipt,
+            compared_at=datetime(2026, 4, 5, 12, 13, tzinfo=timezone.utc),
             stale_after=datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc),
         )
 
@@ -373,6 +900,15 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
         self.assertIsNotNone(stored_execution)
         self.assertEqual(stored_execution.lifecycle_state, "succeeded")
         self.assertEqual(stored_execution.execution_run_id, execution.execution_run_id)
+        self.assertEqual(replay.reconciliation_id, reconciliation.reconciliation_id)
+        self.assertEqual(
+            len(store.list(ReconciliationRecord)),
+            1,
+        )
+        self.assertEqual(
+            stored_execution.provenance["normalized_receipt"]["requested_scope"],
+            approved_target_scope,
+        )
         self.assertEqual(
             reconciliation.subject_linkage["action_execution_ids"],
             (execution.action_execution_id,),
@@ -499,6 +1035,7 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
         self.assertIsNotNone(stored_execution)
         self.assertEqual(stored_execution.lifecycle_state, "failed")
         self.assertEqual(stored_execution.execution_run_id, execution.execution_run_id)
+        self.assertNotIn("normalized_receipt", stored_execution.provenance)
         self.assertEqual(
             reconciliation.subject_linkage["action_execution_ids"],
             (execution.action_execution_id,),

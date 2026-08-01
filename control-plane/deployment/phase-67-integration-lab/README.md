@@ -23,6 +23,15 @@ identity headers are cleared, the proxy credential and fixed
 untracked read-only include, and Wazuh reads its bearer credential and proxy CA
 from mounted files.
 
+Phase 67.3 adds one bounded real execution path:
+
+`approved AegisOps action -> TLS/Bearer Shuffle API -> reviewed local echo -> authenticated receipt polling -> AegisOps reconciliation`
+
+The deterministic adapter remains the default outside this lab. The real
+adapter requires an explicit reviewed delegation binding, rejects synthetic
+execution and receipt identifiers, and never persists Shuffle's
+per-execution authorization token.
+
 ## Runtime Shape
 
 The default `core` scope starts PostgreSQL, applies the reviewed first-boot migrations plus current runtime migrations through `0015`, starts the AegisOps control plane, and starts the TLS reverse proxy. Later migration checksums are recorded in the same bootstrap metadata table and fail closed on checksum or recorded-schema drift, including reviewed column, constraint type, validated constraint definition, and index definitions. Before service handoff, the lab also hashes the complete final column, constraint, and index catalogs to reprove the definitions introduced by delegated migrations `0001` through `0007` after their reviewed later evolution. Wazuh and Shuffle are opt-in Compose profiles:
@@ -31,10 +40,10 @@ The default `core` scope starts PostgreSQL, applies the reviewed first-boot migr
 | --- | --- | --- |
 | `core` | PostgreSQL, AegisOps, proxy | `https://localhost:18443` |
 | `wazuh` | core plus manager, indexer, dashboard | `https://wazuh.localhost:18443` |
-| `shuffle` | core plus backend, frontend, OpenSearch | `https://shuffle.localhost:18443` |
+| `shuffle` | core plus backend, frontend, Orborus, worker, OpenSearch | `https://shuffle.localhost:18443` |
 | `full` | all of the above | the three TLS proxy hostnames above |
 
-Wazuh `4.14.6` is pinned to the reviewed upstream tag commit and arm64 image digests. Shuffle `2.2.1` images are pinned to amd64 digests and run through explicit Colima emulation acceptance. Emulated execution requires both global `binfmt_misc` and the selected QEMU handler to report `enabled`; executable Colima Rosetta is accepted for amd64 instead. PostgreSQL, nginx, Shuffle OpenSearch, the control-plane base image, and the Wazuh certificate generator are also digest-pinned so evidence runs cannot silently change their external substrate. Phase 67.1 does not mount the Docker socket or start Orborus, so Shuffle workflow execution remains disabled until Phase 67.3.
+Wazuh `4.14.6` is pinned to the reviewed upstream tag commit and arm64 image digests. Shuffle `2.2.1` backend, frontend, Orborus, and worker images are pinned to amd64 digests and run through explicit Colima emulation acceptance. Emulated execution requires both global `binfmt_misc` and the selected QEMU handler to report `enabled`; executable Colima Rosetta is accepted for amd64 instead. PostgreSQL, nginx, Shuffle OpenSearch, the control-plane base image, and the Wazuh certificate generator are also digest-pinned so evidence runs cannot silently change their external substrate. Orborus and the backend mount the selected Colima Docker socket because Shuffle workers are dynamic containers; this grants Docker-daemon authority inside the isolated lab and is not an accepted production topology.
 
 ## Quick Start
 
@@ -92,6 +101,28 @@ contains only the synthetic user, RFC 5737 test address, ephemeral lab manager
 identity, and native Wazuh metadata; it contains no credential or production
 data.
 
+Bootstrap and run the reviewed harmless Shuffle workflow:
+
+```bash
+control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh
+control-plane/deployment/phase-67-integration-lab/test-shuffle-execution.sh
+```
+
+Bootstrap creates the first local Shuffle admin only when the preserved
+substrate has no API credential, stores the returned API key in the untracked
+mode-`600` secret directory, imports the tracked local-echo workflow, records
+its runtime UUID and export digest, and recreates AegisOps with `real_http`
+selected. Workflow state is persisted atomically as active ID, pending ID, and
+transport mode: fresh initialization has no workflow ID, interrupted creation
+resumes the pending ID, and only a validated workflow becomes active. The API
+path from AegisOps is TLS-terminated at the proxy and source-address restricted
+to the control-plane container. The trial persists a real execution UUID, the
+single-execution idempotency count, requested scope, normalized receipt digest,
+and AegisOps reconciliation ID; exact receipt replay must return the same
+reconciliation record. Orborus uses the project-scoped Compose identity to join
+its Swarm overlay and deterministically recreates dynamic Shuffle worker/app
+services after an Orborus restart.
+
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 
 `up.sh` will not represent a narrower scope while services from another optional profile remain running. Run `down.sh` before changing from `full` to `core`, `wazuh`, or `shuffle`, or when switching directly between the two optional scopes.
@@ -148,6 +179,9 @@ python3 -m unittest control-plane.tests.test_phase67_colima_integration_lab
 bash scripts/verify-phase-67-2-real-wazuh-intake.sh
 bash scripts/test-verify-phase-67-2-real-wazuh-intake.sh
 python3 -m unittest control-plane.tests.test_phase67_2_real_wazuh_intake
+bash scripts/verify-phase-67-3-real-shuffle-transport.sh
+bash scripts/test-verify-phase-67-3-real-shuffle-transport.sh
+python3 -m unittest control-plane.tests.test_phase67_3_real_shuffle_transport
 ```
 
 The real-host core smoke boundary requires the selected Colima profile and

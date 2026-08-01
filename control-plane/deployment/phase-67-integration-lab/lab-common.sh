@@ -6,6 +6,7 @@ LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${LAB_DIR}/../../.." && pwd)"
 COMPOSE_FILE="${LAB_DIR}/docker-compose.yml"
 BOOTSTRAP_ENV="${AEGISOPS_LAB_BOOTSTRAP_ENV:-${LAB_DIR}/bootstrap.env.sample}"
+LEGACY_SHUFFLE_PLACEHOLDER_WORKFLOW_ID="67f30000-0000-4000-8000-000000000001"
 
 fail() {
   echo "BLOCKED: $*" >&2
@@ -55,6 +56,74 @@ require_runtime_configuration() {
 require_runtime_environment() {
   require_runtime_configuration
   [[ -d "${AEGISOPS_LAB_SECRET_DIR:-}" ]] || fail "runtime secret directory is missing; rerun ${LAB_DIR}/init.sh"
+}
+
+normalize_shuffle_workflow_id() {
+  local candidate="${1:-}"
+
+  python3 - "${candidate}" <<'PY'
+import sys
+from uuid import UUID
+
+candidate = sys.argv[1]
+try:
+    normalized = str(UUID(candidate))
+except ValueError:
+    raise SystemExit(1)
+if normalized != candidate.lower():
+    raise SystemExit(1)
+print(normalized)
+PY
+}
+
+classify_shuffle_workflow_runtime_state() {
+  local active_id="${1:-}"
+  local pending_id="${2:-}"
+  local transport_mode="${3:-deterministic}"
+  local normalized_active_id=""
+  local normalized_pending_id=""
+
+  case "${transport_mode}" in
+    deterministic | real_http) ;;
+    *) fail "Shuffle transport mode must be deterministic or real_http" ;;
+  esac
+
+  if [[ -n "${active_id}" ]]; then
+    normalized_active_id="$(normalize_shuffle_workflow_id "${active_id}")" \
+      || fail "active Shuffle workflow id must be a canonical UUID"
+    if [[
+      "${normalized_active_id}" == "${LEGACY_SHUFFLE_PLACEHOLDER_WORKFLOW_ID}"
+    ]]; then
+      normalized_active_id=""
+    fi
+  fi
+  if [[ -n "${pending_id}" ]]; then
+    normalized_pending_id="$(normalize_shuffle_workflow_id "${pending_id}")" \
+      || fail "pending Shuffle workflow id must be a canonical UUID"
+    [[
+      "${normalized_pending_id}" != "${LEGACY_SHUFFLE_PLACEHOLDER_WORKFLOW_ID}"
+    ]] || fail "legacy Shuffle placeholder cannot be a pending workflow id"
+  fi
+
+  if [[ -n "${normalized_pending_id}" ]]; then
+    [[ "${transport_mode}" == "deterministic" ]] \
+      || fail "pending Shuffle workflow update cannot use real_http mode"
+    [[
+      -z "${normalized_active_id}" ||
+        "${normalized_active_id}" == "${normalized_pending_id}"
+    ]] || fail "active and pending Shuffle workflow ids conflict"
+    printf 'update_pending\n'
+  elif [[ -n "${normalized_active_id}" ]]; then
+    if [[ "${transport_mode}" == "real_http" ]]; then
+      printf 'active\n'
+    else
+      printf 'validation_pending\n'
+    fi
+  else
+    [[ "${transport_mode}" == "deterministic" ]] \
+      || fail "real_http mode requires an active Shuffle workflow id"
+    printf 'uninitialized\n'
+  fi
 }
 
 assert_reviewed_lab_pins() {
@@ -289,13 +358,15 @@ excluded_services_for_scope() {
         wazuh-dashboard \
         shuffle-opensearch \
         shuffle-backend \
-        shuffle-frontend
+        shuffle-frontend \
+        shuffle-orborus
       ;;
     wazuh)
       printf '%s\n' \
         shuffle-opensearch \
         shuffle-backend \
-        shuffle-frontend
+        shuffle-frontend \
+        shuffle-orborus
       ;;
     shuffle)
       printf '%s\n' \

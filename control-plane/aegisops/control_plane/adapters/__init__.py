@@ -5,6 +5,7 @@ from .n8n import N8NReconciliationAdapter
 from .opensearch import OpenSearchSignalAdapter
 from .postgres import PostgresControlPlaneStore
 from .shuffle import ShuffleActionAdapter
+from .shuffle_real import RealShuffleActionAdapter, ShuffleReceiptPollingClient
 from .wazuh import WazuhAlertAdapter
 
 __all__ = [
@@ -13,5 +14,7 @@ __all__ = [
     "OpenSearchSignalAdapter",
     "PostgresControlPlaneStore",
     "ShuffleActionAdapter",
+    "RealShuffleActionAdapter",
+    "ShuffleReceiptPollingClient",
     "WazuhAlertAdapter",
 ]

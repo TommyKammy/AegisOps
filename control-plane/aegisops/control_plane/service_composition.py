@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Type
 
 from .adapters.endpoint_evidence import EndpointEvidencePackAdapter
@@ -10,6 +12,10 @@ from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.osquery import OsqueryHostContextAdapter
 from .adapters.postgres import PostgresControlPlaneStore
 from .adapters.shuffle import ShuffleActionAdapter
+from .adapters.shuffle_real import (
+    RealShuffleActionAdapter,
+    UrllibShuffleJsonTransport,
+)
 from .assistant.ai_trace_lifecycle import AITraceLifecycleService
 from .assistant.assistant_advisory import AssistantAdvisoryCoordinator
 from .assistant.assistant_context import (
@@ -42,6 +48,23 @@ from .runtime.runtime_boundary import RuntimeBoundaryService
 from .runtime.runtime_restore_readiness_diagnostics import (
     RuntimeRestoreReadinessDiagnosticsService,
 )
+
+_PHASE67_REVIEWED_SHUFFLE_WORKFLOW = (
+    Path(__file__).resolve().parents[2]
+    / "deployment"
+    / "phase-67-integration-lab"
+    / "shuffle"
+    / "harmless-local-log-workflow.json"
+)
+
+
+def _load_phase67_reviewed_shuffle_workflow() -> Mapping[str, object]:
+    workflow = json.loads(
+        _PHASE67_REVIEWED_SHUFFLE_WORKFLOW.read_text(encoding="utf-8")
+    )
+    if not isinstance(workflow, Mapping):
+        raise ValueError("reviewed Phase 67 Shuffle workflow must be an object")
+    return workflow
 
 
 @dataclass(frozen=True)
@@ -97,7 +120,7 @@ class ControlPlaneServiceCompositionDependencies:
 class ControlPlaneServiceComposition:
     store: Any
     reconciliation: N8NReconciliationAdapter
-    shuffle: ShuffleActionAdapter
+    shuffle: object
     isolated_executor: IsolatedExecutorAdapter
     assistant_provider_adapter: AssistantProviderAdapter
     reviewed_slice_policy: ReviewedSlicePolicy
@@ -136,11 +159,27 @@ def build_control_plane_service_composition(
     store: Any | None,
     dependencies: ControlPlaneServiceCompositionDependencies,
 ) -> ControlPlaneServiceComposition:
+    if (
+        config.shuffle_transport_mode == "real_http"
+        and config.deployment_profile != "phase67-integration-lab"
+    ):
+        raise ValueError(
+            "real Shuffle transport is restricted to the Phase 67 integration lab"
+        )
     resolved_store = (
         store if store is not None else PostgresControlPlaneStore(config.postgres_dsn)
     )
     reconciliation = N8NReconciliationAdapter(config.n8n_base_url)
-    shuffle = ShuffleActionAdapter(config.shuffle_base_url)
+    if config.shuffle_transport_mode == "real_http":
+        shuffle = RealShuffleActionAdapter(
+            base_url=config.shuffle_base_url,
+            api_key=config.shuffle_api_key,
+            api_workflow_id=config.shuffle_api_workflow_id,
+            transport=UrllibShuffleJsonTransport(config.shuffle_ca_file),
+            reviewed_workflow=_load_phase67_reviewed_shuffle_workflow(),
+        )
+    else:
+        shuffle = ShuffleActionAdapter(config.shuffle_base_url)
     isolated_executor = IsolatedExecutorAdapter(config.isolated_executor_base_url)
     assistant_provider_adapter = AssistantProviderAdapter(
         provider_identity="reviewed_local",

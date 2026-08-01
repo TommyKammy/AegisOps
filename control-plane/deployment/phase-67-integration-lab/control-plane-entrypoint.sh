@@ -537,6 +537,32 @@ SELECT CASE
 END;
 EOF
       ;;
+    0016_phase_67_action_execution_dispatching_state.sql)
+      cat <<'EOF'
+SELECT CASE
+  WHEN EXISTS (
+    SELECT 1
+    FROM pg_constraint AS constraint_record
+    JOIN pg_class AS relation ON relation.oid = constraint_record.conrelid
+    WHERE constraint_record.connamespace = 'aegisops_control'::regnamespace
+      AND relation.relname = 'action_execution_records'
+      AND constraint_record.conname = 'action_execution_records_lifecycle_state_check'
+      AND constraint_record.contype = 'c'
+      AND constraint_record.convalidated
+      AND encode(
+        sha256(
+          convert_to(
+            pg_get_constraintdef(constraint_record.oid, true),
+            'UTF8'
+          )
+        ),
+        'hex'
+      ) = '5b340453651de616ba658ab802f574a909f04bccf7e7c483a5ba92c6d50b8c9e'
+  )
+  THEN 'ready' ELSE 'not-ready'
+END;
+EOF
+      ;;
     *)
       echo "Phase 67.1 does not recognize current-runtime migration: $1" >&2
       return 1
@@ -559,7 +585,7 @@ reviewed_schema_catalog_query() {
 WITH expected_catalog_hashes(catalog_name, catalog_sha256) AS (
   VALUES
     ('columns', 'd906ba1ab5288c94b5c277c1aad60d6ddf499ad2aed55a2abde8729e639d3443'),
-    ('constraints', 'a00a8e3616ded3dd37dbdc6619d0309f22899c2773a9ca241a88a6b2b644336e'),
+    ('constraints', '5de18095fdfcf3c0d223a45280d3b96a699dde0ebdc6e11328a1a936fb39d8de'),
     ('indexes', 'ba3907928c1c026b50f3a9e37c870d6c0008dddb2ebeccf9001cf937898c7d4f')
 ),
 actual_catalog_hashes(catalog_name, catalog_sha256) AS (
@@ -658,7 +684,8 @@ for migration_path in \
   "${migrations_dir}"/0012_*.sql \
   "${migrations_dir}"/0013_*.sql \
   "${migrations_dir}"/0014_*.sql \
-  "${migrations_dir}"/0015_*.sql
+  "${migrations_dir}"/0015_*.sql \
+  "${migrations_dir}"/0016_*.sql
 do
   if [ ! -f "${migration_path}" ]; then
     echo "Phase 67.1 current-runtime migration is missing: ${migration_path}" >&2
@@ -699,7 +726,7 @@ do
 done
 
 # Migrations 0001-0007 are delegated to the first-boot entrypoint. Reprove the
-# complete final catalog after 0008-0015 apply so reviewed later evolution of
+# complete final catalog after 0008-0016 apply so reviewed later evolution of
 # those early tables is accepted while any column, constraint, or index drift
 # still fails before the service process starts.
 if ! prove_delegated_migration_definitions; then

@@ -115,9 +115,26 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 stat.S_IMODE(runtime_env.stat().st_mode),
                 0o600,
             )
+            runtime_env_text = runtime_env.read_text(encoding="utf-8")
             self.assertIn(
                 f'AEGISOPS_LAB_RUNTIME_ROOT="{runtime_root}"',
-                runtime_env.read_text(encoding="utf-8"),
+                runtime_env_text,
+            )
+            self.assertIn(
+                'AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID=""',
+                runtime_env_text,
+            )
+            self.assertIn(
+                'AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID=""',
+                runtime_env_text,
+            )
+            self.assertIn(
+                'AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE="deterministic"',
+                runtime_env_text,
+            )
+            self.assertNotIn(
+                "67f30000-0000-4000-8000-000000000001",
+                runtime_env_text,
             )
 
             for name in (
@@ -255,6 +272,94 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 ).read_text(encoding="utf-8"),
                 postgres_secret,
             )
+
+    def test_init_preserves_pending_workflow_and_migrates_legacy_placeholder(
+        self,
+    ) -> None:
+        pending_workflow_id = "793f1705-46fe-4862-90b6-d26ff2be70a0"
+        legacy_placeholder_id = "67f30000-0000-4000-8000-000000000001"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = pathlib.Path(tmpdir)
+            bootstrap = LAB_DIR / "bootstrap.env.sample"
+            first = self._run_init(home, bootstrap)
+            self.assertEqual(first.returncode, 0, first.stderr)
+
+            runtime_env = (
+                home
+                / ".local"
+                / "share"
+                / "aegisops"
+                / "phase-67-integration-lab"
+                / "runtime.env"
+            )
+            runtime_text = runtime_env.read_text(encoding="utf-8").replace(
+                'AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID=""',
+                "AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID="
+                f'"{pending_workflow_id}"',
+            )
+            runtime_env.write_text(runtime_text, encoding="utf-8")
+
+            resumed = self._run_init(home, bootstrap)
+            self.assertEqual(resumed.returncode, 0, resumed.stderr)
+            resumed_text = runtime_env.read_text(encoding="utf-8")
+            self.assertIn(
+                f'AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID="{pending_workflow_id}"',
+                resumed_text,
+            )
+            self.assertIn(
+                'AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID=""',
+                resumed_text,
+            )
+
+            active_text = resumed_text.replace(
+                'AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID=""',
+                f'AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID="{pending_workflow_id}"',
+            ).replace(
+                f'AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID="{pending_workflow_id}"',
+                'AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID=""',
+            ).replace(
+                'AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE="deterministic"',
+                'AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE="real_http"',
+            )
+            runtime_env.write_text(active_text, encoding="utf-8")
+            (
+                runtime_env.parent / "secrets" / "shuffle-api-key"
+            ).write_text("real-api-key\n", encoding="utf-8")
+
+            active = self._run_init(home, bootstrap)
+            self.assertEqual(active.returncode, 0, active.stderr)
+            preserved_active_text = runtime_env.read_text(encoding="utf-8")
+            self.assertIn(
+                f'AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID="{pending_workflow_id}"',
+                preserved_active_text,
+            )
+            self.assertIn(
+                'AEGISOPS_LAB_SHUFFLE_PENDING_WORKFLOW_ID=""',
+                preserved_active_text,
+            )
+            self.assertIn(
+                'AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE="real_http"',
+                preserved_active_text,
+            )
+
+            migrated_text = preserved_active_text.replace(
+                f'AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID="{pending_workflow_id}"',
+                f'AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID="{legacy_placeholder_id}"',
+            ).replace(
+                'AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE="real_http"',
+                'AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE="deterministic"',
+            )
+            runtime_env.write_text(migrated_text, encoding="utf-8")
+
+            migrated = self._run_init(home, bootstrap)
+            self.assertEqual(migrated.returncode, 0, migrated.stderr)
+            final_text = runtime_env.read_text(encoding="utf-8")
+            self.assertIn(
+                'AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID=""',
+                final_text,
+            )
+            self.assertNotIn(legacy_placeholder_id, final_text)
 
     def test_runtime_environment_supports_whitespace_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -585,6 +690,24 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         self.assertIn("server_name shuffle.localhost;", proxy)
         self.assertIn("proxy_pass $phase67_wazuh_dashboard;", proxy)
         self.assertIn("proxy_pass $phase67_shuffle_frontend;", proxy)
+        self.assertIn(
+            "allow ${AEGISOPS_LAB_CONTROL_PLANE_IPV4};",
+            proxy,
+        )
+        self.assertIn(
+            "AEGISOPS_LAB_CONTROL_PLANE_IPV4: "
+            "${AEGISOPS_LAB_CONTROL_PLANE_IPV4:-172.31.67.20}",
+            compose,
+        )
+        self.assertIn(
+            "NGINX_ENVSUBST_FILTER: ^AEGISOPS_LAB_CONTROL_PLANE_IPV4$",
+            compose,
+        )
+        self.assertIn(
+            "./config/control-plane.conf:"
+            "/etc/nginx/templates/control-plane.conf.template:ro",
+            compose,
+        )
 
     def test_selected_scope_checks_only_active_service_addresses(self) -> None:
         expected = {
@@ -647,6 +770,7 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             "0013_phase_61_detector_lifecycle_records.sql",
             "0014_phase_61_source_health_records.sql",
             "0015_phase_64_known_limitation_ownership_records.sql",
+            "0016_phase_67_action_execution_dispatching_state.sql",
         ):
             self.assertIn(migration_name, entrypoint)
         self.assertGreaterEqual(
@@ -728,7 +852,10 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         phase15_readiness = entrypoint.split(
             "0015_phase_64_known_limitation_ownership_records.sql)",
             maxsplit=1,
-        )[1]
+        )[1].split(
+            "0016_phase_67_action_execution_dispatching_state.sql)",
+            maxsplit=1,
+        )[0]
         self.assertNotIn(
             "lifecycle_transition_records_subject_family_matches",
             phase13_readiness,
@@ -740,6 +867,18 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         self.assertIn(
             "lifecycle_transition_records_subject_family_matches",
             phase15_readiness,
+        )
+        phase16_readiness = entrypoint.split(
+            "0016_phase_67_action_execution_dispatching_state.sql)",
+            maxsplit=1,
+        )[1]
+        self.assertIn(
+            "action_execution_records_lifecycle_state_check",
+            phase16_readiness,
+        )
+        self.assertIn(
+            "5b340453651de616ba658ab802f574a909f04bccf7e7c483a5ba92c6d50b8c9e",
+            phase16_readiness,
         )
         self.assertIn("AND indnkeyatts = 1", entrypoint)
         self.assertIn("AND indnatts = 1", entrypoint)
@@ -791,14 +930,14 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         for catalog_hash in (
             "d906ba1ab5288c94b5c277c1aad60d6d"
             "df499ad2aed55a2abde8729e639d3443",
-            "a00a8e3616ded3dd37dbdc6619d0309f"
-            "22899c2773a9ca241a88a6b2b644336e",
+            "5de18095fdfcf3c0d223a45280d3b96a"
+            "699dde0ebdc6e11328a1a936fb39d8de",
             "ba3907928c1c026b50f3a9e37c870d6c"
             "0008dddb2ebeccf9001cf937898c7d4f",
         ):
             self.assertIn(catalog_hash, entrypoint)
         self.assertLess(
-            entrypoint.rindex('"${migrations_dir}"/0015_*.sql'),
+            entrypoint.rindex('"${migrations_dir}"/0016_*.sql'),
             entrypoint.index("if ! prove_delegated_migration_definitions"),
         )
         self.assertLess(
@@ -814,7 +953,9 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         )
         for scope, running_service in (
             ("core", "wazuh-dashboard"),
+            ("core", "shuffle-orborus"),
             ("wazuh", "shuffle-frontend"),
+            ("wazuh", "shuffle-orborus"),
             ("shuffle", "wazuh-manager"),
         ):
             with self.subTest(scope=scope, running_service=running_service):
@@ -860,6 +1001,72 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             env=env,
         )
         self.assertEqual(accepted.returncode, 0, accepted.stderr)
+
+    def test_shuffle_workflow_runtime_state_contract(self) -> None:
+        active_id = "793f1705-46fe-4862-90b6-d26ff2be70a0"
+        other_id = "e12d7970-71d5-40ca-9329-b8c3a99ea010"
+        legacy_placeholder_id = "67f30000-0000-4000-8000-000000000001"
+        command = (
+            'source "$1"; '
+            'classify_shuffle_workflow_runtime_state "$2" "$3" "$4"'
+        )
+
+        for expected, active, pending, mode in (
+            ("uninitialized", "", "", "deterministic"),
+            ("uninitialized", legacy_placeholder_id, "", "deterministic"),
+            ("validation_pending", active_id, "", "deterministic"),
+            ("active", active_id, "", "real_http"),
+            ("update_pending", "", active_id, "deterministic"),
+            ("update_pending", active_id, active_id, "deterministic"),
+        ):
+            with self.subTest(
+                expected=expected,
+                active=active,
+                pending=pending,
+                mode=mode,
+            ):
+                classified = subprocess.run(
+                    [
+                        "bash",
+                        "-c",
+                        command,
+                        "phase67-workflow-state-test",
+                        str(LAB_DIR / "lab-common.sh"),
+                        active,
+                        pending,
+                        mode,
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(classified.returncode, 0, classified.stderr)
+                self.assertEqual(classified.stdout.strip(), expected)
+
+        for active, pending, mode in (
+            ("", "", "real_http"),
+            ("not-a-uuid", "", "deterministic"),
+            ("", legacy_placeholder_id, "deterministic"),
+            (active_id, other_id, "deterministic"),
+            ("", active_id, "real_http"),
+        ):
+            with self.subTest(active=active, pending=pending, mode=mode):
+                rejected = subprocess.run(
+                    [
+                        "bash",
+                        "-c",
+                        command,
+                        "phase67-workflow-state-test",
+                        str(LAB_DIR / "lab-common.sh"),
+                        active,
+                        pending,
+                        mode,
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertNotEqual(rejected.returncode, 0)
 
     def test_every_external_runtime_image_is_digest_pinned(self) -> None:
         compose = (LAB_DIR / "docker-compose.yml").read_text(encoding="utf-8")

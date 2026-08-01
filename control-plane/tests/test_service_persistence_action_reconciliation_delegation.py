@@ -1,6 +1,7 @@
 from __future__ import annotations
 # ruff: noqa: E402
 
+from datetime import timedelta
 import pathlib
 import sys
 import unittest
@@ -10,6 +11,7 @@ if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
 import _service_persistence_support as support
+from aegisops.control_plane.actions import execution_coordinator_delegation
 from _service_persistence_support import (
     ActionExecutionRecord,
     ActionRequestRecord,
@@ -44,7 +46,14 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
             store=store,
         )
         requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
-        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        delegated_at = datetime(
+            2026,
+            4,
+            5,
+            21,
+            5,
+            tzinfo=timezone(timedelta(hours=9)),
+        )
         expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
         approved_target_scope = {"asset_id": "workstation-001"}
         approved_payload = _phase20_notify_identity_owner_payload(
@@ -394,6 +403,110 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(
             service.get_record(ActionExecutionRecord, execution.action_execution_id),
             execution,
+        )
+        execution_transitions = sorted(
+            (
+                transition
+                for transition in store.list(support.LifecycleTransitionRecord)
+                if transition.subject_record_family == "action_execution"
+                and transition.subject_record_id == execution.action_execution_id
+            ),
+            key=lambda transition: transition.transitioned_at,
+        )
+        self.assertEqual(
+            [transition.lifecycle_state for transition in execution_transitions],
+            ["dispatching", "queued"],
+        )
+        self.assertGreater(
+            execution_transitions[1].transitioned_at,
+            execution_transitions[0].transitioned_at,
+        )
+
+    def test_service_uses_service_time_for_future_dated_dispatch_transitions(
+        self,
+    ) -> None:
+        store, service, approved_payload, delegated_at = (
+            self._build_approved_shuffle_delegation_context(
+                approval_decision_id="approval-future-dispatch-001",
+                action_request_id="action-request-future-dispatch-001",
+                idempotency_key="idempotency-future-dispatch-001",
+            )
+        )
+        service_now = delegated_at - timedelta(minutes=1)
+
+        class ServiceDatetime(datetime):
+            @classmethod
+            def now(cls, tz: object = None) -> datetime:
+                return service_now if tz is not None else service_now.replace(tzinfo=None)
+
+        with mock.patch.object(
+            execution_coordinator_delegation,
+            "datetime",
+            ServiceDatetime,
+        ):
+            execution = service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-future-dispatch-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        execution_transitions = tuple(
+            transition
+            for transition in store.list(support.LifecycleTransitionRecord)
+            if transition.subject_record_family == "action_execution"
+            and transition.subject_record_id == execution.action_execution_id
+        )
+        self.assertEqual(execution.delegated_at, delegated_at)
+        self.assertEqual(
+            {transition.transitioned_at for transition in execution_transitions},
+            {service_now},
+        )
+
+        downstream_binding = execution.provenance["downstream_binding"]
+        receipt_observed_at = service_now + timedelta(seconds=30)
+        reconciliation = service.reconcile_action_execution(
+            action_request_id=execution.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": execution.execution_surface_type,
+                    "execution_surface_id": execution.execution_surface_id,
+                    "idempotency_key": execution.idempotency_key,
+                    "approval_decision_id": execution.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding[
+                        "workflow_version_id"
+                    ],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
+                    "external_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
+                    "requested_scope": execution.target_scope,
+                    "idempotency_execution_count": 1,
+                    "observed_at": receipt_observed_at,
+                    "status": "success",
+                },
+            ),
+            compared_at=receipt_observed_at,
+            stale_after=delegated_at + timedelta(minutes=10),
+        )
+
+        self.assertEqual(reconciliation.ingest_disposition, "matched")
+        self.assertEqual(
+            service.get_record(
+                ActionExecutionRecord,
+                execution.action_execution_id,
+            ).lifecycle_state,
+            "succeeded",
         )
 
     def test_service_serializes_action_execution_idempotency_claim(
@@ -870,6 +983,14 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
             )
         )
         original_persist_record = service.persist_record
+        original_dispatch = type(service._shuffle).dispatch_approved_action
+        original_recovery = type(service._shuffle).recover_interrupted_dispatch
+        dispatched_receipts: list[object] = []
+
+        def capture_dispatch(adapter: object, **kwargs: object) -> object:
+            receipt = original_dispatch(adapter, **kwargs)
+            dispatched_receipts.append(receipt)
+            return receipt
 
         def persist_record_with_finalization_failure(
             record: object,
@@ -882,10 +1003,18 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
                 raise RuntimeError("synthetic finalization failure")
             return original_persist_record(record, **kwargs)
 
-        with mock.patch.object(
-            service,
-            "persist_record",
-            side_effect=persist_record_with_finalization_failure,
+        with (
+            mock.patch.object(
+                type(service._shuffle),
+                "dispatch_approved_action",
+                autospec=True,
+                side_effect=capture_dispatch,
+            ),
+            mock.patch.object(
+                service,
+                "persist_record",
+                side_effect=persist_record_with_finalization_failure,
+            ),
         ):
             with self.assertRaisesRegex(RuntimeError, "synthetic finalization failure"):
                 service.delegate_approved_action_to_shuffle(
@@ -898,6 +1027,10 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
         executions = store.list(ActionExecutionRecord)
         self.assertEqual(len(executions), 1)
         self.assertEqual(executions[0].lifecycle_state, "dispatching")
+        self.assertEqual(
+            executions[0].delegated_at,
+            datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
+        )
         self.assertEqual(executions[0].execution_surface_type, "automation_substrate")
         self.assertEqual(executions[0].execution_surface_id, "shuffle")
         self.assertTrue(executions[0].execution_run_id.startswith("shuffle-run-"))
@@ -910,6 +1043,125 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
             executions[0].provenance["dispatch_finalization_failure"]["error"],
             "synthetic finalization failure",
         )
+        self.assertEqual(len(dispatched_receipts), 1)
+
+        def capture_recovery(adapter: object, **kwargs: object) -> object:
+            return original_recovery(adapter, **kwargs)
+
+        with mock.patch.object(
+            type(service._shuffle),
+            "recover_interrupted_dispatch",
+            autospec=True,
+            side_effect=capture_recovery,
+        ) as recover_interrupted_dispatch:
+            recovery_started_at = datetime.now(timezone.utc)
+            future_retry_at = recovery_started_at + timedelta(days=1)
+            recovered = service.delegate_approved_action_to_shuffle(
+                action_request_id=(
+                    "action-request-routine-finalization-failure-001"
+                ),
+                approved_payload=approved_payload,
+                delegated_at=future_retry_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(recovered.lifecycle_state, "queued")
+        self.assertEqual(
+            recovered.execution_run_id,
+            dispatched_receipts[0].execution_run_id,
+        )
+        self.assertEqual(len(store.list(ActionExecutionRecord)), 1)
+        recover_interrupted_dispatch.assert_called_once()
+        self.assertEqual(
+            recover_interrupted_dispatch.call_args.kwargs["delegated_at"],
+            datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
+        )
+        queued_transition = max(
+            (
+                transition
+                for transition in store.list(support.LifecycleTransitionRecord)
+                if transition.subject_record_family == "action_execution"
+                and transition.subject_record_id == recovered.action_execution_id
+                and transition.lifecycle_state == "queued"
+            ),
+            key=lambda transition: transition.transitioned_at,
+        )
+        self.assertGreaterEqual(
+            queued_transition.transitioned_at,
+            recovery_started_at,
+        )
+        self.assertLess(
+            queued_transition.transitioned_at,
+            future_retry_at,
+        )
+
+    def test_service_keeps_ambiguous_shuffle_post_failure_recoverable(
+        self,
+    ) -> None:
+        store, service, approved_payload, delegated_at = (
+            self._build_approved_shuffle_delegation_context(
+                approval_decision_id="approval-ambiguous-post-001",
+                action_request_id="action-request-ambiguous-post-001",
+                idempotency_key="idempotency-ambiguous-post-001",
+            )
+        )
+        original_dispatch = type(service._shuffle).dispatch_approved_action
+
+        class AmbiguousDispatchError(RuntimeError):
+            outcome_unknown = True
+
+        def raise_ambiguous_failure(adapter: object, **kwargs: object) -> object:
+            raise AmbiguousDispatchError("proxy failed after accepting POST")
+
+        with mock.patch.object(
+            type(service._shuffle),
+            "dispatch_approved_action",
+            autospec=True,
+            side_effect=raise_ambiguous_failure,
+        ):
+            with self.assertRaisesRegex(
+                AmbiguousDispatchError,
+                "proxy failed after accepting POST",
+            ):
+                service.delegate_approved_action_to_shuffle(
+                    action_request_id="action-request-ambiguous-post-001",
+                    approved_payload=approved_payload,
+                    delegated_at=delegated_at,
+                    delegation_issuer="control-plane-service",
+                )
+
+        claimed_execution = store.list(ActionExecutionRecord)[0]
+        self.assertEqual(claimed_execution.lifecycle_state, "dispatching")
+        self.assertNotIn("dispatch_failure", claimed_execution.provenance)
+        recovery_calls: list[dict[str, object]] = []
+
+        def recover(adapter: object, **kwargs: object) -> object:
+            recovery_calls.append(dict(kwargs))
+            return original_dispatch(adapter, **kwargs)
+
+        with (
+            mock.patch.object(
+                type(service._shuffle),
+                "dispatch_approved_action",
+                side_effect=AssertionError("recovery must not POST again"),
+            ),
+            mock.patch.object(
+                type(service._shuffle),
+                "recover_interrupted_dispatch",
+                new=recover,
+                create=True,
+            ),
+        ):
+            recovered = service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-ambiguous-post-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at + timedelta(minutes=1),
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(recovered.lifecycle_state, "queued")
+        self.assertEqual(len(recovery_calls), 1)
+        self.assertEqual(recovery_calls[0]["delegated_at"], delegated_at)
 
     def test_service_preserves_finalization_failure_recording_error_context(
         self,

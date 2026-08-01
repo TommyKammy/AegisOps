@@ -53,11 +53,44 @@ production data.
 Do not replace the bounded test input with a production endpoint, public
 address, real username, or customer log.
 
-Shuffle startup is available for substrate inspection, but workflow execution is intentionally disabled. The tracked bootstrap keeps emulation disabled; set `AEGISOPS_LAB_ALLOW_EMULATION=yes` only in an untracked bootstrap after accepting the architecture boundary. Do not add a Docker socket mount locally. Phase 67.3 must add the reviewed execution boundary.
+The tracked bootstrap keeps Shuffle emulation disabled; set
+`AEGISOPS_LAB_ALLOW_EMULATION=yes` only in an untracked bootstrap after
+accepting the architecture boundary. Phase 67.3 uses the official
+Orborus/worker model, so the backend and Orborus receive the selected Colima
+Docker socket. Treat both containers as Docker-daemon privileged and keep this
+topology isolated and non-production.
 
 ```bash
-control-plane/deployment/phase-67-integration-lab/up.sh shuffle
+control-plane/deployment/phase-67-integration-lab/bootstrap-shuffle.sh
+control-plane/deployment/phase-67-integration-lab/test-shuffle-execution.sh
 ```
+
+`bootstrap-shuffle.sh` starts the substrate in deterministic mode, registers
+the first local admin if needed, stores the returned API key only below the
+untracked runtime secret directory, imports the tracked harmless local-echo
+workflow, and restarts AegisOps in `real_http` mode. Reruns validate the
+preserved credential and workflow instead of creating another workflow.
+`runtime.env` stores the workflow transition as one atomic
+active-ID/pending-ID/transport-mode state. A first initialization leaves both
+IDs empty; if bootstrap stops after creation, the pending ID is resumed on the
+next run, and `real_http` is selected only after the preserved workflow passes
+validation. The retired placeholder UUID is treated as uninitialized and
+removed by the next `init.sh` run.
+
+`test-shuffle-execution.sh` creates one explicitly approved local-sink action,
+dispatches it through the authenticated API with at most two attempts, polls
+the authenticated execution list, validates every approval, delegation, hash,
+workflow, and correlation field, and passes the normalized receipt to AegisOps
+reconciliation. An ambiguous timeout is not retried. Exact receipt replay must
+return the original reconciliation ID. Failed, missing, malformed, duplicated,
+or mismatched receipts fail the trial and do not become accepted
+reconciliation truth.
+
+On each Orborus recreation, the lab removes and recreates Shuffle's dynamic
+Swarm worker/app services. `ORBORUS_CONTAINER_NAME` uses the configured Compose
+project name so Orborus joins the worker overlay without a global
+`container_name`. Wait for the bounded Orborus startup window before treating a
+queued execution as stalled.
 
 ## Inspect
 
@@ -114,6 +147,14 @@ That command applies the same ownership proof before deleting only volumes attac
   `control-plane` logs, confirm `wazuh-integratord` is running, and rerun
   `prepare-substrates.sh` plus `up.sh wazuh`; do not widen the rule `5710`
   filter.
+- Shuffle bootstrap registration rejected: if the preserved Shuffle volume
+  already has an administrator but the API-key file is missing, restore the
+  original credential or destroy the disposable lab volumes before
+  reinitializing; do not generate an unrelated replacement key.
+- Shuffle receipt polling timeout or failed execution: inspect bounded
+  `shuffle-backend`, `shuffle-orborus`, and dynamic worker logs. Preserve the
+  failed evidence and do not mark the action reconciled or rerun dispatch
+  manually.
 - Shuffle amd64 execution unavailable: preserve the profile settings and use the exact `colima stop` plus `colima start --vm-type vz --vz-rosetta ... --activate=false` command printed by `preflight.sh --scope shuffle`. This host-level change interrupts every workload in that Colima profile, so the lab reports it as a blocker and never applies it automatically. Do not remove the explicit `linux/amd64` platform.
 
 When a blocker remains, save the relevant scoped preflight, `status.sh ... --write-evidence`, and a bounded `logs.sh` snapshot before changing the lab configuration.

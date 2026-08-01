@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timezone
+import json
 from typing import Mapping
 
 from .action_receipt_validation import (
@@ -20,6 +21,33 @@ from ..models import (
     ActionRequestRecord,
     ApprovalDecisionRecord,
 )
+
+
+def _json_values_equal(left: object, right: object) -> bool:
+    try:
+        return json.dumps(
+            _json_ready(left),
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ) == json.dumps(
+            _json_ready(right),
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _json_ready(value: object) -> object:
+    if isinstance(value, Mapping):
+        if any(not isinstance(key, str) for key in value):
+            raise TypeError("JSON object keys must be strings")
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(item) for item in value]
+    return value
 
 
 class ApprovedActionDelegationCoordinator:
@@ -94,7 +122,10 @@ class ApprovedActionDelegationCoordinator:
         invalid_execution_surface_id_message: str,
         delegation_label: str,
     ) -> ActionExecutionRecord:
-        delegated_at = self._service._require_aware_datetime(delegated_at, "delegated_at")
+        delegated_at = self._service._require_aware_datetime(
+            delegated_at,
+            "delegated_at",
+        ).astimezone(timezone.utc)
         action_request_id = self._service._require_non_empty_string(
             action_request_id,
             "action_request_id",
@@ -113,6 +144,7 @@ class ApprovedActionDelegationCoordinator:
             else self._service._isolated_executor
         )
         predispatch_execution: ActionExecutionRecord
+        recover_interrupted_claim = False
         action_request: ActionRequestRecord
         approval_decision: ApprovalDecisionRecord
         approval_decision_id: str
@@ -132,6 +164,11 @@ class ApprovedActionDelegationCoordinator:
                 delegation_label=delegation_label,
             )
             approval_decision_id = approval_decision.approval_decision_id
+            if execution_surface_id == "shuffle":
+                self._require_reviewed_shuffle_payload(
+                    action_request=action_request,
+                    approved_payload=normalized_payload,
+                )
             for existing in self._service._store.list(ActionExecutionRecord):
                 if (
                     existing.action_request_id == action_request.action_request_id
@@ -139,55 +176,81 @@ class ApprovedActionDelegationCoordinator:
                     and existing.execution_surface_id == execution_surface_id
                     and existing.idempotency_key == action_request.idempotency_key
                 ):
+                    self._require_exact_approved_expiry_binding(
+                        action_request=action_request,
+                        approval_decision=approval_decision,
+                        delegated_at=existing.delegated_at,
+                        delegation_label=delegation_label,
+                    )
                     if existing.lifecycle_state == "dispatching":
-                        raise RuntimeError(
-                            "approved action delegation is already dispatching"
-                        )
+                        predispatch_execution = existing
+                        delegation_id = existing.delegation_id
+                        recover_interrupted_claim = True
+                        break
                     return existing
-            if execution_surface_id == "shuffle":
-                self._require_reviewed_shuffle_payload(
+            else:
+                self._require_exact_approved_expiry_binding(
                     action_request=action_request,
-                    approved_payload=normalized_payload,
-                )
-
-            delegation_id = self._service._next_identifier("delegation")
-            predispatch_execution = self._service.persist_record(
-                ActionExecutionRecord(
-                    action_execution_id=self._service._next_identifier("action-execution"),
-                    action_request_id=action_request.action_request_id,
-                    approval_decision_id=approval_decision_id,
-                    delegation_id=delegation_id,
-                    execution_surface_type=execution_surface_type,
-                    execution_surface_id=execution_surface_id,
-                    execution_run_id=self._pending_dispatch_execution_run_id(
-                        delegation_id
-                    ),
-                    idempotency_key=action_request.idempotency_key,
-                    target_scope=action_request.target_scope,
-                    approved_payload=normalized_payload,
-                    payload_hash=action_request.payload_hash,
+                    approval_decision=approval_decision,
                     delegated_at=delegated_at,
-                    expires_at=action_request.expires_at,
-                    provenance={
-                        "delegation_issuer": delegation_issuer,
-                        "evidence_ids": evidence_ids,
-                    },
-                    lifecycle_state="dispatching",
-                ),
-                transitioned_at=delegated_at,
-            )
+                    delegation_label=delegation_label,
+                )
+                delegation_id = self._service._next_identifier("delegation")
+                claim_transitioned_at = datetime.now(timezone.utc)
+                predispatch_execution = self._service.persist_record(
+                    ActionExecutionRecord(
+                        action_execution_id=self._service._next_identifier(
+                            "action-execution"
+                        ),
+                        action_request_id=action_request.action_request_id,
+                        approval_decision_id=approval_decision_id,
+                        delegation_id=delegation_id,
+                        execution_surface_type=execution_surface_type,
+                        execution_surface_id=execution_surface_id,
+                        execution_run_id=self._pending_dispatch_execution_run_id(
+                            delegation_id
+                        ),
+                        idempotency_key=action_request.idempotency_key,
+                        target_scope=action_request.target_scope,
+                        approved_payload=normalized_payload,
+                        payload_hash=action_request.payload_hash,
+                        delegated_at=delegated_at,
+                        expires_at=action_request.expires_at,
+                        provenance={
+                            "delegation_issuer": delegation_issuer,
+                            "evidence_ids": evidence_ids,
+                        },
+                        lifecycle_state="dispatching",
+                    ),
+                    transitioned_at=claim_transitioned_at,
+                )
         receipt = None
         execution_run_id: str
         finalized_provenance: dict[str, object]
         try:
-            receipt = adapter.dispatch_approved_action(
+            dispatch_operation = adapter.dispatch_approved_action
+            dispatch_timestamp = delegated_at
+            if recover_interrupted_claim:
+                recovery_operation = getattr(
+                    adapter,
+                    "recover_interrupted_dispatch",
+                    None,
+                )
+                if not callable(recovery_operation):
+                    raise RuntimeError(
+                        "approved action delegation is already dispatching "
+                        "and the adapter cannot recover it"
+                    )
+                dispatch_operation = recovery_operation
+                dispatch_timestamp = predispatch_execution.delegated_at
+            receipt = dispatch_operation(
                 delegation_id=delegation_id,
                 action_request_id=action_request.action_request_id,
                 approval_decision_id=approval_decision_id,
                 payload_hash=action_request.payload_hash,
                 idempotency_key=action_request.idempotency_key,
                 approved_payload=normalized_payload,
-                delegated_at=delegated_at,
+                delegated_at=dispatch_timestamp,
             )
             self._require_exact_adapter_receipt_binding(
                 receipt=receipt,
@@ -207,13 +270,18 @@ class ApprovedActionDelegationCoordinator:
                 execution_surface_id=execution_surface_id,
             )
         except Exception as exc:
-            self._mark_dispatch_failure(
-                execution=predispatch_execution,
-                error=exc,
-                receipt=receipt,
-            )
+            if (
+                not recover_interrupted_claim
+                and getattr(exc, "outcome_unknown", False) is not True
+            ):
+                self._mark_dispatch_failure(
+                    execution=predispatch_execution,
+                    error=exc,
+                    receipt=receipt,
+                )
             raise
 
+        finalization_transitioned_at = datetime.now(timezone.utc)
         try:
             with self._service._store.transaction():
                 stored_execution = self._service._store.get(
@@ -224,15 +292,22 @@ class ApprovedActionDelegationCoordinator:
                     raise LookupError(
                         "missing pre-dispatch action execution record during delegation finalization"
                     )
-                execution = self._service.persist_record(
-                    replace(
-                        stored_execution,
-                        execution_run_id=execution_run_id,
-                        provenance=finalized_provenance,
-                        lifecycle_state="queued",
-                    ),
-                    transitioned_at=delegated_at,
-                )
+                if stored_execution.lifecycle_state != "dispatching":
+                    if stored_execution.execution_run_id != execution_run_id:
+                        raise RuntimeError(
+                            "dispatch claim was finalized with a different execution"
+                        )
+                    execution = stored_execution
+                else:
+                    execution = self._service.persist_record(
+                        replace(
+                            stored_execution,
+                            execution_run_id=execution_run_id,
+                            provenance=finalized_provenance,
+                            lifecycle_state="queued",
+                        ),
+                        transitioned_at=finalization_transitioned_at,
+                    )
         except Exception as exc:
             try:
                 self._record_dispatch_finalization_failure(
@@ -382,7 +457,7 @@ class ApprovedActionDelegationCoordinator:
             raise ValueError(
                 "shuffle delegation binding uses an unknown reviewed workflow template version"
             )
-        if requested_scope != action_request.target_scope:
+        if not _json_values_equal(requested_scope, action_request.target_scope):
             raise ValueError(
                 "shuffle delegation binding does not match approved action request scope"
             )
@@ -447,8 +522,10 @@ class ApprovedActionDelegationCoordinator:
                             "external_receipt_id",
                         )
                         != delegation_binding["expected_execution_receipt_id"],
-                        getattr(receipt, "requested_scope", None)
-                        != delegation_binding["requested_scope"],
+                        not _json_values_equal(
+                            getattr(receipt, "requested_scope", None),
+                            delegation_binding["requested_scope"],
+                        ),
                     )
                 ):
                     raise ValueError(
@@ -750,11 +827,9 @@ class ApprovedActionDelegationCoordinator:
             execution_surface_type=execution_surface_type,
             execution_surface_id=execution_surface_id,
         )
-        self._require_exact_approved_expiry_binding(
+        self._require_approved_expiry_snapshot_matches(
             action_request=action_request,
             approval_decision=approval_decision,
-            delegated_at=delegated_at,
-            delegation_label=delegation_label,
         )
         return action_request, approval_decision
 
@@ -766,8 +841,10 @@ class ApprovedActionDelegationCoordinator:
         delegated_at: datetime,
         delegation_label: str,
     ) -> None:
-        if approval_decision.approved_expires_at != action_request.expires_at:
-            raise ValueError("approved expiry window does not match action request expiry")
+        self._require_approved_expiry_snapshot_matches(
+            action_request=action_request,
+            approval_decision=approval_decision,
+        )
         if (
             approval_decision.approved_expires_at is not None
             and delegated_at > approval_decision.approved_expires_at
@@ -775,6 +852,15 @@ class ApprovedActionDelegationCoordinator:
             raise ValueError(
                 f"Action request {action_request.action_request_id!r} expired before {delegation_label} delegation"
             )
+
+    @staticmethod
+    def _require_approved_expiry_snapshot_matches(
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord,
+    ) -> None:
+        if approval_decision.approved_expires_at != action_request.expires_at:
+            raise ValueError("approved expiry window does not match action request expiry")
 
     def _require_exact_approved_payload_binding(
         self,
@@ -789,7 +875,10 @@ class ApprovedActionDelegationCoordinator:
             raise ValueError(
                 "approved payload binding does not match approved action request and approval decision"
             )
-        if approval_decision.target_snapshot != action_request.target_scope:
+        if not _json_values_equal(
+            approval_decision.target_snapshot,
+            action_request.target_scope,
+        ):
             raise ValueError(
                 "approved payload binding does not match approved action request and approval decision"
             )

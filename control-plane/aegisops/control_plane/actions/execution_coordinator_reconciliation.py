@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timezone
+import hashlib
+import json
 import logging
 from typing import Mapping
 
@@ -16,6 +18,53 @@ from ..models import (
     ActionRequestRecord,
     ReconciliationRecord,
 )
+
+_SHUFFLE_STATUS_TO_LIFECYCLE = {
+    "queued": "queued",
+    "pending": "queued",
+    "running": "running",
+    "in_progress": "running",
+    "success": "succeeded",
+    "succeeded": "succeeded",
+    "completed": "succeeded",
+    "failed": "failed",
+    "error": "failed",
+    "canceled": "canceled",
+    "cancelled": "canceled",
+}
+_SHUFFLE_FAILURE_STATUSES = frozenset(
+    {"failed", "error", "canceled", "cancelled"}
+)
+_SHUFFLE_NON_FAILURE_STATUSES = frozenset(_SHUFFLE_STATUS_TO_LIFECYCLE).difference(
+    _SHUFFLE_FAILURE_STATUSES
+)
+
+
+def _json_values_equal(left: object, right: object) -> bool:
+    try:
+        return json.dumps(
+            _json_ready(left),
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ) == json.dumps(
+            _json_ready(right),
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _json_ready(value: object) -> object:
+    if isinstance(value, Mapping):
+        if any(not isinstance(key, str) for key in value):
+            raise TypeError("JSON object keys must be strings")
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(item) for item in value]
+    return value
 
 
 class ActionExecutionReconciliationCoordinator:
@@ -123,6 +172,8 @@ class ActionExecutionReconciliationCoordinator:
         mismatch_summary: str
         execution_run_id: str | None = None
         last_seen_at = action_request.requested_at
+        persist_normalized_receipt = False
+        normalized_receipt: Mapping[str, object] | None = None
 
         if latest_execution is None:
             ingest_disposition = "missing"
@@ -235,6 +286,13 @@ class ActionExecutionReconciliationCoordinator:
                     observed_expected_execution_receipt_id=(
                         observed_expected_execution_receipt_id
                     ),
+                    observed_external_receipt_id=observed_external_receipt_id,
+                    observed_requested_scope=latest_execution.get(
+                        "requested_scope"
+                    ),
+                    observed_idempotency_execution_count=latest_execution.get(
+                        "idempotency_execution_count"
+                    ),
                     action_type=authoritative_execution.approved_payload.get(
                         "action_type"
                     ),
@@ -297,12 +355,34 @@ class ActionExecutionReconciliationCoordinator:
                     "coordination receipt mismatch between authoritative action execution "
                     "and observed downstream execution"
                 )
+            elif (
+                require_binding_identifiers
+                and latest_execution.get("status") in _SHUFFLE_FAILURE_STATUSES
+            ):
+                ingest_disposition = "mismatch"
+                lifecycle_state = "mismatched"
+                mismatch_summary = (
+                    "downstream execution failed and requires operator review"
+                )
+                persist_normalized_receipt = require_binding_identifiers
+            elif (
+                require_binding_identifiers
+                and latest_execution.get("status")
+                not in _SHUFFLE_NON_FAILURE_STATUSES
+            ):
+                ingest_disposition = "mismatch"
+                lifecycle_state = "mismatched"
+                mismatch_summary = (
+                    "unrecognized downstream execution status requires operator review"
+                )
+                persist_normalized_receipt = require_binding_identifiers
             else:
                 ingest_disposition = "matched"
                 lifecycle_state = "matched"
                 mismatch_summary = (
                     "matched approved action request to reviewed execution run"
                 )
+                persist_normalized_receipt = require_binding_identifiers
 
         with self._service._store.transaction():
             if authoritative_execution is not None:
@@ -316,22 +396,68 @@ class ActionExecutionReconciliationCoordinator:
                     )
                 authoritative_execution = stored_execution
 
+            candidate_normalized_receipt: Mapping[str, object] | None = None
             if (
                 authoritative_execution is not None
                 and latest_execution is not None
-                and ingest_disposition == "matched"
+                and require_binding_identifiers
             ):
+                candidate_normalized_receipt = self._normalized_shuffle_receipt(
+                    latest_execution
+                )
+                normalized_receipt_sha256 = candidate_normalized_receipt["sha256"]
+                if not isinstance(normalized_receipt_sha256, str):
+                    raise RuntimeError(
+                        "normalized Shuffle receipt must include a SHA-256 digest"
+                    )
+                current_normalized_receipt = (
+                    authoritative_execution.provenance.get("normalized_receipt")
+                )
+                existing_reconciliation = self._find_receipt_reconciliation(
+                    authoritative_execution.action_execution_id,
+                    latest_execution["execution_run_id"],
+                    normalized_receipt_sha256,
+                    allow_unhashed_match=(
+                        isinstance(current_normalized_receipt, Mapping)
+                        and current_normalized_receipt.get("sha256")
+                        == normalized_receipt_sha256
+                    ),
+                )
+                if existing_reconciliation is not None:
+                    return existing_reconciliation
+
+            if (
+                authoritative_execution is not None
+                and latest_execution is not None
+                and (
+                    persist_normalized_receipt
+                    or ingest_disposition == "matched"
+                )
+            ):
+                updated_provenance = dict(authoritative_execution.provenance)
+                if persist_normalized_receipt:
+                    normalized_receipt = candidate_normalized_receipt
+                    if normalized_receipt is None:
+                        raise RuntimeError(
+                            "normalized Shuffle receipt is unavailable for persistence"
+                        )
+                    updated_provenance["normalized_receipt"] = normalized_receipt
                 reconciled_lifecycle_state = self._action_execution_lifecycle_from_status(
                     latest_execution.get("status"),
                     authoritative_execution.lifecycle_state,
                 )
-                if reconciled_lifecycle_state != authoritative_execution.lifecycle_state:
+                if (
+                    reconciled_lifecycle_state
+                    != authoritative_execution.lifecycle_state
+                    or updated_provenance != authoritative_execution.provenance
+                ):
                     authoritative_execution = self._service.persist_record(
                         replace(
                             authoritative_execution,
+                            provenance=updated_provenance,
                             lifecycle_state=reconciled_lifecycle_state,
                         ),
-                        transitioned_at=latest_execution["observed_at"],
+                        transitioned_at=datetime.now(timezone.utc),
                     )
             downstream_binding: Mapping[str, object] | None = None
             if authoritative_execution is not None:
@@ -360,6 +486,10 @@ class ActionExecutionReconciliationCoordinator:
                         subject_linkage["expected_execution_receipt_ids"] = (
                             downstream_binding["expected_execution_receipt_id"],
                         )
+            if normalized_receipt is not None:
+                subject_linkage["normalized_receipt_sha256"] = (
+                    normalized_receipt["sha256"],
+                )
 
             if (
                 authoritative_execution is not None
@@ -434,19 +564,7 @@ class ActionExecutionReconciliationCoordinator:
             return current_lifecycle_state
 
         normalized_status = status.strip().lower()
-        observed_state = {
-            "queued": "queued",
-            "pending": "queued",
-            "running": "running",
-            "in_progress": "running",
-            "success": "succeeded",
-            "succeeded": "succeeded",
-            "completed": "succeeded",
-            "failed": "failed",
-            "error": "failed",
-            "canceled": "canceled",
-            "cancelled": "canceled",
-        }.get(normalized_status)
+        observed_state = _SHUFFLE_STATUS_TO_LIFECYCLE.get(normalized_status)
         if observed_state is None:
             return current_lifecycle_state
 
@@ -516,6 +634,77 @@ class ActionExecutionReconciliationCoordinator:
                     return execution
         return matches[0] if matches else None
 
+    def _find_receipt_reconciliation(
+        self,
+        action_execution_id: str,
+        execution_run_id: str,
+        normalized_receipt_sha256: str,
+        *,
+        allow_unhashed_match: bool,
+    ) -> ReconciliationRecord | None:
+        for reconciliation in reversed(
+            self._service._store.list(ReconciliationRecord)
+        ):
+            linked_action_execution_ids = reconciliation.subject_linkage.get(
+                "action_execution_ids",
+                (),
+            )
+            linked_receipt_sha256 = reconciliation.subject_linkage.get(
+                "normalized_receipt_sha256",
+                (),
+            )
+            if (
+                isinstance(linked_action_execution_ids, tuple)
+                and action_execution_id in linked_action_execution_ids
+                and reconciliation.execution_run_id == execution_run_id
+                and (
+                    (
+                        isinstance(linked_receipt_sha256, tuple)
+                        and normalized_receipt_sha256 in linked_receipt_sha256
+                    )
+                    or (
+                        allow_unhashed_match
+                        and linked_receipt_sha256 == ()
+                    )
+                )
+            ):
+                return reconciliation
+        return None
+
+    @staticmethod
+    def _normalized_shuffle_receipt(
+        execution: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        fields = (
+            "execution_run_id",
+            "execution_surface_type",
+            "execution_surface_id",
+            "idempotency_key",
+            "status",
+            "approval_decision_id",
+            "delegation_id",
+            "payload_hash",
+            "action_request_id",
+            "workflow_id",
+            "workflow_version_id",
+            "correlation_id",
+            "expected_execution_receipt_id",
+            "external_receipt_id",
+            "requested_scope",
+            "idempotency_execution_count",
+        )
+        content = {field: execution.get(field) for field in fields}
+        encoded = json.dumps(
+            content,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return {
+            **content,
+            "sha256": hashlib.sha256(encoded).hexdigest(),
+            "authority_posture": "subordinate_shuffle_receipt",
+        }
+
     @staticmethod
     def _shuffle_receipt_binding_mismatched(
         *,
@@ -525,6 +714,9 @@ class ActionExecutionReconciliationCoordinator:
         observed_workflow_version_id: object,
         observed_correlation_id: object,
         observed_expected_execution_receipt_id: object,
+        observed_external_receipt_id: object,
+        observed_requested_scope: object,
+        observed_idempotency_execution_count: object,
         action_type: object,
     ) -> bool:
         downstream_binding = authoritative_execution.provenance.get(
@@ -549,7 +741,42 @@ class ActionExecutionReconciliationCoordinator:
                 continue
             if observed_value != downstream_binding[field_name]:
                 return True
+        expected_execution_receipt_id = downstream_binding.get(
+            "expected_execution_receipt_id"
+        )
+        if (
+            authoritative_execution.provenance.get("adapter")
+            == "shuffle_real_http"
+            and isinstance(expected_execution_receipt_id, str)
+            and observed_external_receipt_id != expected_execution_receipt_id
+        ):
+            return True
+        expected_requested_scope = downstream_binding.get("requested_scope")
+        if (
+            isinstance(expected_requested_scope, Mapping)
+            and not _json_values_equal(
+                observed_requested_scope,
+                expected_requested_scope,
+            )
+        ):
+            return True
+        if (
+            authoritative_execution.provenance.get("adapter")
+            == "shuffle_real_http"
+            and not ActionExecutionReconciliationCoordinator._is_exact_integer_one(
+                observed_idempotency_execution_count
+            )
+        ):
+            return True
         return False
+
+    @staticmethod
+    def _is_exact_integer_one(value: object) -> bool:
+        return (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and value == 1
+        )
 
     def _normalize_observed_executions(
         self,
@@ -575,6 +802,28 @@ class ActionExecutionReconciliationCoordinator:
             expected_execution_receipt_id = execution.get(
                 "expected_execution_receipt_id"
             )
+            requested_scope = execution.get("requested_scope")
+            if requested_scope is not None:
+                if not isinstance(requested_scope, Mapping):
+                    raise ValueError(
+                        "observed execution requested_scope must be a mapping"
+                    )
+                requested_scope = dict(requested_scope)
+            idempotency_execution_count = execution.get(
+                "idempotency_execution_count"
+            )
+            if (
+                idempotency_execution_count is not None
+                and not self._is_exact_integer_one(
+                    idempotency_execution_count
+                )
+            ):
+                raise ValueError(
+                    "observed execution idempotency_execution_count must be integer one"
+                )
+            status = execution.get("status")
+            if isinstance(status, str):
+                status = status.strip().lower()
             coordination_reference_id = execution.get("coordination_reference_id")
             coordination_target_type = execution.get("coordination_target_type")
             external_receipt_id = execution.get("external_receipt_id")
@@ -645,12 +894,14 @@ class ActionExecutionReconciliationCoordinator:
                     "workflow_version_id": workflow_version_id,
                     "correlation_id": correlation_id,
                     "expected_execution_receipt_id": expected_execution_receipt_id,
+                    "requested_scope": requested_scope,
+                    "idempotency_execution_count": idempotency_execution_count,
                     "coordination_reference_id": coordination_reference_id,
                     "coordination_target_type": coordination_target_type,
                     "external_receipt_id": external_receipt_id,
                     "coordination_target_id": coordination_target_id,
                     "ticket_reference_url": ticket_reference_url,
-                    "status": execution.get("status"),
+                    "status": status,
                 }
             )
 

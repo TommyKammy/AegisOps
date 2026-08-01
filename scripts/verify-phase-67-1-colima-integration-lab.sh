@@ -122,7 +122,7 @@ required_compose_lines=(
   '- wazuh.indexer'
   '- wazuh.manager'
   "grep -q 'wazuh-analysisd is running'"
-  'com.aegisops.lab.execution-enabled: "false"'
+  'com.aegisops.lab.execution-enabled: "true"'
   'file: ${AEGISOPS_LAB_SECRET_DIR:?run-init-first}/postgres-password'
   'file: ${AEGISOPS_LAB_SECRET_DIR:?run-init-first}/control-plane-postgres-dsn'
   'subnet: ${AEGISOPS_LAB_NETWORK_SUBNET:-172.31.67.0/24}'
@@ -135,6 +135,9 @@ required_compose_lines=(
   'postgres:16.4@sha256:'
   'nginx:1.27.0@sha256:'
   'opensearchproject/opensearch:3.2.0@sha256:'
+  'AEGISOPS_LAB_CONTROL_PLANE_IPV4: ${AEGISOPS_LAB_CONTROL_PLANE_IPV4:-172.31.67.20}'
+  'NGINX_ENVSUBST_FILTER: ^AEGISOPS_LAB_CONTROL_PLANE_IPV4$'
+  './config/control-plane.conf:/etc/nginx/templates/control-plane.conf.template:ro'
 )
 for line in "${required_compose_lines[@]}"; do
   require_fixed_string "${compose}" "${line}"
@@ -171,6 +174,17 @@ require_fixed_string "${common}" 'pathlib.Path(sys.argv[1]).resolve(strict=False
 require_fixed_string "${common}" 'assert_phase67_compose_project_ownership'
 require_fixed_string "${common}" 'excluded_services_for_scope'
 require_fixed_string "${common}" 'assert_no_running_excluded_services'
+for scope in core wazuh; do
+  excluded_scope_services="$(
+    bash -c 'source "$1"; excluded_services_for_scope "$2"' \
+      phase67-scope-verifier \
+      "${common}" \
+      "${scope}"
+  )"
+  if ! grep -Fxq 'shuffle-orborus' <<<"${excluded_scope_services}"; then
+    fail "Phase 67 ${scope} scope must exclude the Shuffle Orborus service."
+  fi
+done
 require_fixed_string "${common}" 'assert_no_preserved_phase67_volumes'
 require_fixed_string "${common}" 'repository_runtime_state='
 require_fixed_string "${common}" 'repository_runtime_artifact_sha256='
@@ -205,6 +219,7 @@ require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'AEGISOPS_CONTROL_
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'unset AEGISOPS_CONTROL_PLANE_POSTGRES_DSN_FILE'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" '/opt/aegisops/bin/first-boot-entrypoint.sh /bin/true'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" '"${migrations_dir}"/0015_*.sql'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" '"${migrations_dir}"/0016_*.sql'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'detected migration checksum drift'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'migration_readiness_query'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'prove_migration_state'
@@ -227,7 +242,7 @@ require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" '6854488c1104636fe
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'prove_delegated_migration_definitions'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'final schema definitions for delegated migrations 0001-0007'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'd906ba1ab5288c94b5c277c1aad60d6ddf499ad2aed55a2abde8729e639d3443'
-require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'a00a8e3616ded3dd37dbdc6619d0309f22899c2773a9ca241a88a6b2b644336e'
+require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" '5de18095fdfcf3c0d223a45280d3b96a699dde0ebdc6e11328a1a936fb39d8de'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" 'ba3907928c1c026b50f3a9e37c870d6c0008dddb2ebeccf9001cf937898c7d4f'
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "tablename || '|' || indexname || '|' || indexdef"
 require_fixed_string "${lab_dir}/control-plane-entrypoint.sh" "('evidence_records', 'provenance', 'jsonb', 'NO', \$default\$'{}'::jsonb\$default\$)"
@@ -288,6 +303,7 @@ require_fixed_string "${proxy_config}" 'server_name shuffle.localhost;'
 require_fixed_string "${proxy_config}" 'proxy_pass $phase67_wazuh_dashboard;'
 require_fixed_string "${proxy_config}" 'proxy_pass $phase67_shuffle_frontend;'
 require_fixed_string "${proxy_config}" 'resolver 127.0.0.11 ipv6=off valid=10s;'
+require_fixed_string "${proxy_config}" 'allow ${AEGISOPS_LAB_CONTROL_PLANE_IPV4};'
 require_fixed_string "${proxy_config}" 'proxy_ssl_trusted_certificate /etc/nginx/certs/wazuh-upstream-root-ca.pem;'
 require_fixed_string "${proxy_config}" 'proxy_ssl_verify on;'
 require_fixed_string "${proxy_config}" 'include /etc/nginx/certs/runtime-auth.conf;'
@@ -334,7 +350,7 @@ require_fixed_string "${cleanup}" 'Use destroy-data.sh only when permanent delet
 require_fixed_string "${destroy}" '--confirm-destroy-phase-67-lab-data'
 require_fixed_string "${destroy}" 'assert_phase67_compose_project_ownership'
 require_fixed_string "${destroy}" 'down --volumes --remove-orphans'
-require_fixed_string "${readme}" 'Phase 67.1 does not mount the Docker socket or start Orborus'
+require_fixed_string "${readme}" 'Orborus and the backend mount the selected Colima Docker socket'
 require_fixed_string "${readme}" 'export AEGISOPS_LAB_BOOTSTRAP_ENV='
 require_fixed_string "${readme}" 'next `up.sh` force service recreation'
 require_fixed_string "${readme}" 'phase67-lab-platform-admin'
@@ -364,10 +380,41 @@ require_fixed_string "${repo_root}/.github/workflows/ci.yml" 'bash scripts/test-
 if grep -R --include='*.sh' -F -- 'docker context use' "${lab_dir}" >/dev/null; then
   fail "Phase 67.1 lab must not mutate the global Docker context."
 fi
-if grep -E -- '/var/run/docker\.sock|docker\.sock:/' "${compose}" >/dev/null ||
-  grep -R --include='*.sh' -E -- '/var/run/docker\.sock|docker\.sock:/' "${lab_dir}" >/dev/null; then
-  fail "Phase 67.1 lab must not mount the Docker socket."
+if ! python3 - "${compose}" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+compose = Path(sys.argv[1]).read_text(encoding="utf-8")
+in_services = False
+current_service = None
+socket_owners = []
+for line in compose.splitlines():
+    if line and not line[0].isspace():
+        in_services = line == "services:"
+        current_service = None
+        continue
+    if in_services and line.startswith("  ") and not line.startswith("    "):
+        service_match = re.fullmatch(
+            r"""  ("[^"]+"|'[^']+'|[A-Za-z0-9_.-]+):\s*(?:#.*)?""",
+            line,
+        )
+        if service_match is not None:
+            current_service = service_match.group(1).strip("\"'")
+        elif line.strip() and not line.lstrip().startswith("#"):
+            current_service = None
+    if line.strip() == "- /var/run/docker.sock:/var/run/docker.sock":
+        socket_owners.append(current_service if in_services else None)
+
+if socket_owners != ["shuffle-backend", "shuffle-orborus"]:
+    raise SystemExit(1)
+PY
+then
+  fail "Phase 67 cumulative lab must limit Docker socket mounts to the reviewed Shuffle backend and Orborus services."
 fi
+require_fixed_string \
+  "${compose}" \
+  'com.aegisops.lab.execution-scope: harmless-local-test-sink'
 if grep -E -- '(^|[[:space:]])container_name:' "${compose}" >/dev/null; then
   fail "Phase 67.1 lab must preserve Compose project isolation without container_name."
 fi
