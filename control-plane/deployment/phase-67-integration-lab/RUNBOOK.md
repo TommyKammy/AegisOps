@@ -105,17 +105,22 @@ The runner uses the `full` profile and one generated trial run ID. It hashes
 the repository revision, rendered Compose model, evidence schema, runtime
 artifacts, and running image identities before it combines any evidence. It
 then executes the real Wazuh trial, promotes that exact admitted alert to a
-case, records a requester and distinct approver, proves a denied action has
-zero executions, and dispatches one approved harmless action to real Shuffle.
+case, and prepares a reviewed harmless action. A distinct local operator must
+inspect the displayed action request, payload hash, and challenge, then confirm
+the macOS operator dialog or type the exact `APPROVE <challenge>` phrase on a
+TTY. Only that ceremony persists approval and allows dispatch to real Shuffle.
 Receipt success is passed through AegisOps reconciliation instead of inferred
 from Shuffle state.
 
 After report export and delivery replay, the runner stops and starts the lab,
 checks the persisted authoritative identifiers and one-execution count, and
-runs `cleanup.sh`. Raw captures and the complete redacted report remain mode
-`0600` below `${AEGISOPS_LAB_EVIDENCE_DIR}`. Only a separately reviewed,
-redacted manifest may be copied to the tracked sample path. Do not commit the
-raw command output, report, service logs, runtime env, or host-local paths.
+runs `cleanup.sh`. The runner retains a trial-specific raw artifact directory
+with mode `0700` and files with mode `0600`, plus the complete redacted report,
+below `${AEGISOPS_LAB_EVIDENCE_DIR}`. The manifest records every retained raw
+artifact digest and binds a generated evaluation record to the trial, snapshot,
+revision, and verdict. Only a separately reviewed, redacted manifest may be
+copied to the tracked sample path. Do not commit the raw command output, report,
+service logs, runtime env, or host-local paths.
 
 The evidence validator fails closed on missing or reordered steps, mixed
 snapshots, placeholder or synthetic live IDs, same-actor request and approval,

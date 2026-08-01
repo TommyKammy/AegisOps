@@ -40,8 +40,10 @@ The combined runner requires a clean immutable repository revision and the
 `full` profile. It records digest-pinned services, all 15 reviewed journey
 steps, denied-action non-dispatch, duplicate delivery behavior, selected
 negative probes, persistence after restart, and non-destructive cleanup. The
-publishable sample omits raw logs, secret values, private host paths, and the
-full local report.
+operator must interactively approve a challenge bound to the prepared action
+through a macOS dialog or exact TTY response; the runner cannot complete from
+unattended input. The publishable sample omits raw logs, secret values, private
+host paths, and the full local report.
 
 ## Runtime Shape
 
@@ -143,9 +145,11 @@ control-plane/deployment/phase-67-integration-lab/run-e2e-trial.sh
 
 The command starts `full`, reuses the real Wazuh intake boundary, promotes that
 exact admitted alert, proves a denied action has no Shuffle execution, records
-a separate approved real execution, reconciles its authenticated receipt,
-exports a redacted AegisOps report, restarts the lab, checks authoritative
-record persistence, and stops the lab without deleting volumes or evidence.
+a separate approved real execution after an authenticated local operator
+confirms the displayed approval challenge, reconciles its authenticated
+receipt, exports a redacted AegisOps report, restarts the lab, checks
+authoritative record persistence, and stops the lab without deleting volumes
+or evidence.
 
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 

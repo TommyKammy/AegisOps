@@ -36,11 +36,14 @@ captured_prefix="$(date -u '+%Y%m%dT%H%M%SZ')"
 trial_run_id="phase67-e2e-${captured_prefix}-$(openssl rand -hex 6)"
 staging_dir="$(mktemp -d "${AEGISOPS_LAB_EVIDENCE_DIR}/.phase67-e2e.XXXXXX")"
 wazuh_output="${staging_dir}/wazuh-output.txt"
+wazuh_manifest_output="${staging_dir}/wazuh-manifest.json"
+preparation_output="${staging_dir}/preparation.json"
 journey_output="${staging_dir}/journey.json"
 restart_output="${staging_dir}/restart.json"
 report_output="${staging_dir}/report.json"
 snapshot_output="${staging_dir}/snapshot.json"
 images_output="${staging_dir}/images.json"
+evaluation_record_output="${staging_dir}/evaluation-record.json"
 evidence_output="${staging_dir}/evidence.json"
 cleaned=false
 
@@ -95,6 +98,12 @@ docker_lab inspect ${container_ids} |
     )
     | sort_by(.service)
   ' >"${images_output}"
+jq \
+  --arg service "shuffle-action-image" \
+  --arg immutable_reference "${shuffle_tools_immutable_ref}" \
+  '. + [{service: $service, immutable_reference: $immutable_reference}] | sort_by(.service)' \
+  "${images_output}" >"${images_output}.next"
+mv "${images_output}.next" "${images_output}"
 
 AEGISOPS_LAB_TRIAL_SCOPE=full \
   "${LAB_DIR}/test-wazuh-intake.sh" | tee "${wazuh_output}"
@@ -103,7 +112,61 @@ wazuh_evidence="$(
 )"
 [[ -f "${wazuh_evidence}" ]] \
   || fail "real Wazuh trial did not publish its evidence manifest"
+cp "${wazuh_evidence}" "${wazuh_manifest_output}"
 aegisops_alert_id="$(jq -er '.aegisops_alert_id' "${wazuh_evidence}")"
+
+compose_scope full exec -T \
+  -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE="${shuffle_tools_image}" \
+  -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}" \
+  -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_IMMUTABLE_REF="${shuffle_tools_immutable_ref}" \
+  control-plane \
+  python3 /opt/aegisops/phase67-e2e/run_real_journey.py \
+    prepare \
+    --trial-id "${trial_run_id}" \
+    --alert-id "${aegisops_alert_id}" \
+    >"${preparation_output}"
+
+approval_challenge="$(jq -er '.approval_challenge' "${preparation_output}")"
+action_request_id="$(jq -er '.action_request_id' "${preparation_output}")"
+payload_hash="$(jq -er '.payload_hash' "${preparation_output}")"
+approver_identity="local-operator:$(id -un)"
+if [[ "$(uname -s)" == "Darwin" ]] && command -v osascript >/dev/null 2>&1; then
+  approval_method="macos_operator_dialog"
+  if ! approval_response="$(
+    osascript - \
+      "${action_request_id}" \
+      "${payload_hash}" \
+      "${approval_challenge}" \
+      "${approver_identity}" <<'APPLESCRIPT'
+on run arguments
+  set actionRequestId to item 1 of arguments
+  set payloadHash to item 2 of arguments
+  set approvalChallenge to item 3 of arguments
+  set approverIdentity to item 4 of arguments
+  set promptText to "Approve the reviewed harmless local AegisOps action?" & return & return & "action_request_id=" & actionRequestId & return & "payload_hash=" & payloadHash & return & "challenge=" & approvalChallenge & return & "approver_identity=" & approverIdentity
+  set response to display dialog promptText with title "AegisOps Phase 67.4 Approval" buttons {"Deny", "Approve"} default button "Approve" cancel button "Deny" with icon caution
+  return button returned of response
+end run
+APPLESCRIPT
+  )"; then
+    fail "interactive macOS operator approval was denied"
+  fi
+  [[ "${approval_response}" == "Approve" ]] \
+    || fail "interactive macOS operator approval was not granted"
+else
+  [[ -t 0 && -t 1 ]] \
+    || fail "interactive human approval requires a terminal or macOS dialog"
+  approval_method="tty_challenge"
+  printf '%s\n' \
+    "Human approval required for the reviewed harmless local action." \
+    "action_request_id=${action_request_id}" \
+    "payload_hash=${payload_hash}" \
+    "approver_identity=${approver_identity}" \
+    "Type exactly: APPROVE ${approval_challenge}"
+  IFS= read -r approval_response
+  [[ "${approval_response}" == "APPROVE ${approval_challenge}" ]] \
+    || fail "interactive approval was not granted"
+fi
 
 compose_scope full exec -T \
   -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE="${shuffle_tools_image}" \
@@ -113,7 +176,10 @@ compose_scope full exec -T \
   python3 /opt/aegisops/phase67-e2e/run_real_journey.py \
     execute \
     --trial-id "${trial_run_id}" \
-    --alert-id "${aegisops_alert_id}" \
+    --approver-identity "${approver_identity}" \
+    --approval-challenge "${approval_challenge}" \
+    --approval-method "${approval_method}" \
+    <"${preparation_output}" \
     >"${journey_output}"
 python3 - "${journey_output}" "${report_output}" <<'PY'
 import json
@@ -142,7 +208,7 @@ jq -c '.journey | .aegisops_alert_id = .alert_id' "${journey_output}" |
   || fail "repository revision changed during the E2E trial"
 runtime_artifact_sha256="$(jq -er '.runtime_artifact_digest' "${wazuh_evidence}")"
 docker_context="${AEGISOPS_LAB_DOCKER_CONTEXT}"
-colima_profile="${COLIMA_PROFILE:-default}"
+colima_profile="${AEGISOPS_LAB_COLIMA_PROFILE}"
 jq -n \
   --arg trial_run_id "${trial_run_id}" \
   --arg snapshot_id "${snapshot_id}" \
@@ -169,28 +235,58 @@ jq -n \
     }
   ' >"${snapshot_output}"
 
+evaluated_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+jq -n \
+  --arg evaluated_at "${evaluated_at}" \
+  --arg trial_run_id "${trial_run_id}" \
+  --arg snapshot_id "${snapshot_id}" \
+  --arg repository_revision "${repository_revision}" '
+    {
+      schema_version: "phase67.4-prerequisite-evaluation-v1",
+      evaluated_at: $evaluated_at,
+      trial_run_id: $trial_run_id,
+      snapshot_id: $snapshot_id,
+      repository_revision: $repository_revision,
+      verdict: "integration_trial_passed_with_owned_limitations",
+      ga_accepted: false,
+      limitation_ids: [
+        "phase67-single-host",
+        "phase67-bounded-connectors",
+        "phase67-ga-gates-open"
+      ]
+    }
+  ' >"${evaluation_record_output}"
+
 "${LAB_DIR}/cleanup.sh"
 cleaned=true
 python3 "${builder}" \
   --schema "${schema}" \
   --snapshot "${snapshot_output}" \
-  --wazuh "${wazuh_evidence}" \
+  --images "${images_output}" \
+  --preparation "${preparation_output}" \
+  --wazuh "${wazuh_manifest_output}" \
   --wazuh-output "${wazuh_output}" \
   --journey "${journey_output}" \
   --restart "${restart_output}" \
   --report "${report_output}" \
   --evaluation "${evaluation}" \
+  --evaluation-record "${evaluation_record_output}" \
+  --artifacts-directory-name "${trial_run_id}-artifacts" \
   --output "${evidence_output}"
 python3 "${validator}" "${schema}" "${evidence_output}"
 
 final_evidence="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}.json"
 final_report="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}-report.json"
+final_artifacts="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}-artifacts"
 mv "${evidence_output}" "${final_evidence}"
 mv "${report_output}" "${final_report}"
+mv "${staging_dir}" "${final_artifacts}"
+chmod 700 "${final_artifacts}"
+find "${final_artifacts}" -type f -exec chmod 600 {} +
 chmod 600 "${final_evidence}" "${final_report}"
-rm -rf "${staging_dir}"
 trap - EXIT
 
 echo "PASS: Phase 67.4 real-service E2E trial completed"
 echo "evidence=${final_evidence}"
 echo "report=${final_report}"
+echo "artifacts=${final_artifacts}"

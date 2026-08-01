@@ -79,6 +79,11 @@ def _manifest() -> dict[str, object]:
                     "immutable_reference": "frikky/shuffle-backend@sha256:"
                     + "1" * 64,
                 },
+                {
+                    "service": "shuffle-action-image",
+                    "immutable_reference": "ghcr.io/aegisops/shuffle-tools@sha256:"
+                    + "3" * 64,
+                },
             ],
         },
         "steps": steps,
@@ -107,10 +112,14 @@ def _manifest() -> dict[str, object]:
         },
         "human_control": {
             "requester_identity": "phase67-lab-requester",
-            "approver_identity": "phase67-lab-approver",
+            "approver_identity": "local-operator:reviewer",
+            "authenticated_approver_identity": "local-operator:reviewer",
             "denied_action_execution_count": 0,
             "denied_dispatch_rejected": True,
-            "approval_source": "aegisops_approval_decision_record",
+            "approval_source": "interactive_local_operator_ceremony",
+            "approval_method": "tty_challenge",
+            "approval_challenge_sha256": "4" * 64,
+            "approval_confirmed_at": observed_at,
         },
         "idempotency": {
             "wazuh_first_disposition": "created",
@@ -123,7 +132,22 @@ def _manifest() -> dict[str, object]:
         "negative_cases": {
             key: {
                 "status": "rejected" if key != "failed_execution" else "contained",
-                "authority_delta": 0,
+                "authority_before": 10,
+                "authority_after": (
+                    11
+                    if key in {"failed_execution", "reconciliation_mismatch"}
+                    else 10
+                ),
+                "authority_delta": (
+                    1
+                    if key in {"failed_execution", "reconciliation_mismatch"}
+                    else 0
+                ),
+                "measurement_source": (
+                    "aegisops_authoritative_alert_count"
+                    if key in {"invalid_credential", "proxy_bypass"}
+                    else "aegisops_authoritative_record_count"
+                ),
                 "evidence_ref": f"negative:{key}",
             }
             for key in validator.NEGATIVE_CASE_KEYS
@@ -144,6 +168,25 @@ def _manifest() -> dict[str, object]:
             "sha256": "2" * 64,
             "source_of_truth": "aegisops_authoritative_records",
             "redacted": True,
+        },
+        "evaluation": {
+            "trial_run_id": "phase67-e2e-20260801T100000Z-0123456789ab",
+            "snapshot_id": snapshot_id,
+            "repository_revision": "a" * 40,
+            "evaluated_at": observed_at,
+            "verdict": "integration_trial_passed_with_owned_limitations",
+            "ga_accepted": False,
+            "sha256": "5" * 64,
+        },
+        "artifacts": {
+            "retention": "local_mode_0600",
+            "directory_name": (
+                "phase67-e2e-20260801T100000Z-0123456789ab-artifacts"
+            ),
+            "files": [
+                {"name": name, "sha256": "6" * 64}
+                for name in sorted(validator.ARTIFACT_NAMES)
+            ],
         },
         "cleanup": {
             "mode": "non_destructive",
@@ -197,6 +240,46 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         ):
             validator.validate_manifest(missing, SCHEMA)
 
+    def test_validator_rejects_missing_action_image_and_stale_evaluation(self) -> None:
+        missing_image = _manifest()
+        missing_image["snapshot"]["images"] = [
+            image
+            for image in missing_image["snapshot"]["images"]
+            if image["service"] != "shuffle-action-image"
+        ]
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "dynamic Shuffle action image",
+        ):
+            validator.validate_manifest(missing_image, SCHEMA)
+
+        stale_evaluation = _manifest()
+        stale_evaluation["evaluation"]["trial_run_id"] = (
+            "phase67-e2e-20260801T100001Z-0123456789ab"
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "evaluation is not bound to this trial",
+        ):
+            validator.validate_manifest(stale_evaluation, SCHEMA)
+
+    def test_validator_rejects_unmeasured_negative_and_missing_artifact(self) -> None:
+        unmeasured = _manifest()
+        unmeasured["negative_cases"]["failed_execution"]["authority_delta"] = 0
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "authority delta is not measured",
+        ):
+            validator.validate_manifest(unmeasured, SCHEMA)
+
+        incomplete = _manifest()
+        incomplete["artifacts"]["files"].pop()
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "raw artifact inventory is incomplete",
+        ):
+            validator.validate_manifest(incomplete, SCHEMA)
+
     def test_validator_rejects_inferred_human_control_or_receipt_success(self) -> None:
         same_actor = _manifest()
         same_actor["human_control"]["approver_identity"] = same_actor[
@@ -215,6 +298,16 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "denied action",
         ):
             validator.validate_manifest(denied_dispatch, SCHEMA)
+
+        unattended = _manifest()
+        unattended["human_control"]["approval_source"] = (
+            "aegisops_approval_decision_record"
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "interactive ceremony",
+        ):
+            validator.validate_manifest(unattended, SCHEMA)
 
         replay = _manifest()
         replay["idempotency"]["receipt_replay_reconciliation_id"] = (
@@ -251,7 +344,14 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         for key in manifest["idempotency"]:
             manifest["idempotency"][key] = None
         for case in manifest["negative_cases"].values():
-            case.update(status=None, authority_delta=None, evidence_ref=None)
+            case.update(
+                status=None,
+                authority_before=None,
+                authority_after=None,
+                authority_delta=None,
+                measurement_source=None,
+                evidence_ref=None,
+            )
         manifest["restart"] = {
             "performed": None,
             "records_persisted": None,
@@ -262,6 +362,20 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "sha256": None,
             "source_of_truth": None,
             "redacted": None,
+        }
+        manifest["evaluation"] = {
+            "trial_run_id": None,
+            "snapshot_id": None,
+            "repository_revision": None,
+            "evaluated_at": None,
+            "verdict": None,
+            "ga_accepted": None,
+            "sha256": None,
+        }
+        manifest["artifacts"] = {
+            "retention": None,
+            "directory_name": None,
+            "files": [],
         }
         manifest["cleanup"] = {
             "mode": None,
@@ -287,8 +401,18 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         ):
             validator.validate_manifest(manifest, SCHEMA)
 
-    def test_runner_uses_distinct_actors_and_deterministic_record_ids(self) -> None:
-        self.assertNotEqual(journey.REQUESTER_IDENTITY, journey.APPROVER_IDENTITY)
+    def test_runner_uses_bound_approval_challenges_and_deterministic_record_ids(self) -> None:
+        challenge = journey._approval_challenge(
+            trial_id="phase67-e2e-20260801T100000Z-0123456789ab",
+            action_request_id="action-a1b2c3d4",
+            payload_hash="a" * 64,
+        )
+        changed = journey._approval_challenge(
+            trial_id="phase67-e2e-20260801T100000Z-0123456789ab",
+            action_request_id="action-a1b2c3d4",
+            payload_hash="b" * 64,
+        )
+        self.assertNotEqual(challenge, changed)
         first = journey._identifiers_for_trial(
             "phase67-e2e-20260801T100000Z-0123456789ab"
         )
@@ -307,8 +431,19 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn("AEGISOPS_LAB_TRIAL_SCOPE=full", runner)
         self.assertIn("docker_lab inspect ${container_ids}", runner)
         self.assertIn('docker_context="${AEGISOPS_LAB_DOCKER_CONTEXT}"', runner)
+        self.assertIn('colima_profile="${AEGISOPS_LAB_COLIMA_PROFILE}"', runner)
+        self.assertIn('[[ -t 0 && -t 1 ]]', runner)
+        self.assertIn('approval_method="macos_operator_dialog"', runner)
+        self.assertIn('display dialog promptText', runner)
+        self.assertIn('"APPROVE ${approval_challenge}"', runner)
+        self.assertIn('prepare \\', runner)
+        self.assertIn('--approver-identity "${approver_identity}"', runner)
+        self.assertIn('"shuffle-action-image"', runner)
+        self.assertIn('final_artifacts=', runner)
         self.assertNotIn("docker inspect ${container_ids}", runner)
         self.assertNotIn("docker context show", runner)
+        self.assertNotIn('colima_profile="${COLIMA_PROFILE:-default}"', runner)
+        self.assertNotIn('rm -rf "${staging_dir}"', runner)
         self.assertIn("verify-restart", runner)
         self.assertIn(
             ".journey | .aegisops_alert_id = .alert_id",
@@ -321,6 +456,8 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         )
         self.assertIn('lifecycle_state="rejected"', real_journey)
         self.assertNotIn('lifecycle_state="denied"', real_journey)
+        self.assertNotIn("class _StaticTransport", real_journey)
+        self.assertIn("service.reconcile_action_execution(", real_journey)
         compose = (LAB_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
         self.assertIn("./e2e:/opt/aegisops/phase67-e2e:ro", compose)
 

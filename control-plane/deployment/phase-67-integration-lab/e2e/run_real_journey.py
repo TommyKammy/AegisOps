@@ -57,7 +57,7 @@ REVIEWED_SHUFFLE_APP_IMAGE_IMMUTABLE_REF = (
     "frikky/shuffle@" + REVIEWED_SHUFFLE_APP_IMAGE_DIGEST
 )
 REQUESTER_IDENTITY = "phase67-lab-requester"
-APPROVER_IDENTITY = "phase67-lab-approver"
+NEGATIVE_PROBE_APPROVER_IDENTITY = "phase67-lab-negative-probe-approver"
 REVIEWED_ACTION_ID = "phase67-harmless-local-log-action"
 REVIEWED_ACTION_NAME = "Harmless local log"
 RESTART_RECORD_TYPES = {
@@ -70,14 +70,6 @@ RESTART_RECORD_TYPES = {
     "action_execution_id": ActionExecutionRecord,
     "reconciliation_id": ReconciliationRecord,
 }
-
-
-class _StaticTransport:
-    def __init__(self, response: object) -> None:
-        self.response = response
-
-    def request_json(self, **_kwargs: object) -> object:
-        return self.response
 
 
 def _approved_binding_hash(
@@ -132,6 +124,18 @@ def _identifiers_for_trial(trial_id: str) -> dict[str, str]:
         "idempotency_key": f"phase67-idempotency-{suffix}",
         "report_id": f"phase67-report-{suffix}",
     }
+
+
+def _approval_challenge(
+    *,
+    trial_id: str,
+    action_request_id: str,
+    payload_hash: str,
+) -> str:
+    encoded = "\0".join(
+        (trial_id, action_request_id, payload_hash)
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:16].upper()
 
 
 def _binding_and_payload(
@@ -229,7 +233,7 @@ def _prove_denied_action_non_dispatch(
         ApprovalDecisionRecord(
             approval_decision_id=identifiers["denied_approval_decision_id"],
             action_request_id=action.action_request_id,
-            approver_identities=(APPROVER_IDENTITY,),
+            approver_identities=(NEGATIVE_PROBE_APPROVER_IDENTITY,),
             target_snapshot=target_scope,
             payload_hash=payload_hash,
             decided_at=requested_at + timedelta(seconds=1),
@@ -309,91 +313,96 @@ def _poll_real_receipt(
 
 def _run_receipt_negative_probes(
     *,
-    config: RuntimeConfig,
-    execution_id: str,
-    idempotency_key: str,
-    expected_binding: Mapping[str, object],
+    service: AegisOpsControlPlaneService,
+    action: ActionRequestRecord,
+    receipt: Mapping[str, object],
+    compared_at: datetime,
 ) -> dict[str, dict[str, object]]:
-    argument = {**expected_binding, "idempotency_key": idempotency_key}
+    record_types = (
+        ActionRequestRecord,
+        ApprovalDecisionRecord,
+        ActionExecutionRecord,
+        ReconciliationRecord,
+    )
 
-    def probe(response: object) -> tuple[str, str]:
-        client = ShuffleReceiptPollingClient(
-            base_url=config.shuffle_base_url,
-            api_key=config.shuffle_api_key,
-            api_workflow_id=config.shuffle_api_workflow_id,
-            transport=_StaticTransport(response),
-        )
+    def authority_count() -> int:
+        return sum(len(service._store.list(record_type)) for record_type in record_types)
+
+    def probe(
+        name: str,
+        observed_execution: Mapping[str, object],
+        *,
+        expected_status: str,
+        expected_category: str,
+    ) -> dict[str, object]:
+        before = authority_count()
+        status = expected_status
+        category = expected_category
         try:
-            receipt = client.poll_normalized_receipt(
-                execution_id=execution_id,
-                idempotency_key=idempotency_key,
-                expected_binding=expected_binding,
-                observed_at=datetime.now(timezone.utc),
+            reconciliation = service.reconcile_action_execution(
+                action_request_id=action.action_request_id,
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                observed_executions=(observed_execution,),
+                compared_at=compared_at,
+                stale_after=compared_at + timedelta(minutes=5),
             )
-        except ShuffleTransportFailure as exc:
-            return "rejected", exc.category
-        if receipt["status"] == "failed":
-            return "contained", "failed_receipt_not_reconciled"
-        raise RuntimeError("negative receipt probe unexpectedly succeeded")
-
-    failed_response = {
-        "executions": [
-            {
-                "execution_id": execution_id,
-                "execution_argument": argument,
-                "status": "FAILED",
-                "results": [],
-            }
-        ]
-    }
-    malformed_response = {
-        "executions": [
-            {
-                "execution_id": execution_id,
-                "execution_argument": "{",
-                "status": "FINISHED",
-                "results": [],
-            }
-        ]
-    }
-    mismatched_argument = dict(argument)
-    mismatched_argument["payload_hash"] = "0" * 64
-    mismatch_response = {
-        "executions": [
-            {
-                "execution_id": execution_id,
-                "execution_argument": mismatched_argument,
-                "status": "FINISHED",
-                "results": [
-                    {
-                        "action": {
-                            "id": REVIEWED_ACTION_ID,
-                            "name": REVIEWED_ACTION_NAME,
-                        },
-                        "status": "SUCCESS",
-                    }
-                ],
-            }
-        ]
-    }
-    result: dict[str, dict[str, object]] = {}
-    for name, response in (
-        ("failed_execution", failed_response),
-        ("malformed_receipt", malformed_response),
-        ("reconciliation_mismatch", mismatch_response),
-    ):
-        status, category = probe(response)
-        result[name] = {
+        except (TypeError, ValueError) as exc:
+            if name != "malformed_receipt":
+                raise
+            category = "malformed_receipt"
+            status = "rejected"
+            if not str(exc):
+                raise RuntimeError("malformed receipt rejection lacks a diagnostic") from exc
+        else:
+            if reconciliation.ingest_disposition != "mismatch":
+                raise RuntimeError(
+                    f"{name} unexpectedly reconciled as "
+                    f"{reconciliation.ingest_disposition!r}"
+                )
+        after = authority_count()
+        return {
             "status": status,
             "category": category,
-            "authority_delta": 0,
+            "authority_before": before,
+            "authority_after": after,
+            "authority_delta": after - before,
+            "measurement_source": "aegisops_authoritative_record_count",
         }
-    return result
+
+    malformed_receipt = {
+        "execution_run_id": receipt.get("execution_run_id"),
+        "status": "succeeded",
+    }
+    mismatched_receipt = dict(receipt)
+    mismatched_receipt["payload_hash"] = "0" * 64
+    failed_receipt = dict(receipt)
+    failed_receipt["status"] = "failed"
+
+    return {
+        "malformed_receipt": probe(
+            "malformed_receipt",
+            malformed_receipt,
+            expected_status="rejected",
+            expected_category="malformed_receipt",
+        ),
+        "reconciliation_mismatch": probe(
+            "reconciliation_mismatch",
+            mismatched_receipt,
+            expected_status="rejected",
+            expected_category="payload_hash_mismatch",
+        ),
+        "failed_execution": probe(
+            "failed_execution",
+            failed_receipt,
+            expected_status="contained",
+            expected_category="failed_execution_reconciled_for_review",
+        ),
+    }
 
 
-def _execute(args: argparse.Namespace) -> dict[str, object]:
-    config = _require_lab_config()
-    service = AegisOpsControlPlaneService(config)
+def _prepare(args: argparse.Namespace) -> dict[str, object]:
+    service = AegisOpsControlPlaneService(_require_lab_config())
     alert = service.get_record(AlertRecord, args.alert_id)
     if alert is None:
         raise RuntimeError(f"admitted AegisOps alert {args.alert_id!r} is missing")
@@ -435,32 +444,107 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
         payload_hash=payload_hash,
         requested_at=now + timedelta(seconds=3),
     )
-    approval = service.persist_record(
-        ApprovalDecisionRecord(
-            approval_decision_id=identifiers["approval_decision_id"],
-            action_request_id=action.action_request_id,
-            approver_identities=(APPROVER_IDENTITY,),
-            target_snapshot=target_scope,
-            payload_hash=payload_hash,
-            decided_at=now + timedelta(seconds=4),
-            lifecycle_state="approved",
-            decision_rationale="Reviewed harmless Phase 67.4 local echo.",
-            approved_expires_at=action.expires_at,
-        ),
-        transitioned_at=now + timedelta(seconds=4),
+    challenge = _approval_challenge(
+        trial_id=args.trial_id,
+        action_request_id=action.action_request_id,
+        payload_hash=action.payload_hash,
     )
-    service.persist_record(
-        replace(
-            action,
-            approval_decision_id=approval.approval_decision_id,
-            lifecycle_state="approved",
+    return {
+        "trial_run_id": args.trial_id,
+        "alert_id": alert.alert_id,
+        "finding_id": alert.finding_id,
+        "case_id": case.case_id,
+        "requester_identity": REQUESTER_IDENTITY,
+        "action_request_id": action.action_request_id,
+        "payload_hash": action.payload_hash,
+        "target_scope": dict(action.target_scope),
+        "approval_challenge": challenge,
+        "approval_challenge_sha256": hashlib.sha256(
+            challenge.encode("utf-8")
+        ).hexdigest(),
+        "denied_action_request_id": identifiers["denied_action_request_id"],
+        "denied_approval_decision_id": identifiers[
+            "denied_approval_decision_id"
+        ],
+        "denied_dispatch": denied,
+        "prepared_at": datetime.now(timezone.utc).isoformat().replace(
+            "+00:00", "Z"
         ),
-        transitioned_at=now + timedelta(seconds=4),
+    }
+
+
+def _execute(args: argparse.Namespace) -> dict[str, object]:
+    config = _require_lab_config()
+    service = AegisOpsControlPlaneService(config)
+    preparation = json.load(sys.stdin)
+    if not isinstance(preparation, Mapping):
+        raise RuntimeError("execute input must be a preparation object")
+    identifiers = _identifiers_for_trial(args.trial_id)
+    action = service.get_record(
+        ActionRequestRecord,
+        identifiers["action_request_id"],
     )
+    if action is None or action.lifecycle_state != "pending_approval":
+        raise RuntimeError("prepared action request is missing or no longer pending")
+    case = service.get_record(CaseRecord, identifiers["case_id"])
+    if case is None:
+        raise RuntimeError("prepared case is missing")
+    challenge = _approval_challenge(
+        trial_id=args.trial_id,
+        action_request_id=action.action_request_id,
+        payload_hash=action.payload_hash,
+    )
+    expected_preparation = {
+        "trial_run_id": args.trial_id,
+        "alert_id": action.alert_id,
+        "finding_id": action.finding_id,
+        "case_id": case.case_id,
+        "requester_identity": REQUESTER_IDENTITY,
+        "action_request_id": action.action_request_id,
+        "payload_hash": action.payload_hash,
+        "target_scope": dict(action.target_scope),
+        "approval_challenge": challenge,
+        "approval_challenge_sha256": hashlib.sha256(
+            challenge.encode("utf-8")
+        ).hexdigest(),
+    }
+    for field_name, expected_value in expected_preparation.items():
+        if preparation.get(field_name) != expected_value:
+            raise RuntimeError(
+                f"preparation {field_name} does not match the pending action"
+            )
+    denied = preparation.get("denied_dispatch")
+    if not isinstance(denied, Mapping):
+        raise RuntimeError("preparation lacks denied-action evidence")
+    if (
+        preparation.get("denied_action_request_id")
+        != identifiers["denied_action_request_id"]
+        or preparation.get("denied_approval_decision_id")
+        != identifiers["denied_approval_decision_id"]
+        or denied.get("dispatch_rejected") is not True
+        or denied.get("execution_count") != 0
+    ):
+        raise RuntimeError("preparation denied-action evidence is not valid")
+    if args.approval_challenge != challenge:
+        raise PermissionError("interactive approval challenge does not match")
+    decided_at = datetime.now(timezone.utc)
+    approval = service.record_action_approval_decision(
+        action_request_id=action.action_request_id,
+        approver_identity=args.approver_identity,
+        authenticated_approver_identity=args.approver_identity,
+        decision="grant",
+        decision_rationale="Interactive approval of harmless Phase 67.4 local echo.",
+        decided_at=decided_at,
+        approval_decision_id=identifiers["approval_decision_id"],
+    )
+    payload = dict(action.requested_payload)
+    binding = payload.get("shuffle_delegation_binding")
+    if not isinstance(binding, Mapping):
+        raise RuntimeError("prepared action lacks the reviewed Shuffle binding")
     execution = service.delegate_approved_action_to_shuffle(
         action_request_id=action.action_request_id,
         approved_payload=payload,
-        delegated_at=now + timedelta(seconds=5),
+        delegated_at=decided_at + timedelta(seconds=1),
         delegation_issuer=REQUESTER_IDENTITY,
         evidence_ids=("phase67-4-real-service-e2e",),
     )
@@ -470,7 +554,7 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
         "action_request_id": action.action_request_id,
         "approval_decision_id": approval.approval_decision_id,
         "delegation_id": execution.delegation_id,
-        "payload_hash": payload_hash,
+        "payload_hash": action.payload_hash,
         **binding,
         "delegated_at": execution.delegated_at.astimezone(timezone.utc)
         .isoformat()
@@ -489,6 +573,13 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
         expected_binding=expected_binding,
     )
     compared_at = datetime.now(timezone.utc)
+    negatives = _run_receipt_negative_probes(
+        service=service,
+        action=action,
+        receipt=receipt,
+        compared_at=compared_at,
+    )
+    compared_at += timedelta(seconds=4)
     reconciliation = service.reconcile_action_execution(
         action_request_id=action.action_request_id,
         execution_surface_type="automation_substrate",
@@ -517,12 +608,6 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
         raise RuntimeError("real Shuffle receipt did not match AegisOps binding")
     if replay.reconciliation_id != reconciliation.reconciliation_id:
         raise RuntimeError("receipt replay created a second reconciliation")
-    negatives = _run_receipt_negative_probes(
-        config=config,
-        execution_id=execution.execution_run_id,
-        idempotency_key=action.idempotency_key,
-        expected_binding=expected_binding,
-    )
     report = export_audit_retention_baseline(
         store=service._store,
         record_types=(
@@ -540,11 +625,20 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
     return {
         "journey": {
             "trial_run_id": args.trial_id,
-            "alert_id": alert.alert_id,
-            "finding_id": alert.finding_id,
+            "alert_id": preparation["alert_id"],
+            "finding_id": preparation["finding_id"],
             "case_id": case.case_id,
             "requester_identity": REQUESTER_IDENTITY,
-            "approver_identity": APPROVER_IDENTITY,
+            "approver_identity": args.approver_identity,
+            "authenticated_approver_identity": args.approver_identity,
+            "approval_source": "interactive_local_operator_ceremony",
+            "approval_method": args.approval_method,
+            "approval_challenge_sha256": preparation[
+                "approval_challenge_sha256"
+            ],
+            "approval_confirmed_at": decided_at.isoformat().replace(
+                "+00:00", "Z"
+            ),
             "denied_action_request_id": identifiers["denied_action_request_id"],
             "denied_approval_decision_id": identifiers[
                 "denied_approval_decision_id"
@@ -610,16 +704,30 @@ def _verify_restart(args: argparse.Namespace) -> dict[str, object]:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
+    prepare = subparsers.add_parser("prepare")
+    prepare.add_argument("--trial-id", required=True)
+    prepare.add_argument("--alert-id", required=True)
     execute = subparsers.add_parser("execute")
     execute.add_argument("--trial-id", required=True)
-    execute.add_argument("--alert-id", required=True)
+    execute.add_argument("--approver-identity", required=True)
+    execute.add_argument("--approval-challenge", required=True)
+    execute.add_argument(
+        "--approval-method",
+        choices=("macos_operator_dialog", "tty_challenge"),
+        required=True,
+    )
     subparsers.add_parser("verify-restart")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    output = _execute(args) if args.command == "execute" else _verify_restart(args)
+    if args.command == "prepare":
+        output = _prepare(args)
+    elif args.command == "execute":
+        output = _execute(args)
+    else:
+        output = _verify_restart(args)
     json.dump(output, sys.stdout, separators=(",", ":"), sort_keys=True)
     sys.stdout.write("\n")
     return 0

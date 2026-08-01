@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://aegisops.local/schemas/phase67-4-real-service-e2e-evidence-v1.json",
+  "$id": "https://aegisops.local/schemas/phase67-4-real-service-e2e-evidence-v2.json",
   "title": "Phase 67.4 real-service E2E evidence manifest",
   "type": "object",
   "additionalProperties": false,
@@ -17,6 +17,8 @@
     "negative_cases",
     "restart",
     "report",
+    "evaluation",
+    "artifacts",
     "cleanup",
     "authority_posture",
     "verdict",
@@ -24,7 +26,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "phase67.4-real-service-e2e-evidence-v1"
+      "const": "phase67.4-real-service-e2e-evidence-v2"
     },
     "captured_at": {
       "type": "string",
@@ -196,19 +198,30 @@
       "required": [
         "requester_identity",
         "approver_identity",
+        "authenticated_approver_identity",
         "denied_action_execution_count",
         "denied_dispatch_rejected",
-        "approval_source"
+        "approval_source",
+        "approval_method",
+        "approval_challenge_sha256",
+        "approval_confirmed_at"
       ],
       "properties": {
         "requester_identity": {"type": ["string", "null"]},
         "approver_identity": {"type": ["string", "null"]},
+        "authenticated_approver_identity": {"type": ["string", "null"]},
         "denied_action_execution_count": {"type": ["integer", "null"]},
         "denied_dispatch_rejected": {"type": ["boolean", "null"]},
         "approval_source": {
           "type": ["string", "null"],
-          "enum": ["aegisops_approval_decision_record", null]
-        }
+          "enum": ["interactive_local_operator_ceremony", null]
+        },
+        "approval_method": {
+          "type": ["string", "null"],
+          "enum": ["macos_operator_dialog", "tty_challenge", null]
+        },
+        "approval_challenge_sha256": {"type": ["string", "null"]},
+        "approval_confirmed_at": {"type": ["string", "null"], "format": "date-time"}
       }
     },
     "idempotency": {
@@ -276,6 +289,52 @@
         "redacted": {"type": ["boolean", "null"]}
       }
     },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trial_run_id",
+        "snapshot_id",
+        "repository_revision",
+        "evaluated_at",
+        "verdict",
+        "ga_accepted",
+        "sha256"
+      ],
+      "properties": {
+        "trial_run_id": {"type": ["string", "null"]},
+        "snapshot_id": {"type": ["string", "null"]},
+        "repository_revision": {"type": ["string", "null"]},
+        "evaluated_at": {"type": ["string", "null"], "format": "date-time"},
+        "verdict": {"type": ["string", "null"]},
+        "ga_accepted": {"type": ["boolean", "null"]},
+        "sha256": {"type": ["string", "null"]}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["retention", "directory_name", "files"],
+      "properties": {
+        "retention": {
+          "type": ["string", "null"],
+          "enum": ["local_mode_0600", null]
+        },
+        "directory_name": {"type": ["string", "null"]},
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "sha256"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "sha256": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        }
+      }
+    },
     "cleanup": {
       "type": "object",
       "additionalProperties": false,
@@ -329,13 +388,23 @@
     "negative_case": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "authority_delta", "evidence_ref"],
+      "required": [
+        "status",
+        "authority_before",
+        "authority_after",
+        "authority_delta",
+        "measurement_source",
+        "evidence_ref"
+      ],
       "properties": {
         "status": {
           "type": ["string", "null"],
           "enum": ["rejected", "contained", null]
         },
+        "authority_before": {"type": ["integer", "null"]},
+        "authority_after": {"type": ["integer", "null"]},
         "authority_delta": {"type": ["integer", "null"]},
+        "measurement_source": {"type": ["string", "null"]},
         "evidence_ref": {"type": ["string", "null"]}
       }
     }

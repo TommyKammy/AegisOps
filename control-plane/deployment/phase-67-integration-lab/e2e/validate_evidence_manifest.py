@@ -10,10 +10,10 @@ import sys
 from typing import Mapping, Sequence
 
 
-SCHEMA_VERSION = "phase67.4-real-service-e2e-evidence-v1"
+SCHEMA_VERSION = "phase67.4-real-service-e2e-evidence-v2"
 SCHEMA_ID = (
     "https://aegisops.local/schemas/"
-    "phase67-4-real-service-e2e-evidence-v1.json"
+    "phase67-4-real-service-e2e-evidence-v2.json"
 )
 VERDICTS = {
     "integration_trial_passed_ga_not_accepted",
@@ -66,6 +66,16 @@ NEGATIVE_CASE_KEYS = (
     "malformed_receipt",
     "reconciliation_mismatch",
 )
+ARTIFACT_NAMES = {
+    "preparation.json",
+    "wazuh-manifest.json",
+    "wazuh-output.txt",
+    "journey.json",
+    "restart.json",
+    "snapshot.json",
+    "images.json",
+    "evaluation-record.json",
+}
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 REVISION = re.compile(r"^[0-9a-f]{40}$")
 TRIAL_ID = re.compile(r"^phase67-e2e-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$")
@@ -177,6 +187,11 @@ def require_nullable_boolean(value: object, path: str) -> bool | None:
     return value  # type: ignore[return-value]
 
 
+def require_boolean(value: object, path: str) -> bool:
+    require(isinstance(value, bool), f"{path} must be a boolean")
+    return value  # type: ignore[return-value]
+
+
 def require_datetime(value: object, path: str) -> str:
     text = require_string(value, path)
     normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
@@ -262,6 +277,10 @@ def _validate_snapshot(value: object) -> Mapping[str, object]:
         services.add(service)
         reference = require_string(image["immutable_reference"], f"$.snapshot.images[{index}].immutable_reference")
         require(IMMUTABLE_IMAGE.fullmatch(reference) is not None, f"$.snapshot.images[{index}] is not digest-pinned")
+    require(
+        "shuffle-action-image" in services,
+        "$.snapshot.images omits the dynamic Shuffle action image",
+    )
     return snapshot
 
 
@@ -322,6 +341,8 @@ def validate_manifest(manifest: object, schema: object) -> None:
         "negative_cases",
         "restart",
         "report",
+        "evaluation",
+        "artifacts",
         "cleanup",
         "authority_posture",
         "verdict",
@@ -356,16 +377,26 @@ def validate_manifest(manifest: object, schema: object) -> None:
         require(normalized_ids["native_wazuh_alert_id"] != normalized_ids["aegisops_alert_id"], "native Wazuh and AegisOps alert IDs must remain distinct")
 
     human = require_mapping(root["human_control"], "$.human_control")
-    require_exact_keys(human, required=("requester_identity", "approver_identity", "denied_action_execution_count", "denied_dispatch_rejected", "approval_source"), path="$.human_control")
+    require_exact_keys(human, required=("requester_identity", "approver_identity", "authenticated_approver_identity", "denied_action_execution_count", "denied_dispatch_rejected", "approval_source", "approval_method", "approval_challenge_sha256", "approval_confirmed_at"), path="$.human_control")
     requester = require_nullable_string(human["requester_identity"], "$.human_control.requester_identity")
     approver = require_nullable_string(human["approver_identity"], "$.human_control.approver_identity")
+    authenticated_approver = require_nullable_string(human["authenticated_approver_identity"], "$.human_control.authenticated_approver_identity")
     denied_count = require_nullable_integer(human["denied_action_execution_count"], "$.human_control.denied_action_execution_count")
     denied_rejected = require_nullable_boolean(human["denied_dispatch_rejected"], "$.human_control.denied_dispatch_rejected")
     approval_source = require_nullable_string(human["approval_source"], "$.human_control.approval_source")
+    approval_method = require_nullable_string(human["approval_method"], "$.human_control.approval_method")
+    approval_challenge_sha256 = require_nullable_string(human["approval_challenge_sha256"], "$.human_control.approval_challenge_sha256")
+    approval_confirmed_at = human["approval_confirmed_at"]
     if verdict.startswith("integration_trial_passed"):
         require(requester != approver, "requester and approver must be distinct")
+        require(approver == authenticated_approver, "approver must match the authenticated local operator")
         require(denied_count == 0 and denied_rejected is True, "denied action must produce no dispatch")
-        require(approval_source == "aegisops_approval_decision_record", "approval cannot be inferred")
+        require(approval_source == "interactive_local_operator_ceremony", "approval must come from the interactive ceremony")
+        require(approval_method in {"macos_operator_dialog", "tty_challenge"}, "approval method is not independently interactive")
+        require(approval_challenge_sha256 is not None and SHA256.fullmatch(approval_challenge_sha256) is not None, "approval challenge digest must be SHA-256")
+        require_datetime(approval_confirmed_at, "$.human_control.approval_confirmed_at")
+    else:
+        require(approval_confirmed_at is None or isinstance(approval_confirmed_at, str), "$.human_control.approval_confirmed_at must be a date-time or null")
 
     idempotency = require_mapping(root["idempotency"], "$.idempotency")
     require_exact_keys(idempotency, required=("wazuh_first_disposition", "wazuh_duplicate_disposition", "wazuh_alert_identity_preserved", "shuffle_execution_count", "receipt_replay_reconciliation_id", "receipt_identity_preserved"), path="$.idempotency")
@@ -384,13 +415,25 @@ def validate_manifest(manifest: object, schema: object) -> None:
     require_exact_keys(negative_cases, required=NEGATIVE_CASE_KEYS, path="$.negative_cases")
     for key in NEGATIVE_CASE_KEYS:
         case = require_mapping(negative_cases[key], f"$.negative_cases.{key}")
-        require_exact_keys(case, required=("status", "authority_delta", "evidence_ref"), path=f"$.negative_cases.{key}")
+        require_exact_keys(case, required=("status", "authority_before", "authority_after", "authority_delta", "measurement_source", "evidence_ref"), path=f"$.negative_cases.{key}")
         status = require_nullable_string(case["status"], f"$.negative_cases.{key}.status")
+        before = require_nullable_integer(case["authority_before"], f"$.negative_cases.{key}.authority_before")
+        after = require_nullable_integer(case["authority_after"], f"$.negative_cases.{key}.authority_after")
         delta = require_nullable_integer(case["authority_delta"], f"$.negative_cases.{key}.authority_delta")
+        measurement_source = require_nullable_string(case["measurement_source"], f"$.negative_cases.{key}.measurement_source")
         evidence_ref = require_nullable_string(case["evidence_ref"], f"$.negative_cases.{key}.evidence_ref")
         if verdict.startswith("integration_trial_passed"):
             require(status in {"rejected", "contained"}, f"$.negative_cases.{key} did not reject or contain the probe")
-            require(delta == 0, f"$.negative_cases.{key} changed authoritative state")
+            require(before is not None and before >= 0 and after is not None and after >= 0, f"$.negative_cases.{key} lacks authoritative before/after counts")
+            require(delta == after - before, f"$.negative_cases.{key} authority delta is not measured")
+            expected_source = (
+                "aegisops_authoritative_alert_count"
+                if key in {"invalid_credential", "proxy_bypass"}
+                else "aegisops_authoritative_record_count"
+            )
+            require(measurement_source == expected_source, f"$.negative_cases.{key} did not use the real AegisOps measurement source")
+            if key in {"invalid_credential", "proxy_bypass", "malformed_receipt"}:
+                require(delta == 0, f"$.negative_cases.{key} unexpectedly persisted authoritative state")
             require(evidence_ref is not None, f"$.negative_cases.{key} lacks evidence")
 
     restart = require_mapping(root["restart"], "$.restart")
@@ -413,6 +456,43 @@ def validate_manifest(manifest: object, schema: object) -> None:
         require(report_id == normalized_ids["report_id"], "report ID is not bound to journey identifiers")
         require(report_sha is not None and SHA256.fullmatch(report_sha) is not None, "report digest must be SHA-256")
         require(report_source == "aegisops_authoritative_records" and report_redacted is True, "report must be redacted and AegisOps-derived")
+
+    evaluation = require_mapping(root["evaluation"], "$.evaluation")
+    require_exact_keys(evaluation, required=("trial_run_id", "snapshot_id", "repository_revision", "evaluated_at", "verdict", "ga_accepted", "sha256"), path="$.evaluation")
+    evaluation_trial = require_nullable_string(evaluation["trial_run_id"], "$.evaluation.trial_run_id")
+    evaluation_snapshot = require_nullable_string(evaluation["snapshot_id"], "$.evaluation.snapshot_id")
+    evaluation_revision = require_nullable_string(evaluation["repository_revision"], "$.evaluation.repository_revision")
+    evaluation_verdict = require_nullable_string(evaluation["verdict"], "$.evaluation.verdict")
+    evaluation_ga = require_nullable_boolean(evaluation["ga_accepted"], "$.evaluation.ga_accepted")
+    evaluation_sha = require_nullable_string(evaluation["sha256"], "$.evaluation.sha256")
+    if verdict.startswith("integration_trial_passed"):
+        require(evaluation_trial == root["trial_run_id"], "evaluation is not bound to this trial")
+        require(evaluation_snapshot == snapshot_id, "evaluation is not bound to this snapshot")
+        require(evaluation_revision == snapshot["repository_revision"], "evaluation is not bound to this repository revision")
+        require_datetime(evaluation["evaluated_at"], "$.evaluation.evaluated_at")
+        require(evaluation_verdict == verdict, "evaluation verdict does not match the manifest")
+        require(evaluation_ga is False, "Phase 67 evidence cannot accept GA")
+        require(evaluation_sha is not None and SHA256.fullmatch(evaluation_sha) is not None, "evaluation record digest must be SHA-256")
+
+    artifacts = require_mapping(root["artifacts"], "$.artifacts")
+    require_exact_keys(artifacts, required=("retention", "directory_name", "files"), path="$.artifacts")
+    retention = require_nullable_string(artifacts["retention"], "$.artifacts.retention")
+    directory_name = require_nullable_string(artifacts["directory_name"], "$.artifacts.directory_name")
+    files = artifacts["files"]
+    require(isinstance(files, list), "$.artifacts.files must be an array")
+    artifact_names: set[str] = set()
+    for index, item in enumerate(files):
+        artifact = require_mapping(item, f"$.artifacts.files[{index}]")
+        require_exact_keys(artifact, required=("name", "sha256"), path=f"$.artifacts.files[{index}]")
+        name = require_string(artifact["name"], f"$.artifacts.files[{index}].name")
+        require(name not in artifact_names, "$.artifacts.files contains duplicate names")
+        artifact_names.add(name)
+        digest = require_string(artifact["sha256"], f"$.artifacts.files[{index}].sha256")
+        require(SHA256.fullmatch(digest) is not None, f"$.artifacts.files[{index}].sha256 must be SHA-256")
+    if verdict.startswith("integration_trial_passed"):
+        require(retention == "local_mode_0600", "passed trial raw artifacts must be retained in local 0600 mode")
+        require(directory_name == f"{root['trial_run_id']}-artifacts", "artifact directory is not bound to this trial")
+        require(artifact_names == ARTIFACT_NAMES, "raw artifact inventory is incomplete")
 
     cleanup = require_mapping(root["cleanup"], "$.cleanup")
     require_exact_keys(cleanup, required=("mode", "containers_stopped", "data_preserved"), path="$.cleanup")

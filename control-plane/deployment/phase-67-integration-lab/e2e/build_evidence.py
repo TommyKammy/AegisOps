@@ -36,14 +36,20 @@ STEP_EVIDENCE_REFS = (
     ("journey:case_id",),
     ("journey:action_request_id",),
     ("journey:denied_dispatch",),
-    ("journey:execution_id",),
+    ("journey:approval_challenge_sha256", "journey:execution_id"),
     ("journey:expected_receipt_id",),
     ("journey:reconciliation_id",),
     ("report:sha256",),
     ("wazuh-manifest:duplicate_delivery", "journey:replay_reconciliation_id"),
-    ("wazuh-command:negative-boundaries", "journey:negative_probes"),
+    ("wazuh-command:negative-boundaries", "journey:measured_negative_probes"),
     ("restart:checked_identifiers",),
-    ("docs:phase-67-prerequisite-evaluation",),
+    ("evaluation-record:sha256",),
+)
+
+LIMITATION_IDS = (
+    "phase67-single-host",
+    "phase67-bounded-connectors",
+    "phase67-ga-gates-open",
 )
 
 
@@ -75,23 +81,32 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--schema", type=Path, required=True)
     parser.add_argument("--snapshot", type=Path, required=True)
+    parser.add_argument("--images", type=Path, required=True)
+    parser.add_argument("--preparation", type=Path, required=True)
     parser.add_argument("--wazuh", type=Path, required=True)
     parser.add_argument("--wazuh-output", type=Path, required=True)
     parser.add_argument("--journey", type=Path, required=True)
     parser.add_argument("--restart", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--evaluation", type=Path, required=True)
+    parser.add_argument("--evaluation-record", type=Path, required=True)
+    parser.add_argument("--artifacts-directory-name", required=True)
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
 
 def build(args: argparse.Namespace) -> dict[str, object]:
     snapshot = _mapping(_read_json(args.snapshot), "snapshot")
+    preparation = _mapping(_read_json(args.preparation), "preparation")
     wazuh = _mapping(_read_json(args.wazuh), "wazuh")
     combined_journey = _mapping(_read_json(args.journey), "journey output")
     journey = _mapping(combined_journey.get("journey"), "journey output.journey")
     restart = _mapping(_read_json(args.restart), "restart")
     report = _mapping(_read_json(args.report), "report")
+    evaluation_record = _mapping(
+        _read_json(args.evaluation_record),
+        "evaluation record",
+    )
     wazuh_output = args.wazuh_output.read_text(encoding="utf-8")
     evaluation = args.evaluation.read_text(encoding="utf-8")
     for required_line in (
@@ -106,6 +121,21 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         or "GA acceptance: not accepted" not in evaluation
     ):
         raise ValueError("Phase 67 prerequisite evaluation is not conservative")
+    expected_evaluation = {
+        "schema_version": "phase67.4-prerequisite-evaluation-v1",
+        "trial_run_id": snapshot.get("trial_run_id"),
+        "snapshot_id": snapshot.get("snapshot_id"),
+        "repository_revision": snapshot.get("repository_revision"),
+        "verdict": "integration_trial_passed_with_owned_limitations",
+        "ga_accepted": False,
+        "limitation_ids": list(LIMITATION_IDS),
+    }
+    if set(evaluation_record) != set(expected_evaluation) | {"evaluated_at"}:
+        raise ValueError("evaluation record fields do not match the reviewed contract")
+    for key, expected in expected_evaluation.items():
+        if evaluation_record.get(key) != expected:
+            raise ValueError(f"evaluation record {key} does not match this trial")
+    _required_text(evaluation_record.get("evaluated_at"), "evaluation.evaluated_at")
     if _sha256(args.schema) != snapshot.get("evidence_schema_sha256"):
         raise ValueError("snapshot evidence schema digest does not match")
     if report.get("export_id") != journey.get("report_id"):
@@ -119,6 +149,15 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         raise ValueError("Wazuh admission and case journey use different alerts")
     if wazuh.get("first_delivery", {}).get("finding_id") != journey.get("finding_id"):
         raise ValueError("Wazuh admission and action journey use different findings")
+    for key in ("trial_run_id", "action_request_id", "payload_hash"):
+        if preparation.get(key) != journey.get(key):
+            raise ValueError(f"preparation {key} does not match the journey")
+    if preparation.get("requester_identity") != journey.get("requester_identity"):
+        raise ValueError("preparation requester does not match the journey")
+    if preparation.get("approval_challenge_sha256") != journey.get(
+        "approval_challenge_sha256"
+    ):
+        raise ValueError("interactive approval challenge is not bound to the journey")
     if restart.get("shuffle_execution_count") != journey.get(
         "idempotency_execution_count"
     ):
@@ -143,17 +182,47 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     )
     denied = _mapping(journey.get("denied_dispatch"), "journey.denied_dispatch")
     probes = _mapping(journey.get("negative_probes"), "journey.negative_probes")
+    negative_boundary = _mapping(
+        wazuh.get("negative_boundary"),
+        "wazuh.negative_boundary",
+    )
 
     def negative_case(name: str) -> dict[str, object]:
         probe = _mapping(probes.get(name), f"journey.negative_probes.{name}")
         return {
             "status": probe.get("status"),
+            "authority_before": probe.get("authority_before"),
+            "authority_after": probe.get("authority_after"),
             "authority_delta": probe.get("authority_delta"),
+            "measurement_source": probe.get("measurement_source"),
             "evidence_ref": f"journey:negative_probes.{name}:{probe.get('category')}",
         }
 
+    def ingress_negative_case(name: str) -> dict[str, object]:
+        return {
+            "status": "rejected",
+            "authority_before": negative_boundary.get("baseline_alert_count"),
+            "authority_after": negative_boundary.get("after_alert_count"),
+            "authority_delta": negative_boundary.get(
+                "authoritative_alert_delta"
+            ),
+            "measurement_source": "aegisops_authoritative_alert_count",
+            "evidence_ref": f"wazuh-command:{name}=403",
+        }
+
+    artifact_paths = {
+        "preparation.json": args.preparation,
+        "wazuh-manifest.json": args.wazuh,
+        "wazuh-output.txt": args.wazuh_output,
+        "journey.json": args.journey,
+        "restart.json": args.restart,
+        "snapshot.json": args.snapshot,
+        "images.json": args.images,
+        "evaluation-record.json": args.evaluation_record,
+    }
+
     return {
-        "schema_version": "phase67.4-real-service-e2e-evidence-v1",
+        "schema_version": "phase67.4-real-service-e2e-evidence-v2",
         "captured_at": captured_at,
         "source_mode": "real_services",
         "trial_run_id": snapshot.get("trial_run_id"),
@@ -189,9 +258,17 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         "human_control": {
             "requester_identity": journey.get("requester_identity"),
             "approver_identity": journey.get("approver_identity"),
+            "authenticated_approver_identity": journey.get(
+                "authenticated_approver_identity"
+            ),
             "denied_action_execution_count": denied.get("execution_count"),
             "denied_dispatch_rejected": denied.get("dispatch_rejected"),
-            "approval_source": "aegisops_approval_decision_record",
+            "approval_source": journey.get("approval_source"),
+            "approval_method": journey.get("approval_method"),
+            "approval_challenge_sha256": journey.get(
+                "approval_challenge_sha256"
+            ),
+            "approval_confirmed_at": journey.get("approval_confirmed_at"),
         },
         "idempotency": {
             "wazuh_first_disposition": first_delivery.get("disposition"),
@@ -212,18 +289,10 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         },
         "negative_cases": {
             "invalid_credential": {
-                "status": "rejected",
-                "authority_delta": wazuh.get("negative_boundary", {}).get(
-                    "authoritative_alert_delta"
-                ),
-                "evidence_ref": "wazuh-command:invalid_bearer_secret=403",
+                **ingress_negative_case("invalid_bearer_secret"),
             },
             "proxy_bypass": {
-                "status": "rejected",
-                "authority_delta": wazuh.get("negative_boundary", {}).get(
-                    "authoritative_alert_delta"
-                ),
-                "evidence_ref": "wazuh-command:proxy_bypass=403",
+                **ingress_negative_case("proxy_bypass"),
             },
             "failed_execution": negative_case("failed_execution"),
             "malformed_receipt": negative_case("malformed_receipt"),
@@ -241,6 +310,25 @@ def build(args: argparse.Namespace) -> dict[str, object]:
             "sha256": report_sha256,
             "source_of_truth": report.get("source_of_truth"),
             "redacted": True,
+        },
+        "evaluation": {
+            "trial_run_id": evaluation_record.get("trial_run_id"),
+            "snapshot_id": evaluation_record.get("snapshot_id"),
+            "repository_revision": evaluation_record.get(
+                "repository_revision"
+            ),
+            "evaluated_at": evaluation_record.get("evaluated_at"),
+            "verdict": evaluation_record.get("verdict"),
+            "ga_accepted": evaluation_record.get("ga_accepted"),
+            "sha256": _sha256(args.evaluation_record),
+        },
+        "artifacts": {
+            "retention": "local_mode_0600",
+            "directory_name": args.artifacts_directory_name,
+            "files": [
+                {"name": name, "sha256": _sha256(path)}
+                for name, path in artifact_paths.items()
+            ],
         },
         "cleanup": {
             "mode": "non_destructive",

@@ -20,15 +20,14 @@ rollout, autonomous remediation, or a GA claim.
   `control-plane/deployment/phase-67-integration-lab/e2e/evidence-manifest.schema.json`.
 - Publishable redacted packet:
   `control-plane/deployment/phase-67-integration-lab/e2e/sample-evidence.json`.
-- Raw service logs, command output, and the full redacted report remain under
-  the mode-`0600` local runtime evidence directory and are not committed.
+- Raw service logs, command output, preparation record, per-run evaluation
+  record, and the full redacted report remain under the mode-`0600` local
+  runtime evidence directory and are not committed.
 
-The published packet records trial
-`phase67-e2e-20260801T101013Z-3f1ab3cf5906`, captured at
-`2026-08-01T10:13:49.959152Z` against repository revision
-`afd494452ea85ba4f81844f564190833d2c99fb0` and snapshot
-`phase67-snapshot-91d9f7ae646a86cc`. All 15 required journey steps passed on
-the dedicated `colima-aegisops-phase67` Docker context.
+The current trial ID, capture time, repository revision, snapshot ID, and
+verdict are recorded in the publishable packet. A generated per-run evaluation
+record repeats those values and is SHA-256-bound into that packet, so this
+policy document cannot be reused as evidence for a later trial by itself.
 
 The evidence packet binds every journey step to one full repository revision,
 one rendered Compose digest, one schema digest, one runtime artifact digest,
@@ -45,8 +44,11 @@ as subordinate evidence and is never used as workflow truth.
   finding identifiers.
 - The admitted alert is promoted to a case through the AegisOps service record
   path.
-- A requester and a distinct approver are recorded. A denied action request is
-  rejected before dispatch and produces zero Shuffle executions.
+- A requester and a distinct, authenticated local operator are recorded. The
+  operator must confirm a challenge bound to the trial, action request, and
+  payload through a macOS dialog or exact TTY response before approval is
+  persisted. A denied action request is rejected before dispatch and produces
+  zero Shuffle executions.
 - The approved low-risk action reaches one reviewed real Shuffle workflow. The
   native execution and receipt identifiers are persisted as subordinate
   evidence.
@@ -55,8 +57,10 @@ as subordinate evidence and is never used as workflow truth.
   insufficient.
 - Replaying the receipt preserves one execution and one reconciliation record.
 - Invalid credential, proxy bypass, failed execution, malformed receipt, and
-  reconciliation mismatch probes are rejected or contained without an
-  authoritative state delta.
+  reconciliation mismatch probes are sent through their real AegisOps
+  boundaries. The packet records authoritative before/after counts and the
+  measured delta; rejected reconciliation observations may add explicit
+  reconciliation evidence but cannot become accepted execution truth.
 - A redacted report is derived from AegisOps records under a repeatable-read
   snapshot.
 - A stop/start cycle preserves the alert, case, action, approval, execution, and
