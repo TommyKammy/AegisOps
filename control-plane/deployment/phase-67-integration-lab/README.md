@@ -45,6 +45,11 @@ through a macOS dialog or exact TTY response; the runner cannot complete from
 unattended input. The publishable sample omits raw logs, secret values, private
 host paths, and the full local report.
 
+The committed sample is the historical approval-blocked trial captured at
+revision `2473b66f5702a38f1d4630c990509bf812a6af7a`. It does not prove the
+behavior of the current runner or PR head. Current-revision evidence requires a
+new clean-revision trial with an independent human approver.
+
 ## Runtime Shape
 
 The default `core` scope starts PostgreSQL, applies the reviewed first-boot migrations plus current runtime migrations through `0015`, starts the AegisOps control plane, and starts the TLS reverse proxy. Later migration checksums are recorded in the same bootstrap metadata table and fail closed on checksum or recorded-schema drift, including reviewed column, constraint type, validated constraint definition, and index definitions. Before service handoff, the lab also hashes the complete final column, constraint, and index catalogs to reprove the definitions introduced by delegated migrations `0001` through `0007` after their reviewed later evolution. Wazuh and Shuffle are opt-in Compose profiles:

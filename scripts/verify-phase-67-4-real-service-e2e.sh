@@ -59,6 +59,8 @@ done
 
 require_fixed "${evaluation}" '`integration_trial_passed_with_owned_limitations`'
 require_fixed "${evaluation}" 'GA acceptance: not accepted.'
+require_fixed "${evaluation}" 'does not attest to the current'
+require_fixed "${evaluation}" 'cannot be reused as current-revision evidence'
 require_fixed "${evaluation}" 'AegisOps alert, case, action request, approval decision, action execution,'
 require_fixed "${evaluation}" 'does not prove production readiness'
 require_fixed "${lab_root}/RUNBOOK.md" '## Complete Phase 67.4 E2E Trial'
@@ -82,6 +84,9 @@ require_fixed "${e2e_root}/validate_evidence_manifest.py" 'step-observations.jso
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'snapshot_id is not bound to all snapshot inputs'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'completed step observations must be strictly chronological'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'IDENTIFIER_PRODUCING_STEPS'
+require_fixed "${e2e_root}/validate_evidence_manifest.py" 'STEP_EVIDENCE_REFS'
+require_fixed "${e2e_root}/validate_evidence_manifest.py" 'steps after a failure must be not_run'
+require_fixed "${e2e_root}/validate_evidence_manifest.py" 'must be null when run_negative_cases did not pass'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'verify-restart'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'startup_status_output='
 require_fixed "${lab_root}/run-e2e-trial.sh" 'initial_status_output='

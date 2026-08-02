@@ -64,6 +64,31 @@ assert_fails_with \
   'strictly chronological' \
   mutate_json '.steps[1].observed_at = .steps[0].observed_at'
 assert_fails_with \
+  unreviewed-step-reference \
+  'historical trial contract' \
+  mutate_json '.steps[5].evidence_refs = ["fake"]'
+assert_fails_with \
+  impossible-failed-order \
+  'exactly one failed step' \
+  mutate_json '.verdict = "integration_trial_failed"
+    | .steps[7].status = "failed"
+    | .steps[9].status = "failed"
+    | .steps[9].blocker = {
+        "owner": "AegisOps integration engineering",
+        "reason": "A later step cannot run after an upstream failure."
+      }'
+assert_fails_with \
+  unobserved-receipt-probe \
+  'must be null when run_negative_cases did not pass' \
+  mutate_json '.negative_cases.failed_execution = {
+    "status": "contained",
+    "authority_before": 1,
+    "authority_after": 1,
+    "authority_delta": 0,
+    "measurement_source": "aegisops_authoritative_record_count",
+    "evidence_ref": "journey:negative-probe"
+  }'
+assert_fails_with \
   same-actor \
   'a non-passed approval step cannot claim an approver or approval event' \
   mutate_json '.human_control.approver_identity = .human_control.requester_identity'

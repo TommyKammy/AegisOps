@@ -87,7 +87,7 @@ def _manifest() -> dict[str, object]:
             "status": "passed",
             "snapshot_id": snapshot_id,
             "observed_at": f"2026-08-01T10:00:{index:02d}Z",
-            "evidence_refs": [f"evidence:step-{index}"],
+            "evidence_refs": list(builder.STEP_EVIDENCE_REFS[index - 1]),
         }
         for index, name in enumerate(validator.STEP_NAMES, start=1)
     ]
@@ -220,6 +220,7 @@ def _manifest() -> dict[str, object]:
 
 class Phase674RealServiceE2ETests(unittest.TestCase):
     def test_valid_evidence_enforces_the_complete_real_identifier_chain(self) -> None:
+        self.assertEqual(builder.STEP_EVIDENCE_REFS, validator.STEP_EVIDENCE_REFS)
         validator.validate_manifest(_manifest(), SCHEMA)
 
     def test_validator_rejects_placeholder_and_synthetic_live_ids(self) -> None:
@@ -259,6 +260,74 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "strictly chronological",
         ):
             validator.validate_manifest(manifest, SCHEMA)
+
+    def test_validator_rejects_unreviewed_step_evidence_references(self) -> None:
+        manifest = _manifest()
+        manifest["steps"][7]["evidence_refs"] = ["fake"]
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "reviewed step contract",
+        ):
+            validator.validate_manifest(manifest, SCHEMA)
+
+    def test_failed_verdict_requires_one_terminal_failure(self) -> None:
+        manifest = _manifest()
+        steps = manifest["steps"]
+        steps[7]["status"] = "failed"
+        steps[7]["blocker"] = {
+            "owner": "AegisOps integration engineering",
+            "reason": "Reviewed dispatch failed closed.",
+        }
+        for step in steps[8:]:
+            step["status"] = "not_run"
+            step["evidence_refs"] = ["not-run:upstream-failure"]
+        validator._validate_steps(
+            steps,
+            manifest["snapshot"]["snapshot_id"],
+            "integration_trial_failed",
+        )
+
+        unreviewed_not_run = deepcopy(steps)
+        unreviewed_not_run[8]["evidence_refs"] = ["fake"]
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "must record a not-run reason",
+        ):
+            validator._validate_steps(
+                unreviewed_not_run,
+                manifest["snapshot"]["snapshot_id"],
+                "integration_trial_failed",
+            )
+
+        later_pass = deepcopy(steps)
+        later_pass[9]["status"] = "passed"
+        later_pass[9]["evidence_refs"] = list(builder.STEP_EVIDENCE_REFS[9])
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "steps after a failure must be not_run",
+        ):
+            validator._validate_steps(
+                later_pass,
+                manifest["snapshot"]["snapshot_id"],
+                "integration_trial_failed",
+            )
+
+        impossible = deepcopy(steps)
+        impossible[9]["status"] = "failed"
+        impossible[9]["evidence_refs"] = list(builder.STEP_EVIDENCE_REFS[9])
+        impossible[9]["blocker"] = {
+            "owner": "AegisOps integration engineering",
+            "reason": "A later step cannot fail after an unexecuted prerequisite.",
+        }
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "exactly one failed step",
+        ):
+            validator._validate_steps(
+                impossible,
+                manifest["snapshot"]["snapshot_id"],
+                "integration_trial_failed",
+            )
 
     def test_builder_loads_a_complete_chronological_observation_log(self) -> None:
         start = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
@@ -595,6 +664,8 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     "owner": "AegisOps integration engineering",
                     "reason": "Reviewed service bootstrap did not complete.",
                 }
+            else:
+                step["evidence_refs"] = ["not-run:upstream-blocker"]
         validator.validate_manifest(manifest, SCHEMA)
 
         mixed_snapshot = deepcopy(manifest)
@@ -626,6 +697,9 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             validator.validate_manifest(unobserved_identifier, SCHEMA)
 
         manifest["steps"][3]["status"] = "passed"
+        manifest["steps"][3]["evidence_refs"] = list(
+            builder.STEP_EVIDENCE_REFS[3]
+        )
         with self.assertRaisesRegex(
             validator.EvidenceValidationError,
             "steps after a blocker",
@@ -648,6 +722,29 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 with self.assertRaisesRegex(
                     validator.EvidenceValidationError,
                     "must be null",
+                ):
+                    validator.validate_manifest(tampered, SCHEMA)
+
+    def test_approval_blocked_sample_rejects_unobserved_receipt_probes(self) -> None:
+        sample = validator.load_json(E2E_ROOT / "sample-evidence.json")
+        for key in (
+            "failed_execution",
+            "malformed_receipt",
+            "reconciliation_mismatch",
+        ):
+            with self.subTest(key=key):
+                tampered = deepcopy(sample)
+                tampered["negative_cases"][key] = {
+                    "status": "contained",
+                    "authority_before": 1,
+                    "authority_after": 1,
+                    "authority_delta": 0,
+                    "measurement_source": "aegisops_authoritative_record_count",
+                    "evidence_ref": "journey:negative-probe",
+                }
+                with self.assertRaisesRegex(
+                    validator.EvidenceValidationError,
+                    "must be null when run_negative_cases did not pass",
                 ):
                     validator.validate_manifest(tampered, SCHEMA)
 

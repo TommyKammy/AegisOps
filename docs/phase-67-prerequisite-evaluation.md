@@ -6,11 +6,14 @@
 
 GA acceptance: not accepted.
 
-The current trial reached the independent approval boundary and stopped before
-Shuffle dispatch because no distinct human approval event was granted. A later
-completed trial may emit `integration_trial_passed_with_owned_limitations` only
-after that event and every subsequent step are evidenced. Neither verdict
-authorizes production rollout, autonomous remediation, or a GA claim.
+The committed historical trial reached the independent approval boundary and
+stopped before Shuffle dispatch because no distinct human approval event was
+granted. It was captured at repository revision
+`2473b66f5702a38f1d4630c990509bf812a6af7a` and does not attest to the current
+runner or PR head. A new trial from the final clean revision may emit
+`integration_trial_passed_with_owned_limitations` only after an independent
+human grants that event and every subsequent step is evidenced. Neither
+verdict authorizes production rollout, autonomous remediation, or a GA claim.
 
 ## Evaluation Basis
 
@@ -26,10 +29,11 @@ authorizes production rollout, autonomous remediation, or a GA claim.
   record, and the full redacted report remain under the mode-`0600` local
   runtime evidence directory and are not committed.
 
-The current trial ID, capture time, repository revision, snapshot ID, and
+The historical trial ID, capture time, repository revision, snapshot ID, and
 verdict are recorded in the publishable packet. A generated per-run evaluation
-record repeats those values and is SHA-256-bound into that packet, so this
-policy document cannot be reused as evidence for a later trial by itself.
+record repeats those values and is SHA-256-bound into that packet. The packet
+and this policy document cannot be reused as current-revision evidence for a
+later trial.
 
 The evidence packet binds every journey step to one full repository revision,
 one rendered Compose digest, one schema digest, one runtime artifact digest,

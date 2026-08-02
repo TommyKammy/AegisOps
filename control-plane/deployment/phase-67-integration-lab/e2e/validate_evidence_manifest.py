@@ -39,6 +39,50 @@ STEP_NAMES = (
     "restart_and_verify_persistence",
     "publish_prerequisite_evaluation",
 )
+STEP_EVIDENCE_REFS = (
+    ("snapshot", "artifact:workflow-snapshot.json"),
+    ("artifact:initial-status.txt",),
+    ("wazuh-manifest:native_wazuh_alert_id",),
+    ("wazuh-manifest:aegisops_alert_id",),
+    ("journey:case_id",),
+    ("journey:action_request_id",),
+    ("journey:denied_dispatch",),
+    (
+        "journey:approval_challenge_sha256",
+        "artifact:workflow-pre-dispatch.json",
+        "journey:execution_id",
+    ),
+    ("journey:expected_receipt_id",),
+    ("journey:reconciliation_id",),
+    ("report:sha256",),
+    ("wazuh-manifest:duplicate_delivery", "journey:replay_reconciliation_id"),
+    ("wazuh-command:negative-boundaries", "journey:measured_negative_probes"),
+    ("restart:checked_identifiers", "artifact:restart-status.txt"),
+    ("evaluation-record:sha256",),
+)
+# The committed approval-blocked packet predates retained status/workflow captures.
+# Keep its concrete references reviewable without treating them as the current contract.
+LEGACY_BLOCKED_STEP_EVIDENCE_REFS = (
+    ("snapshot",),
+    ("lab-status:full",),
+    ("wazuh-manifest:native_wazuh_alert_id",),
+    ("wazuh-manifest:aegisops_alert_id",),
+    ("preparation:case_id",),
+    ("preparation:action_request_id",),
+    ("preparation:denied_dispatch",),
+    ("preparation:approval_challenge_sha256",),
+    ("not-run:approval-blocked",),
+    ("not-run:approval-blocked",),
+    ("not-run:approval-blocked",),
+    ("wazuh-manifest:duplicate_delivery",),
+    ("wazuh-command:negative-boundaries",),
+    ("not-run:approval-blocked",),
+    ("evaluation-record:sha256",),
+)
+LEGACY_BLOCKED_TRIAL = (
+    "phase67-e2e-20260801T135206Z-26c533b6ca31",
+    "2473b66f5702a38f1d4630c990509bf812a6af7a",
+)
 IDENTIFIER_KEYS = (
     "wazuh_manager_id",
     "wazuh_agent_id",
@@ -361,6 +405,8 @@ def _validate_steps(
     value: object,
     snapshot_id: str,
     verdict: str,
+    *,
+    allow_legacy_blocked_refs: bool = False,
 ) -> tuple[str, ...]:
     require(isinstance(value, list) and len(value) == len(STEP_NAMES), "$.steps must contain exactly 15 steps")
     statuses: list[str] = []
@@ -395,6 +441,27 @@ def _validate_steps(
         require(isinstance(refs, list) and refs, f"$.steps[{index}].evidence_refs must be non-empty")
         for ref_index, evidence_ref in enumerate(refs):
             require_string(evidence_ref, f"$.steps[{index}].evidence_refs[{ref_index}]")
+        refs_tuple = tuple(refs)
+        if allow_legacy_blocked_refs:
+            require(
+                refs_tuple == LEGACY_BLOCKED_STEP_EVIDENCE_REFS[index],
+                f"$.steps[{index}].evidence_refs do not match the historical trial contract",
+            )
+        elif status == "passed":
+            require(
+                refs_tuple == STEP_EVIDENCE_REFS[index],
+                f"$.steps[{index}].evidence_refs do not match the reviewed step contract",
+            )
+        elif status in {"blocked", "failed"}:
+            require(
+                set(refs).issubset(STEP_EVIDENCE_REFS[index]),
+                f"$.steps[{index}].evidence_refs are outside the reviewed step contract",
+            )
+        else:
+            require(
+                len(refs) == 1 and refs[0].startswith("not-run:"),
+                f"$.steps[{index}].evidence_refs must record a not-run reason",
+            )
         blocker = item.get("blocker")
         if status in {"blocked", "failed"}:
             blocker_mapping = require_mapping(blocker, f"$.steps[{index}].blocker")
@@ -423,7 +490,10 @@ def _validate_steps(
         require(all(status == "passed" for status in statuses[:blocked_index]), "steps before a blocker must pass")
         require(all(status == "not_run" for status in statuses[blocked_index + 1 :]), "steps after a blocker must be not_run")
     elif verdict == "integration_trial_failed":
-        require(statuses.count("failed") >= 1, "a failed verdict requires a failed step")
+        require(statuses.count("failed") == 1, "a failed verdict requires exactly one failed step")
+        failed_index = statuses.index("failed")
+        require(all(status == "passed" for status in statuses[:failed_index]), "steps before a failure must pass")
+        require(all(status == "not_run" for status in statuses[failed_index + 1 :]), "steps after a failure must be not_run")
     return tuple(statuses)
 
 
@@ -463,7 +533,22 @@ def validate_manifest(manifest: object, schema: object) -> None:
         trial_run_id=trial_run_id,
     )
     snapshot_id = require_string(snapshot["snapshot_id"], "$.snapshot.snapshot_id")
-    step_statuses = _validate_steps(root["steps"], snapshot_id, verdict)
+    allow_legacy_blocked_refs = (
+        (
+            trial_run_id,
+            require_string(
+                snapshot["repository_revision"],
+                "$.snapshot.repository_revision",
+            ),
+        )
+        == LEGACY_BLOCKED_TRIAL
+    )
+    step_statuses = _validate_steps(
+        root["steps"],
+        snapshot_id,
+        verdict,
+        allow_legacy_blocked_refs=allow_legacy_blocked_refs,
+    )
 
     identifiers = require_mapping(root["identifiers"], "$.identifiers")
     require_exact_keys(identifiers, required=IDENTIFIER_KEYS, path="$.identifiers")
@@ -551,6 +636,11 @@ def validate_manifest(manifest: object, schema: object) -> None:
 
     negative_cases = require_mapping(root["negative_cases"], "$.negative_cases")
     require_exact_keys(negative_cases, required=NEGATIVE_CASE_KEYS, path="$.negative_cases")
+    receipt_probe_keys = {
+        "failed_execution",
+        "malformed_receipt",
+        "reconciliation_mismatch",
+    }
     for key in NEGATIVE_CASE_KEYS:
         case = require_mapping(negative_cases[key], f"$.negative_cases.{key}")
         require_exact_keys(case, required=("status", "authority_before", "authority_after", "authority_delta", "measurement_source", "evidence_ref"), path=f"$.negative_cases.{key}")
@@ -560,6 +650,22 @@ def validate_manifest(manifest: object, schema: object) -> None:
         delta = require_nullable_integer(case["authority_delta"], f"$.negative_cases.{key}.authority_delta")
         measurement_source = require_nullable_string(case["measurement_source"], f"$.negative_cases.{key}.measurement_source")
         evidence_ref = require_nullable_string(case["evidence_ref"], f"$.negative_cases.{key}.evidence_ref")
+        if key in receipt_probe_keys and step_statuses[12] != "passed":
+            require(
+                all(
+                    value is None
+                    for value in (
+                        status,
+                        before,
+                        after,
+                        delta,
+                        measurement_source,
+                        evidence_ref,
+                    )
+                ),
+                f"$.negative_cases.{key} must be null when run_negative_cases did not pass",
+            )
+            continue
         if status is not None:
             require(status in {"rejected", "contained"}, f"$.negative_cases.{key} did not reject or contain the probe")
             require(before is not None and before >= 0 and after is not None and after >= 0, f"$.negative_cases.{key} lacks authoritative before/after counts")
