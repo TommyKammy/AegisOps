@@ -80,12 +80,17 @@ ARTIFACT_NAMES = {
     "startup-status.txt",
     "initial-status.txt",
     "restart-status.txt",
+    "workflow-snapshot.json",
+    "workflow-pre-dispatch.json",
 }
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 REVISION = re.compile(r"^[0-9a-f]{40}$")
 TRIAL_ID = re.compile(r"^phase67-e2e-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$")
 SNAPSHOT_ID = re.compile(r"^phase67-snapshot-[0-9a-f]{16}$")
 IMMUTABLE_IMAGE = re.compile(r"^.+@sha256:[0-9a-f]{64}$")
+WORKFLOW_UUID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
 PLACEHOLDER = re.compile(
     r"(?:^|[-_.])(example|fixture|placeholder|synthetic|todo|tbd|unknown|"
     r"changeme|replace-me)(?:$|[-_.])",
@@ -275,6 +280,9 @@ def _validate_snapshot(
             "compose_sha256",
             "evidence_schema_sha256",
             "runtime_artifact_sha256",
+            "shuffle_api_workflow_id",
+            "shuffle_reviewed_workflow_sha256",
+            "shuffle_live_workflow_sha256",
             "host_architecture",
             "docker_context",
             "colima_profile",
@@ -285,8 +293,24 @@ def _validate_snapshot(
     )
     require(SNAPSHOT_ID.fullmatch(require_string(snapshot["snapshot_id"], "$.snapshot.snapshot_id")) is not None, "$.snapshot.snapshot_id is invalid")
     require(REVISION.fullmatch(require_string(snapshot["repository_revision"], "$.snapshot.repository_revision")) is not None, "$.snapshot.repository_revision must be a full commit SHA")
-    for key in ("compose_sha256", "evidence_schema_sha256", "runtime_artifact_sha256"):
+    for key in (
+        "compose_sha256",
+        "evidence_schema_sha256",
+        "runtime_artifact_sha256",
+        "shuffle_reviewed_workflow_sha256",
+        "shuffle_live_workflow_sha256",
+    ):
         require(SHA256.fullmatch(require_string(snapshot[key], f"$.snapshot.{key}")) is not None, f"$.snapshot.{key} must be SHA-256")
+    require(
+        WORKFLOW_UUID.fullmatch(
+            require_string(
+                snapshot["shuffle_api_workflow_id"],
+                "$.snapshot.shuffle_api_workflow_id",
+            )
+        )
+        is not None,
+        "$.snapshot.shuffle_api_workflow_id must be a UUID",
+    )
     require(snapshot["host_architecture"] in ("arm64", "aarch64"), "$.snapshot.host_architecture must be ARM64")
     require_string(snapshot["docker_context"], "$.snapshot.docker_context")
     require_string(snapshot["colima_profile"], "$.snapshot.colima_profile")

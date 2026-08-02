@@ -30,6 +30,13 @@ require_fixed() {
     || fail "${path#"${repo_root}/"} is missing required text: ${text}"
 }
 
+reject_fixed() {
+  local path="$1"
+  local text="$2"
+  ! grep -Fq -- "${text}" "${path}" \
+    || fail "${path#"${repo_root}/"} contains forbidden text: ${text}"
+}
+
 for path in \
   "${schema}" \
   "${sample}" \
@@ -65,6 +72,8 @@ require_fixed "${e2e_root}/run_real_journey.py" 'lifecycle_state="rejected"'
 require_fixed "${e2e_root}/run_real_journey.py" 'service.reconcile_action_execution('
 require_fixed "${e2e_root}/run_real_journey.py" 'export_audit_retention_baseline('
 require_fixed "${e2e_root}/run_real_journey.py" 'negative receipt probes changed authoritative state'
+require_fixed "${e2e_root}/run_real_journey.py" 'delegated_at = datetime.now(timezone.utc)'
+reject_fixed "${e2e_root}/run_real_journey.py" 'delegated_at=decided_at + timedelta(seconds=1)'
 require_fixed "${e2e_root}/build_evidence.py" 'step observations must be strictly chronological'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'step-observations.jsonl'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'snapshot_id is not bound to all snapshot inputs'
@@ -72,6 +81,9 @@ require_fixed "${lab_root}/run-e2e-trial.sh" 'verify-restart'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'startup_status_output='
 require_fixed "${lab_root}/run-e2e-trial.sh" 'initial_status_output='
 require_fixed "${lab_root}/run-e2e-trial.sh" 'restart_status_output='
+require_fixed "${lab_root}/run-e2e-trial.sh" 'workflow_snapshot_output='
+require_fixed "${lab_root}/run-e2e-trial.sh" 'workflow_predispatch_output='
+require_fixed "${lab_root}/run-e2e-trial.sh" 'live Shuffle workflow changed after the trial snapshot'
 require_fixed "${lab_root}/run-e2e-trial.sh" '[[ -t 0 && -t 1 ]]'
 require_fixed "${lab_root}/run-e2e-trial.sh" '"APPROVE ${approval_challenge}"'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'display dialog promptText'

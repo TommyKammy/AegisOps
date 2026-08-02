@@ -13,6 +13,7 @@ require_command git
 require_command jq
 require_command openssl
 require_command python3
+require_command curl
 require_runtime_environment
 [[ "${AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE:-}" == "real_http" ]] \
   || fail "real Shuffle transport is not enabled; run ${LAB_DIR}/bootstrap-shuffle.sh"
@@ -25,6 +26,8 @@ schema="${LAB_DIR}/e2e/evidence-manifest.schema.json"
 validator="${LAB_DIR}/e2e/validate_evidence_manifest.py"
 builder="${LAB_DIR}/e2e/build_evidence.py"
 evaluation="${REPO_ROOT}/docs/phase-67-prerequisite-evaluation.md"
+reviewed_workflow="${LAB_DIR}/shuffle/harmless-local-log-workflow.json"
+workflow_validator="${LAB_DIR}/shuffle/validate_preserved_workflow.py"
 
 [[ -f "${evaluation}" ]] \
   || fail "Phase 67 prerequisite evaluation is missing: ${evaluation}"
@@ -48,6 +51,8 @@ observations_output="${staging_dir}/step-observations.jsonl"
 startup_status_output="${staging_dir}/startup-status.txt"
 initial_status_output="${staging_dir}/initial-status.txt"
 restart_status_output="${staging_dir}/restart-status.txt"
+workflow_snapshot_output="${staging_dir}/workflow-snapshot.json"
+workflow_predispatch_output="${staging_dir}/workflow-pre-dispatch.json"
 evidence_output="${staging_dir}/evidence.json"
 cleaned=false
 
@@ -82,6 +87,48 @@ retain_status_evidence() {
   cp "${source}" "${destination}"
 }
 
+canonical_json_sha256() {
+  python3 - "$1" <<'PY'
+from pathlib import Path
+import hashlib
+import json
+import sys
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+print(hashlib.sha256(encoded).hexdigest())
+PY
+}
+
+capture_reviewed_shuffle_workflow() (
+  local destination="$1"
+  local auth_header_path
+
+  auth_header_path="$(mktemp "${staging_dir}/.shuffle-auth.XXXXXX")"
+  trap 'rm -f -- "${auth_header_path}"' EXIT
+  printf 'Authorization: Bearer %s\n' \
+    "$(<"${AEGISOPS_LAB_SECRET_DIR}/shuffle-api-key")" \
+    >"${auth_header_path}"
+  chmod 600 "${auth_header_path}"
+  curl \
+    --silent \
+    --show-error \
+    --fail-with-body \
+    --cacert "${AEGISOPS_LAB_PROXY_CERT_DIR}/lab.crt" \
+    --resolve "shuffle.localhost:${AEGISOPS_LAB_PROXY_PORT}:127.0.0.1" \
+    --connect-timeout 5 \
+    --max-time 30 \
+    -H "@${auth_header_path}" \
+    "https://shuffle.localhost:${AEGISOPS_LAB_PROXY_PORT}/api/v1/workflows/${shuffle_api_workflow_id}" \
+    >"${destination}"
+  python3 \
+    "${workflow_validator}" \
+    "${reviewed_workflow}" \
+    "${shuffle_api_workflow_id}" \
+    <"${destination}" \
+    >/dev/null
+)
+
 cleanup_on_exit() {
   local rc=$?
   if [[ "${cleaned}" != true ]]; then
@@ -100,6 +147,12 @@ compose_render_sha256="$(
     awk '{print $1}'
 )"
 schema_sha256="$(openssl dgst -sha256 -r "${schema}" | awk '{print $1}')"
+reviewed_workflow_sha256="$(
+  openssl dgst -sha256 -r "${reviewed_workflow}" | awk '{print $1}'
+)"
+shuffle_api_workflow_id="${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID}"
+[[ "${shuffle_api_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]] \
+  || fail "real Shuffle workflow ID is not configured"
 
 "${LAB_DIR}/pin-shuffle-app-image.sh"
 startup_output="$("${LAB_DIR}/up.sh" full)"
@@ -132,6 +185,8 @@ jq \
   '. + [{service: $service, immutable_reference: $immutable_reference}] | sort_by(.service)' \
   "${images_output}" >"${images_output}.next"
 mv "${images_output}.next" "${images_output}"
+capture_reviewed_shuffle_workflow "${workflow_snapshot_output}"
+live_workflow_sha256="$(canonical_json_sha256 "${workflow_snapshot_output}")"
 runtime_artifact_sha256="$(
   sed -n 's/^repository_runtime_artifact_sha256=//p' \
     "${startup_status_output}" |
@@ -149,6 +204,9 @@ jq -n \
   --arg compose_sha256 "${compose_render_sha256}" \
   --arg evidence_schema_sha256 "${schema_sha256}" \
   --arg runtime_artifact_sha256 "${runtime_artifact_sha256}" \
+  --arg shuffle_api_workflow_id "${shuffle_api_workflow_id}" \
+  --arg shuffle_reviewed_workflow_sha256 "${reviewed_workflow_sha256}" \
+  --arg shuffle_live_workflow_sha256 "${live_workflow_sha256}" \
   --arg host_architecture "${host_architecture}" \
   --arg docker_context "${docker_context}" \
   --arg colima_profile "${colima_profile}" \
@@ -159,6 +217,9 @@ jq -n \
       compose_sha256: $compose_sha256,
       evidence_schema_sha256: $evidence_schema_sha256,
       runtime_artifact_sha256: $runtime_artifact_sha256,
+      shuffle_api_workflow_id: $shuffle_api_workflow_id,
+      shuffle_reviewed_workflow_sha256: $shuffle_reviewed_workflow_sha256,
+      shuffle_live_workflow_sha256: $shuffle_live_workflow_sha256,
       host_architecture: $host_architecture,
       docker_context: $docker_context,
       colima_profile: $colima_profile,
@@ -269,6 +330,12 @@ else
     || fail "interactive approval was not granted"
 fi
 
+capture_reviewed_shuffle_workflow "${workflow_predispatch_output}"
+[[ "$(canonical_json_sha256 "${workflow_predispatch_output}")" == "${live_workflow_sha256}" ]] \
+  || fail "live Shuffle workflow changed after the trial snapshot"
+[[ "$(openssl dgst -sha256 -r "${reviewed_workflow}" | awk '{print $1}')" == "${reviewed_workflow_sha256}" ]] \
+  || fail "reviewed Shuffle workflow changed after the trial snapshot"
+
 compose_scope full exec -T \
   -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE="${shuffle_tools_image}" \
   -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}" \
@@ -367,6 +434,9 @@ python3 "${builder}" \
   --startup-status "${startup_status_output}" \
   --initial-status "${initial_status_output}" \
   --restart-status "${restart_status_output}" \
+  --workflow-snapshot "${workflow_snapshot_output}" \
+  --workflow-pre-dispatch "${workflow_predispatch_output}" \
+  --reviewed-workflow "${reviewed_workflow}" \
   --artifacts-directory-name "${trial_run_id}-artifacts" \
   --output "${evidence_output}"
 python3 "${validator}" "${schema}" "${evidence_output}"

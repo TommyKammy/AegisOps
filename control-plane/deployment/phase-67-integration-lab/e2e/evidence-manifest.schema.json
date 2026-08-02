@@ -48,6 +48,9 @@
         "compose_sha256",
         "evidence_schema_sha256",
         "runtime_artifact_sha256",
+        "shuffle_api_workflow_id",
+        "shuffle_reviewed_workflow_sha256",
+        "shuffle_live_workflow_sha256",
         "host_architecture",
         "docker_context",
         "colima_profile",
@@ -70,6 +73,16 @@
           "$ref": "#/$defs/sha256"
         },
         "runtime_artifact_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "shuffle_api_workflow_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "shuffle_reviewed_workflow_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "shuffle_live_workflow_sha256": {
           "$ref": "#/$defs/sha256"
         },
         "host_architecture": {

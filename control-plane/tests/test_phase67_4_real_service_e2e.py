@@ -50,6 +50,9 @@ def _manifest() -> dict[str, object]:
         "compose_sha256": "b" * 64,
         "evidence_schema_sha256": "c" * 64,
         "runtime_artifact_sha256": "d" * 64,
+        "shuffle_api_workflow_id": "42c15ad7-ff1f-4d50-bf6c-a1b2c3d4e5f6",
+        "shuffle_reviewed_workflow_sha256": "2" * 64,
+        "shuffle_live_workflow_sha256": "4" * 64,
         "host_architecture": "arm64",
         "docker_context": "colima",
         "colima_profile": "default",
@@ -397,6 +400,9 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "compose_sha256": "8" * 64,
             "evidence_schema_sha256": "7" * 64,
             "runtime_artifact_sha256": "6" * 64,
+            "shuffle_api_workflow_id": "52c15ad7-ff1f-4d50-bf6c-a1b2c3d4e5f6",
+            "shuffle_reviewed_workflow_sha256": "0" * 64,
+            "shuffle_live_workflow_sha256": "a" * 64,
             "host_architecture": "aarch64",
             "docker_context": "colima-review",
             "colima_profile": "review",
@@ -443,6 +449,22 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     status_path,
                     "control_plane_container_image_id",
                 )
+
+    def test_live_workflow_digest_is_canonical_and_content_bound(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            workflow_path = Path(temporary_directory) / "workflow.json"
+            workflow_path.write_text('{"b":2,"a":1}\n', encoding="utf-8")
+            baseline = builder._canonical_json_sha256(workflow_path)
+            workflow_path.write_text(
+                '{\n  "a": 1,\n  "b": 2\n}\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(builder._canonical_json_sha256(workflow_path), baseline)
+            workflow_path.write_text('{"a":1,"b":3}\n', encoding="utf-8")
+            self.assertNotEqual(
+                builder._canonical_json_sha256(workflow_path),
+                baseline,
+            )
 
     def test_validator_rejects_unmeasured_negative_and_missing_artifact(self) -> None:
         unmeasured = _manifest()
@@ -624,6 +646,20 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn('startup_status_output=', runner)
         self.assertIn('initial_status_output=', runner)
         self.assertIn('restart_status_output=', runner)
+        self.assertIn('workflow_snapshot_output=', runner)
+        self.assertIn('workflow_predispatch_output=', runner)
+        self.assertIn(
+            'capture_reviewed_shuffle_workflow "${workflow_snapshot_output}"',
+            runner,
+        )
+        self.assertIn(
+            'capture_reviewed_shuffle_workflow "${workflow_predispatch_output}"',
+            runner,
+        )
+        self.assertIn(
+            'live Shuffle workflow changed after the trial snapshot',
+            runner,
+        )
         self.assertIn('retain_status_evidence "${startup_output}"', runner)
         self.assertIn('--startup-status "${startup_status_output}"', runner)
         snapshot_completed = runner.index('>"${snapshot_output}"')
@@ -651,6 +687,27 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertNotIn('lifecycle_state="denied"', real_journey)
         self.assertNotIn("class _StaticTransport", real_journey)
         self.assertIn("service.reconcile_action_execution(", real_journey)
+        self.assertIn("delegated_at = datetime.now(timezone.utc)", real_journey)
+        self.assertIn("delegated_at=delegated_at", real_journey)
+        self.assertNotIn(
+            "delegated_at=decided_at + timedelta(seconds=1)",
+            real_journey,
+        )
+        real_shuffle_adapter = (
+            CONTROL_PLANE_ROOT
+            / "aegisops"
+            / "control_plane"
+            / "adapters"
+            / "shuffle_real.py"
+        ).read_text(encoding="utf-8")
+        revalidation = real_shuffle_adapter.index(
+            "self._revalidate_reviewed_workflow()"
+        )
+        dispatch = real_shuffle_adapter.index(
+            'method="POST",',
+            revalidation,
+        )
+        self.assertLess(revalidation, dispatch)
         compose = (LAB_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
         self.assertIn("./e2e:/opt/aegisops/phase67-e2e:ro", compose)
 

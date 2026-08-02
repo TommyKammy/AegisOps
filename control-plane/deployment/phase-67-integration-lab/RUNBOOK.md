@@ -103,8 +103,9 @@ control-plane/deployment/phase-67-integration-lab/run-e2e-trial.sh
 
 The runner uses the `full` profile and one generated trial run ID. It hashes
 the repository revision, rendered Compose model, evidence schema, runtime
-artifacts, host and Colima identity, selected profile, and running image
-identities into one recomputable snapshot ID before it records step 1. It
+artifacts, reviewed and live Shuffle workflow digests, workflow API ID, host
+and Colima identity, selected profile, and running image identities into one
+recomputable snapshot ID before it records step 1. It
 then executes the real Wazuh trial, promotes that exact admitted alert to a
 case, and prepares a reviewed harmless action. A distinct local operator must
 inspect the displayed action request, payload hash, and challenge, then confirm
@@ -125,7 +126,10 @@ revision, and verdict. The retained `step-observations.jsonl` records the actual
 completion time of all 15 steps, and a passing manifest requires those times to
 be strictly chronological. `startup-status.txt`, `initial-status.txt`, and
 `restart-status.txt` retain the exact status captures used by the snapshot,
-health, and restart steps. Only a separately reviewed, redacted manifest may be
+health, and restart steps. `workflow-snapshot.json` and
+`workflow-pre-dispatch.json` retain the semantically validated live exports;
+their canonical digests must match before the adapter performs its own live
+validation and dispatch. Only a separately reviewed, redacted manifest may be
 copied to the tracked sample path. Do not commit the raw command output, report,
 service logs, runtime env, or host-local paths.
 

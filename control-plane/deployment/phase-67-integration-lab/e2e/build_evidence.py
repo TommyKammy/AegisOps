@@ -30,14 +30,18 @@ STEP_NAMES = (
     "publish_prerequisite_evaluation",
 )
 STEP_EVIDENCE_REFS = (
-    ("snapshot",),
+    ("snapshot", "artifact:workflow-snapshot.json"),
     ("artifact:initial-status.txt",),
     ("wazuh-manifest:native_wazuh_alert_id",),
     ("wazuh-manifest:aegisops_alert_id",),
     ("journey:case_id",),
     ("journey:action_request_id",),
     ("journey:denied_dispatch",),
-    ("journey:approval_challenge_sha256", "journey:execution_id"),
+    (
+        "journey:approval_challenge_sha256",
+        "artifact:workflow-pre-dispatch.json",
+        "journey:execution_id",
+    ),
     ("journey:expected_receipt_id",),
     ("journey:reconciliation_id",),
     ("report:sha256",),
@@ -70,6 +74,16 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _canonical_json_sha256(path: Path) -> str:
+    payload = _read_json(path)
+    encoded = json.dumps(
+        payload,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _status_value(path: Path, key: str) -> str:
@@ -158,6 +172,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--startup-status", type=Path, required=True)
     parser.add_argument("--initial-status", type=Path, required=True)
     parser.add_argument("--restart-status", type=Path, required=True)
+    parser.add_argument("--workflow-snapshot", type=Path, required=True)
+    parser.add_argument("--workflow-pre-dispatch", type=Path, required=True)
+    parser.add_argument("--reviewed-workflow", type=Path, required=True)
     parser.add_argument("--artifacts-directory-name", required=True)
     parser.add_argument("--output", type=Path, required=True)
     return parser
@@ -178,6 +195,23 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     observations = _load_step_observations(args.observations)
     wazuh_output = args.wazuh_output.read_text(encoding="utf-8")
     evaluation = args.evaluation.read_text(encoding="utf-8")
+    if _sha256(args.reviewed_workflow) != snapshot.get(
+        "shuffle_reviewed_workflow_sha256"
+    ):
+        raise ValueError("snapshot reviewed Shuffle workflow digest does not match")
+    for workflow_path in (
+        args.workflow_snapshot,
+        args.workflow_pre_dispatch,
+    ):
+        workflow = _mapping(_read_json(workflow_path), workflow_path.name)
+        if workflow.get("id") != snapshot.get("shuffle_api_workflow_id"):
+            raise ValueError(f"{workflow_path.name} uses a different workflow ID")
+        if _canonical_json_sha256(workflow_path) != snapshot.get(
+            "shuffle_live_workflow_sha256"
+        ):
+            raise ValueError(
+                f"{workflow_path.name} does not match the snapshotted workflow"
+            )
     for status_path in (
         args.startup_status,
         args.initial_status,
@@ -318,6 +352,8 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         "startup-status.txt": args.startup_status,
         "initial-status.txt": args.initial_status,
         "restart-status.txt": args.restart_status,
+        "workflow-snapshot.json": args.workflow_snapshot,
+        "workflow-pre-dispatch.json": args.workflow_pre_dispatch,
     }
 
     return {

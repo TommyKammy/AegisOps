@@ -582,10 +582,11 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
     binding = payload.get("shuffle_delegation_binding")
     if not isinstance(binding, Mapping):
         raise RuntimeError("prepared action lacks the reviewed Shuffle binding")
+    delegated_at = datetime.now(timezone.utc)
     execution = service.delegate_approved_action_to_shuffle(
         action_request_id=action.action_request_id,
         approved_payload=payload,
-        delegated_at=decided_at + timedelta(seconds=1),
+        delegated_at=delegated_at,
         delegation_issuer=REQUESTER_IDENTITY,
         evidence_ids=("phase67-4-real-service-e2e",),
     )
