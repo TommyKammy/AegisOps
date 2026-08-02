@@ -77,6 +77,57 @@ def _required_text(value: object, path: str) -> str:
     return value.strip()
 
 
+def _load_step_observations(path: Path) -> list[dict[str, object]]:
+    observations: list[dict[str, object]] = []
+    previous: datetime | None = None
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        try:
+            item = _mapping(json.loads(line), f"observations line {line_number}")
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"observations line {line_number} is not valid JSON"
+            ) from exc
+        if set(item) != {"step", "name", "observed_at"}:
+            raise ValueError(
+                f"observations line {line_number} fields do not match the contract"
+            )
+        expected_step = len(observations) + 1
+        if item.get("step") != expected_step:
+            raise ValueError("step observations must be ordered 1 through 15")
+        expected_name = STEP_NAMES[expected_step - 1]
+        if item.get("name") != expected_name:
+            raise ValueError(
+                f"step observation {expected_step} is not {expected_name!r}"
+            )
+        observed_at = _required_text(
+            item.get("observed_at"),
+            f"observations[{expected_step - 1}].observed_at",
+        )
+        normalized = observed_at[:-1] + "+00:00" if observed_at.endswith("Z") else observed_at
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError as exc:
+            raise ValueError(
+                f"step observation {expected_step} is not RFC3339"
+            ) from exc
+        if parsed.tzinfo is None:
+            raise ValueError(f"step observation {expected_step} lacks a timezone")
+        parsed = parsed.astimezone(timezone.utc)
+        if previous is not None and parsed <= previous:
+            raise ValueError("step observations must be strictly chronological")
+        previous = parsed
+        observations.append(
+            {
+                "step": expected_step,
+                "name": expected_name,
+                "observed_at": observed_at,
+            }
+        )
+    if len(observations) != len(STEP_NAMES):
+        raise ValueError("step observations must contain exactly 15 entries")
+    return observations
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--schema", type=Path, required=True)
@@ -90,6 +141,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--evaluation", type=Path, required=True)
     parser.add_argument("--evaluation-record", type=Path, required=True)
+    parser.add_argument("--observations", type=Path, required=True)
     parser.add_argument("--artifacts-directory-name", required=True)
     parser.add_argument("--output", type=Path, required=True)
     return parser
@@ -107,6 +159,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         _read_json(args.evaluation_record),
         "evaluation record",
     )
+    observations = _load_step_observations(args.observations)
     wazuh_output = args.wazuh_output.read_text(encoding="utf-8")
     evaluation = args.evaluation.read_text(encoding="utf-8")
     for required_line in (
@@ -166,14 +219,16 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     snapshot_id = _required_text(snapshot.get("snapshot_id"), "snapshot.snapshot_id")
     steps = [
         {
-            "step": index,
-            "name": name,
+            "step": observation["step"],
+            "name": observation["name"],
             "status": "passed",
             "snapshot_id": snapshot_id,
-            "observed_at": captured_at,
-            "evidence_refs": list(STEP_EVIDENCE_REFS[index - 1]),
+            "observed_at": observation["observed_at"],
+            "evidence_refs": list(
+                STEP_EVIDENCE_REFS[int(observation["step"]) - 1]
+            ),
         }
-        for index, name in enumerate(STEP_NAMES, start=1)
+        for observation in observations
     ]
     first_delivery = _mapping(wazuh.get("first_delivery"), "wazuh.first_delivery")
     duplicate_delivery = _mapping(
@@ -219,6 +274,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         "snapshot.json": args.snapshot,
         "images.json": args.images,
         "evaluation-record.json": args.evaluation_record,
+        "step-observations.jsonl": args.observations,
     }
 
     return {

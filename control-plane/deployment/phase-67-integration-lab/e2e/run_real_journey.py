@@ -315,6 +315,7 @@ def _run_receipt_negative_probes(
     *,
     service: AegisOpsControlPlaneService,
     action: ActionRequestRecord,
+    execution: ActionExecutionRecord,
     receipt: Mapping[str, object],
     compared_at: datetime,
 ) -> dict[str, dict[str, object]]:
@@ -327,6 +328,14 @@ def _run_receipt_negative_probes(
 
     def authority_count() -> int:
         return sum(len(service._store.list(record_type)) for record_type in record_types)
+
+    baseline_count = authority_count()
+    baseline_execution = service.get_record(
+        ActionExecutionRecord,
+        execution.action_execution_id,
+    )
+    if baseline_execution is None:
+        raise RuntimeError("negative probes require the authoritative execution")
 
     def probe(
         name: str,
@@ -379,26 +388,44 @@ def _run_receipt_negative_probes(
     failed_receipt = dict(receipt)
     failed_receipt["status"] = "failed"
 
-    return {
-        "malformed_receipt": probe(
-            "malformed_receipt",
-            malformed_receipt,
-            expected_status="rejected",
-            expected_category="malformed_receipt",
-        ),
-        "reconciliation_mismatch": probe(
-            "reconciliation_mismatch",
-            mismatched_receipt,
-            expected_status="rejected",
-            expected_category="payload_hash_mismatch",
-        ),
-        "failed_execution": probe(
-            "failed_execution",
-            failed_receipt,
-            expected_status="contained",
-            expected_category="failed_execution_reconciled_for_review",
-        ),
-    }
+    class RollbackNegativeProbes(RuntimeError):
+        def __init__(self, results: dict[str, dict[str, object]]) -> None:
+            super().__init__("rollback isolated negative receipt probes")
+            self.results = results
+
+    try:
+        with service._store.transaction():
+            results = {
+                "malformed_receipt": probe(
+                    "malformed_receipt",
+                    malformed_receipt,
+                    expected_status="rejected",
+                    expected_category="malformed_receipt",
+                ),
+                "reconciliation_mismatch": probe(
+                    "reconciliation_mismatch",
+                    mismatched_receipt,
+                    expected_status="rejected",
+                    expected_category="payload_hash_mismatch",
+                ),
+                "failed_execution": probe(
+                    "failed_execution",
+                    failed_receipt,
+                    expected_status="contained",
+                    expected_category="failed_execution_reconciled_for_review",
+                ),
+            }
+            raise RollbackNegativeProbes(results)
+    except RollbackNegativeProbes as rollback:
+        results = rollback.results
+
+    restored_execution = service.get_record(
+        ActionExecutionRecord,
+        execution.action_execution_id,
+    )
+    if restored_execution != baseline_execution or authority_count() != baseline_count:
+        raise RuntimeError("negative receipt probes changed authoritative state")
+    return results
 
 
 def _prepare(args: argparse.Namespace) -> dict[str, object]:
@@ -411,6 +438,7 @@ def _prepare(args: argparse.Namespace) -> dict[str, object]:
         alert.alert_id,
         case_id=identifiers["case_id"],
     )
+    case_observed_at = datetime.now(timezone.utc)
     now = datetime.now(timezone.utc) - timedelta(seconds=5)
     target_scope = {
         "record_family": "case",
@@ -418,13 +446,6 @@ def _prepare(args: argparse.Namespace) -> dict[str, object]:
         "finding_id": case.finding_id,
         "recipient_identity": "local-test-sink",
     }
-    denied = _prove_denied_action_non_dispatch(
-        service,
-        identifiers=identifiers,
-        case=case,
-        target_scope=target_scope,
-        requested_at=now,
-    )
     binding, payload = _binding_and_payload(
         correlation_id=identifiers["correlation_id"],
         expected_receipt_id=identifiers["expected_receipt_id"],
@@ -442,8 +463,17 @@ def _prepare(args: argparse.Namespace) -> dict[str, object]:
         target_scope=target_scope,
         payload=payload,
         payload_hash=payload_hash,
-        requested_at=now + timedelta(seconds=3),
+        requested_at=now,
     )
+    action_observed_at = datetime.now(timezone.utc)
+    denied = _prove_denied_action_non_dispatch(
+        service,
+        identifiers=identifiers,
+        case=case,
+        target_scope=target_scope,
+        requested_at=now + timedelta(seconds=1),
+    )
+    denied_observed_at = datetime.now(timezone.utc)
     challenge = _approval_challenge(
         trial_id=args.trial_id,
         action_request_id=action.action_request_id,
@@ -467,6 +497,17 @@ def _prepare(args: argparse.Namespace) -> dict[str, object]:
             "denied_approval_decision_id"
         ],
         "denied_dispatch": denied,
+        "step_observations": {
+            "promote_alert_to_case": case_observed_at.isoformat().replace(
+                "+00:00", "Z"
+            ),
+            "create_reviewed_action_request": action_observed_at.isoformat().replace(
+                "+00:00", "Z"
+            ),
+            "prove_denied_action_non_dispatch": denied_observed_at.isoformat().replace(
+                "+00:00", "Z"
+            ),
+        },
         "prepared_at": datetime.now(timezone.utc).isoformat().replace(
             "+00:00", "Z"
         ),
@@ -548,6 +589,7 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
         delegation_issuer=REQUESTER_IDENTITY,
         evidence_ids=("phase67-4-real-service-e2e",),
     )
+    dispatch_observed_at = datetime.now(timezone.utc)
     if execution.execution_run_id.startswith("shuffle-run-"):
         raise RuntimeError("synthetic execution ID cannot be live evidence")
     expected_binding = {
@@ -573,13 +615,6 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
         expected_binding=expected_binding,
     )
     compared_at = datetime.now(timezone.utc)
-    negatives = _run_receipt_negative_probes(
-        service=service,
-        action=action,
-        receipt=receipt,
-        compared_at=compared_at,
-    )
-    compared_at += timedelta(seconds=4)
     reconciliation = service.reconcile_action_execution(
         action_request_id=action.action_request_id,
         execution_surface_type="automation_substrate",
@@ -588,26 +623,7 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
         compared_at=compared_at,
         stale_after=compared_at + timedelta(minutes=5),
     )
-    replay = service.reconcile_action_execution(
-        action_request_id=action.action_request_id,
-        execution_surface_type="automation_substrate",
-        execution_surface_id="shuffle",
-        observed_executions=(receipt,),
-        compared_at=compared_at + timedelta(seconds=1),
-        stale_after=compared_at + timedelta(minutes=5),
-    )
-    stored_execution = service.get_record(
-        ActionExecutionRecord,
-        execution.action_execution_id,
-    )
-    if stored_execution is None:
-        raise RuntimeError("persisted action execution is missing")
-    if receipt["status"] == "failed":
-        raise RuntimeError("real Shuffle execution failed")
-    if reconciliation.ingest_disposition != "matched":
-        raise RuntimeError("real Shuffle receipt did not match AegisOps binding")
-    if replay.reconciliation_id != reconciliation.reconciliation_id:
-        raise RuntimeError("receipt replay created a second reconciliation")
+    reconciliation_observed_at = datetime.now(timezone.utc)
     report = export_audit_retention_baseline(
         store=service._store,
         record_types=(
@@ -621,6 +637,40 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
         export_id=identifiers["report_id"],
         exported_at=datetime.now(timezone.utc),
     )
+    report_observed_at = datetime.now(timezone.utc)
+    replay_compared_at = datetime.now(timezone.utc)
+    replay = service.reconcile_action_execution(
+        action_request_id=action.action_request_id,
+        execution_surface_type="automation_substrate",
+        execution_surface_id="shuffle",
+        observed_executions=(receipt,),
+        compared_at=replay_compared_at,
+        stale_after=replay_compared_at + timedelta(minutes=5),
+    )
+    replay_observed_at = datetime.now(timezone.utc)
+    negative_probes_compared_at = datetime.now(timezone.utc)
+    negatives = _run_receipt_negative_probes(
+        service=service,
+        action=action,
+        execution=execution,
+        receipt=receipt,
+        compared_at=negative_probes_compared_at,
+    )
+    negative_probes_observed_at = datetime.now(timezone.utc)
+    stored_execution = service.get_record(
+        ActionExecutionRecord,
+        execution.action_execution_id,
+    )
+    if stored_execution is None:
+        raise RuntimeError("persisted action execution is missing")
+    if receipt["status"] == "failed":
+        raise RuntimeError("real Shuffle execution failed")
+    if reconciliation.ingest_disposition != "matched":
+        raise RuntimeError("real Shuffle receipt did not match AegisOps binding")
+    if replay.reconciliation_id != reconciliation.reconciliation_id:
+        raise RuntimeError("receipt replay created a second reconciliation")
+    if stored_execution.lifecycle_state != "succeeded":
+        raise RuntimeError("authoritative Shuffle execution is not succeeded")
     report_payload = json.dumps(report, separators=(",", ":"), sort_keys=True)
     return {
         "journey": {
@@ -663,6 +713,24 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
             ),
             "reconciliation_disposition": reconciliation.ingest_disposition,
             "negative_probes": negatives,
+            "step_observations": {
+                "approve_and_dispatch_real_shuffle_action": (
+                    dispatch_observed_at.isoformat().replace("+00:00", "Z")
+                ),
+                "capture_authenticated_shuffle_receipt": str(receipt["observed_at"]),
+                "reconcile_from_aegisops_records": (
+                    reconciliation_observed_at.isoformat().replace("+00:00", "Z")
+                ),
+                "export_redacted_aegisops_report": (
+                    report_observed_at.isoformat().replace("+00:00", "Z")
+                ),
+                "replay_deliveries_for_idempotency": (
+                    replay_observed_at.isoformat().replace("+00:00", "Z")
+                ),
+                "run_negative_cases": (
+                    negative_probes_observed_at.isoformat().replace("+00:00", "Z")
+                ),
+            },
             "report_id": identifiers["report_id"],
             "report_sha256": hashlib.sha256(
                 report_payload.encode("utf-8")
@@ -698,6 +766,9 @@ def _verify_restart(args: argparse.Namespace) -> dict[str, object]:
         "records_persisted": True,
         "checked_identifiers": checked,
         "shuffle_execution_count": execution_count,
+        "observed_at": datetime.now(timezone.utc).isoformat().replace(
+            "+00:00", "Z"
+        ),
     }
 
 

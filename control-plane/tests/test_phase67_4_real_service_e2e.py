@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 import importlib.util
 import json
 from pathlib import Path
 import sys
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 
 
@@ -32,6 +36,10 @@ journey = _load_module(
     "phase67_4_real_journey",
     E2E_ROOT / "run_real_journey.py",
 )
+builder = _load_module(
+    "phase67_4_evidence_builder",
+    E2E_ROOT / "build_evidence.py",
+)
 SCHEMA = validator.load_json(E2E_ROOT / "evidence-manifest.schema.json")
 
 
@@ -44,14 +52,14 @@ def _manifest() -> dict[str, object]:
             "name": name,
             "status": "passed",
             "snapshot_id": snapshot_id,
-            "observed_at": observed_at,
+            "observed_at": f"2026-08-01T10:00:{index:02d}Z",
             "evidence_refs": [f"evidence:step-{index}"],
         }
         for index, name in enumerate(validator.STEP_NAMES, start=1)
     ]
     return {
         "schema_version": validator.SCHEMA_VERSION,
-        "captured_at": observed_at,
+        "captured_at": "2026-08-01T10:00:16Z",
         "source_mode": "real_services",
         "trial_run_id": "phase67-e2e-20260801T100000Z-0123456789ab",
         "snapshot": {
@@ -239,6 +247,114 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "exactly 15 steps",
         ):
             validator.validate_manifest(missing, SCHEMA)
+
+    def test_validator_rejects_non_chronological_step_observations(self) -> None:
+        manifest = _manifest()
+        manifest["steps"][7]["observed_at"] = manifest["steps"][6]["observed_at"]
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "strictly chronological",
+        ):
+            validator.validate_manifest(manifest, SCHEMA)
+
+    def test_builder_loads_a_complete_chronological_observation_log(self) -> None:
+        start = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
+        lines = [
+            json.dumps(
+                {
+                    "step": index,
+                    "name": name,
+                    "observed_at": (start + timedelta(seconds=index))
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                }
+            )
+            for index, name in enumerate(builder.STEP_NAMES, start=1)
+        ]
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "step-observations.jsonl"
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            observations = builder._load_step_observations(path)
+        self.assertEqual(len(observations), 15)
+        self.assertEqual(observations[-1]["name"], builder.STEP_NAMES[-1])
+
+    def test_negative_receipt_probes_rollback_authoritative_execution(self) -> None:
+        record_types = (
+            journey.ActionRequestRecord,
+            journey.ApprovalDecisionRecord,
+            journey.ActionExecutionRecord,
+            journey.ReconciliationRecord,
+        )
+        baseline_execution = SimpleNamespace(
+            action_execution_id="execution-real-1",
+            lifecycle_state="succeeded",
+            provenance={"normalized_receipt": {"status": "succeeded"}},
+        )
+
+        class FakeStore:
+            def __init__(self) -> None:
+                self.records = {record_type: [] for record_type in record_types}
+                self.records[journey.ActionExecutionRecord] = [baseline_execution]
+
+            def list(self, record_type: object) -> tuple[object, ...]:
+                return tuple(self.records[record_type])
+
+            @contextmanager
+            def transaction(self):
+                saved = deepcopy(self.records)
+                try:
+                    yield
+                except Exception:
+                    self.records = saved
+                    raise
+
+        class FakeService:
+            def __init__(self) -> None:
+                self._store = FakeStore()
+
+            def get_record(self, record_type: object, record_id: str) -> object | None:
+                for record in self._store.list(record_type):
+                    if getattr(record, "action_execution_id", None) == record_id:
+                        return record
+                return None
+
+            def reconcile_action_execution(self, **kwargs: object) -> object:
+                observed = kwargs["observed_executions"][0]
+                if "payload_hash" not in observed:
+                    raise ValueError("missing payload_hash")
+                self._store.records[journey.ReconciliationRecord].append(
+                    SimpleNamespace(reconciliation_id="probe")
+                )
+                if observed["status"] == "failed":
+                    self._store.records[journey.ActionExecutionRecord][0] = (
+                        SimpleNamespace(
+                            action_execution_id="execution-real-1",
+                            lifecycle_state="failed",
+                            provenance={"normalized_receipt": {"status": "failed"}},
+                        )
+                    )
+                return SimpleNamespace(ingest_disposition="mismatch")
+
+        service = FakeService()
+        results = journey._run_receipt_negative_probes(
+            service=service,
+            action=SimpleNamespace(action_request_id="action-real-1"),
+            execution=baseline_execution,
+            receipt={
+                "execution_run_id": "real-run-1",
+                "status": "succeeded",
+                "payload_hash": "a" * 64,
+            },
+            compared_at=datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc),
+        )
+        self.assertEqual(results["failed_execution"]["authority_delta"], 1)
+        self.assertEqual(
+            service.get_record(
+                journey.ActionExecutionRecord,
+                "execution-real-1",
+            ),
+            baseline_execution,
+        )
 
     def test_validator_rejects_missing_action_image_and_stale_evaluation(self) -> None:
         missing_image = _manifest()

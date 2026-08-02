@@ -149,7 +149,12 @@ a separate approved real execution after an authenticated local operator
 confirms the displayed approval challenge, reconciles its authenticated
 receipt, exports a redacted AegisOps report, restarts the lab, checks
 authoritative record persistence, and stops the lab without deleting volumes
-or evidence.
+or evidence. The runner records each completed step in
+`step-observations.jsonl`; the evidence builder rejects missing, reordered, or
+non-chronological observations. Synthetic receipt failure probes execute
+through the real reconciliation service inside a rollback-only transaction,
+and the runner verifies that the successful authoritative execution is
+unchanged before publishing evidence.
 
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 

@@ -21,6 +21,10 @@ require_command git
 require_command jq
 require_command python3
 
+observed_now() {
+  python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))'
+}
+
 fixture="${REPO_ROOT}/control-plane/tests/fixtures/wazuh/phase53-smb-single-node-ssh-auth-failure-alert.json"
 [[ -s "${fixture}" ]] || fail "reviewed Wazuh negative-test fixture is missing"
 evidence_schema="${LAB_DIR}/wazuh/evidence-manifest.schema.json"
@@ -478,6 +482,7 @@ PY
 negative_after_alert_count="$(analyst_queue_count)"
 [[ "${negative_after_alert_count}" == "${negative_baseline_alert_count}" ]] \
   || fail "negative boundary tests changed authoritative analyst-queue alert state"
+negative_cases_observed_at="$(observed_now)"
 
 receipt_file="/var/ossec/logs/integrations/aegisops-receipts.jsonl"
 receipt_count() {
@@ -511,6 +516,7 @@ compose_scope "${trial_scope}" exec -T wazuh-manager \
   "${test_timestamp}" \
   "${trial_username}" \
   /var/ossec/logs/aegisops-phase67-ssh-test.log
+alert_triggered_at="$(observed_now)"
 
 receipt_deadline=$((SECONDS + 90))
 first_receipt=""
@@ -533,6 +539,7 @@ jq -e '
   and .disposition == "created"
 ' <<<"${first_receipt}" >/dev/null \
   || fail "first real Wazuh delivery did not create one AegisOps alert"
+first_delivery_observed_at="$(observed_now)"
 sleep 4
 pre_replay_receipt_count="$(receipt_count)"
 [[ "${pre_replay_receipt_count//[[:space:]]/}" == "$((initial_receipt_count + 1))" ]] \
@@ -632,6 +639,7 @@ jq -e \
     and .aegisops_alert_id == $alert_id
   ' <<<"${duplicate_receipt}" >/dev/null \
   || fail "duplicate Wazuh delivery did not deduplicate to the original alert"
+duplicate_delivery_observed_at="$(observed_now)"
 
 queue="$(
   compose_scope "${trial_scope}" exec -T control-plane \
@@ -788,4 +796,8 @@ echo "PASS native_wazuh_alert_id=${native_alert_id}"
 echo "PASS first_disposition=created"
 echo "PASS duplicate_disposition=deduplicated"
 echo "PASS analyst_queue_alert_id=${aegisops_alert_id}"
+echo "step_observation.trigger_real_wazuh_detection=${alert_triggered_at}"
+echo "step_observation.admit_wazuh_alert=${first_delivery_observed_at}"
+echo "step_observation.replay_wazuh_delivery=${duplicate_delivery_observed_at}"
+echo "step_observation.wazuh_negative_cases=${negative_cases_observed_at}"
 echo "evidence=${evidence_file}"

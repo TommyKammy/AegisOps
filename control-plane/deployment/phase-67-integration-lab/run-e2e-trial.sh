@@ -44,8 +44,26 @@ report_output="${staging_dir}/report.json"
 snapshot_output="${staging_dir}/snapshot.json"
 images_output="${staging_dir}/images.json"
 evaluation_record_output="${staging_dir}/evaluation-record.json"
+observations_output="${staging_dir}/step-observations.jsonl"
 evidence_output="${staging_dir}/evidence.json"
 cleaned=false
+
+observed_now() {
+  python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))'
+}
+
+record_step() {
+  local step="$1"
+  local name="$2"
+  local observed_at="${3:-$(observed_now)}"
+
+  jq -cn \
+    --argjson step "${step}" \
+    --arg name "${name}" \
+    --arg observed_at "${observed_at}" \
+    '{step: $step, name: $name, observed_at: $observed_at}' \
+    >>"${observations_output}"
+}
 
 cleanup_on_exit() {
   local rc=$?
@@ -74,6 +92,7 @@ snapshot_id="phase67-snapshot-$(
     openssl dgst -sha256 -r |
     awk '{print substr($1, 1, 16)}'
 )"
+record_step 1 "capture_immutable_snapshot"
 
 "${LAB_DIR}/pin-shuffle-app-image.sh"
 "${LAB_DIR}/up.sh" full
@@ -104,6 +123,7 @@ jq \
   '. + [{service: $service, immutable_reference: $immutable_reference}] | sort_by(.service)' \
   "${images_output}" >"${images_output}.next"
 mv "${images_output}.next" "${images_output}"
+record_step 2 "start_lab_and_record_health"
 
 AEGISOPS_LAB_TRIAL_SCOPE=full \
   "${LAB_DIR}/test-wazuh-intake.sh" | tee "${wazuh_output}"
@@ -114,6 +134,12 @@ wazuh_evidence="$(
   || fail "real Wazuh trial did not publish its evidence manifest"
 cp "${wazuh_evidence}" "${wazuh_manifest_output}"
 aegisops_alert_id="$(jq -er '.aegisops_alert_id' "${wazuh_evidence}")"
+record_step 3 \
+  "trigger_real_wazuh_detection" \
+  "$(sed -n 's/^step_observation\.trigger_real_wazuh_detection=//p' "${wazuh_output}" | tail -n 1)"
+record_step 4 \
+  "admit_wazuh_alert" \
+  "$(sed -n 's/^step_observation\.admit_wazuh_alert=//p' "${wazuh_output}" | tail -n 1)"
 
 compose_scope full exec -T \
   -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE="${shuffle_tools_image}" \
@@ -125,6 +151,15 @@ compose_scope full exec -T \
     --trial-id "${trial_run_id}" \
     --alert-id "${aegisops_alert_id}" \
     >"${preparation_output}"
+record_step 5 \
+  "promote_alert_to_case" \
+  "$(jq -er '.step_observations.promote_alert_to_case' "${preparation_output}")"
+record_step 6 \
+  "create_reviewed_action_request" \
+  "$(jq -er '.step_observations.create_reviewed_action_request' "${preparation_output}")"
+record_step 7 \
+  "prove_denied_action_non_dispatch" \
+  "$(jq -er '.step_observations.prove_denied_action_non_dispatch' "${preparation_output}")"
 
 approval_challenge="$(jq -er '.approval_challenge' "${preparation_output}")"
 action_request_id="$(jq -er '.action_request_id' "${preparation_output}")"
@@ -181,6 +216,20 @@ compose_scope full exec -T \
     --approval-method "${approval_method}" \
     <"${preparation_output}" \
     >"${journey_output}"
+for step_spec in \
+  "8:approve_and_dispatch_real_shuffle_action" \
+  "9:capture_authenticated_shuffle_receipt" \
+  "10:reconcile_from_aegisops_records" \
+  "11:export_redacted_aegisops_report" \
+  "12:replay_deliveries_for_idempotency" \
+  "13:run_negative_cases"; do
+  step_number="${step_spec%%:*}"
+  step_name="${step_spec#*:}"
+  record_step \
+    "${step_number}" \
+    "${step_name}" \
+    "$(jq -er --arg name "${step_name}" '.journey.step_observations[$name]' "${journey_output}")"
+done
 python3 - "${journey_output}" "${report_output}" <<'PY'
 import json
 from pathlib import Path
@@ -203,6 +252,9 @@ jq -c '.journey | .aegisops_alert_id = .alert_id' "${journey_output}" |
     control-plane \
     python3 /opt/aegisops/phase67-e2e/run_real_journey.py verify-restart \
     >"${restart_output}"
+record_step 14 \
+  "restart_and_verify_persistence" \
+  "$(jq -er '.observed_at' "${restart_output}")"
 
 [[ "$(git -C "${REPO_ROOT}" rev-parse HEAD)" == "${repository_revision}" ]] \
   || fail "repository revision changed during the E2E trial"
@@ -235,7 +287,7 @@ jq -n \
     }
   ' >"${snapshot_output}"
 
-evaluated_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+evaluated_at="$(observed_now)"
 jq -n \
   --arg evaluated_at "${evaluated_at}" \
   --arg trial_run_id "${trial_run_id}" \
@@ -256,6 +308,7 @@ jq -n \
       ]
     }
   ' >"${evaluation_record_output}"
+record_step 15 "publish_prerequisite_evaluation" "${evaluated_at}"
 
 "${LAB_DIR}/cleanup.sh"
 cleaned=true
@@ -271,6 +324,7 @@ python3 "${builder}" \
   --report "${report_output}" \
   --evaluation "${evaluation}" \
   --evaluation-record "${evaluation_record_output}" \
+  --observations "${observations_output}" \
   --artifacts-directory-name "${trial_run_id}-artifacts" \
   --output "${evidence_output}"
 python3 "${validator}" "${schema}" "${evidence_output}"

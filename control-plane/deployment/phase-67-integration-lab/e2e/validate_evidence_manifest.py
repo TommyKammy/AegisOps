@@ -75,6 +75,7 @@ ARTIFACT_NAMES = {
     "snapshot.json",
     "images.json",
     "evaluation-record.json",
+    "step-observations.jsonl",
 }
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 REVISION = re.compile(r"^[0-9a-f]{40}$")
@@ -286,6 +287,7 @@ def _validate_steps(
 ) -> tuple[str, ...]:
     require(isinstance(value, list) and len(value) == len(STEP_NAMES), "$.steps must contain exactly 15 steps")
     statuses: list[str] = []
+    observed_times: list[datetime] = []
     for index, expected_name in enumerate(STEP_NAMES):
         item = require_mapping(value[index], f"$.steps[{index}]")
         require_exact_keys(
@@ -300,7 +302,18 @@ def _validate_steps(
         require(status in {"passed", "failed", "blocked", "not_run"}, f"$.steps[{index}].status is invalid")
         statuses.append(status)
         require(item["snapshot_id"] == snapshot_id, f"$.steps[{index}] uses a mixed snapshot")
-        require_datetime(item["observed_at"], f"$.steps[{index}].observed_at")
+        observed_at = require_datetime(
+            item["observed_at"],
+            f"$.steps[{index}].observed_at",
+        )
+        normalized_observed_at = (
+            observed_at[:-1] + "+00:00"
+            if observed_at.endswith("Z")
+            else observed_at
+        )
+        observed_times.append(
+            datetime.fromisoformat(normalized_observed_at).astimezone()
+        )
         refs = item["evidence_refs"]
         require(isinstance(refs, list) and refs, f"$.steps[{index}].evidence_refs must be non-empty")
         for ref_index, evidence_ref in enumerate(refs):
@@ -315,6 +328,13 @@ def _validate_steps(
             require(blocker is None, f"$.steps[{index}].blocker is only allowed for failed or blocked steps")
     if verdict.startswith("integration_trial_passed"):
         require(all(status == "passed" for status in statuses), "a passed verdict requires all journey steps to pass")
+        require(
+            all(
+                current > previous
+                for previous, current in zip(observed_times, observed_times[1:])
+            ),
+            "a passed verdict requires strictly chronological step observations",
+        )
     elif verdict == "integration_trial_blocked":
         require(statuses.count("blocked") == 1, "a blocked verdict requires exactly one blocked step")
         blocked_index = statuses.index("blocked")

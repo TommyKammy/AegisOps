@@ -110,7 +110,9 @@ inspect the displayed action request, payload hash, and challenge, then confirm
 the macOS operator dialog or type the exact `APPROVE <challenge>` phrase on a
 TTY. Only that ceremony persists approval and allows dispatch to real Shuffle.
 Receipt success is passed through AegisOps reconciliation instead of inferred
-from Shuffle state.
+from Shuffle state. Receipt failure probes run in a rollback-only transaction;
+the trial fails if the authoritative successful execution or record count is
+not restored exactly.
 
 After report export and delivery replay, the runner stops and starts the lab,
 checks the persisted authoritative identifiers and one-execution count, and
@@ -118,7 +120,9 @@ runs `cleanup.sh`. The runner retains a trial-specific raw artifact directory
 with mode `0700` and files with mode `0600`, plus the complete redacted report,
 below `${AEGISOPS_LAB_EVIDENCE_DIR}`. The manifest records every retained raw
 artifact digest and binds a generated evaluation record to the trial, snapshot,
-revision, and verdict. Only a separately reviewed, redacted manifest may be
+revision, and verdict. The retained `step-observations.jsonl` records the actual
+completion time of all 15 steps, and a passing manifest requires those times to
+be strictly chronological. Only a separately reviewed, redacted manifest may be
 copied to the tracked sample path. Do not commit the raw command output, report,
 service logs, runtime env, or host-local paths.
 
