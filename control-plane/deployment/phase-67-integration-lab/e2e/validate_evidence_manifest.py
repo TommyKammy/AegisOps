@@ -60,6 +60,27 @@ IDENTIFIER_KEYS = (
     "reconciliation_id",
     "report_id",
 )
+IDENTIFIER_PRODUCING_STEPS = {
+    "wazuh_manager_id": "trigger_real_wazuh_detection",
+    "wazuh_agent_id": "trigger_real_wazuh_detection",
+    "wazuh_rule_id": "trigger_real_wazuh_detection",
+    "native_wazuh_alert_id": "trigger_real_wazuh_detection",
+    "aegisops_alert_id": "admit_wazuh_alert",
+    "finding_id": "admit_wazuh_alert",
+    "case_id": "promote_alert_to_case",
+    "action_request_id": "create_reviewed_action_request",
+    "denied_action_request_id": "prove_denied_action_non_dispatch",
+    "denied_approval_decision_id": "prove_denied_action_non_dispatch",
+    "approval_decision_id": "approve_and_dispatch_real_shuffle_action",
+    "delegation_id": "approve_and_dispatch_real_shuffle_action",
+    "shuffle_workflow_id": "approve_and_dispatch_real_shuffle_action",
+    "shuffle_workflow_version": "approve_and_dispatch_real_shuffle_action",
+    "shuffle_execution_id": "approve_and_dispatch_real_shuffle_action",
+    "expected_receipt_id": "approve_and_dispatch_real_shuffle_action",
+    "action_execution_id": "approve_and_dispatch_real_shuffle_action",
+    "reconciliation_id": "reconcile_from_aegisops_records",
+    "report_id": "export_redacted_aegisops_report",
+}
 NEGATIVE_CASE_KEYS = (
     "invalid_credential",
     "proxy_bypass",
@@ -269,7 +290,6 @@ def _validate_snapshot(
     value: object,
     *,
     trial_run_id: str,
-    enforce_identifier_binding: bool,
 ) -> Mapping[str, object]:
     snapshot = require_mapping(value, "$.snapshot")
     require_exact_keys(
@@ -330,11 +350,10 @@ def _validate_snapshot(
         "shuffle-action-image" in services,
         "$.snapshot.images omits the dynamic Shuffle action image",
     )
-    if enforce_identifier_binding:
-        require(
-            snapshot["snapshot_id"] == _snapshot_identifier(trial_run_id, snapshot),
-            "$.snapshot.snapshot_id is not bound to all snapshot inputs",
-        )
+    require(
+        snapshot["snapshot_id"] == _snapshot_identifier(trial_run_id, snapshot),
+        "$.snapshot.snapshot_id is not bound to all snapshot inputs",
+    )
     return snapshot
 
 
@@ -384,15 +403,20 @@ def _validate_steps(
             require_string(blocker_mapping["reason"], f"$.steps[{index}].blocker.reason")
         else:
             require(blocker is None, f"$.steps[{index}].blocker is only allowed for failed or blocked steps")
+    completed_times = [
+        observed_at
+        for status, observed_at in zip(statuses, observed_times)
+        if status != "not_run"
+    ]
+    require(
+        all(
+            current > previous
+            for previous, current in zip(completed_times, completed_times[1:])
+        ),
+        "completed step observations must be strictly chronological",
+    )
     if verdict.startswith("integration_trial_passed"):
         require(all(status == "passed" for status in statuses), "a passed verdict requires all journey steps to pass")
-        require(
-            all(
-                current > previous
-                for previous, current in zip(observed_times, observed_times[1:])
-            ),
-            "a passed verdict requires strictly chronological step observations",
-        )
     elif verdict == "integration_trial_blocked":
         require(statuses.count("blocked") == 1, "a blocked verdict requires exactly one blocked step")
         blocked_index = statuses.index("blocked")
@@ -437,7 +461,6 @@ def validate_manifest(manifest: object, schema: object) -> None:
     snapshot = _validate_snapshot(
         root["snapshot"],
         trial_run_id=trial_run_id,
-        enforce_identifier_binding=verdict.startswith("integration_trial_passed"),
     )
     snapshot_id = require_string(snapshot["snapshot_id"], "$.snapshot.snapshot_id")
     step_statuses = _validate_steps(root["steps"], snapshot_id, verdict)
@@ -448,8 +471,22 @@ def validate_manifest(manifest: object, schema: object) -> None:
         key: require_nullable_string(identifiers[key], f"$.identifiers.{key}")
         for key in IDENTIFIER_KEYS
     }
-    if verdict.startswith("integration_trial_passed"):
-        require(all(normalized_ids.values()), "a passed verdict requires every real journey identifier")
+    require(
+        set(IDENTIFIER_PRODUCING_STEPS) == set(IDENTIFIER_KEYS),
+        "identifier-producing step contract is incomplete",
+    )
+    for key, producing_step in IDENTIFIER_PRODUCING_STEPS.items():
+        step_status = step_statuses[STEP_NAMES.index(producing_step)]
+        if step_status == "passed":
+            require(
+                normalized_ids[key] is not None,
+                f"$.identifiers.{key} is required after {producing_step} passed",
+            )
+        else:
+            require(
+                normalized_ids[key] is None,
+                f"$.identifiers.{key} must be null when {producing_step} did not pass",
+            )
     for key, value in normalized_ids.items():
         if value is not None:
             require(PLACEHOLDER.search(value) is None, f"$.identifiers.{key} looks synthetic or placeholder-derived")

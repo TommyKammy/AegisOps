@@ -111,6 +111,9 @@ case, and prepares a reviewed harmless action. A distinct local operator must
 inspect the displayed action request, payload hash, and challenge, then confirm
 the macOS operator dialog or type the exact `APPROVE <challenge>` phrase on a
 TTY. Only that ceremony persists approval and allows dispatch to real Shuffle.
+Immediately before dispatch, the runner reloads the denied request and decision
+from PostgreSQL and recounts its executions; any lifecycle change or execution
+blocks the trial.
 Receipt success is passed through AegisOps reconciliation instead of inferred
 from Shuffle state. Receipt failure probes run in a rollback-only transaction;
 the trial fails if the authoritative successful execution or record count is
@@ -123,8 +126,12 @@ with mode `0700` and files with mode `0600`, plus the complete redacted report,
 below `${AEGISOPS_LAB_EVIDENCE_DIR}`. The manifest records every retained raw
 artifact digest and binds a generated evaluation record to the trial, snapshot,
 revision, and verdict. The retained `step-observations.jsonl` records the actual
-completion time of all 15 steps, and a passing manifest requires those times to
-be strictly chronological. `startup-status.txt`, `initial-status.txt`, and
+completion time of all 15 steps. The validator requires every completed or
+terminal step before `not_run` to be strictly chronological for passed,
+blocked, and failed manifests. Every verdict
+recomputes its snapshot ID from all captured inputs, and each journey identifier
+must be present only when its producing step passed. `startup-status.txt`,
+`initial-status.txt`, and
 `restart-status.txt` retain the exact status captures used by the snapshot,
 health, and restart steps. `workflow-snapshot.json` and
 `workflow-pre-dispatch.json` retain the semantically validated live exports;

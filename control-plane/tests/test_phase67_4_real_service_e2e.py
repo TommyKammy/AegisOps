@@ -597,12 +597,59 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 }
         validator.validate_manifest(manifest, SCHEMA)
 
+        mixed_snapshot = deepcopy(manifest)
+        mixed_snapshot["snapshot"]["docker_context"] = "different-colima"
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "not bound to all snapshot inputs",
+        ):
+            validator.validate_manifest(mixed_snapshot, SCHEMA)
+
+        non_chronological = deepcopy(manifest)
+        non_chronological["steps"][1]["observed_at"] = (
+            non_chronological["steps"][0]["observed_at"]
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "strictly chronological",
+        ):
+            validator.validate_manifest(non_chronological, SCHEMA)
+
+        unobserved_identifier = deepcopy(manifest)
+        unobserved_identifier["identifiers"]["native_wazuh_alert_id"] = (
+            "1754042400.123456"
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "must be null",
+        ):
+            validator.validate_manifest(unobserved_identifier, SCHEMA)
+
         manifest["steps"][3]["status"] = "passed"
         with self.assertRaisesRegex(
             validator.EvidenceValidationError,
             "steps after a blocker",
         ):
             validator.validate_manifest(manifest, SCHEMA)
+
+    def test_approval_blocked_sample_rejects_downstream_identifiers(self) -> None:
+        sample = validator.load_json(E2E_ROOT / "sample-evidence.json")
+        validator.validate_manifest(sample, SCHEMA)
+        downstream_identifiers = {
+            "shuffle_execution_id": "e89b4567-12d3-4a56-8266-426614174000",
+            "action_execution_id": "action-execution-a1b2c3d4",
+            "reconciliation_id": "reconciliation-a1b2c3d4",
+            "report_id": "report-a1b2c3d4",
+        }
+        for key, value in downstream_identifiers.items():
+            with self.subTest(key=key):
+                tampered = deepcopy(sample)
+                tampered["identifiers"][key] = value
+                with self.assertRaisesRegex(
+                    validator.EvidenceValidationError,
+                    "must be null",
+                ):
+                    validator.validate_manifest(tampered, SCHEMA)
 
     def test_runner_uses_bound_approval_challenges_and_deterministic_record_ids(self) -> None:
         challenge = journey._approval_challenge(
@@ -627,6 +674,77 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             first["denied_action_request_id"],
             first["action_request_id"],
         )
+
+    def test_denied_action_is_revalidated_from_authoritative_records(self) -> None:
+        identifiers = {
+            "denied_action_request_id": "denied-action-a1b2c3d4",
+            "denied_approval_decision_id": "denied-decision-a1b2c3d4",
+        }
+
+        def service_for(
+            *,
+            action_state: str = "rejected",
+            decision_state: str = "rejected",
+            execution_count: int = 0,
+        ) -> SimpleNamespace:
+            action = SimpleNamespace(
+                action_request_id=identifiers["denied_action_request_id"],
+                lifecycle_state=action_state,
+                approval_decision_id=identifiers[
+                    "denied_approval_decision_id"
+                ],
+                requested_payload={
+                    "shuffle_delegation_binding": {
+                        "workflow_id": "notify_identity_owner"
+                    }
+                },
+            )
+            decision = SimpleNamespace(
+                approval_decision_id=identifiers[
+                    "denied_approval_decision_id"
+                ],
+                action_request_id=identifiers["denied_action_request_id"],
+                lifecycle_state=decision_state,
+            )
+            records = {
+                identifiers["denied_action_request_id"]: action,
+                identifiers["denied_approval_decision_id"]: decision,
+            }
+            executions = [
+                SimpleNamespace(
+                    action_request_id=identifiers["denied_action_request_id"]
+                )
+                for _ in range(execution_count)
+            ]
+            return SimpleNamespace(
+                get_record=lambda _record_type, record_id: records.get(record_id),
+                _store=SimpleNamespace(list=lambda _record_type: executions),
+            )
+
+        self.assertEqual(
+            journey._authoritative_denied_action_state(
+                service_for(),
+                identifiers,
+            ),
+            {
+                "binding_reviewed": True,
+                "dispatch_rejected": True,
+                "execution_count": 0,
+            },
+        )
+        for kwargs in (
+            {"action_state": "approved"},
+            {"decision_state": "granted"},
+            {"execution_count": 1},
+        ):
+            with self.subTest(**kwargs), self.assertRaisesRegex(
+                RuntimeError,
+                "authoritative denied action state changed",
+            ):
+                journey._authoritative_denied_action_state(
+                    service_for(**kwargs),
+                    identifiers,
+                )
 
     def test_operator_runner_binds_full_scope_restart_and_cleanup(self) -> None:
         runner = (LAB_ROOT / "run-e2e-trial.sh").read_text(encoding="utf-8")
@@ -693,6 +811,18 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "delegated_at=decided_at + timedelta(seconds=1)",
             real_journey,
         )
+        self.assertNotIn(
+            "datetime.now(timezone.utc) - timedelta(seconds=5)",
+            real_journey,
+        )
+        denied_revalidation = real_journey.index(
+            "denied = _authoritative_denied_action_state(service, identifiers)"
+        )
+        delegated = real_journey.index(
+            "execution = service.delegate_approved_action_to_shuffle(",
+            denied_revalidation,
+        )
+        self.assertLess(denied_revalidation, delegated)
         real_shuffle_adapter = (
             CONTROL_PLANE_ROOT
             / "aegisops"

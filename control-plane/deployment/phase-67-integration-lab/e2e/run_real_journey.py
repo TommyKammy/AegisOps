@@ -229,6 +229,7 @@ def _prove_denied_action_non_dispatch(
         payload_hash=payload_hash,
         requested_at=requested_at,
     )
+    decided_at = datetime.now(timezone.utc)
     decision = service.persist_record(
         ApprovalDecisionRecord(
             approval_decision_id=identifiers["denied_approval_decision_id"],
@@ -236,12 +237,12 @@ def _prove_denied_action_non_dispatch(
             approver_identities=(NEGATIVE_PROBE_APPROVER_IDENTITY,),
             target_snapshot=target_scope,
             payload_hash=payload_hash,
-            decided_at=requested_at + timedelta(seconds=1),
+            decided_at=decided_at,
             lifecycle_state="rejected",
             decision_rationale="Denied control action for Phase 67.4 proof.",
             approved_expires_at=None,
         ),
-        transitioned_at=requested_at + timedelta(seconds=1),
+        transitioned_at=decided_at,
     )
     service.persist_record(
         replace(
@@ -249,14 +250,14 @@ def _prove_denied_action_non_dispatch(
             approval_decision_id=decision.approval_decision_id,
             lifecycle_state="rejected",
         ),
-        transitioned_at=requested_at + timedelta(seconds=1),
+        transitioned_at=decided_at,
     )
     rejected = False
     try:
         service.delegate_approved_action_to_shuffle(
             action_request_id=action.action_request_id,
             approved_payload=payload,
-            delegated_at=requested_at + timedelta(seconds=2),
+            delegated_at=datetime.now(timezone.utc),
             delegation_issuer=REQUESTER_IDENTITY,
             evidence_ids=("phase67-4-denied-action-proof",),
         )
@@ -273,6 +274,45 @@ def _prove_denied_action_non_dispatch(
     return {
         "binding_reviewed": binding["workflow_id"] == "notify_identity_owner",
         "dispatch_rejected": rejected,
+        "execution_count": execution_count,
+    }
+
+
+def _authoritative_denied_action_state(
+    service: AegisOpsControlPlaneService,
+    identifiers: Mapping[str, str],
+) -> dict[str, object]:
+    action = service.get_record(
+        ActionRequestRecord,
+        identifiers["denied_action_request_id"],
+    )
+    decision = service.get_record(
+        ApprovalDecisionRecord,
+        identifiers["denied_approval_decision_id"],
+    )
+    execution_count = sum(
+        record.action_request_id == identifiers["denied_action_request_id"]
+        for record in service._store.list(ActionExecutionRecord)
+    )
+    if (
+        action is None
+        or action.lifecycle_state != "rejected"
+        or action.approval_decision_id != identifiers["denied_approval_decision_id"]
+        or decision is None
+        or decision.action_request_id != identifiers["denied_action_request_id"]
+        or decision.lifecycle_state != "rejected"
+        or execution_count != 0
+    ):
+        raise RuntimeError("authoritative denied action state changed before dispatch")
+    binding = action.requested_payload.get("shuffle_delegation_binding")
+    if (
+        not isinstance(binding, Mapping)
+        or binding.get("workflow_id") != "notify_identity_owner"
+    ):
+        raise RuntimeError("authoritative denied action lost its reviewed binding")
+    return {
+        "binding_reviewed": True,
+        "dispatch_rejected": True,
         "execution_count": execution_count,
     }
 
@@ -439,7 +479,6 @@ def _prepare(args: argparse.Namespace) -> dict[str, object]:
         case_id=identifiers["case_id"],
     )
     case_observed_at = datetime.now(timezone.utc)
-    now = datetime.now(timezone.utc) - timedelta(seconds=5)
     target_scope = {
         "record_family": "case",
         "record_id": case.case_id,
@@ -463,7 +502,7 @@ def _prepare(args: argparse.Namespace) -> dict[str, object]:
         target_scope=target_scope,
         payload=payload,
         payload_hash=payload_hash,
-        requested_at=now,
+        requested_at=datetime.now(timezone.utc),
     )
     action_observed_at = datetime.now(timezone.utc)
     denied = _prove_denied_action_non_dispatch(
@@ -471,7 +510,7 @@ def _prepare(args: argparse.Namespace) -> dict[str, object]:
         identifiers=identifiers,
         case=case,
         target_scope=target_scope,
-        requested_at=now + timedelta(seconds=1),
+        requested_at=datetime.now(timezone.utc),
     )
     denied_observed_at = datetime.now(timezone.utc)
     challenge = _approval_challenge(
@@ -582,6 +621,7 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
     binding = payload.get("shuffle_delegation_binding")
     if not isinstance(binding, Mapping):
         raise RuntimeError("prepared action lacks the reviewed Shuffle binding")
+    denied = _authoritative_denied_action_state(service, identifiers)
     delegated_at = datetime.now(timezone.utc)
     execution = service.delegate_approved_action_to_shuffle(
         action_request_id=action.action_request_id,

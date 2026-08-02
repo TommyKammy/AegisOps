@@ -44,8 +44,8 @@ assert_fails_with \
   'looks synthetic or placeholder-derived' \
   mutate_json '.identifiers.native_wazuh_alert_id = "fixture-alert-1"'
 assert_fails_with \
-  synthetic-shuffle-id \
-  'synthetic Shuffle execution ID' \
+  unobserved-shuffle-id \
+  'must be null' \
   mutate_json '.identifiers.shuffle_execution_id = "shuffle-run-123"'
 assert_fails_with \
   missing-step \
@@ -55,6 +55,14 @@ assert_fails_with \
   mixed-snapshot \
   'mixed snapshot' \
   mutate_json '.steps[8].snapshot_id = "phase67-snapshot-fedcba9876543210"'
+assert_fails_with \
+  unbound-blocked-snapshot \
+  'not bound to all snapshot inputs' \
+  mutate_json '.snapshot.docker_context = "tampered-colima"'
+assert_fails_with \
+  non-chronological-blocked-steps \
+  'strictly chronological' \
+  mutate_json '.steps[1].observed_at = .steps[0].observed_at'
 assert_fails_with \
   same-actor \
   'a non-passed approval step cannot claim an approver or approval event' \

@@ -151,7 +151,10 @@ receipt, exports a redacted AegisOps report, restarts the lab, checks
 authoritative record persistence, and stops the lab without deleting volumes
 or evidence. The runner records each completed step in
 `step-observations.jsonl`; the evidence builder rejects missing, reordered, or
-non-chronological observations. Synthetic receipt failure probes execute
+non-chronological observations. After the interactive pause and immediately
+before approved dispatch, the runner reloads the denied request, rejection
+decision, and authoritative execution count and fails if that proof changed.
+Synthetic receipt failure probes execute
 through the real reconciliation service inside a rollback-only transaction,
 and the runner verifies that the successful authoritative execution is
 unchanged before publishing evidence. The snapshot ID commits to the revision,
