@@ -44,7 +44,38 @@ SCHEMA = validator.load_json(E2E_ROOT / "evidence-manifest.schema.json")
 
 
 def _manifest() -> dict[str, object]:
-    snapshot_id = "phase67-snapshot-0123456789abcdef"
+    trial_run_id = "phase67-e2e-20260801T100000Z-0123456789ab"
+    snapshot: dict[str, object] = {
+        "repository_revision": "a" * 40,
+        "compose_sha256": "b" * 64,
+        "evidence_schema_sha256": "c" * 64,
+        "runtime_artifact_sha256": "d" * 64,
+        "host_architecture": "arm64",
+        "docker_context": "colima",
+        "colima_profile": "default",
+        "selected_profile": "full",
+        "images": [
+            {
+                "service": "control-plane",
+                "immutable_reference": "control-plane@sha256:" + "e" * 64,
+            },
+            {
+                "service": "wazuh-manager",
+                "immutable_reference": "wazuh/wazuh-manager@sha256:" + "f" * 64,
+            },
+            {
+                "service": "shuffle-backend",
+                "immutable_reference": "frikky/shuffle-backend@sha256:" + "1" * 64,
+            },
+            {
+                "service": "shuffle-action-image",
+                "immutable_reference": "ghcr.io/aegisops/shuffle-tools@sha256:"
+                + "3" * 64,
+            },
+        ],
+    }
+    snapshot_id = validator._snapshot_identifier(trial_run_id, snapshot)
+    snapshot["snapshot_id"] = snapshot_id
     observed_at = "2026-08-01T10:00:00Z"
     steps = [
         {
@@ -61,39 +92,8 @@ def _manifest() -> dict[str, object]:
         "schema_version": validator.SCHEMA_VERSION,
         "captured_at": "2026-08-01T10:00:16Z",
         "source_mode": "real_services",
-        "trial_run_id": "phase67-e2e-20260801T100000Z-0123456789ab",
-        "snapshot": {
-            "snapshot_id": snapshot_id,
-            "repository_revision": "a" * 40,
-            "compose_sha256": "b" * 64,
-            "evidence_schema_sha256": "c" * 64,
-            "runtime_artifact_sha256": "d" * 64,
-            "host_architecture": "arm64",
-            "docker_context": "colima",
-            "colima_profile": "default",
-            "selected_profile": "full",
-            "images": [
-                {
-                    "service": "control-plane",
-                    "immutable_reference": "control-plane@sha256:" + "e" * 64,
-                },
-                {
-                    "service": "wazuh-manager",
-                    "immutable_reference": "wazuh/wazuh-manager@sha256:"
-                    + "f" * 64,
-                },
-                {
-                    "service": "shuffle-backend",
-                    "immutable_reference": "frikky/shuffle-backend@sha256:"
-                    + "1" * 64,
-                },
-                {
-                    "service": "shuffle-action-image",
-                    "immutable_reference": "ghcr.io/aegisops/shuffle-tools@sha256:"
-                    + "3" * 64,
-                },
-            ],
-        },
+        "trial_run_id": trial_run_id,
+        "snapshot": snapshot,
         "steps": steps,
         "identifiers": {
             "wazuh_manager_id": "wazuh.manager",
@@ -379,6 +379,71 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         ):
             validator.validate_manifest(stale_evaluation, SCHEMA)
 
+        altered_snapshot = _manifest()
+        altered_snapshot["snapshot"]["docker_context"] = "different-colima"
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "not bound to all snapshot inputs",
+        ):
+            validator.validate_manifest(altered_snapshot, SCHEMA)
+
+    def test_snapshot_identifier_commits_to_every_environment_input(self) -> None:
+        manifest = _manifest()
+        trial_run_id = manifest["trial_run_id"]
+        snapshot = manifest["snapshot"]
+        baseline = validator._snapshot_identifier(trial_run_id, snapshot)
+        mutations = {
+            "repository_revision": "9" * 40,
+            "compose_sha256": "8" * 64,
+            "evidence_schema_sha256": "7" * 64,
+            "runtime_artifact_sha256": "6" * 64,
+            "host_architecture": "aarch64",
+            "docker_context": "colima-review",
+            "colima_profile": "review",
+            "selected_profile": "full-review",
+        }
+        for field_name, value in mutations.items():
+            with self.subTest(field_name=field_name):
+                changed = deepcopy(snapshot)
+                changed[field_name] = value
+                self.assertNotEqual(
+                    validator._snapshot_identifier(trial_run_id, changed),
+                    baseline,
+                )
+        changed_image = deepcopy(snapshot)
+        changed_image["images"][0]["immutable_reference"] = (
+            "control-plane@sha256:" + "5" * 64
+        )
+        self.assertNotEqual(
+            validator._snapshot_identifier(trial_run_id, changed_image),
+            baseline,
+        )
+
+    def test_status_evidence_requires_one_complete_image_identity(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            status_path = Path(temporary_directory) / "status.txt"
+            status_path.write_text(
+                "control_plane_container_image_id=sha256:" + "a" * 64 + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                builder._status_value(
+                    status_path,
+                    "control_plane_container_image_id",
+                ),
+                "sha256:" + "a" * 64,
+            )
+            status_path.write_text(
+                "control_plane_container_image_id=sha256:" + "a" * 64 + "\n"
+                "control_plane_container_image_id=sha256:" + "b" * 64 + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "exactly one"):
+                builder._status_value(
+                    status_path,
+                    "control_plane_container_image_id",
+                )
+
     def test_validator_rejects_unmeasured_negative_and_missing_artifact(self) -> None:
         unmeasured = _manifest()
         unmeasured["negative_cases"]["failed_execution"]["authority_delta"] = 0
@@ -556,6 +621,18 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn('--approver-identity "${approver_identity}"', runner)
         self.assertIn('"shuffle-action-image"', runner)
         self.assertIn('final_artifacts=', runner)
+        self.assertIn('startup_status_output=', runner)
+        self.assertIn('initial_status_output=', runner)
+        self.assertIn('restart_status_output=', runner)
+        self.assertIn('retain_status_evidence "${startup_output}"', runner)
+        self.assertIn('--startup-status "${startup_status_output}"', runner)
+        snapshot_completed = runner.index('>"${snapshot_output}"')
+        step_one_recorded = runner.index('record_step 1 "capture_immutable_snapshot"')
+        initial_status_retained = runner.index(
+            '"${initial_status_output}"\nrecord_step 2'
+        )
+        self.assertLess(snapshot_completed, step_one_recorded)
+        self.assertLess(step_one_recorded, initial_status_retained)
         self.assertNotIn("docker inspect ${container_ids}", runner)
         self.assertNotIn("docker context show", runner)
         self.assertNotIn('colima_profile="${COLIMA_PROFILE:-default}"', runner)

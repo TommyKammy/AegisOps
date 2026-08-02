@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -76,6 +77,9 @@ ARTIFACT_NAMES = {
     "images.json",
     "evaluation-record.json",
     "step-observations.jsonl",
+    "startup-status.txt",
+    "initial-status.txt",
+    "restart-status.txt",
 }
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 REVISION = re.compile(r"^[0-9a-f]{40}$")
@@ -236,7 +240,32 @@ def _validate_schema_contract(schema: object) -> None:
     require(root.get("additionalProperties") is False, "schema must reject extra fields")
 
 
-def _validate_snapshot(value: object) -> Mapping[str, object]:
+def _snapshot_identifier(
+    trial_run_id: str,
+    snapshot: Mapping[str, object],
+) -> str:
+    payload = {
+        "trial_run_id": trial_run_id,
+        **{
+            key: value
+            for key, value in snapshot.items()
+            if key != "snapshot_id"
+        },
+    }
+    encoded = json.dumps(
+        payload,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    return "phase67-snapshot-" + hashlib.sha256(encoded).hexdigest()[:16]
+
+
+def _validate_snapshot(
+    value: object,
+    *,
+    trial_run_id: str,
+    enforce_identifier_binding: bool,
+) -> Mapping[str, object]:
     snapshot = require_mapping(value, "$.snapshot")
     require_exact_keys(
         snapshot,
@@ -277,6 +306,11 @@ def _validate_snapshot(value: object) -> Mapping[str, object]:
         "shuffle-action-image" in services,
         "$.snapshot.images omits the dynamic Shuffle action image",
     )
+    if enforce_identifier_binding:
+        require(
+            snapshot["snapshot_id"] == _snapshot_identifier(trial_run_id, snapshot),
+            "$.snapshot.snapshot_id is not bound to all snapshot inputs",
+        )
     return snapshot
 
 
@@ -372,10 +406,15 @@ def validate_manifest(manifest: object, schema: object) -> None:
     require(root["schema_version"] == SCHEMA_VERSION, "$.schema_version is invalid")
     require_datetime(root["captured_at"], "$.captured_at")
     require(root["source_mode"] == "real_services", "$.source_mode must be real_services")
-    require(TRIAL_ID.fullmatch(require_string(root["trial_run_id"], "$.trial_run_id")) is not None, "$.trial_run_id is invalid")
+    trial_run_id = require_string(root["trial_run_id"], "$.trial_run_id")
+    require(TRIAL_ID.fullmatch(trial_run_id) is not None, "$.trial_run_id is invalid")
     verdict = require_string(root["verdict"], "$.verdict")
     require(verdict in VERDICTS, "$.verdict is not in the reviewed vocabulary")
-    snapshot = _validate_snapshot(root["snapshot"])
+    snapshot = _validate_snapshot(
+        root["snapshot"],
+        trial_run_id=trial_run_id,
+        enforce_identifier_binding=verdict.startswith("integration_trial_passed"),
+    )
     snapshot_id = require_string(snapshot["snapshot_id"], "$.snapshot.snapshot_id")
     step_statuses = _validate_steps(root["steps"], snapshot_id, verdict)
 

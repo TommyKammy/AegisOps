@@ -45,6 +45,9 @@ snapshot_output="${staging_dir}/snapshot.json"
 images_output="${staging_dir}/images.json"
 evaluation_record_output="${staging_dir}/evaluation-record.json"
 observations_output="${staging_dir}/step-observations.jsonl"
+startup_status_output="${staging_dir}/startup-status.txt"
+initial_status_output="${staging_dir}/initial-status.txt"
+restart_status_output="${staging_dir}/restart-status.txt"
 evidence_output="${staging_dir}/evidence.json"
 cleaned=false
 
@@ -65,6 +68,20 @@ record_step() {
     >>"${observations_output}"
 }
 
+retain_status_evidence() {
+  local command_output="$1"
+  local destination="$2"
+  local source
+
+  source="$(
+    printf '%s\n' "${command_output}" |
+      sed -n 's/^evidence=//p' |
+      tail -n 1
+  )"
+  [[ -f "${source}" ]] || fail "lab status evidence was not published"
+  cp "${source}" "${destination}"
+}
+
 cleanup_on_exit() {
   local rc=$?
   if [[ "${cleaned}" != true ]]; then
@@ -83,19 +100,11 @@ compose_render_sha256="$(
     awk '{print $1}'
 )"
 schema_sha256="$(openssl dgst -sha256 -r "${schema}" | awk '{print $1}')"
-snapshot_id="phase67-snapshot-$(
-  printf '%s\0%s\0%s\0%s' \
-    "${repository_revision}" \
-    "${compose_render_sha256}" \
-    "${schema_sha256}" \
-    "${trial_run_id}" |
-    openssl dgst -sha256 -r |
-    awk '{print substr($1, 1, 16)}'
-)"
-record_step 1 "capture_immutable_snapshot"
 
 "${LAB_DIR}/pin-shuffle-app-image.sh"
-"${LAB_DIR}/up.sh" full
+startup_output="$("${LAB_DIR}/up.sh" full)"
+printf '%s\n' "${startup_output}"
+retain_status_evidence "${startup_output}" "${startup_status_output}"
 
 container_ids="$(compose_scope full ps -q)"
 [[ -n "${container_ids}" ]] || fail "full lab started no containers"
@@ -123,6 +132,63 @@ jq \
   '. + [{service: $service, immutable_reference: $immutable_reference}] | sort_by(.service)' \
   "${images_output}" >"${images_output}.next"
 mv "${images_output}.next" "${images_output}"
+runtime_artifact_sha256="$(
+  sed -n 's/^repository_runtime_artifact_sha256=//p' \
+    "${startup_status_output}" |
+    tail -n 1
+)"
+[[ "${runtime_artifact_sha256}" =~ ^[0-9a-f]{64}$ ]] \
+  || fail "startup status lacks the runtime artifact digest"
+docker_context="${AEGISOPS_LAB_DOCKER_CONTEXT}"
+colima_profile="${AEGISOPS_LAB_COLIMA_PROFILE}"
+host_architecture="$(uname -m)"
+snapshot_staging="${snapshot_output}.staging"
+jq -n \
+  --arg trial_run_id "${trial_run_id}" \
+  --arg repository_revision "${repository_revision}" \
+  --arg compose_sha256 "${compose_render_sha256}" \
+  --arg evidence_schema_sha256 "${schema_sha256}" \
+  --arg runtime_artifact_sha256 "${runtime_artifact_sha256}" \
+  --arg host_architecture "${host_architecture}" \
+  --arg docker_context "${docker_context}" \
+  --arg colima_profile "${colima_profile}" \
+  --slurpfile images "${images_output}" '
+    {
+      trial_run_id: $trial_run_id,
+      repository_revision: $repository_revision,
+      compose_sha256: $compose_sha256,
+      evidence_schema_sha256: $evidence_schema_sha256,
+      runtime_artifact_sha256: $runtime_artifact_sha256,
+      host_architecture: $host_architecture,
+      docker_context: $docker_context,
+      colima_profile: $colima_profile,
+      selected_profile: "full",
+      images: $images[0]
+    }
+  ' >"${snapshot_staging}"
+snapshot_id="$(
+  python3 - "${snapshot_staging}" <<'PY'
+from pathlib import Path
+import hashlib
+import json
+import sys
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+print("phase67-snapshot-" + hashlib.sha256(encoded).hexdigest()[:16])
+PY
+)"
+jq --arg snapshot_id "${snapshot_id}" \
+  '. + {snapshot_id: $snapshot_id}' \
+  "${snapshot_staging}" >"${snapshot_output}"
+rm -f "${snapshot_staging}"
+record_step 1 "capture_immutable_snapshot"
+
+initial_status_command_output="$("${LAB_DIR}/status.sh" full --write-evidence)"
+printf '%s\n' "${initial_status_command_output}"
+retain_status_evidence \
+  "${initial_status_command_output}" \
+  "${initial_status_output}"
 record_step 2 "start_lab_and_record_health"
 
 AEGISOPS_LAB_TRIAL_SCOPE=full \
@@ -243,7 +309,9 @@ Path(sys.argv[2]).write_text(
 PY
 
 "${LAB_DIR}/down.sh"
-"${LAB_DIR}/up.sh" full
+restart_up_output="$("${LAB_DIR}/up.sh" full)"
+printf '%s\n' "${restart_up_output}"
+retain_status_evidence "${restart_up_output}" "${restart_status_output}"
 jq -c '.journey | .aegisops_alert_id = .alert_id' "${journey_output}" |
   compose_scope full exec -T \
     -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE="${shuffle_tools_image}" \
@@ -258,35 +326,6 @@ record_step 14 \
 
 [[ "$(git -C "${REPO_ROOT}" rev-parse HEAD)" == "${repository_revision}" ]] \
   || fail "repository revision changed during the E2E trial"
-runtime_artifact_sha256="$(jq -er '.runtime_artifact_digest' "${wazuh_evidence}")"
-docker_context="${AEGISOPS_LAB_DOCKER_CONTEXT}"
-colima_profile="${AEGISOPS_LAB_COLIMA_PROFILE}"
-jq -n \
-  --arg trial_run_id "${trial_run_id}" \
-  --arg snapshot_id "${snapshot_id}" \
-  --arg repository_revision "${repository_revision}" \
-  --arg compose_sha256 "${compose_render_sha256}" \
-  --arg evidence_schema_sha256 "${schema_sha256}" \
-  --arg runtime_artifact_sha256 "${runtime_artifact_sha256}" \
-  --arg host_architecture "$(uname -m)" \
-  --arg docker_context "${docker_context}" \
-  --arg colima_profile "${colima_profile}" \
-  --slurpfile images "${images_output}" '
-    {
-      trial_run_id: $trial_run_id,
-      snapshot_id: $snapshot_id,
-      repository_revision: $repository_revision,
-      compose_sha256: $compose_sha256,
-      evidence_schema_sha256: $evidence_schema_sha256,
-      runtime_artifact_sha256: $runtime_artifact_sha256,
-      host_architecture: $host_architecture,
-      docker_context: $docker_context,
-      colima_profile: $colima_profile,
-      selected_profile: "full",
-      images: $images[0]
-    }
-  ' >"${snapshot_output}"
-
 evaluated_at="$(observed_now)"
 jq -n \
   --arg evaluated_at "${evaluated_at}" \
@@ -325,6 +364,9 @@ python3 "${builder}" \
   --evaluation "${evaluation}" \
   --evaluation-record "${evaluation_record_output}" \
   --observations "${observations_output}" \
+  --startup-status "${startup_status_output}" \
+  --initial-status "${initial_status_output}" \
+  --restart-status "${restart_status_output}" \
   --artifacts-directory-name "${trial_run_id}-artifacts" \
   --output "${evidence_output}"
 python3 "${validator}" "${schema}" "${evidence_output}"

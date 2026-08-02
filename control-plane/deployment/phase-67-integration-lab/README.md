@@ -154,7 +154,10 @@ or evidence. The runner records each completed step in
 non-chronological observations. Synthetic receipt failure probes execute
 through the real reconciliation service inside a rollback-only transaction,
 and the runner verifies that the successful authoritative execution is
-unchanged before publishing evidence.
+unchanged before publishing evidence. The snapshot ID commits to the revision,
+rendered Compose and schema digests, startup runtime digest, host and Colima
+identity, selected profile, and every immutable image reference. Startup,
+initial health, and restart status captures are retained with the raw packet.
 
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 

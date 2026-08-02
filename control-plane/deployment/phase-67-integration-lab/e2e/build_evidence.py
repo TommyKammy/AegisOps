@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Mapping, Sequence
 
@@ -30,7 +31,7 @@ STEP_NAMES = (
 )
 STEP_EVIDENCE_REFS = (
     ("snapshot",),
-    ("lab-status:full",),
+    ("artifact:initial-status.txt",),
     ("wazuh-manifest:native_wazuh_alert_id",),
     ("wazuh-manifest:aegisops_alert_id",),
     ("journey:case_id",),
@@ -42,7 +43,7 @@ STEP_EVIDENCE_REFS = (
     ("report:sha256",),
     ("wazuh-manifest:duplicate_delivery", "journey:replay_reconciliation_id"),
     ("wazuh-command:negative-boundaries", "journey:measured_negative_probes"),
-    ("restart:checked_identifiers",),
+    ("restart:checked_identifiers", "artifact:restart-status.txt"),
     ("evaluation-record:sha256",),
 )
 
@@ -69,6 +70,18 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _status_value(path: Path, key: str) -> str:
+    prefix = f"{key}="
+    matches = [
+        line[len(prefix) :].strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.startswith(prefix)
+    ]
+    if len(matches) != 1 or matches[0] == "":
+        raise ValueError(f"{path.name} must contain exactly one {key}")
+    return matches[0]
 
 
 def _required_text(value: object, path: str) -> str:
@@ -142,6 +155,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--evaluation", type=Path, required=True)
     parser.add_argument("--evaluation-record", type=Path, required=True)
     parser.add_argument("--observations", type=Path, required=True)
+    parser.add_argument("--startup-status", type=Path, required=True)
+    parser.add_argument("--initial-status", type=Path, required=True)
+    parser.add_argument("--restart-status", type=Path, required=True)
     parser.add_argument("--artifacts-directory-name", required=True)
     parser.add_argument("--output", type=Path, required=True)
     return parser
@@ -162,6 +178,30 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     observations = _load_step_observations(args.observations)
     wazuh_output = args.wazuh_output.read_text(encoding="utf-8")
     evaluation = args.evaluation.read_text(encoding="utf-8")
+    for status_path in (
+        args.startup_status,
+        args.initial_status,
+        args.restart_status,
+    ):
+        if _status_value(status_path, "repository_commit") != snapshot.get(
+            "repository_revision"
+        ):
+            raise ValueError(f"{status_path.name} uses a different revision")
+        if _status_value(status_path, "repository_runtime_state") != "clean":
+            raise ValueError(f"{status_path.name} was captured from a dirty runtime")
+        if _status_value(
+            status_path,
+            "repository_runtime_artifact_sha256",
+        ) != snapshot.get("runtime_artifact_sha256"):
+            raise ValueError(f"{status_path.name} uses different runtime artifacts")
+        control_plane_image_id = _status_value(
+            status_path,
+            "control_plane_container_image_id",
+        )
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", control_plane_image_id) is None:
+            raise ValueError(
+                f"{status_path.name} lacks the control-plane image identity"
+            )
     for required_line in (
         "PASS invalid_bearer_secret=403",
         "PASS proxy_bypass=403",
@@ -275,6 +315,9 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         "images.json": args.images,
         "evaluation-record.json": args.evaluation_record,
         "step-observations.jsonl": args.observations,
+        "startup-status.txt": args.startup_status,
+        "initial-status.txt": args.initial_status,
+        "restart-status.txt": args.restart_status,
     }
 
     return {
