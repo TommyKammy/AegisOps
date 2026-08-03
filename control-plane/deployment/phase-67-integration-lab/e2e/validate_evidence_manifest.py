@@ -22,6 +22,14 @@ VERDICTS = {
     "integration_trial_blocked",
     "integration_trial_failed",
 }
+OWNED_LIMITATION_STATUSES = {
+    "phase67-single-host": "accepted",
+    "phase67-bounded-connectors": "follow_up_required",
+    "phase67-ga-gates-open": "blocking",
+}
+LEGACY_APPROVAL_BLOCKER_STATUSES = {
+    "phase67-independent-human-approval-required": "blocking",
+}
 STEP_NAMES = (
     "capture_immutable_snapshot",
     "start_lab_and_record_health",
@@ -875,18 +883,59 @@ def validate_manifest(manifest: object, schema: object) -> None:
     require(root["authority_posture"] == "aegisops_records_remain_authoritative", "$.authority_posture is invalid")
     limitations = root["limitations"]
     require(isinstance(limitations, list) and limitations, "$.limitations must be non-empty")
-    seen_limitations: set[str] = set()
+    limitation_statuses: dict[str, str] = {}
     for index, item in enumerate(limitations):
         limitation = require_mapping(item, f"$.limitations[{index}]")
         require_exact_keys(limitation, required=("limitation_id", "owner", "status", "description"), optional=("follow_up_issue",), path=f"$.limitations[{index}]")
         limitation_id = require_string(limitation["limitation_id"], f"$.limitations[{index}].limitation_id")
-        require(limitation_id not in seen_limitations, "duplicate limitation_id")
-        seen_limitations.add(limitation_id)
+        require(limitation_id not in limitation_statuses, "duplicate limitation_id")
         require_string(limitation["owner"], f"$.limitations[{index}].owner")
-        require(limitation["status"] in {"accepted", "follow_up_required", "blocking"}, f"$.limitations[{index}].status is invalid")
+        limitation_status = require_string(
+            limitation["status"],
+            f"$.limitations[{index}].status",
+        )
+        require(
+            limitation_status in {"accepted", "follow_up_required", "blocking"},
+            f"$.limitations[{index}].status is invalid",
+        )
+        limitation_statuses[limitation_id] = limitation_status
         require_string(limitation["description"], f"$.limitations[{index}].description")
         follow_up = limitation.get("follow_up_issue")
         require(follow_up is None or (isinstance(follow_up, str) and re.fullmatch(r"#[0-9]+", follow_up) is not None), f"$.limitations[{index}].follow_up_issue must be an issue reference or null")
+    if allow_legacy_blocked_refs:
+        require(
+            limitation_statuses == LEGACY_APPROVAL_BLOCKER_STATUSES,
+            "historical approval-blocked limitation contract is incomplete",
+        )
+    else:
+        for limitation_id, expected_status in OWNED_LIMITATION_STATUSES.items():
+            require(
+                limitation_statuses.get(limitation_id) == expected_status,
+                f"$.limitations must retain {limitation_id} with status {expected_status}",
+            )
+        if verdict.startswith("integration_trial_passed"):
+            require(
+                limitation_statuses == OWNED_LIMITATION_STATUSES,
+                "passed trial limitation set must match the reviewed owned limitations",
+            )
+        else:
+            terminal_status = (
+                "blocked"
+                if verdict == "integration_trial_blocked"
+                else "failed"
+            )
+            terminal_step = STEP_NAMES[step_statuses.index(terminal_status)]
+            terminal_limitation_id = (
+                f"phase67-{terminal_status}-{terminal_step.replace('_', '-')}"
+            )
+            expected_statuses = {
+                **OWNED_LIMITATION_STATUSES,
+                terminal_limitation_id: "blocking",
+            }
+            require(
+                limitation_statuses == expected_statuses,
+                "blocked or failed trial limitation set must match its terminal step",
+            )
     _scan_secret_values(root)
 
 

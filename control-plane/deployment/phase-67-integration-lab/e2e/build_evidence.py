@@ -51,11 +51,20 @@ STEP_EVIDENCE_REFS = (
     ("evaluation-record:sha256",),
 )
 
-LIMITATION_IDS = (
-    "phase67-single-host",
-    "phase67-bounded-connectors",
-    "phase67-ga-gates-open",
-)
+LIMITATION_STATUSES = {
+    "phase67-single-host": "accepted",
+    "phase67-bounded-connectors": "follow_up_required",
+    "phase67-ga-gates-open": "blocking",
+}
+LIMITATION_IDS = tuple(LIMITATION_STATUSES)
+REPORT_RECORD_ID_FIELDS = {
+    "alert": "alert_id",
+    "case": "case_id",
+    "action_request": "action_request_id",
+    "approval_decision": "approval_decision_id",
+    "action_execution": "action_execution_id",
+    "reconciliation": "reconciliation_id",
+}
 
 
 def _mapping(value: object, path: str) -> Mapping[str, object]:
@@ -102,6 +111,103 @@ def _required_text(value: object, path: str) -> str:
     if not isinstance(value, str) or value.strip() == "":
         raise ValueError(f"{path} must be a non-empty string")
     return value.strip()
+
+
+def _validate_trial_report_scope(
+    report: Mapping[str, object],
+    journey: Mapping[str, object],
+) -> None:
+    records = _mapping(report.get("records"), "report.records")
+    if set(records) != set(REPORT_RECORD_ID_FIELDS):
+        raise ValueError("report record families do not match the Phase 67 trial scope")
+
+    expected_ids = {
+        "alert": {journey.get("alert_id")},
+        "case": {journey.get("case_id")},
+        "action_request": {
+            journey.get("denied_action_request_id"),
+            journey.get("action_request_id"),
+        },
+        "approval_decision": {
+            journey.get("denied_approval_decision_id"),
+            journey.get("approval_decision_id"),
+        },
+        "action_execution": {journey.get("action_execution_id")},
+    }
+    for family, family_expected_ids in expected_ids.items():
+        if not all(
+            isinstance(record_id, str) and record_id.strip()
+            for record_id in family_expected_ids
+        ):
+            raise ValueError(f"journey lacks the {family} report scope")
+        family_records = records[family]
+        if not isinstance(family_records, list):
+            raise ValueError(f"report.records.{family} must be an array")
+        observed_ids = {
+            _required_text(
+                _mapping(item, f"report.records.{family}[{index}]").get(
+                    REPORT_RECORD_ID_FIELDS[family]
+                ),
+                f"report.records.{family}[{index}].{REPORT_RECORD_ID_FIELDS[family]}",
+            )
+            for index, item in enumerate(family_records)
+        }
+        if observed_ids != family_expected_ids or len(family_records) != len(
+            family_expected_ids
+        ):
+            raise ValueError(f"report.records.{family} is not scoped to this trial")
+
+    reconciliation_records = records["reconciliation"]
+    if not isinstance(reconciliation_records, list) or not reconciliation_records:
+        raise ValueError("report must retain trial reconciliation records")
+    reconciliation_ids: set[str] = set()
+    wazuh_reconciliation_ids = journey.get("wazuh_reconciliation_ids")
+    if (
+        not isinstance(wazuh_reconciliation_ids, list)
+        or not wazuh_reconciliation_ids
+        or any(
+            not isinstance(record_id, str) or not record_id.strip()
+            for record_id in wazuh_reconciliation_ids
+        )
+        or len(set(wazuh_reconciliation_ids)) != len(wazuh_reconciliation_ids)
+    ):
+        raise ValueError("journey lacks unique Wazuh reconciliation IDs")
+    for index, item in enumerate(reconciliation_records):
+        record = _mapping(item, f"report.records.reconciliation[{index}]")
+        reconciliation_ids.add(
+            _required_text(
+                record.get("reconciliation_id"),
+                f"report.records.reconciliation[{index}].reconciliation_id",
+            )
+        )
+        linked_execution_ids = record.get("linked_execution_run_ids")
+        if not isinstance(linked_execution_ids, list):
+            raise ValueError(
+                f"report.records.reconciliation[{index}].linked_execution_run_ids "
+                "must be an array"
+            )
+        if not (
+            record.get("alert_id") == journey.get("alert_id")
+            or record.get("finding_id") == journey.get("finding_id")
+            or record.get("execution_run_id") == journey.get("execution_id")
+            or journey.get("execution_id") in linked_execution_ids
+        ):
+            raise ValueError(
+                "report.records.reconciliation contains a record outside this trial"
+            )
+    if len(reconciliation_ids) != len(reconciliation_records):
+        raise ValueError("report.records.reconciliation contains duplicate IDs")
+    expected_reconciliation_ids = {
+        *wazuh_reconciliation_ids,
+        _required_text(
+            journey.get("reconciliation_id"),
+            "journey.reconciliation_id",
+        ),
+    }
+    if reconciliation_ids != expected_reconciliation_ids:
+        raise ValueError(
+            "report.records.reconciliation is not scoped to this trial"
+        )
 
 
 def _load_step_observations(path: Path) -> list[dict[str, object]]:
@@ -272,6 +378,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         raise ValueError("report digest does not match the journey")
     if report.get("source_of_truth") != "aegisops_authoritative_records":
         raise ValueError("report is not derived from AegisOps source records")
+    _validate_trial_report_scope(report, journey)
     if wazuh.get("aegisops_alert_id") != journey.get("alert_id"):
         raise ValueError("Wazuh admission and case journey use different alerts")
     if wazuh.get("first_delivery", {}).get("finding_id") != journey.get("finding_id"):
@@ -476,21 +583,21 @@ def build(args: argparse.Namespace) -> dict[str, object]:
             {
                 "limitation_id": "phase67-single-host",
                 "owner": "AegisOps platform operations",
-                "status": "accepted",
+                "status": LIMITATION_STATUSES["phase67-single-host"],
                 "description": "Evidence covers one non-production single-host Colima lab.",
                 "follow_up_issue": None,
             },
             {
                 "limitation_id": "phase67-bounded-connectors",
                 "owner": "AegisOps integration engineering",
-                "status": "follow_up_required",
+                "status": LIMITATION_STATUSES["phase67-bounded-connectors"],
                 "description": "Evidence covers one Wazuh rule and one reviewed harmless Shuffle workflow.",
                 "follow_up_issue": None,
             },
             {
                 "limitation_id": "phase67-ga-gates-open",
                 "owner": "AegisOps release owner",
-                "status": "blocking",
+                "status": LIMITATION_STATUSES["phase67-ga-gates-open"],
                 "description": "Production operations, design-partner evidence, scale, HA, and disaster recovery gates remain open.",
                 "follow_up_issue": None,
             },

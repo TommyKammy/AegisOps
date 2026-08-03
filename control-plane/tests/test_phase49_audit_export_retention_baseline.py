@@ -14,6 +14,9 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops.control_plane.config import RuntimeConfig
 from aegisops.control_plane.models import EvidenceRecord
+from aegisops.control_plane.reporting.audit_export import (
+    export_audit_retention_baseline,
+)
 from aegisops.control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 
@@ -141,6 +144,53 @@ class Phase49AuditExportRetentionBaselineTests(unittest.TestCase):
             ),
             "invalid export IDs must be rejected before the export snapshot opens",
         )
+
+    def test_low_level_audit_export_enforces_an_explicit_record_scope(self) -> None:
+        store, _backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        acquired_at = datetime(2026, 4, 29, 2, 0, tzinfo=timezone.utc)
+        for suffix in ("current", "previous"):
+            service.persist_record(
+                EvidenceRecord(
+                    evidence_id=f"evidence-{suffix}",
+                    source_record_id=f"native-{suffix}",
+                    alert_id=f"alert-{suffix}",
+                    case_id=None,
+                    source_system="wazuh",
+                    collector_identity="collector://wazuh/replay",
+                    acquired_at=acquired_at,
+                    derivation_relationship="native_detection_record",
+                    lifecycle_state="collected",
+                ),
+                transitioned_at=acquired_at,
+            )
+
+        export = export_audit_retention_baseline(
+            store=store,
+            record_types=(EvidenceRecord,),
+            export_id="audit-export-scoped",
+            exported_at=acquired_at,
+            record_ids_by_family={"evidence": frozenset({"evidence-current"})},
+        )
+        self.assertEqual(
+            [record["evidence_id"] for record in export["records"]["evidence"]],
+            ["evidence-current"],
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "does not match authoritative records",
+        ):
+            export_audit_retention_baseline(
+                store=store,
+                record_types=(EvidenceRecord,),
+                export_id="audit-export-missing-record",
+                exported_at=acquired_at,
+                record_ids_by_family={"evidence": frozenset({"evidence-missing"})},
+            )
 
 
 if __name__ == "__main__":

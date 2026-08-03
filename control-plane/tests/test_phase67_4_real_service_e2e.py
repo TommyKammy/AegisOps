@@ -205,12 +205,26 @@ def _manifest() -> dict[str, object]:
         "verdict": "integration_trial_passed_with_owned_limitations",
         "limitations": [
             {
-                "limitation_id": "single-host",
+                "limitation_id": "phase67-single-host",
                 "owner": "AegisOps platform operations",
                 "status": "accepted",
                 "description": "One bounded non-production host was exercised.",
                 "follow_up_issue": None,
-            }
+            },
+            {
+                "limitation_id": "phase67-bounded-connectors",
+                "owner": "AegisOps integration engineering",
+                "status": "follow_up_required",
+                "description": "One Wazuh rule and one Shuffle workflow were exercised.",
+                "follow_up_issue": None,
+            },
+            {
+                "limitation_id": "phase67-ga-gates-open",
+                "owner": "AegisOps release owner",
+                "status": "blocking",
+                "description": "Production and GA gates remain open.",
+                "follow_up_issue": None,
+            },
         ],
     }
 
@@ -218,6 +232,10 @@ def _manifest() -> dict[str, object]:
 class Phase674RealServiceE2ETests(unittest.TestCase):
     def test_valid_evidence_enforces_the_complete_real_identifier_chain(self) -> None:
         self.assertEqual(builder.STEP_EVIDENCE_REFS, validator.STEP_EVIDENCE_REFS)
+        self.assertEqual(
+            builder.LIMITATION_STATUSES,
+            validator.OWNED_LIMITATION_STATUSES,
+        )
         validator.validate_manifest(_manifest(), SCHEMA)
 
     def test_validator_rejects_placeholder_and_synthetic_live_ids(self) -> None:
@@ -678,6 +696,179 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 ):
                     validator.validate_manifest(manifest, SCHEMA)
 
+    def test_validator_binds_owned_limitations_to_the_trial_verdict(self) -> None:
+        for mutation, message in (
+            (
+                lambda manifest: manifest["limitations"].pop(1),
+                "must retain phase67-bounded-connectors",
+            ),
+            (
+                lambda manifest: manifest["limitations"][2].update(
+                    status="accepted"
+                ),
+                "must retain phase67-ga-gates-open with status blocking",
+            ),
+            (
+                lambda manifest: manifest["limitations"].append(
+                    {
+                        "limitation_id": "unreviewed-extra",
+                        "owner": "Nobody",
+                        "status": "accepted",
+                        "description": "This does not qualify the trial.",
+                        "follow_up_issue": None,
+                    }
+                ),
+                "must match the reviewed owned limitations",
+            ),
+        ):
+            with self.subTest(message=message):
+                manifest = _manifest()
+                mutation(manifest)
+                with self.assertRaisesRegex(
+                    validator.EvidenceValidationError,
+                    message,
+                ):
+                    validator.validate_manifest(manifest, SCHEMA)
+
+        historical = validator.load_json(E2E_ROOT / "sample-evidence.json")
+        historical["limitations"][0]["limitation_id"] = "unrelated-blocker"
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "historical approval-blocked limitation contract",
+        ):
+            validator.validate_manifest(historical, SCHEMA)
+
+    def test_builder_rejects_report_records_outside_the_trial_chain(self) -> None:
+        identifiers = _manifest()["identifiers"]
+        journey_record = {
+            "alert_id": identifiers["aegisops_alert_id"],
+            "finding_id": identifiers["finding_id"],
+            "case_id": identifiers["case_id"],
+            "denied_action_request_id": identifiers["denied_action_request_id"],
+            "denied_approval_decision_id": identifiers[
+                "denied_approval_decision_id"
+            ],
+            "action_request_id": identifiers["action_request_id"],
+            "approval_decision_id": identifiers["approval_decision_id"],
+            "execution_id": identifiers["shuffle_execution_id"],
+            "action_execution_id": identifiers["action_execution_id"],
+            "reconciliation_id": identifiers["reconciliation_id"],
+            "wazuh_reconciliation_ids": [
+                "phase67-admission-reconciliation"
+            ],
+        }
+        report = {
+            "records": {
+                "alert": [{"alert_id": identifiers["aegisops_alert_id"]}],
+                "case": [{"case_id": identifiers["case_id"]}],
+                "action_request": [
+                    {
+                        "action_request_id": identifiers[
+                            "denied_action_request_id"
+                        ]
+                    },
+                    {"action_request_id": identifiers["action_request_id"]},
+                ],
+                "approval_decision": [
+                    {
+                        "approval_decision_id": identifiers[
+                            "denied_approval_decision_id"
+                        ]
+                    },
+                    {
+                        "approval_decision_id": identifiers[
+                            "approval_decision_id"
+                        ]
+                    },
+                ],
+                "action_execution": [
+                    {
+                        "action_execution_id": identifiers[
+                            "action_execution_id"
+                        ]
+                    }
+                ],
+                "reconciliation": [
+                    {
+                        "reconciliation_id": "phase67-admission-reconciliation",
+                        "alert_id": identifiers["aegisops_alert_id"],
+                        "finding_id": identifiers["finding_id"],
+                        "execution_run_id": None,
+                        "linked_execution_run_ids": [],
+                    },
+                    {
+                        "reconciliation_id": identifiers["reconciliation_id"],
+                        "alert_id": identifiers["aegisops_alert_id"],
+                        "finding_id": identifiers["finding_id"],
+                        "execution_run_id": identifiers["shuffle_execution_id"],
+                        "linked_execution_run_ids": [
+                            identifiers["shuffle_execution_id"]
+                        ],
+                    },
+                ],
+            }
+        }
+        builder._validate_trial_report_scope(report, journey_record)
+
+        previous_trial = deepcopy(report)
+        previous_trial["records"]["action_request"].append(
+            {"action_request_id": "phase67-action-from-previous-trial"}
+        )
+        with self.assertRaisesRegex(ValueError, "is not scoped to this trial"):
+            builder._validate_trial_report_scope(previous_trial, journey_record)
+
+        unrelated_reconciliation = deepcopy(report)
+        unrelated_reconciliation["records"]["reconciliation"].append(
+            {
+                "reconciliation_id": "phase67-unexpected-linked-reconciliation",
+                "alert_id": identifiers["aegisops_alert_id"],
+                "finding_id": identifiers["finding_id"],
+                "execution_run_id": identifiers["shuffle_execution_id"],
+                "linked_execution_run_ids": [],
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "is not scoped to this trial"):
+            builder._validate_trial_report_scope(
+                unrelated_reconciliation,
+                journey_record,
+            )
+
+    def test_journey_report_scope_excludes_preserved_prior_trial_records(self) -> None:
+        current_reconciliation = SimpleNamespace(
+            reconciliation_id="reconciliation-current",
+            alert_id="alert-current",
+            finding_id="finding-current",
+            execution_run_id="execution-current",
+            linked_execution_run_ids=("execution-current",),
+        )
+        identifiers = {
+            "case_id": "case-current",
+            "denied_action_request_id": "denied-action-current",
+            "action_request_id": "action-current",
+            "denied_approval_decision_id": "denied-approval-current",
+            "approval_decision_id": "approval-current",
+        }
+        scope = journey._trial_report_record_ids(
+            preparation={
+                "alert_id": "alert-current",
+                "finding_id": "finding-current",
+                "wazuh_reconciliation_ids": ["reconciliation-admission"],
+            },
+            identifiers=identifiers,
+            execution=SimpleNamespace(
+                action_execution_id="action-execution-current",
+                execution_run_id="execution-current",
+            ),
+            reconciliation=current_reconciliation,
+        )
+        self.assertEqual(
+            scope["reconciliation"],
+            frozenset(
+                {"reconciliation-current", "reconciliation-admission"}
+            ),
+        )
+        self.assertNotIn("reconciliation-previous", scope["reconciliation"])
+
     def test_blocked_verdict_requires_one_owned_blocker_and_no_later_steps(self) -> None:
         manifest = _manifest()
         manifest["verdict"] = "integration_trial_blocked"
@@ -726,7 +917,15 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "containers_stopped": None,
             "data_preserved": None,
         }
-        manifest["limitations"][0]["status"] = "blocking"
+        manifest["limitations"].append(
+            {
+                "limitation_id": "phase67-blocked-trigger-real-wazuh-detection",
+                "owner": "AegisOps integration engineering",
+                "status": "blocking",
+                "description": "Reviewed service bootstrap did not complete.",
+                "follow_up_issue": None,
+            }
+        )
         for index, step in enumerate(manifest["steps"]):
             if index < 2:
                 continue
@@ -739,6 +938,16 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             else:
                 step["evidence_refs"] = ["not-run:upstream-blocker"]
         validator.validate_manifest(manifest, SCHEMA)
+
+        unrelated_blocker = deepcopy(manifest)
+        unrelated_blocker["limitations"][-1]["limitation_id"] = (
+            "phase67-blocked-unrelated-step"
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "must match its terminal step",
+        ):
+            validator.validate_manifest(unrelated_blocker, SCHEMA)
 
         mixed_snapshot = deepcopy(manifest)
         mixed_snapshot["snapshot"]["docker_context"] = "different-colima"
@@ -1008,6 +1217,12 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             runner,
         )
         self.assertIn('"${LAB_DIR}/cleanup.sh"', runner)
+        cleanup = runner.index('"${LAB_DIR}/cleanup.sh"')
+        final_snapshot_check = runner.index("assert_repository_snapshot", cleanup)
+        evidence_build = runner.index('python3 "${builder}"', final_snapshot_check)
+        self.assertLess(cleanup, final_snapshot_check)
+        self.assertLess(final_snapshot_check, evidence_build)
+        self.assertIn("status --porcelain=v1 --untracked-files=all", runner)
         self.assertNotIn("destroy-data.sh", runner)
         real_journey = (E2E_ROOT / "run_real_journey.py").read_text(
             encoding="utf-8"
@@ -1016,6 +1231,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertNotIn('lifecycle_state="denied"', real_journey)
         self.assertNotIn("class _StaticTransport", real_journey)
         self.assertIn("service.reconcile_action_execution(", real_journey)
+        self.assertIn("record_ids_by_family=_trial_report_record_ids(", real_journey)
         self.assertIn("delegated_at = datetime.now(timezone.utc)", real_journey)
         self.assertIn("delegated_at=delegated_at", real_journey)
         self.assertNotIn(

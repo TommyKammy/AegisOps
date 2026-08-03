@@ -29,12 +29,17 @@ evaluation="${REPO_ROOT}/docs/phase-67-prerequisite-evaluation.md"
 reviewed_workflow="${LAB_DIR}/shuffle/harmless-local-log-workflow.json"
 workflow_validator="${LAB_DIR}/shuffle/validate_preserved_workflow.py"
 
+assert_repository_snapshot() {
+  [[ "$(git -C "${REPO_ROOT}" rev-parse HEAD)" == "${repository_revision}" ]] \
+    || fail "repository revision changed during the E2E trial"
+  [[ -z "$(git -C "${REPO_ROOT}" status --porcelain=v1 --untracked-files=all)" ]] \
+    || fail "real E2E evidence requires the reviewed repository worktree to remain clean"
+}
+
 [[ -f "${evaluation}" ]] \
   || fail "Phase 67 prerequisite evaluation is missing: ${evaluation}"
-[[ -z "$(git -C "${REPO_ROOT}" status --porcelain=v1)" ]] \
-  || fail "real E2E evidence requires a clean immutable repository revision"
-
 repository_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+assert_repository_snapshot
 captured_prefix="$(date -u '+%Y%m%dT%H%M%SZ')"
 trial_run_id="phase67-e2e-${captured_prefix}-$(openssl rand -hex 6)"
 staging_dir="$(mktemp -d "${AEGISOPS_LAB_EVIDENCE_DIR}/.phase67-e2e.XXXXXX")"
@@ -262,6 +267,17 @@ wazuh_evidence="$(
   || fail "real Wazuh trial did not publish its evidence manifest"
 cp "${wazuh_evidence}" "${wazuh_manifest_output}"
 aegisops_alert_id="$(jq -er '.aegisops_alert_id' "${wazuh_evidence}")"
+wazuh_reconciliation_args=()
+while IFS= read -r reconciliation_id; do
+  wazuh_reconciliation_args+=(--wazuh-reconciliation-id "${reconciliation_id}")
+done < <(
+  jq -er '
+    [.first_delivery.reconciliation_id, .duplicate_delivery.reconciliation_id]
+    | unique[]
+  ' "${wazuh_evidence}"
+)
+[[ "${#wazuh_reconciliation_args[@]}" -gt 0 ]] \
+  || fail "Wazuh trial evidence lacks reconciliation identifiers"
 record_step 3 \
   "trigger_real_wazuh_detection" \
   "$(sed -n 's/^step_observation\.trigger_real_wazuh_detection=//p' "${wazuh_output}" | tail -n 1)"
@@ -278,6 +294,7 @@ compose_scope full exec -T \
     prepare \
     --trial-id "${trial_run_id}" \
     --alert-id "${aegisops_alert_id}" \
+    "${wazuh_reconciliation_args[@]}" \
     >"${preparation_output}"
 record_step 5 \
   "promote_alert_to_case" \
@@ -392,8 +409,7 @@ record_step 14 \
   "restart_and_verify_persistence" \
   "$(jq -er '.observed_at' "${restart_output}")"
 
-[[ "$(git -C "${REPO_ROOT}" rev-parse HEAD)" == "${repository_revision}" ]] \
-  || fail "repository revision changed during the E2E trial"
+assert_repository_snapshot
 evaluated_at="$(observed_now)"
 jq -n \
   --arg evaluated_at "${evaluated_at}" \
@@ -419,6 +435,7 @@ record_step 15 "publish_prerequisite_evaluation" "${evaluated_at}"
 
 "${LAB_DIR}/cleanup.sh"
 cleaned=true
+assert_repository_snapshot
 python3 "${builder}" \
   --schema "${schema}" \
   --snapshot "${snapshot_output}" \

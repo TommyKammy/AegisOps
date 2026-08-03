@@ -86,6 +86,14 @@ assert_fails_with \
   'historical trial contract' \
   mutate_json '.steps[5].evidence_refs = ["fake"]'
 assert_fails_with \
+  missing-historical-approval-blocker \
+  'historical approval-blocked limitation contract is incomplete' \
+  mutate_json '.limitations[0].limitation_id = "unrelated-blocker"'
+assert_fails_with \
+  downgraded-historical-approval-blocker \
+  'historical approval-blocked limitation contract is incomplete' \
+  mutate_json '.limitations[0].status = "accepted"'
+assert_fails_with \
   impossible-failed-order \
   'exactly one failed step' \
   mutate_json '.verdict = "integration_trial_failed"

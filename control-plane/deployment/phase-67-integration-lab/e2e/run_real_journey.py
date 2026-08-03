@@ -518,6 +518,11 @@ def _prepare(args: argparse.Namespace) -> dict[str, object]:
         action_request_id=action.action_request_id,
         payload_hash=action.payload_hash,
     )
+    wazuh_reconciliation_ids = tuple(
+        dict.fromkeys(args.wazuh_reconciliation_id)
+    )
+    if any(not record_id.strip() for record_id in wazuh_reconciliation_ids):
+        raise RuntimeError("Wazuh reconciliation IDs must be non-empty")
     return {
         "trial_run_id": args.trial_id,
         "alert_id": alert.alert_id,
@@ -536,6 +541,7 @@ def _prepare(args: argparse.Namespace) -> dict[str, object]:
             "denied_approval_decision_id"
         ],
         "denied_dispatch": denied,
+        "wazuh_reconciliation_ids": list(wazuh_reconciliation_ids),
         "step_observations": {
             "promote_alert_to_case": case_observed_at.isoformat().replace(
                 "+00:00", "Z"
@@ -550,6 +556,50 @@ def _prepare(args: argparse.Namespace) -> dict[str, object]:
         "prepared_at": datetime.now(timezone.utc).isoformat().replace(
             "+00:00", "Z"
         ),
+    }
+
+
+def _trial_report_record_ids(
+    *,
+    preparation: Mapping[str, object],
+    identifiers: Mapping[str, str],
+    execution: ActionExecutionRecord,
+    reconciliation: ReconciliationRecord,
+) -> dict[str, frozenset[str]]:
+    alert_id = str(preparation["alert_id"])
+    wazuh_reconciliation_ids = preparation.get("wazuh_reconciliation_ids")
+    if (
+        not isinstance(wazuh_reconciliation_ids, list)
+        or not wazuh_reconciliation_ids
+        or any(
+            not isinstance(record_id, str) or not record_id.strip()
+            for record_id in wazuh_reconciliation_ids
+        )
+        or len(set(wazuh_reconciliation_ids)) != len(wazuh_reconciliation_ids)
+    ):
+        raise RuntimeError("preparation lacks unique Wazuh reconciliation IDs")
+    reconciliation_ids = frozenset(
+        {*wazuh_reconciliation_ids, reconciliation.reconciliation_id}
+    )
+    return {
+        AlertRecord.record_family: frozenset({alert_id}),
+        CaseRecord.record_family: frozenset({identifiers["case_id"]}),
+        ActionRequestRecord.record_family: frozenset(
+            {
+                identifiers["denied_action_request_id"],
+                identifiers["action_request_id"],
+            }
+        ),
+        ApprovalDecisionRecord.record_family: frozenset(
+            {
+                identifiers["denied_approval_decision_id"],
+                identifiers["approval_decision_id"],
+            }
+        ),
+        ActionExecutionRecord.record_family: frozenset(
+            {execution.action_execution_id}
+        ),
+        ReconciliationRecord.record_family: reconciliation_ids,
     }
 
 
@@ -677,6 +727,12 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
         ),
         export_id=identifiers["report_id"],
         exported_at=datetime.now(timezone.utc),
+        record_ids_by_family=_trial_report_record_ids(
+            preparation=preparation,
+            identifiers=identifiers,
+            execution=execution,
+            reconciliation=reconciliation,
+        ),
     )
     report_observed_at = datetime.now(timezone.utc)
     replay_compared_at = datetime.now(timezone.utc)
@@ -744,6 +800,9 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
             "expected_receipt_id": identifiers["expected_receipt_id"],
             "action_execution_id": execution.action_execution_id,
             "reconciliation_id": reconciliation.reconciliation_id,
+            "wazuh_reconciliation_ids": preparation[
+                "wazuh_reconciliation_ids"
+            ],
             "replay_reconciliation_id": replay.reconciliation_id,
             "idempotency_execution_count": receipt[
                 "idempotency_execution_count"
@@ -819,6 +878,11 @@ def _parser() -> argparse.ArgumentParser:
     prepare = subparsers.add_parser("prepare")
     prepare.add_argument("--trial-id", required=True)
     prepare.add_argument("--alert-id", required=True)
+    prepare.add_argument(
+        "--wazuh-reconciliation-id",
+        action="append",
+        required=True,
+    )
     execute = subparsers.add_parser("execute")
     execute.add_argument("--trial-id", required=True)
     execute.add_argument("--approver-identity", required=True)

@@ -168,7 +168,13 @@ Shuffle workflow digests, workflow API ID, host and Colima identity, selected
 profile, and every immutable image reference. The runner captures and validates
 the live workflow again immediately before dispatch and rejects any change from
 the snapshot. Startup, initial health, restart status, and both workflow exports
-are retained with the raw packet.
+are retained with the raw packet. Report export is restricted to the exact
+record IDs linked to the current trial, so records in preserved volumes from
+earlier trials cannot enter the retained report. After cleanup and immediately
+before evidence construction, the runner rechecks the captured `HEAD` and the
+complete tracked and untracked worktree. The validator binds the reviewed
+limitation set to a passing verdict and binds blocked or failed limitations to
+their terminal journey step.
 
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 

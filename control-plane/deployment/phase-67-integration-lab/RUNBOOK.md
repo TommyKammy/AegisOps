@@ -117,7 +117,10 @@ blocks the trial.
 Receipt success is passed through AegisOps reconciliation instead of inferred
 from Shuffle state. Receipt failure probes run in a rollback-only transaction;
 the trial fails if the authoritative successful execution or record count is
-not restored exactly.
+not restored exactly. The retained report uses an explicit record-ID allowlist
+for this trial's alert, case, denied and approved requests and decisions,
+execution, Wazuh admission/replay reconciliations, and action reconciliation;
+records preserved from earlier trials are excluded.
 
 After report export and delivery replay, the runner stops and starts the lab,
 checks the persisted authoritative identifiers and one-execution count, and
@@ -128,7 +131,9 @@ artifact digest and binds a generated evaluation record to the trial, snapshot,
 revision, and verdict. The retained `step-observations.jsonl` records the actual
 completion time of all 15 steps. The validator requires every completed or
 terminal step before `not_run` to be strictly chronological for passed,
-blocked, and failed manifests. Every verdict
+blocked, and failed manifests. The runner rechecks both `HEAD` and the complete
+tracked and untracked worktree after cleanup, immediately before building the
+publishable packet. Every verdict
 recomputes its snapshot ID from all captured inputs, and each journey identifier
 must be present only when its producing step passed. `startup-status.txt`,
 `initial-status.txt`, and
@@ -145,7 +150,11 @@ snapshots, placeholder or synthetic live IDs, same-actor request and approval,
 denied dispatch, inferred receipt or reconciliation success, secret exposure,
 private host paths, mutable branch references, and a verdict that exceeds the
 recorded journey. A passing trial selects
-`integration_trial_passed_with_owned_limitations`; it does not accept GA.
+`integration_trial_passed_with_owned_limitations`; it does not accept GA. Its
+three reviewed limitation IDs and statuses are mandatory. A current blocked or
+failed packet must additionally use the deterministic blocking limitation ID
+derived from its terminal step. The historical approval-blocked packet retains
+its separately reviewed approval limitation contract.
 
 ## Inspect
 
