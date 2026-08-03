@@ -68,6 +68,16 @@ STEP_EVIDENCE_REFS = (
     ("restart:checked_identifiers", "artifact:restart-status.txt"),
     ("evaluation-record:sha256",),
 )
+RESTART_REQUIRED_IDENTIFIER_FIELDS = (
+    "aegisops_alert_id",
+    "case_id",
+    "denied_action_request_id",
+    "denied_approval_decision_id",
+    "action_request_id",
+    "approval_decision_id",
+    "action_execution_id",
+    "reconciliation_id",
+)
 # The committed approval-blocked packet predates retained status/workflow captures.
 # Keep its concrete references reviewable without treating them as the current contract.
 LEGACY_BLOCKED_STEP_EVIDENCE_REFS = (
@@ -90,6 +100,9 @@ LEGACY_BLOCKED_STEP_EVIDENCE_REFS = (
 LEGACY_BLOCKED_TRIAL = (
     "phase67-e2e-20260801T135206Z-26c533b6ca31",
     "2473b66f5702a38f1d4630c990509bf812a6af7a",
+)
+LEGACY_BLOCKED_MANIFEST_SHA256 = (
+    "69024ef973dc820ef797bb6b5dfad66ff322a9f11673951f6a53ff0a168d09e8"
 )
 REVIEWED_IMMUTABLE_IMAGE_REFERENCES = {
     "postgres": (
@@ -390,6 +403,26 @@ def _snapshot_identifier(
     return "phase67-snapshot-" + hashlib.sha256(encoded).hexdigest()[:16]
 
 
+def _manifest_sha256(value: Mapping[str, object]) -> str:
+    encoded = json.dumps(
+        value,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _is_legacy_blocked_manifest(value: Mapping[str, object]) -> bool:
+    snapshot = value.get("snapshot")
+    return (
+        _manifest_sha256(value) == LEGACY_BLOCKED_MANIFEST_SHA256
+        and value.get("verdict") == "integration_trial_blocked"
+        and value.get("trial_run_id") == LEGACY_BLOCKED_TRIAL[0]
+        and isinstance(snapshot, Mapping)
+        and snapshot.get("repository_revision") == LEGACY_BLOCKED_TRIAL[1]
+    )
+
+
 def _validate_runtime_images(
     value: object,
     *,
@@ -441,6 +474,7 @@ def _validate_snapshot(
     value: object,
     *,
     trial_run_id: str,
+    allow_legacy_blocked_inventory: bool = False,
 ) -> Mapping[str, object]:
     snapshot = require_mapping(value, "$.snapshot")
     require_exact_keys(
@@ -495,11 +529,7 @@ def _validate_snapshot(
     require(snapshot["selected_profile"] == "full", "$.snapshot.selected_profile must be full")
     _validate_runtime_images(
         snapshot["images"],
-        allow_legacy_blocked_inventory=(
-            trial_run_id,
-            repository_revision,
-        )
-        == LEGACY_BLOCKED_TRIAL,
+        allow_legacy_blocked_inventory=allow_legacy_blocked_inventory,
     )
     require(
         snapshot["snapshot_id"] == _snapshot_identifier(trial_run_id, snapshot),
@@ -631,6 +661,7 @@ def validate_manifest(manifest: object, schema: object) -> None:
     require(root["schema_version"] == SCHEMA_VERSION, "$.schema_version is invalid")
     require_datetime(root["captured_at"], "$.captured_at")
     require(root["source_mode"] == "real_services", "$.source_mode must be real_services")
+    allow_legacy_blocked_packet = _is_legacy_blocked_manifest(root)
     trial_run_id = require_string(root["trial_run_id"], "$.trial_run_id")
     require(TRIAL_ID.fullmatch(trial_run_id) is not None, "$.trial_run_id is invalid")
     verdict = require_string(root["verdict"], "$.verdict")
@@ -638,23 +669,14 @@ def validate_manifest(manifest: object, schema: object) -> None:
     snapshot = _validate_snapshot(
         root["snapshot"],
         trial_run_id=trial_run_id,
+        allow_legacy_blocked_inventory=allow_legacy_blocked_packet,
     )
     snapshot_id = require_string(snapshot["snapshot_id"], "$.snapshot.snapshot_id")
-    allow_legacy_blocked_refs = (
-        (
-            trial_run_id,
-            require_string(
-                snapshot["repository_revision"],
-                "$.snapshot.repository_revision",
-            ),
-        )
-        == LEGACY_BLOCKED_TRIAL
-    )
     step_statuses = _validate_steps(
         root["steps"],
         snapshot_id,
         verdict,
-        allow_legacy_blocked_refs=allow_legacy_blocked_refs,
+        allow_legacy_blocked_refs=allow_legacy_blocked_packet,
     )
 
     identifiers = require_mapping(root["identifiers"], "$.identifiers")
@@ -799,7 +821,14 @@ def validate_manifest(manifest: object, schema: object) -> None:
     require(isinstance(checked, list), "$.restart.checked_identifiers must be an array")
     if step_statuses[13] == "passed":
         require(restart_performed is True and records_persisted is True, "passed trial requires restart persistence proof")
-        require(set(checked) >= {"aegisops_alert_id", "case_id", "action_request_id", "action_execution_id", "reconciliation_id"}, "restart proof omits authoritative identifiers")
+        require(
+            set(checked)
+            >= {
+                *RESTART_REQUIRED_IDENTIFIER_FIELDS,
+                "wazuh_reconciliation_ids",
+            },
+            "restart proof omits authoritative identifiers",
+        )
     else:
         require(restart_performed is None and records_persisted is None and checked == [], "a non-passed restart step cannot claim persistence proof")
 
@@ -902,7 +931,7 @@ def validate_manifest(manifest: object, schema: object) -> None:
         require_string(limitation["description"], f"$.limitations[{index}].description")
         follow_up = limitation.get("follow_up_issue")
         require(follow_up is None or (isinstance(follow_up, str) and re.fullmatch(r"#[0-9]+", follow_up) is not None), f"$.limitations[{index}].follow_up_issue must be an issue reference or null")
-    if allow_legacy_blocked_refs:
+    if allow_legacy_blocked_packet:
         require(
             limitation_statuses == LEGACY_APPROVAL_BLOCKER_STATUSES,
             "historical approval-blocked limitation contract is incomplete",

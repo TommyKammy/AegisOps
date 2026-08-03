@@ -123,7 +123,8 @@ execution, Wazuh admission/replay reconciliations, and action reconciliation;
 records preserved from earlier trials are excluded.
 
 After report export and delivery replay, the runner stops and starts the lab,
-checks the persisted authoritative identifiers and one-execution count, and
+checks the persisted action-chain identifiers, every Wazuh admission/replay
+reconciliation ID, and the one-execution count, and
 runs `cleanup.sh`. The runner retains a trial-specific raw artifact directory
 with mode `0700` and files with mode `0600`, plus the complete redacted report,
 below `${AEGISOPS_LAB_EVIDENCE_DIR}`. The manifest records every retained raw
@@ -154,7 +155,10 @@ recorded journey. A passing trial selects
 three reviewed limitation IDs and statuses are mandatory. A current blocked or
 failed packet must additionally use the deterministic blocking limitation ID
 derived from its terminal step. The historical approval-blocked packet retains
-its separately reviewed approval limitation contract.
+its separately reviewed approval limitation contract only when the complete
+canonical packet SHA-256 matches the committed compatibility fingerprint.
+Every retained status capture must also report the exact control-plane image ID
+from the snapshot, including after restart.
 
 ## Inspect
 

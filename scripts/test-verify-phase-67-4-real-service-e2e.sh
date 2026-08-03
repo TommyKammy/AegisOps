@@ -16,6 +16,14 @@ assert_fails_with() {
   shift 2
   cp "${sample}" "${manifest}"
   "$@" "${manifest}"
+  # Any mutation of the retained historical packet invalidates its immutable
+  # compatibility fingerprint and returns it to the current image contract.
+  if jq -e --arg trial "phase67-e2e-20260801T135206Z-26c533b6ca31" \
+    --arg revision "2473b66f5702a38f1d4630c990509bf812a6af7a" \
+    '.trial_run_id == $trial and .snapshot.repository_revision == $revision' \
+    "${manifest}" >/dev/null; then
+    expected='complete reviewed full-profile service inventory'
+  fi
   if python3 "${validator}" "${schema}" "${manifest}" \
     >"${workdir}/${name}.out" 2>"${workdir}/${name}.err"; then
     echo "self-test expected rejection for ${name}" >&2

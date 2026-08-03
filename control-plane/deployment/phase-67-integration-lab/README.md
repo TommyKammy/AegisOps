@@ -153,7 +153,8 @@ exact admitted alert, proves a denied action has no Shuffle execution, records
 a separate approved real execution after an authenticated local operator
 confirms the displayed approval challenge, reconciles its authenticated
 receipt, exports a redacted AegisOps report, restarts the lab, checks
-authoritative record persistence, and stops the lab without deleting volumes
+every scoped Wazuh admission/replay reconciliation plus the action-chain record
+persistence, and stops the lab without deleting volumes
 or evidence. The runner records each completed step in
 `step-observations.jsonl`; the evidence builder rejects missing, reordered, or
 non-chronological observations. After the interactive pause and immediately
@@ -168,13 +169,17 @@ Shuffle workflow digests, workflow API ID, host and Colima identity, selected
 profile, and every immutable image reference. The runner captures and validates
 the live workflow again immediately before dispatch and rejects any change from
 the snapshot. Startup, initial health, restart status, and both workflow exports
-are retained with the raw packet. Report export is restricted to the exact
+are retained with the raw packet. Each status capture must report the exact
+control-plane image ID committed by the snapshot; a syntactically valid but
+different post-restart image is rejected. Report export is restricted to the exact
 record IDs linked to the current trial, so records in preserved volumes from
 earlier trials cannot enter the retained report. After cleanup and immediately
 before evidence construction, the runner rechecks the captured `HEAD` and the
 complete tracked and untracked worktree. The validator binds the reviewed
 limitation set to a passing verdict and binds blocked or failed limitations to
-their terminal journey step.
+their terminal journey step. The historical approval-blocked compatibility path
+is limited to the canonical SHA-256 of the one committed packet, so its public
+trial ID and revision cannot authorize a fabricated manifest.
 
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 

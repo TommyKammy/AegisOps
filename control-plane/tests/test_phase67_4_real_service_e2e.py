@@ -166,9 +166,13 @@ def _manifest() -> dict[str, object]:
             "checked_identifiers": [
                 "aegisops_alert_id",
                 "case_id",
+                "denied_action_request_id",
+                "denied_approval_decision_id",
                 "action_request_id",
+                "approval_decision_id",
                 "action_execution_id",
                 "reconciliation_id",
+                "wazuh_reconciliation_ids",
             ],
         },
         "report": {
@@ -585,29 +589,79 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         )
 
     def test_status_evidence_requires_one_complete_image_identity(self) -> None:
+        snapshot = _manifest()["snapshot"]
         with TemporaryDirectory() as temporary_directory:
             status_path = Path(temporary_directory) / "status.txt"
             status_path.write_text(
-                "control_plane_container_image_id=sha256:" + "a" * 64 + "\n",
+                "repository_commit=" + "a" * 40 + "\n"
+                "repository_runtime_state=clean\n"
+                "repository_runtime_artifact_sha256=" + "d" * 64 + "\n"
+                "control_plane_container_image_id=sha256:" + "e" * 64 + "\n",
                 encoding="utf-8",
             )
-            self.assertEqual(
-                builder._status_value(
-                    status_path,
-                    "control_plane_container_image_id",
-                ),
-                "sha256:" + "a" * 64,
-            )
+            builder._validate_status_snapshot(status_path, snapshot)
             status_path.write_text(
-                "control_plane_container_image_id=sha256:" + "a" * 64 + "\n"
-                "control_plane_container_image_id=sha256:" + "b" * 64 + "\n",
+                "repository_commit=" + "a" * 40 + "\n"
+                "repository_runtime_state=clean\n"
+                "repository_runtime_artifact_sha256=" + "d" * 64 + "\n"
+                "control_plane_container_image_id=sha256:" + "f" * 64 + "\n",
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(ValueError, "exactly one"):
-                builder._status_value(
-                    status_path,
-                    "control_plane_container_image_id",
-                )
+            with self.assertRaisesRegex(ValueError, "different control-plane image"):
+                builder._validate_status_snapshot(status_path, snapshot)
+
+    def test_restart_verifies_every_wazuh_reconciliation_record(self) -> None:
+        identifiers = _manifest()["identifiers"]
+        payload = {
+            field_name: identifiers[field_name]
+            for field_name in journey.RESTART_RECORD_TYPES
+        }
+        payload["wazuh_reconciliation_ids"] = [
+            "reconciliation-wazuh-admission",
+            "reconciliation-wazuh-duplicate",
+        ]
+        retained_ids = {
+            str(payload[field_name])
+            for field_name in journey.RESTART_RECORD_TYPES
+        } | set(payload["wazuh_reconciliation_ids"])
+
+        class FakeService:
+            def __init__(self, record_ids: set[str]) -> None:
+                self.record_ids = record_ids
+
+            def get_record(self, _record_type: object, record_id: str) -> object:
+                return object() if record_id in self.record_ids else None
+
+        checked, wazuh_ids = journey._verify_restart_records(
+            FakeService(retained_ids),
+            payload,
+        )
+        self.assertIn("wazuh_reconciliation_ids", checked)
+        self.assertEqual(wazuh_ids, tuple(payload["wazuh_reconciliation_ids"]))
+
+        missing_duplicate = retained_ids - {"reconciliation-wazuh-duplicate"}
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "restart lost wazuh_reconciliation_id=reconciliation-wazuh-duplicate",
+        ):
+            journey._verify_restart_records(FakeService(missing_duplicate), payload)
+
+    def test_builder_binds_restart_to_exact_wazuh_reconciliation_scope(self) -> None:
+        journey_scope = {
+            "wazuh_reconciliation_ids": [
+                "reconciliation-wazuh-admission",
+                "reconciliation-wazuh-duplicate",
+            ]
+        }
+        builder._validate_restart_wazuh_scope(
+            {"wazuh_reconciliation_ids": list(journey_scope["wazuh_reconciliation_ids"])},
+            journey_scope,
+        )
+        with self.assertRaisesRegex(ValueError, "does not match the journey"):
+            builder._validate_restart_wazuh_scope(
+                {"wazuh_reconciliation_ids": ["reconciliation-wazuh-admission"]},
+                journey_scope,
+            )
 
     def test_live_workflow_digest_is_canonical_and_content_bound(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -731,12 +785,30 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     validator.validate_manifest(manifest, SCHEMA)
 
         historical = validator.load_json(E2E_ROOT / "sample-evidence.json")
+        self.assertEqual(
+            validator._manifest_sha256(historical),
+            validator.LEGACY_BLOCKED_MANIFEST_SHA256,
+        )
+        self.assertTrue(validator._is_legacy_blocked_manifest(historical))
         historical["limitations"][0]["limitation_id"] = "unrelated-blocker"
+        self.assertFalse(validator._is_legacy_blocked_manifest(historical))
         with self.assertRaisesRegex(
             validator.EvidenceValidationError,
-            "historical approval-blocked limitation contract",
+            "complete reviewed full-profile service inventory",
         ):
             validator.validate_manifest(historical, SCHEMA)
+
+    def test_legacy_exception_cannot_be_reused_by_a_fabricated_passed_trial(self) -> None:
+        fabricated = validator.load_json(E2E_ROOT / "sample-evidence.json")
+        fabricated["verdict"] = "integration_trial_passed_with_owned_limitations"
+        fabricated["steps"][7]["status"] = "passed"
+        fabricated["steps"][7].pop("blocker")
+        self.assertFalse(validator._is_legacy_blocked_manifest(fabricated))
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "complete reviewed full-profile service inventory",
+        ):
+            validator.validate_manifest(fabricated, SCHEMA)
 
     def test_builder_rejects_report_records_outside_the_trial_chain(self) -> None:
         identifiers = _manifest()["identifiers"]
@@ -1000,9 +1072,10 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             with self.subTest(key=key):
                 tampered = deepcopy(sample)
                 tampered["identifiers"][key] = value
+                self.assertFalse(validator._is_legacy_blocked_manifest(tampered))
                 with self.assertRaisesRegex(
                     validator.EvidenceValidationError,
-                    "must be null",
+                    "complete reviewed full-profile service inventory",
                 ):
                     validator.validate_manifest(tampered, SCHEMA)
 
@@ -1023,9 +1096,10 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     "measurement_source": "aegisops_authoritative_record_count",
                     "evidence_ref": "journey:negative-probe",
                 }
+                self.assertFalse(validator._is_legacy_blocked_manifest(tampered))
                 with self.assertRaisesRegex(
                     validator.EvidenceValidationError,
-                    "must be null when run_negative_cases did not pass",
+                    "complete reviewed full-profile service inventory",
                 ):
                     validator.validate_manifest(tampered, SCHEMA)
 

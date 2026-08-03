@@ -113,6 +113,84 @@ def _required_text(value: object, path: str) -> str:
     return value.strip()
 
 
+def _required_unique_record_ids(
+    value: object,
+    path: str,
+) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{path} must contain record IDs")
+    record_ids = tuple(_required_text(item, path) for item in value)
+    if len(set(record_ids)) != len(record_ids):
+        raise ValueError(f"{path} must contain unique record IDs")
+    return record_ids
+
+
+def _snapshot_control_plane_image_id(snapshot: Mapping[str, object]) -> str:
+    images = snapshot.get("images")
+    if not isinstance(images, list):
+        raise ValueError("snapshot.images must be an array")
+    references = [
+        _required_text(
+            _mapping(item, f"snapshot.images[{index}]").get(
+                "immutable_reference"
+            ),
+            f"snapshot.images[{index}].immutable_reference",
+        )
+        for index, item in enumerate(images)
+        if _mapping(item, f"snapshot.images[{index}]").get("service")
+        == "control-plane"
+    ]
+    if len(references) != 1:
+        raise ValueError("snapshot must contain exactly one control-plane image")
+    match = re.fullmatch(r"control-plane@(sha256:[0-9a-f]{64})", references[0])
+    if match is None:
+        raise ValueError("snapshot control-plane image is not immutable")
+    return match.group(1)
+
+
+def _validate_status_snapshot(
+    status_path: Path,
+    snapshot: Mapping[str, object],
+) -> None:
+    if _status_value(status_path, "repository_commit") != snapshot.get(
+        "repository_revision"
+    ):
+        raise ValueError(f"{status_path.name} uses a different revision")
+    if _status_value(status_path, "repository_runtime_state") != "clean":
+        raise ValueError(f"{status_path.name} was captured from a dirty runtime")
+    if _status_value(
+        status_path,
+        "repository_runtime_artifact_sha256",
+    ) != snapshot.get("runtime_artifact_sha256"):
+        raise ValueError(f"{status_path.name} uses different runtime artifacts")
+    control_plane_image_id = _status_value(
+        status_path,
+        "control_plane_container_image_id",
+    )
+    if control_plane_image_id != _snapshot_control_plane_image_id(snapshot):
+        raise ValueError(
+            f"{status_path.name} uses a different control-plane image"
+        )
+
+
+def _validate_restart_wazuh_scope(
+    restart: Mapping[str, object],
+    journey: Mapping[str, object],
+) -> None:
+    restart_ids = _required_unique_record_ids(
+        restart.get("wazuh_reconciliation_ids"),
+        "restart.wazuh_reconciliation_ids",
+    )
+    journey_ids = _required_unique_record_ids(
+        journey.get("wazuh_reconciliation_ids"),
+        "journey.wazuh_reconciliation_ids",
+    )
+    if restart_ids != journey_ids:
+        raise ValueError(
+            "restart Wazuh reconciliation scope does not match the journey"
+        )
+
+
 def _validate_trial_report_scope(
     report: Mapping[str, object],
     journey: Mapping[str, object],
@@ -161,17 +239,10 @@ def _validate_trial_report_scope(
     if not isinstance(reconciliation_records, list) or not reconciliation_records:
         raise ValueError("report must retain trial reconciliation records")
     reconciliation_ids: set[str] = set()
-    wazuh_reconciliation_ids = journey.get("wazuh_reconciliation_ids")
-    if (
-        not isinstance(wazuh_reconciliation_ids, list)
-        or not wazuh_reconciliation_ids
-        or any(
-            not isinstance(record_id, str) or not record_id.strip()
-            for record_id in wazuh_reconciliation_ids
-        )
-        or len(set(wazuh_reconciliation_ids)) != len(wazuh_reconciliation_ids)
-    ):
-        raise ValueError("journey lacks unique Wazuh reconciliation IDs")
+    wazuh_reconciliation_ids = _required_unique_record_ids(
+        journey.get("wazuh_reconciliation_ids"),
+        "journey.wazuh_reconciliation_ids",
+    )
     for index, item in enumerate(reconciliation_records):
         record = _mapping(item, f"report.records.reconciliation[{index}]")
         reconciliation_ids.add(
@@ -323,25 +394,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         args.initial_status,
         args.restart_status,
     ):
-        if _status_value(status_path, "repository_commit") != snapshot.get(
-            "repository_revision"
-        ):
-            raise ValueError(f"{status_path.name} uses a different revision")
-        if _status_value(status_path, "repository_runtime_state") != "clean":
-            raise ValueError(f"{status_path.name} was captured from a dirty runtime")
-        if _status_value(
-            status_path,
-            "repository_runtime_artifact_sha256",
-        ) != snapshot.get("runtime_artifact_sha256"):
-            raise ValueError(f"{status_path.name} uses different runtime artifacts")
-        control_plane_image_id = _status_value(
-            status_path,
-            "control_plane_container_image_id",
-        )
-        if re.fullmatch(r"sha256:[0-9a-f]{64}", control_plane_image_id) is None:
-            raise ValueError(
-                f"{status_path.name} lacks the control-plane image identity"
-            )
+        _validate_status_snapshot(status_path, snapshot)
     for required_line in (
         "PASS invalid_bearer_secret=403",
         "PASS proxy_bypass=403",
@@ -396,6 +449,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         "idempotency_execution_count"
     ):
         raise ValueError("restart changed the Shuffle execution count")
+    _validate_restart_wazuh_scope(restart, journey)
     captured_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     snapshot_id = _required_text(snapshot.get("snapshot_id"), "snapshot.snapshot_id")
     steps = [

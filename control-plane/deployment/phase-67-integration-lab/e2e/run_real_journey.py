@@ -72,6 +72,23 @@ RESTART_RECORD_TYPES = {
 }
 
 
+def _required_unique_record_ids(
+    value: object,
+    field_name: str,
+) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)) or not value:
+        raise RuntimeError(f"{field_name} must contain record IDs")
+    record_ids = tuple(value)
+    if any(
+        not isinstance(record_id, str) or not record_id.strip()
+        for record_id in record_ids
+    ):
+        raise RuntimeError(f"{field_name} must contain non-empty record IDs")
+    if len(set(record_ids)) != len(record_ids):
+        raise RuntimeError(f"{field_name} must contain unique record IDs")
+    return record_ids
+
+
 def _approved_binding_hash(
     *,
     target_scope: object,
@@ -518,11 +535,10 @@ def _prepare(args: argparse.Namespace) -> dict[str, object]:
         action_request_id=action.action_request_id,
         payload_hash=action.payload_hash,
     )
-    wazuh_reconciliation_ids = tuple(
-        dict.fromkeys(args.wazuh_reconciliation_id)
+    wazuh_reconciliation_ids = _required_unique_record_ids(
+        tuple(dict.fromkeys(args.wazuh_reconciliation_id)),
+        "Wazuh reconciliation IDs",
     )
-    if any(not record_id.strip() for record_id in wazuh_reconciliation_ids):
-        raise RuntimeError("Wazuh reconciliation IDs must be non-empty")
     return {
         "trial_run_id": args.trial_id,
         "alert_id": alert.alert_id,
@@ -567,17 +583,10 @@ def _trial_report_record_ids(
     reconciliation: ReconciliationRecord,
 ) -> dict[str, frozenset[str]]:
     alert_id = str(preparation["alert_id"])
-    wazuh_reconciliation_ids = preparation.get("wazuh_reconciliation_ids")
-    if (
-        not isinstance(wazuh_reconciliation_ids, list)
-        or not wazuh_reconciliation_ids
-        or any(
-            not isinstance(record_id, str) or not record_id.strip()
-            for record_id in wazuh_reconciliation_ids
-        )
-        or len(set(wazuh_reconciliation_ids)) != len(wazuh_reconciliation_ids)
-    ):
-        raise RuntimeError("preparation lacks unique Wazuh reconciliation IDs")
+    wazuh_reconciliation_ids = _required_unique_record_ids(
+        preparation.get("wazuh_reconciliation_ids"),
+        "preparation Wazuh reconciliation IDs",
+    )
     reconciliation_ids = frozenset(
         {*wazuh_reconciliation_ids, reconciliation.reconciliation_id}
     )
@@ -840,12 +849,10 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
     }
 
 
-def _verify_restart(args: argparse.Namespace) -> dict[str, object]:
-    config = _require_lab_config()
-    service = AegisOpsControlPlaneService(config)
-    payload = json.load(sys.stdin)
-    if not isinstance(payload, Mapping):
-        raise RuntimeError("restart input must be a journey object")
+def _verify_restart_records(
+    service: AegisOpsControlPlaneService,
+    payload: Mapping[str, object],
+) -> tuple[list[str], tuple[str, ...]]:
     checked: list[str] = []
     for field_name, record_type in RESTART_RECORD_TYPES.items():
         value = payload.get(field_name)
@@ -854,6 +861,26 @@ def _verify_restart(args: argparse.Namespace) -> dict[str, object]:
         if service.get_record(record_type, value) is None:
             raise RuntimeError(f"restart lost {field_name}={value}")
         checked.append(field_name)
+    wazuh_reconciliation_ids = _required_unique_record_ids(
+        payload.get("wazuh_reconciliation_ids"),
+        "restart Wazuh reconciliation IDs",
+    )
+    for record_id in wazuh_reconciliation_ids:
+        if service.get_record(ReconciliationRecord, record_id) is None:
+            raise RuntimeError(
+                f"restart lost wazuh_reconciliation_id={record_id}"
+            )
+    checked.append("wazuh_reconciliation_ids")
+    return checked, wazuh_reconciliation_ids
+
+
+def _verify_restart(args: argparse.Namespace) -> dict[str, object]:
+    config = _require_lab_config()
+    service = AegisOpsControlPlaneService(config)
+    payload = json.load(sys.stdin)
+    if not isinstance(payload, Mapping):
+        raise RuntimeError("restart input must be a journey object")
+    checked, wazuh_reconciliation_ids = _verify_restart_records(service, payload)
     action_request_id = payload["action_request_id"]
     execution_count = sum(
         record.action_request_id == action_request_id
@@ -865,6 +892,7 @@ def _verify_restart(args: argparse.Namespace) -> dict[str, object]:
         "performed": True,
         "records_persisted": True,
         "checked_identifiers": checked,
+        "wazuh_reconciliation_ids": list(wazuh_reconciliation_ids),
         "shuffle_execution_count": execution_count,
         "observed_at": datetime.now(timezone.utc).isoformat().replace(
             "+00:00", "Z"
