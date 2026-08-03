@@ -159,7 +159,7 @@ startup_output="$("${LAB_DIR}/up.sh" full)"
 printf '%s\n' "${startup_output}"
 retain_status_evidence "${startup_output}" "${startup_status_output}"
 
-container_ids="$(compose_scope full ps -q)"
+container_ids="$(compose_scope full ps -aq)"
 [[ -n "${container_ids}" ]] || fail "full lab started no containers"
 # shellcheck disable=SC2086
 docker_lab inspect ${container_ids} |
@@ -185,6 +185,7 @@ jq \
   '. + [{service: $service, immutable_reference: $immutable_reference}] | sort_by(.service)' \
   "${images_output}" >"${images_output}.next"
 mv "${images_output}.next" "${images_output}"
+python3 "${validator}" --runtime-images "${images_output}"
 capture_reviewed_shuffle_workflow "${workflow_snapshot_output}"
 live_workflow_sha256="$(canonical_json_sha256 "${workflow_snapshot_output}")"
 runtime_artifact_sha256="$(

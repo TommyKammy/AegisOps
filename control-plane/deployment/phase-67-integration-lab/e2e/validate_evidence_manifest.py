@@ -83,6 +83,58 @@ LEGACY_BLOCKED_TRIAL = (
     "phase67-e2e-20260801T135206Z-26c533b6ca31",
     "2473b66f5702a38f1d4630c990509bf812a6af7a",
 )
+REVIEWED_IMMUTABLE_IMAGE_REFERENCES = {
+    "postgres": (
+        "postgres:16.4@sha256:"
+        "e62fbf9d3e2b49816a32c400ed2dba83e3b361e6833e624024309c35d334b412"
+    ),
+    "proxy": (
+        "nginx:1.27.0@sha256:"
+        "98f8ec75657d21b924fe4f69b6b9bff2f6550ea48838af479d8894a852000e40"
+    ),
+    "wazuh-indexer": (
+        "wazuh/wazuh-indexer:4.14.6@sha256:"
+        "27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5"
+    ),
+    "wazuh-security-bootstrap": (
+        "wazuh/wazuh-indexer:4.14.6@sha256:"
+        "27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5"
+    ),
+    "wazuh-manager": (
+        "wazuh/wazuh-manager:4.14.6@sha256:"
+        "4683ddc88474c79ae6171d9132adbd45fda86bdfb22ad0d8ddee167654c9e841"
+    ),
+    "wazuh-dashboard": (
+        "wazuh/wazuh-dashboard:4.14.6@sha256:"
+        "16aa978eaa6355fe3965e310ef8eaaed4df6f701dcf5885ebd0783fcd5ee6f16"
+    ),
+    "shuffle-opensearch": (
+        "opensearchproject/opensearch:3.2.0@sha256:"
+        "23297b8d8545e129dd58c254ed08d786dc552410ba772983ad2af31048d2f04b"
+    ),
+    "shuffle-backend": (
+        "ghcr.io/shuffle/shuffle-backend:2.2.1@sha256:"
+        "0cc1775e48b7d94b7f16d0be713aa274ced52be24ad521beaaf58c67023fd2e5"
+    ),
+    "shuffle-orborus": (
+        "ghcr.io/shuffle/shuffle-orborus:2.2.1@sha256:"
+        "3519810b3ca4fe568acefdf15ce6f2deba0ae6f0ff6b84412354d59d663dff31"
+    ),
+    "shuffle-frontend": (
+        "ghcr.io/shuffle/shuffle-frontend:2.2.1@sha256:"
+        "0561dd421382f70d15cada11a324b40762f0930522fcc1b51edcce9c87cc0f00"
+    ),
+    "shuffle-action-image": (
+        "frikky/shuffle@sha256:"
+        "fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8"
+    ),
+}
+EXPECTED_FULL_PROFILE_IMAGE_SERVICES = frozenset(
+    {"control-plane", *REVIEWED_IMMUTABLE_IMAGE_REFERENCES}
+)
+LEGACY_BLOCKED_IMAGE_SERVICES = (
+    EXPECTED_FULL_PROFILE_IMAGE_SERVICES - {"wazuh-security-bootstrap"}
+)
 IDENTIFIER_KEYS = (
     "wazuh_manager_id",
     "wazuh_agent_id",
@@ -330,6 +382,53 @@ def _snapshot_identifier(
     return "phase67-snapshot-" + hashlib.sha256(encoded).hexdigest()[:16]
 
 
+def _validate_runtime_images(
+    value: object,
+    *,
+    allow_legacy_blocked_inventory: bool = False,
+) -> None:
+    require(isinstance(value, list) and value, "$.snapshot.images must be non-empty")
+    services: set[str] = set()
+    image_references: dict[str, str] = {}
+    for index, item in enumerate(value):
+        image = require_mapping(item, f"$.snapshot.images[{index}]")
+        require_exact_keys(image, required=("service", "immutable_reference"), path=f"$.snapshot.images[{index}]")
+        service = require_string(image["service"], f"$.snapshot.images[{index}].service")
+        require(service not in services, "$.snapshot.images contains duplicate services")
+        services.add(service)
+        reference = require_string(image["immutable_reference"], f"$.snapshot.images[{index}].immutable_reference")
+        require(IMMUTABLE_IMAGE.fullmatch(reference) is not None, f"$.snapshot.images[{index}] is not digest-pinned")
+        image_references[service] = reference
+    require(
+        "shuffle-action-image" in services,
+        "$.snapshot.images omits the dynamic Shuffle action image",
+    )
+    expected_services = (
+        LEGACY_BLOCKED_IMAGE_SERVICES
+        if allow_legacy_blocked_inventory
+        else EXPECTED_FULL_PROFILE_IMAGE_SERVICES
+    )
+    require(
+        services == expected_services,
+        "$.snapshot.images must contain the complete reviewed full-profile service inventory",
+    )
+    require(
+        re.fullmatch(
+            r"control-plane@sha256:[0-9a-f]{64}",
+            image_references["control-plane"],
+        )
+        is not None,
+        "$.snapshot.images control-plane entry must use its captured image ID",
+    )
+    for service, reviewed_reference in REVIEWED_IMMUTABLE_IMAGE_REFERENCES.items():
+        if service not in expected_services:
+            continue
+        require(
+            image_references[service] == reviewed_reference,
+            f"$.snapshot.images.{service} does not use the reviewed immutable reference",
+        )
+
+
 def _validate_snapshot(
     value: object,
     *,
@@ -356,7 +455,14 @@ def _validate_snapshot(
         path="$.snapshot",
     )
     require(SNAPSHOT_ID.fullmatch(require_string(snapshot["snapshot_id"], "$.snapshot.snapshot_id")) is not None, "$.snapshot.snapshot_id is invalid")
-    require(REVISION.fullmatch(require_string(snapshot["repository_revision"], "$.snapshot.repository_revision")) is not None, "$.snapshot.repository_revision must be a full commit SHA")
+    repository_revision = require_string(
+        snapshot["repository_revision"],
+        "$.snapshot.repository_revision",
+    )
+    require(
+        REVISION.fullmatch(repository_revision) is not None,
+        "$.snapshot.repository_revision must be a full commit SHA",
+    )
     for key in (
         "compose_sha256",
         "evidence_schema_sha256",
@@ -379,20 +485,13 @@ def _validate_snapshot(
     require_string(snapshot["docker_context"], "$.snapshot.docker_context")
     require_string(snapshot["colima_profile"], "$.snapshot.colima_profile")
     require(snapshot["selected_profile"] == "full", "$.snapshot.selected_profile must be full")
-    images = snapshot["images"]
-    require(isinstance(images, list) and images, "$.snapshot.images must be non-empty")
-    services: set[str] = set()
-    for index, item in enumerate(images):
-        image = require_mapping(item, f"$.snapshot.images[{index}]")
-        require_exact_keys(image, required=("service", "immutable_reference"), path=f"$.snapshot.images[{index}]")
-        service = require_string(image["service"], f"$.snapshot.images[{index}].service")
-        require(service not in services, "$.snapshot.images contains duplicate services")
-        services.add(service)
-        reference = require_string(image["immutable_reference"], f"$.snapshot.images[{index}].immutable_reference")
-        require(IMMUTABLE_IMAGE.fullmatch(reference) is not None, f"$.snapshot.images[{index}] is not digest-pinned")
-    require(
-        "shuffle-action-image" in services,
-        "$.snapshot.images omits the dynamic Shuffle action image",
+    _validate_runtime_images(
+        snapshot["images"],
+        allow_legacy_blocked_inventory=(
+            trial_run_id,
+            repository_revision,
+        )
+        == LEGACY_BLOCKED_TRIAL,
     )
     require(
         snapshot["snapshot_id"] == _snapshot_identifier(trial_run_id, snapshot),
@@ -794,12 +893,19 @@ def validate_manifest(manifest: object, schema: object) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = tuple(sys.argv[1:] if argv is None else argv)
     if len(arguments) != 2:
-        print("usage: validate_evidence_manifest.py SCHEMA MANIFEST", file=sys.stderr)
+        print(
+            "usage: validate_evidence_manifest.py SCHEMA MANIFEST\n"
+            "       validate_evidence_manifest.py --runtime-images IMAGES",
+            file=sys.stderr,
+        )
         return 2
     try:
-        schema = load_json(Path(arguments[0]))
-        manifest = load_json(Path(arguments[1]))
-        validate_manifest(manifest, schema)
+        if arguments[0] == "--runtime-images":
+            _validate_runtime_images(load_json(Path(arguments[1])))
+        else:
+            schema = load_json(Path(arguments[0]))
+            manifest = load_json(Path(arguments[1]))
+            validate_manifest(manifest, schema)
     except EvidenceValidationError as exc:
         print(f"Phase 67.4 evidence validation failed: {exc}", file=sys.stderr)
         return 1

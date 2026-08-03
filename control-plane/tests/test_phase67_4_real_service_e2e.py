@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import importlib.util
 import json
 from pathlib import Path
+import re
 import sys
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -62,19 +63,15 @@ def _manifest() -> dict[str, object]:
                 "service": "control-plane",
                 "immutable_reference": "control-plane@sha256:" + "e" * 64,
             },
-            {
-                "service": "wazuh-manager",
-                "immutable_reference": "wazuh/wazuh-manager@sha256:" + "f" * 64,
-            },
-            {
-                "service": "shuffle-backend",
-                "immutable_reference": "frikky/shuffle-backend@sha256:" + "1" * 64,
-            },
-            {
-                "service": "shuffle-action-image",
-                "immutable_reference": "ghcr.io/aegisops/shuffle-tools@sha256:"
-                + "3" * 64,
-            },
+            *(
+                {
+                    "service": service,
+                    "immutable_reference": immutable_reference,
+                }
+                for service, immutable_reference in sorted(
+                    validator.REVIEWED_IMMUTABLE_IMAGE_REFERENCES.items()
+                )
+            ),
         ],
     }
     snapshot_id = validator._snapshot_identifier(trial_run_id, snapshot)
@@ -440,6 +437,81 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "dynamic Shuffle action image",
         ):
             validator.validate_manifest(missing_image, SCHEMA)
+
+        incomplete_inventory = _manifest()
+        incomplete_inventory["snapshot"]["images"] = [
+            image
+            for image in incomplete_inventory["snapshot"]["images"]
+            if image["service"] == "shuffle-action-image"
+        ]
+        incomplete_inventory["snapshot"]["snapshot_id"] = (
+            validator._snapshot_identifier(
+                incomplete_inventory["trial_run_id"],
+                incomplete_inventory["snapshot"],
+            )
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "complete reviewed full-profile service inventory",
+        ):
+            validator.validate_manifest(incomplete_inventory, SCHEMA)
+
+        unreviewed_action = _manifest()
+        action_image = next(
+            image
+            for image in unreviewed_action["snapshot"]["images"]
+            if image["service"] == "shuffle-action-image"
+        )
+        action_image["immutable_reference"] = "frikky/shuffle@sha256:" + "9" * 64
+        unreviewed_action["snapshot"]["snapshot_id"] = (
+            validator._snapshot_identifier(
+                unreviewed_action["trial_run_id"],
+                unreviewed_action["snapshot"],
+            )
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "reviewed immutable reference",
+        ):
+            validator.validate_manifest(unreviewed_action, SCHEMA)
+
+        unreviewed_service = _manifest()
+        postgres_image = next(
+            image
+            for image in unreviewed_service["snapshot"]["images"]
+            if image["service"] == "postgres"
+        )
+        postgres_image["immutable_reference"] = "postgres:16.4@sha256:" + "8" * 64
+        unreviewed_service["snapshot"]["snapshot_id"] = (
+            validator._snapshot_identifier(
+                unreviewed_service["trial_run_id"],
+                unreviewed_service["snapshot"],
+            )
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "reviewed immutable reference",
+        ):
+            validator.validate_manifest(unreviewed_service, SCHEMA)
+
+        unexpected_service = _manifest()
+        unexpected_service["snapshot"]["images"].append(
+            {
+                "service": "ambient-container",
+                "immutable_reference": "ambient@sha256:" + "7" * 64,
+            }
+        )
+        unexpected_service["snapshot"]["snapshot_id"] = (
+            validator._snapshot_identifier(
+                unexpected_service["trial_run_id"],
+                unexpected_service["snapshot"],
+            )
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "complete reviewed full-profile service inventory",
+        ):
+            validator.validate_manifest(unexpected_service, SCHEMA)
 
         stale_evaluation = _manifest()
         stale_evaluation["evaluation"]["trial_run_id"] = (
@@ -845,9 +917,46 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
 
     def test_operator_runner_binds_full_scope_restart_and_cleanup(self) -> None:
         runner = (LAB_ROOT / "run-e2e-trial.sh").read_text(encoding="utf-8")
+        compose = (LAB_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        reviewed_image_env = {
+            key: value
+            for key, value in (
+                line.split("=", 1)
+                for line in (LAB_ROOT / "shuffle" / "reviewed-app-image.env")
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line
+            )
+        }
+        services_section = compose.partition("services:\n")[2].partition(
+            "\nnetworks:\n"
+        )[0]
+        compose_services = set(
+            re.findall(r"^  ([a-z0-9-]+):$", services_section, re.MULTILINE)
+        )
+        self.assertEqual(
+            compose_services | {"shuffle-action-image"},
+            validator.EXPECTED_FULL_PROFILE_IMAGE_SERVICES,
+        )
+        for service, immutable_reference in (
+            validator.REVIEWED_IMMUTABLE_IMAGE_REFERENCES.items()
+        ):
+            if service == "shuffle-action-image":
+                continue
+            self.assertIn(immutable_reference, compose)
+        self.assertEqual(
+            validator.REVIEWED_IMMUTABLE_IMAGE_REFERENCES[
+                "shuffle-action-image"
+            ],
+            reviewed_image_env["AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY"]
+            + "@"
+            + reviewed_image_env["AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST"],
+        )
         self.assertIn('"${LAB_DIR}/up.sh" full', runner)
         self.assertIn("AEGISOPS_LAB_TRIAL_SCOPE=full", runner)
+        self.assertIn("compose_scope full ps -aq", runner)
         self.assertIn("docker_lab inspect ${container_ids}", runner)
+        self.assertIn('python3 "${validator}" --runtime-images', runner)
         self.assertIn('docker_context="${AEGISOPS_LAB_DOCKER_CONTEXT}"', runner)
         self.assertIn('colima_profile="${AEGISOPS_LAB_COLIMA_PROFILE}"', runner)
         self.assertIn('[[ -t 0 && -t 1 ]]', runner)
@@ -878,10 +987,15 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn('retain_status_evidence "${startup_output}"', runner)
         self.assertIn('--startup-status "${startup_status_output}"', runner)
         snapshot_completed = runner.index('>"${snapshot_output}"')
+        runtime_images_validated = runner.index(
+            'python3 "${validator}" --runtime-images'
+        )
+        journey_prepared = runner.index('python3 /opt/aegisops/phase67-e2e/run_real_journey.py \\\n    prepare')
         step_one_recorded = runner.index('record_step 1 "capture_immutable_snapshot"')
         initial_status_retained = runner.index(
             '"${initial_status_output}"\nrecord_step 2'
         )
+        self.assertLess(runtime_images_validated, journey_prepared)
         self.assertLess(snapshot_completed, step_one_recorded)
         self.assertLess(step_one_recorded, initial_status_retained)
         self.assertNotIn("docker inspect ${container_ids}", runner)

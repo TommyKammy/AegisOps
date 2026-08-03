@@ -38,6 +38,16 @@ mutate_json() {
 }
 
 python3 "${validator}" "${schema}" "${sample}"
+runtime_images="${workdir}/runtime-images.json"
+jq '
+  .snapshot.images
+  + [{
+      service: "wazuh-security-bootstrap",
+      immutable_reference: "wazuh/wazuh-indexer:4.14.6@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5"
+    }]
+  | sort_by(.service)
+' "${sample}" >"${runtime_images}"
+python3 "${validator}" --runtime-images "${runtime_images}"
 
 assert_fails_with \
   placeholder-id \
@@ -59,6 +69,14 @@ assert_fails_with \
   unbound-blocked-snapshot \
   'not bound to all snapshot inputs' \
   mutate_json '.snapshot.docker_context = "tampered-colima"'
+assert_fails_with \
+  incomplete-runtime-image-inventory \
+  'complete reviewed full-profile service inventory' \
+  mutate_json '.snapshot.images |= map(select(.service == "shuffle-action-image"))'
+assert_fails_with \
+  unreviewed-shuffle-action-image \
+  'does not use the reviewed immutable reference' \
+  mutate_json '(.snapshot.images[] | select(.service == "shuffle-action-image") | .immutable_reference) = "frikky/shuffle@sha256:9999999999999999999999999999999999999999999999999999999999999999"'
 assert_fails_with \
   non-chronological-blocked-steps \
   'strictly chronological' \
