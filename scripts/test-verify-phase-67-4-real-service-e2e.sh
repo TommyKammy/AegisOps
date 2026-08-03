@@ -20,7 +20,15 @@ assert_fails_with() {
   # compatibility fingerprint and returns it to the current image contract.
   if jq -e --arg trial "phase67-e2e-20260801T135206Z-26c533b6ca31" \
     --arg revision "2473b66f5702a38f1d4630c990509bf812a6af7a" \
-    '.trial_run_id == $trial and .snapshot.repository_revision == $revision' \
+    '.verdict as $verdict
+    | .trial_run_id == $trial
+      and .snapshot.repository_revision == $revision
+      and ([
+        "integration_trial_passed_ga_not_accepted",
+        "integration_trial_passed_with_owned_limitations",
+        "integration_trial_blocked",
+        "integration_trial_failed"
+      ] | index($verdict) != null)' \
     "${manifest}" >/dev/null; then
     expected='complete reviewed full-profile service inventory'
   fi
