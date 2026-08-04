@@ -59,7 +59,13 @@ restart_status_output="${staging_dir}/restart-status.txt"
 workflow_snapshot_output="${staging_dir}/workflow-snapshot.json"
 workflow_predispatch_output="${staging_dir}/workflow-pre-dispatch.json"
 evidence_output="${staging_dir}/evidence.json"
+final_evidence="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}.json"
+final_report="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}-report.json"
+final_artifacts="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}-artifacts"
 cleaned=false
+publication_report_published=false
+publication_artifacts_published=false
+publication_manifest_published=false
 
 observed_now() {
   python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))'
@@ -140,7 +146,19 @@ cleanup_on_exit() {
     "${LAB_DIR}/cleanup.sh" >/dev/null 2>&1 || true
   fi
   if [[ "${rc}" -ne 0 ]]; then
-    echo "BLOCKED: Phase 67.4 real-service E2E trial failed; reviewed captures remain in ${staging_dir}" >&2
+    if [[ "${publication_manifest_published}" != true ]]; then
+      if [[ "${publication_artifacts_published}" == true ]] \
+        && [[ -d "${final_artifacts}" ]] \
+        && [[ ! -e "${staging_dir}" ]]; then
+        mv "${final_artifacts}" "${staging_dir}" >/dev/null 2>&1 || true
+      fi
+      if [[ "${publication_report_published}" == true ]] \
+        && [[ -f "${final_report}" ]] \
+        && [[ -d "${staging_dir}" ]]; then
+        mv "${final_report}" "${report_output}" >/dev/null 2>&1 || true
+      fi
+    fi
+    echo "BLOCKED: Phase 67.4 real-service E2E trial failed; no passing manifest was published" >&2
   fi
   exit "${rc}"
 }
@@ -184,10 +202,43 @@ docker_lab inspect ${container_ids} |
     )
     | sort_by(.service)
   ' >"${images_output}"
+shuffle_worker_immutable_ref="$(
+  # shellcheck disable=SC2086
+  docker_lab inspect ${container_ids} |
+    jq -er '
+      [
+        .[]
+        | select(
+            .Config.Labels["com.docker.compose.service"]
+            == "shuffle-orborus"
+          )
+        | .Config.Env[]
+        | select(startswith("SHUFFLE_WORKER_IMAGE="))
+        | ltrimstr("SHUFFLE_WORKER_IMAGE=")
+      ]
+      | unique
+      | if length == 1 then .[0]
+        else error("expected one Shuffle worker image")
+        end
+    '
+)"
+[[ "${shuffle_worker_immutable_ref}" == *@sha256:* ]] \
+  || fail "Shuffle worker image is not digest-pinned"
 jq \
-  --arg service "shuffle-action-image" \
-  --arg immutable_reference "${shuffle_tools_immutable_ref}" \
-  '. + [{service: $service, immutable_reference: $immutable_reference}] | sort_by(.service)' \
+  --arg action_reference "${shuffle_tools_immutable_ref}" \
+  --arg worker_reference "${shuffle_worker_immutable_ref}" '
+    . + [
+      {
+        service: "shuffle-action-image",
+        immutable_reference: $action_reference
+      },
+      {
+        service: "shuffle-worker-image",
+        immutable_reference: $worker_reference
+      }
+    ]
+    | sort_by(.service)
+  ' \
   "${images_output}" >"${images_output}.next"
 mv "${images_output}.next" "${images_output}"
 python3 "${validator}" --runtime-images "${images_output}"
@@ -459,15 +510,18 @@ python3 "${builder}" \
   --output "${evidence_output}"
 python3 "${validator}" "${schema}" "${evidence_output}"
 
-final_evidence="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}.json"
-final_report="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}-report.json"
-final_artifacts="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}-artifacts"
-mv "${evidence_output}" "${final_evidence}"
+for destination in "${final_evidence}" "${final_report}" "${final_artifacts}"; do
+  [[ ! -e "${destination}" && ! -L "${destination}" ]] \
+    || fail "publication destination already exists: ${destination}"
+done
+chmod 700 "${staging_dir}"
+find "${staging_dir}" -type f -exec chmod 600 {} +
 mv "${report_output}" "${final_report}"
+publication_report_published=true
 mv "${staging_dir}" "${final_artifacts}"
-chmod 700 "${final_artifacts}"
-find "${final_artifacts}" -type f -exec chmod 600 {} +
-chmod 600 "${final_evidence}" "${final_report}"
+publication_artifacts_published=true
+mv "${final_artifacts}/evidence.json" "${final_evidence}"
+publication_manifest_published=true
 trap - EXIT
 
 echo "PASS: Phase 67.4 real-service E2E trial completed"

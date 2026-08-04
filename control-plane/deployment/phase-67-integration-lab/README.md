@@ -168,7 +168,10 @@ rendered Compose and schema digests, startup runtime digest, reviewed and live
 Shuffle workflow digests, workflow API ID, host and Colima identity, selected
 profile, and every immutable image reference. The runner captures and validates
 the live workflow again immediately before dispatch and rejects any change from
-the snapshot. Startup, initial health, restart status, and both workflow exports
+the snapshot. The inventory includes the configured dynamic Shuffle worker
+image as well as the action image because neither is guaranteed to appear in
+the pre-dispatch Compose container enumeration. Startup, initial health,
+restart status, and both workflow exports
 are retained with the raw packet. Each status capture must report the exact
 control-plane image ID committed by the snapshot; a syntactically valid but
 different post-restart image is rejected. Report export is restricted to the exact
@@ -180,6 +183,13 @@ limitation set to a passing verdict and binds blocked or failed limitations to
 their terminal journey step. The historical approval-blocked compatibility path
 is limited to the canonical SHA-256 of the one committed packet, so its public
 trial ID and revision cannot authorize a fabricated manifest.
+The Wazuh intake harness is retained as a prerequisite subtrial whose trigger,
+admission, replay, and boundary-probe timestamps remain verbatim in
+`wazuh-output.txt`. Ordered steps 12 and 13 use only the later Shuffle receipt
+replay and receipt negative probes, so earlier Wazuh operations are not
+relabeled as later journey events. Publication prepares permissions and moves
+the report and raw artifact directory first; the passing manifest is moved last
+and partial publication is rolled back when that final commit cannot complete.
 
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 

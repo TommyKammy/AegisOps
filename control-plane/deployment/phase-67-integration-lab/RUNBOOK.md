@@ -132,7 +132,11 @@ artifact digest and binds a generated evaluation record to the trial, snapshot,
 revision, and verdict. The retained `step-observations.jsonl` records the actual
 completion time of all 15 steps. The validator requires every completed or
 terminal step before `not_run` to be strictly chronological for passed,
-blocked, and failed manifests. The runner rechecks both `HEAD` and the complete
+blocked, and failed manifests. The prerequisite Wazuh harness retains its own
+trigger, admission, replay, and negative-boundary timestamps verbatim in
+`wazuh-output.txt`; ordered journey steps 12 and 13 attest only to the later
+Shuffle receipt replay and receipt negative probes. The runner rechecks both
+`HEAD` and the complete
 tracked and untracked worktree after cleanup, immediately before building the
 publishable packet. Every verdict
 recomputes its snapshot ID from all captured inputs, and each journey identifier
@@ -159,6 +163,11 @@ its separately reviewed approval limitation contract only when the complete
 canonical packet SHA-256 matches the committed compatibility fingerprint.
 Every retained status capture must also report the exact control-plane image ID
 from the snapshot, including after restart.
+The snapshot inventory also includes the digest-pinned dynamic Shuffle worker
+configured on Orborus. For publication, report and raw artifacts are moved only
+after every destination is checked, and the passing manifest is moved last.
+Failure before that final move restores the unpublished packet where possible
+and never leaves a discoverable passing manifest with missing references.
 
 ## Inspect
 

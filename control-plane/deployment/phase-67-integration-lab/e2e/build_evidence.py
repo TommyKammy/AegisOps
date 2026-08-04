@@ -32,8 +32,14 @@ STEP_NAMES = (
 STEP_EVIDENCE_REFS = (
     ("snapshot", "artifact:workflow-snapshot.json"),
     ("artifact:initial-status.txt",),
-    ("wazuh-manifest:native_wazuh_alert_id",),
-    ("wazuh-manifest:aegisops_alert_id",),
+    (
+        "wazuh-manifest:native_wazuh_alert_id",
+        "artifact:wazuh-output.txt",
+    ),
+    (
+        "wazuh-manifest:aegisops_alert_id",
+        "artifact:wazuh-output.txt",
+    ),
     ("journey:case_id",),
     ("journey:action_request_id",),
     ("journey:denied_dispatch",),
@@ -45,8 +51,8 @@ STEP_EVIDENCE_REFS = (
     ("journey:expected_receipt_id",),
     ("journey:reconciliation_id",),
     ("report:sha256",),
-    ("wazuh-manifest:duplicate_delivery", "journey:replay_reconciliation_id"),
-    ("wazuh-command:negative-boundaries", "journey:measured_negative_probes"),
+    ("journey:replay_reconciliation_id",),
+    ("journey:measured_negative_probes",),
     ("restart:checked_identifiers", "artifact:restart-status.txt"),
     ("evaluation-record:sha256",),
 )
@@ -332,6 +338,40 @@ def _load_step_observations(path: Path) -> list[dict[str, object]]:
     return observations
 
 
+def _load_wazuh_observations(output: str) -> dict[str, str]:
+    observation_names = (
+        "trigger_real_wazuh_detection",
+        "admit_wazuh_alert",
+        "replay_wazuh_delivery",
+        "wazuh_negative_cases",
+    )
+    observations: dict[str, str] = {}
+    lines = output.splitlines()
+    for name in observation_names:
+        prefix = f"step_observation.{name}="
+        matches = [line[len(prefix) :] for line in lines if line.startswith(prefix)]
+        if len(matches) != 1:
+            raise ValueError(
+                f"Wazuh output must contain exactly one {prefix[:-1]}"
+            )
+        observed_at = _required_text(matches[0], f"wazuh observation {name}")
+        normalized = (
+            observed_at[:-1] + "+00:00"
+            if observed_at.endswith("Z")
+            else observed_at
+        )
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError as exc:
+            raise ValueError(
+                f"Wazuh observation {name} is not RFC3339"
+            ) from exc
+        if parsed.tzinfo is None:
+            raise ValueError(f"Wazuh observation {name} lacks a timezone")
+        observations[name] = observed_at
+    return observations
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--schema", type=Path, required=True)
@@ -371,6 +411,17 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     )
     observations = _load_step_observations(args.observations)
     wazuh_output = args.wazuh_output.read_text(encoding="utf-8")
+    wazuh_observations = _load_wazuh_observations(wazuh_output)
+    for step_index, observation_name in (
+        (2, "trigger_real_wazuh_detection"),
+        (3, "admit_wazuh_alert"),
+    ):
+        if observations[step_index]["observed_at"] != wazuh_observations[
+            observation_name
+        ]:
+            raise ValueError(
+                f"step {step_index + 1} does not use the Wazuh observation time"
+            )
     evaluation = args.evaluation.read_text(encoding="utf-8")
     if _sha256(args.reviewed_workflow) != snapshot.get(
         "shuffle_reviewed_workflow_sha256"

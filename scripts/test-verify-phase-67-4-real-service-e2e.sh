@@ -57,10 +57,16 @@ python3 "${validator}" "${schema}" "${sample}"
 runtime_images="${workdir}/runtime-images.json"
 jq '
   .snapshot.images
-  + [{
-      service: "wazuh-security-bootstrap",
-      immutable_reference: "wazuh/wazuh-indexer:4.14.6@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5"
-    }]
+  + [
+      {
+        service: "wazuh-security-bootstrap",
+        immutable_reference: "wazuh/wazuh-indexer:4.14.6@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5"
+      },
+      {
+        service: "shuffle-worker-image",
+        immutable_reference: "ghcr.io/shuffle/shuffle-worker:2.2.1@sha256:9541c1fef2bc8511727610b565adbd0f7c817c53afee2dd9fef6aad8a971ffb1"
+      }
+    ]
   | sort_by(.service)
 ' "${sample}" >"${runtime_images}"
 python3 "${validator}" --runtime-images "${runtime_images}"

@@ -369,6 +369,32 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertEqual(len(observations), 15)
         self.assertEqual(observations[-1]["name"], builder.STEP_NAMES[-1])
 
+    def test_builder_preserves_real_wazuh_subtrial_observation_times(self) -> None:
+        output = "\n".join(
+            (
+                "step_observation.wazuh_negative_cases=2026-08-01T09:59:59Z",
+                "step_observation.trigger_real_wazuh_detection=2026-08-01T10:00:01Z",
+                "step_observation.admit_wazuh_alert=2026-08-01T10:00:02Z",
+                "step_observation.replay_wazuh_delivery=2026-08-01T10:00:03Z",
+            )
+        )
+        observations = builder._load_wazuh_observations(output)
+        self.assertEqual(
+            observations["wazuh_negative_cases"],
+            "2026-08-01T09:59:59Z",
+        )
+        self.assertEqual(
+            observations["replay_wazuh_delivery"],
+            "2026-08-01T10:00:03Z",
+        )
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            builder._load_wazuh_observations(
+                output.replace(
+                    "step_observation.replay_wazuh_delivery=2026-08-01T10:00:03Z",
+                    "",
+                )
+            )
+
     def test_negative_receipt_probes_rollback_authoritative_execution(self) -> None:
         record_types = (
             journey.ActionRequestRecord,
@@ -1218,7 +1244,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             re.findall(r"^  ([a-z0-9-]+):$", services_section, re.MULTILINE)
         )
         self.assertEqual(
-            compose_services | {"shuffle-action-image"},
+            compose_services | {"shuffle-action-image", "shuffle-worker-image"},
             validator.EXPECTED_FULL_PROFILE_IMAGE_SERVICES,
         )
         for service, immutable_reference in (
@@ -1249,7 +1275,19 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn('prepare \\', runner)
         self.assertIn('--approver-identity "${approver_identity}"', runner)
         self.assertIn('"shuffle-action-image"', runner)
+        self.assertIn('"shuffle-worker-image"', runner)
+        self.assertIn('SHUFFLE_WORKER_IMAGE=', runner)
         self.assertIn('final_artifacts=', runner)
+        self.assertLess(
+            runner.index('mv "${report_output}" "${final_report}"'),
+            runner.index('mv "${final_artifacts}/evidence.json" "${final_evidence}"'),
+        )
+        self.assertLess(
+            runner.index('mv "${staging_dir}" "${final_artifacts}"'),
+            runner.index('mv "${final_artifacts}/evidence.json" "${final_evidence}"'),
+        )
+        self.assertIn('publication_manifest_published=false', runner)
+        self.assertIn('no passing manifest was published', runner)
         self.assertIn('startup_status_output=', runner)
         self.assertIn('initial_status_output=', runner)
         self.assertIn('restart_status_output=', runner)

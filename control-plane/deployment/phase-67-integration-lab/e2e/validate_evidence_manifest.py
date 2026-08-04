@@ -50,8 +50,14 @@ STEP_NAMES = (
 STEP_EVIDENCE_REFS = (
     ("snapshot", "artifact:workflow-snapshot.json"),
     ("artifact:initial-status.txt",),
-    ("wazuh-manifest:native_wazuh_alert_id",),
-    ("wazuh-manifest:aegisops_alert_id",),
+    (
+        "wazuh-manifest:native_wazuh_alert_id",
+        "artifact:wazuh-output.txt",
+    ),
+    (
+        "wazuh-manifest:aegisops_alert_id",
+        "artifact:wazuh-output.txt",
+    ),
     ("journey:case_id",),
     ("journey:action_request_id",),
     ("journey:denied_dispatch",),
@@ -63,8 +69,8 @@ STEP_EVIDENCE_REFS = (
     ("journey:expected_receipt_id",),
     ("journey:reconciliation_id",),
     ("report:sha256",),
-    ("wazuh-manifest:duplicate_delivery", "journey:replay_reconciliation_id"),
-    ("wazuh-command:negative-boundaries", "journey:measured_negative_probes"),
+    ("journey:replay_reconciliation_id",),
+    ("journey:measured_negative_probes",),
     ("restart:checked_identifiers", "artifact:restart-status.txt"),
     ("evaluation-record:sha256",),
 )
@@ -149,12 +155,17 @@ REVIEWED_IMMUTABLE_IMAGE_REFERENCES = {
         "frikky/shuffle@sha256:"
         "fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8"
     ),
+    "shuffle-worker-image": (
+        "ghcr.io/shuffle/shuffle-worker:2.2.1@sha256:"
+        "9541c1fef2bc8511727610b565adbd0f7c817c53afee2dd9fef6aad8a971ffb1"
+    ),
 }
 EXPECTED_FULL_PROFILE_IMAGE_SERVICES = frozenset(
     {"control-plane", *REVIEWED_IMMUTABLE_IMAGE_REFERENCES}
 )
 LEGACY_BLOCKED_IMAGE_SERVICES = (
-    EXPECTED_FULL_PROFILE_IMAGE_SERVICES - {"wazuh-security-bootstrap"}
+    EXPECTED_FULL_PROFILE_IMAGE_SERVICES
+    - {"wazuh-security-bootstrap", "shuffle-worker-image"}
 )
 IDENTIFIER_KEYS = (
     "wazuh_manager_id",
@@ -753,8 +764,16 @@ def validate_manifest(manifest: object, schema: object) -> None:
     execution_count = require_nullable_integer(idempotency["shuffle_execution_count"], "$.idempotency.shuffle_execution_count")
     replay_id = require_nullable_string(idempotency["receipt_replay_reconciliation_id"], "$.idempotency.receipt_replay_reconciliation_id")
     receipt_preserved = require_nullable_boolean(idempotency["receipt_identity_preserved"], "$.idempotency.receipt_identity_preserved")
-    if step_statuses[11] == "passed":
+    if step_statuses[3] == "passed":
         require(first_disposition == "created" and duplicate_disposition == "deduplicated" and wazuh_preserved is True, "Wazuh replay must preserve one admitted alert")
+    else:
+        require(
+            first_disposition is None
+            and duplicate_disposition is None
+            and wazuh_preserved is None,
+            "a non-passed Wazuh admission step cannot claim replay success",
+        )
+    if step_statuses[11] == "passed":
         require(execution_count == 1 and receipt_preserved is True, "Shuffle replay must preserve one execution and receipt")
         require(replay_id == normalized_ids["reconciliation_id"], "receipt replay must reuse the reconciliation ID")
     else:
