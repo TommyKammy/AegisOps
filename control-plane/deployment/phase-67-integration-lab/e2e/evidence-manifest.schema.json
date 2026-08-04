@@ -103,7 +103,7 @@
         "images": {
           "type": "array",
           "minItems": 11,
-          "maxItems": 12,
+          "maxItems": 13,
           "uniqueItems": true,
           "items": {
             "type": "object",
@@ -114,6 +114,10 @@
               "immutable_reference": {
                 "type": "string",
                 "pattern": "^.+@sha256:[0-9a-f]{64}$"
+              },
+              "runtime_image_id": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
               }
             }
           }

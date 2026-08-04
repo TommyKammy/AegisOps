@@ -169,8 +169,11 @@ Shuffle workflow digests, workflow API ID, host and Colima identity, selected
 profile, and every immutable image reference. The runner captures and validates
 the live workflow again immediately before dispatch and rejects any change from
 the snapshot. The inventory includes the configured dynamic Shuffle worker
-image as well as the action image because neither is guaranteed to appear in
-the pre-dispatch Compose container enumeration. Startup, initial health,
+image and the action tag's observed repository digest and runtime image ID
+because neither dynamic image is guaranteed to appear in the pre-dispatch
+Compose container enumeration. After approval, the runner rechecks that action
+identity and the complete repository snapshot immediately before dispatch.
+Startup, initial health,
 restart status, and both workflow exports
 are retained with the raw packet. Each status capture must report the exact
 control-plane image ID committed by the snapshot; a syntactically valid but

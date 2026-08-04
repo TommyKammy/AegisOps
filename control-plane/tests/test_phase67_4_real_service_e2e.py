@@ -67,6 +67,11 @@ def _manifest() -> dict[str, object]:
                 {
                     "service": service,
                     "immutable_reference": immutable_reference,
+                    **(
+                        {"runtime_image_id": "sha256:" + "f" * 64}
+                        if service == "shuffle-action-image"
+                        else {}
+                    ),
                 }
                 for service, immutable_reference in sorted(
                     validator.REVIEWED_IMMUTABLE_IMAGE_REFERENCES.items()
@@ -241,6 +246,17 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             validator.OWNED_LIMITATION_STATUSES,
         )
         validator.validate_manifest(_manifest(), SCHEMA)
+
+    def test_schema_allows_the_complete_runtime_image_inventory(self) -> None:
+        images_schema = SCHEMA["properties"]["snapshot"]["properties"]["images"]
+        self.assertEqual(
+            images_schema["maxItems"],
+            len(validator.EXPECTED_FULL_PROFILE_IMAGE_SERVICES),
+        )
+        self.assertEqual(
+            len(_manifest()["snapshot"]["images"]),
+            images_schema["maxItems"],
+        )
 
     def test_validator_rejects_placeholder_and_synthetic_live_ids(self) -> None:
         for field_name, value in (
@@ -522,6 +538,25 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "reviewed immutable reference",
         ):
             validator.validate_manifest(unreviewed_action, SCHEMA)
+
+        missing_runtime_identity = _manifest()
+        action_image = next(
+            image
+            for image in missing_runtime_identity["snapshot"]["images"]
+            if image["service"] == "shuffle-action-image"
+        )
+        action_image.pop("runtime_image_id")
+        missing_runtime_identity["snapshot"]["snapshot_id"] = (
+            validator._snapshot_identifier(
+                missing_runtime_identity["trial_run_id"],
+                missing_runtime_identity["snapshot"],
+            )
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "observed Shuffle action runtime image ID",
+        ):
+            validator.validate_manifest(missing_runtime_identity, SCHEMA)
 
         unreviewed_service = _manifest()
         postgres_image = next(
@@ -1276,6 +1311,8 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn('--approver-identity "${approver_identity}"', runner)
         self.assertIn('"shuffle-action-image"', runner)
         self.assertIn('"shuffle-worker-image"', runner)
+        self.assertIn("capture_reviewed_shuffle_action_image()", runner)
+        self.assertIn('runtime_image_id: $runtime_image_id', runner)
         self.assertIn('SHUFFLE_WORKER_IMAGE=', runner)
         self.assertIn('final_artifacts=', runner)
         self.assertLess(
@@ -1305,6 +1342,23 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             'live Shuffle workflow changed after the trial snapshot',
             runner,
         )
+        dispatch = runner.index(
+            "python3 /opt/aegisops/phase67-e2e/run_real_journey.py \\\n"
+            "    execute"
+        )
+        predispatch_snapshot_check = runner.rindex(
+            "assert_repository_snapshot",
+            0,
+            dispatch,
+        )
+        predispatch_image_check = runner.rindex(
+            'predispatch_shuffle_action_image="$(capture_reviewed_shuffle_action_image)"',
+            0,
+            dispatch,
+        )
+        self.assertLess(predispatch_snapshot_check, dispatch)
+        self.assertLess(predispatch_image_check, dispatch)
+        self.assertLess(predispatch_image_check, predispatch_snapshot_check)
         self.assertIn('retain_status_evidence "${startup_output}"', runner)
         self.assertIn('--startup-status "${startup_status_output}"', runner)
         snapshot_completed = runner.index('>"${snapshot_output}"')

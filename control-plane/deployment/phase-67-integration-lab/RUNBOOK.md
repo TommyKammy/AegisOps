@@ -164,7 +164,10 @@ canonical packet SHA-256 matches the committed compatibility fingerprint.
 Every retained status capture must also report the exact control-plane image ID
 from the snapshot, including after restart.
 The snapshot inventory also includes the digest-pinned dynamic Shuffle worker
-configured on Orborus. For publication, report and raw artifacts are moved only
+configured on Orborus plus the observed repository digest and runtime image ID
+behind the Shuffle action tag. After operator approval, the runner revalidates
+the live workflow and action image, then checks the complete repository
+snapshot immediately before dispatch. For publication, report and raw artifacts are moved only
 after every destination is checked, and the passing manifest is moved last.
 Failure before that final move restores the unpublished packet where possible
 and never leaves a discoverable passing manifest with missing references.

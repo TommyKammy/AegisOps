@@ -237,6 +237,7 @@ REVISION = re.compile(r"^[0-9a-f]{40}$")
 TRIAL_ID = re.compile(r"^phase67-e2e-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$")
 SNAPSHOT_ID = re.compile(r"^phase67-snapshot-[0-9a-f]{16}$")
 IMMUTABLE_IMAGE = re.compile(r"^.+@sha256:[0-9a-f]{64}$")
+RUNTIME_IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 WORKFLOW_UUID = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
 )
@@ -392,6 +393,19 @@ def _validate_schema_contract(schema: object) -> None:
     require(isinstance(required, list), "schema required list is missing")
     require(set(required) == set(properties), "schema top-level required fields drifted")
     require(root.get("additionalProperties") is False, "schema must reject extra fields")
+    snapshot = require_mapping(properties.get("snapshot"), "$schema.properties.snapshot")
+    snapshot_properties = require_mapping(
+        snapshot.get("properties"),
+        "$schema.properties.snapshot.properties",
+    )
+    images = require_mapping(
+        snapshot_properties.get("images"),
+        "$schema.properties.snapshot.properties.images",
+    )
+    require(
+        images.get("maxItems") == len(EXPECTED_FULL_PROFILE_IMAGE_SERVICES),
+        "schema image inventory limit does not match the full profile",
+    )
 
 
 def _snapshot_identifier(
@@ -442,15 +456,32 @@ def _validate_runtime_images(
     require(isinstance(value, list) and value, "$.snapshot.images must be non-empty")
     services: set[str] = set()
     image_references: dict[str, str] = {}
+    runtime_image_ids: dict[str, str] = {}
     for index, item in enumerate(value):
         image = require_mapping(item, f"$.snapshot.images[{index}]")
-        require_exact_keys(image, required=("service", "immutable_reference"), path=f"$.snapshot.images[{index}]")
+        require_exact_keys(
+            image,
+            required=("service", "immutable_reference"),
+            optional=("runtime_image_id",),
+            path=f"$.snapshot.images[{index}]",
+        )
         service = require_string(image["service"], f"$.snapshot.images[{index}].service")
         require(service not in services, "$.snapshot.images contains duplicate services")
         services.add(service)
         reference = require_string(image["immutable_reference"], f"$.snapshot.images[{index}].immutable_reference")
         require(IMMUTABLE_IMAGE.fullmatch(reference) is not None, f"$.snapshot.images[{index}] is not digest-pinned")
         image_references[service] = reference
+        runtime_image_id = image.get("runtime_image_id")
+        if runtime_image_id is not None:
+            runtime_image_id = require_string(
+                runtime_image_id,
+                f"$.snapshot.images[{index}].runtime_image_id",
+            )
+            require(
+                RUNTIME_IMAGE_ID.fullmatch(runtime_image_id) is not None,
+                f"$.snapshot.images[{index}].runtime_image_id is not an image ID",
+            )
+            runtime_image_ids[service] = runtime_image_id
     require(
         "shuffle-action-image" in services,
         "$.snapshot.images omits the dynamic Shuffle action image",
@@ -464,6 +495,11 @@ def _validate_runtime_images(
         services == expected_services,
         "$.snapshot.images must contain the complete reviewed full-profile service inventory",
     )
+    if not allow_legacy_blocked_inventory:
+        require(
+            "shuffle-action-image" in runtime_image_ids,
+            "$.snapshot.images must retain the observed Shuffle action runtime image ID",
+        )
     require(
         re.fullmatch(
             r"control-plane@sha256:[0-9a-f]{64}",

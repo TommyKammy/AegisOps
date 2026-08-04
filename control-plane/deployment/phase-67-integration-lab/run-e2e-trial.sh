@@ -140,6 +140,43 @@ capture_reviewed_shuffle_workflow() (
     >/dev/null
 )
 
+capture_reviewed_shuffle_action_image() {
+  local pinned_metadata
+  local runtime_metadata
+  local pinned_image_id
+  local runtime_image_id
+  local runtime_immutable_ref
+
+  pinned_metadata="$(docker_lab image inspect "${shuffle_tools_immutable_ref}")"
+  runtime_metadata="$(docker_lab image inspect "${shuffle_tools_image}")"
+  pinned_image_id="$(jq -er '.[0].Id' <<<"${pinned_metadata}")"
+  runtime_image_id="$(jq -er '.[0].Id' <<<"${runtime_metadata}")"
+  runtime_immutable_ref="$(
+    jq -er \
+      --arg repository "${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}@" '
+        [.[0].RepoDigests[] | select(startswith($repository))]
+        | unique
+        | if length == 1 then .[0]
+          else error("expected one repository digest for the Shuffle action image")
+          end
+      ' <<<"${runtime_metadata}"
+  )"
+  [[ "${runtime_image_id}" == "${pinned_image_id}" ]] \
+    || fail "Shuffle action runtime tag does not resolve to the reviewed image ID"
+  [[ "${runtime_immutable_ref}" == "${shuffle_tools_immutable_ref}" ]] \
+    || fail "Shuffle action runtime tag does not retain the reviewed digest"
+
+  jq -cn \
+    --arg immutable_reference "${runtime_immutable_ref}" \
+    --arg runtime_image_id "${runtime_image_id}" '
+      {
+        service: "shuffle-action-image",
+        immutable_reference: $immutable_reference,
+        runtime_image_id: $runtime_image_id
+      }
+    '
+}
+
 cleanup_on_exit() {
   local rc=$?
   if [[ "${cleaned}" != true ]]; then
@@ -224,14 +261,12 @@ shuffle_worker_immutable_ref="$(
 )"
 [[ "${shuffle_worker_immutable_ref}" == *@sha256:* ]] \
   || fail "Shuffle worker image is not digest-pinned"
+shuffle_action_image="$(capture_reviewed_shuffle_action_image)"
 jq \
-  --arg action_reference "${shuffle_tools_immutable_ref}" \
+  --argjson action_image "${shuffle_action_image}" \
   --arg worker_reference "${shuffle_worker_immutable_ref}" '
     . + [
-      {
-        service: "shuffle-action-image",
-        immutable_reference: $action_reference
-      },
+      $action_image,
       {
         service: "shuffle-worker-image",
         immutable_reference: $worker_reference
@@ -404,6 +439,10 @@ capture_reviewed_shuffle_workflow "${workflow_predispatch_output}"
   || fail "live Shuffle workflow changed after the trial snapshot"
 [[ "$(openssl dgst -sha256 -r "${reviewed_workflow}" | awk '{print $1}')" == "${reviewed_workflow_sha256}" ]] \
   || fail "reviewed Shuffle workflow changed after the trial snapshot"
+predispatch_shuffle_action_image="$(capture_reviewed_shuffle_action_image)"
+[[ "${predispatch_shuffle_action_image}" == "${shuffle_action_image}" ]] \
+  || fail "Shuffle action image identity changed after the trial snapshot"
+assert_repository_snapshot
 
 compose_scope full exec -T \
   -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE="${shuffle_tools_image}" \
