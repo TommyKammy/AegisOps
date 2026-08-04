@@ -186,6 +186,12 @@ limitation set to a passing verdict and binds blocked or failed limitations to
 their terminal journey step. The historical approval-blocked compatibility path
 is limited to the canonical SHA-256 of the one committed packet, so its public
 trial ID and revision cannot authorize a fabricated manifest.
+Every database-capable invocation of the bind-mounted E2E journey runner uses
+the same repository-snapshot guard, including prepare, approved dispatch, and
+post-restart verification. Evidence validation accepts both ARM64 and x86_64
+host architecture spellings supported by preflight, and requires evaluation
+fields to remain null unless the publication step passed; only the exact
+fingerprinted historical packet retains its reviewed compatibility exception.
 The Wazuh intake harness is retained as a prerequisite subtrial whose trigger,
 admission, replay, and boundary-probe timestamps remain verbatim in
 `wazuh-output.txt`. Ordered steps 12 and 13 use only the later Shuffle receipt

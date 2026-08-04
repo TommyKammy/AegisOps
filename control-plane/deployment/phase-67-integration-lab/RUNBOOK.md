@@ -171,6 +171,13 @@ snapshot immediately before dispatch. For publication, report and raw artifacts 
 after every destination is checked, and the passing manifest is moved last.
 Failure before that final move restores the unpublished packet where possible
 and never leaves a discoverable passing manifest with missing references.
+The prepare, approved execution, and restart-verification commands all enter
+the bind-mounted journey runner through one helper that checks the captured
+repository revision and complete worktree immediately before container
+execution. The evidence contract accepts the ARM64 and x86_64 host spellings
+supported by preflight. A blocked or failed packet must leave every evaluation
+field null when the publication step did not pass, apart from the exact
+fingerprinted historical compatibility packet.
 
 ## Inspect
 

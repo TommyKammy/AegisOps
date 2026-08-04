@@ -257,6 +257,43 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             len(_manifest()["snapshot"]["images"]),
             images_schema["maxItems"],
         )
+        self.assertEqual(
+            set(
+                SCHEMA["properties"]["snapshot"]["properties"][
+                    "host_architecture"
+                ]["enum"]
+            ),
+            validator.SUPPORTED_HOST_ARCHITECTURES,
+        )
+
+    def test_snapshot_accepts_every_preflight_host_architecture(self) -> None:
+        manifest = _manifest()
+        for architecture in ("arm64", "aarch64", "amd64", "x86_64"):
+            with self.subTest(architecture=architecture):
+                snapshot = deepcopy(manifest["snapshot"])
+                snapshot["host_architecture"] = architecture
+                snapshot["snapshot_id"] = validator._snapshot_identifier(
+                    manifest["trial_run_id"],
+                    snapshot,
+                )
+                validator._validate_snapshot(
+                    snapshot,
+                    trial_run_id=manifest["trial_run_id"],
+                )
+        unsupported = deepcopy(manifest["snapshot"])
+        unsupported["host_architecture"] = "ppc64le"
+        unsupported["snapshot_id"] = validator._snapshot_identifier(
+            manifest["trial_run_id"],
+            unsupported,
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "host_architecture is not supported",
+        ):
+            validator._validate_snapshot(
+                unsupported,
+                trial_run_id=manifest["trial_run_id"],
+            )
 
     def test_validator_rejects_placeholder_and_synthetic_live_ids(self) -> None:
         for field_name, value in (
@@ -1072,6 +1109,17 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 step["evidence_refs"] = ["not-run:upstream-blocker"]
         validator.validate_manifest(manifest, SCHEMA)
 
+        claimed_evaluation = deepcopy(manifest)
+        claimed_evaluation["evaluation"] = deepcopy(_manifest()["evaluation"])
+        claimed_evaluation["evaluation"]["verdict"] = (
+            "integration_trial_blocked"
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "non-passed evaluation step cannot claim",
+        ):
+            validator.validate_manifest(claimed_evaluation, SCHEMA)
+
         unrelated_blocker = deepcopy(manifest)
         unrelated_blocker["limitations"][-1]["limitation_id"] = (
             "phase67-blocked-unrelated-step"
@@ -1342,30 +1390,39 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             'live Shuffle workflow changed after the trial snapshot',
             runner,
         )
-        dispatch = runner.index(
-            "python3 /opt/aegisops/phase67-e2e/run_real_journey.py \\\n"
-            "    execute"
-        )
-        predispatch_snapshot_check = runner.rindex(
-            "assert_repository_snapshot",
-            0,
-            dispatch,
-        )
+        dispatch = runner.index("run_reviewed_journey \\\n  execute")
         predispatch_image_check = runner.rindex(
             'predispatch_shuffle_action_image="$(capture_reviewed_shuffle_action_image)"',
             0,
             dispatch,
         )
-        self.assertLess(predispatch_snapshot_check, dispatch)
         self.assertLess(predispatch_image_check, dispatch)
-        self.assertLess(predispatch_image_check, predispatch_snapshot_check)
+        guarded_runner_start = runner.index("run_reviewed_journey()")
+        guarded_runner_end = runner.index(
+            '[[ -f "${evaluation}" ]]',
+            guarded_runner_start,
+        )
+        guarded_runner = runner[guarded_runner_start:guarded_runner_end]
+        self.assertLess(
+            guarded_runner.index("assert_repository_snapshot"),
+            guarded_runner.index("compose_scope full exec -T"),
+        )
+        self.assertEqual(
+            runner.count(
+                "python3 /opt/aegisops/phase67-e2e/run_real_journey.py"
+            ),
+            1,
+        )
+        self.assertEqual(runner.count("run_reviewed_journey"), 4)
         self.assertIn('retain_status_evidence "${startup_output}"', runner)
         self.assertIn('--startup-status "${startup_status_output}"', runner)
         snapshot_completed = runner.index('>"${snapshot_output}"')
         runtime_images_validated = runner.index(
             'python3 "${validator}" --runtime-images'
         )
-        journey_prepared = runner.index('python3 /opt/aegisops/phase67-e2e/run_real_journey.py \\\n    prepare')
+        journey_prepared = runner.index(
+            "run_reviewed_journey \\\n  prepare"
+        )
         step_one_recorded = runner.index('record_step 1 "capture_immutable_snapshot"')
         initial_status_retained = runner.index(
             '"${initial_status_output}"\nrecord_step 2'

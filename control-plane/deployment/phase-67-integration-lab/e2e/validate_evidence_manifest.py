@@ -27,6 +27,9 @@ OWNED_LIMITATION_STATUSES = {
     "phase67-bounded-connectors": "follow_up_required",
     "phase67-ga-gates-open": "blocking",
 }
+SUPPORTED_HOST_ARCHITECTURES = frozenset(
+    {"arm64", "aarch64", "amd64", "x86_64"}
+)
 LEGACY_APPROVAL_BLOCKER_STATUSES = {
     "phase67-independent-human-approval-required": "blocking",
 }
@@ -402,6 +405,16 @@ def _validate_schema_contract(schema: object) -> None:
         snapshot_properties.get("images"),
         "$schema.properties.snapshot.properties.images",
     )
+    host_architecture = require_mapping(
+        snapshot_properties.get("host_architecture"),
+        "$schema.properties.snapshot.properties.host_architecture",
+    )
+    host_architecture_enum = host_architecture.get("enum")
+    require(
+        isinstance(host_architecture_enum, list)
+        and set(host_architecture_enum) == SUPPORTED_HOST_ARCHITECTURES,
+        "schema host architecture contract drifted",
+    )
     require(
         images.get("maxItems") == len(EXPECTED_FULL_PROFILE_IMAGE_SERVICES),
         "schema image inventory limit does not match the full profile",
@@ -570,7 +583,10 @@ def _validate_snapshot(
         is not None,
         "$.snapshot.shuffle_api_workflow_id must be a UUID",
     )
-    require(snapshot["host_architecture"] in ("arm64", "aarch64"), "$.snapshot.host_architecture must be ARM64")
+    require(
+        snapshot["host_architecture"] in SUPPORTED_HOST_ARCHITECTURES,
+        "$.snapshot.host_architecture is not supported",
+    )
     require_string(snapshot["docker_context"], "$.snapshot.docker_context")
     require_string(snapshot["colima_profile"], "$.snapshot.colima_profile")
     require(snapshot["selected_profile"] == "full", "$.snapshot.selected_profile must be full")
@@ -914,7 +930,7 @@ def validate_manifest(manifest: object, schema: object) -> None:
     evaluation_verdict = require_nullable_string(evaluation["verdict"], "$.evaluation.verdict")
     evaluation_ga = require_nullable_boolean(evaluation["ga_accepted"], "$.evaluation.ga_accepted")
     evaluation_sha = require_nullable_string(evaluation["sha256"], "$.evaluation.sha256")
-    if any(
+    evaluation_present = any(
         value is not None
         for value in (
             evaluation_trial,
@@ -925,7 +941,12 @@ def validate_manifest(manifest: object, schema: object) -> None:
             evaluation_ga,
             evaluation_sha,
         )
-    ):
+    )
+    if step_statuses[14] == "passed" or allow_legacy_blocked_packet:
+        require(
+            evaluation_present,
+            "a passed evaluation step requires a bound evaluation record",
+        )
         require(evaluation_trial == root["trial_run_id"], "evaluation is not bound to this trial")
         require(evaluation_snapshot == snapshot_id, "evaluation is not bound to this snapshot")
         require(evaluation_revision == snapshot["repository_revision"], "evaluation is not bound to this repository revision")
@@ -933,8 +954,11 @@ def validate_manifest(manifest: object, schema: object) -> None:
         require(evaluation_verdict == verdict, "evaluation verdict does not match the manifest")
         require(evaluation_ga is False, "Phase 67 evidence cannot accept GA")
         require(evaluation_sha is not None and SHA256.fullmatch(evaluation_sha) is not None, "evaluation record digest must be SHA-256")
-    elif step_statuses[14] == "passed":
-        raise EvidenceValidationError("a passed evaluation step requires a bound evaluation record")
+    else:
+        require(
+            not evaluation_present,
+            "a non-passed evaluation step cannot claim a published evaluation",
+        )
 
     artifacts = require_mapping(root["artifacts"], "$.artifacts")
     require_exact_keys(artifacts, required=("retention", "directory_name", "files"), path="$.artifacts")

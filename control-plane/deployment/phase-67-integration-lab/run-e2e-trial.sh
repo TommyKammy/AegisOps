@@ -36,6 +36,17 @@ assert_repository_snapshot() {
     || fail "real E2E evidence requires the reviewed repository worktree to remain clean"
 }
 
+run_reviewed_journey() {
+  assert_repository_snapshot
+  compose_scope full exec -T \
+    -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE="${shuffle_tools_image}" \
+    -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}" \
+    -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_IMMUTABLE_REF="${shuffle_tools_immutable_ref}" \
+    control-plane \
+    python3 /opt/aegisops/phase67-e2e/run_real_journey.py \
+      "$@"
+}
+
 [[ -f "${evaluation}" ]] \
   || fail "Phase 67 prerequisite evaluation is missing: ${evaluation}"
 repository_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
@@ -371,17 +382,12 @@ record_step 4 \
   "admit_wazuh_alert" \
   "$(sed -n 's/^step_observation\.admit_wazuh_alert=//p' "${wazuh_output}" | tail -n 1)"
 
-compose_scope full exec -T \
-  -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE="${shuffle_tools_image}" \
-  -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}" \
-  -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_IMMUTABLE_REF="${shuffle_tools_immutable_ref}" \
-  control-plane \
-  python3 /opt/aegisops/phase67-e2e/run_real_journey.py \
-    prepare \
-    --trial-id "${trial_run_id}" \
-    --alert-id "${aegisops_alert_id}" \
-    "${wazuh_reconciliation_args[@]}" \
-    >"${preparation_output}"
+run_reviewed_journey \
+  prepare \
+  --trial-id "${trial_run_id}" \
+  --alert-id "${aegisops_alert_id}" \
+  "${wazuh_reconciliation_args[@]}" \
+  >"${preparation_output}"
 record_step 5 \
   "promote_alert_to_case" \
   "$(jq -er '.step_observations.promote_alert_to_case' "${preparation_output}")"
@@ -442,21 +448,14 @@ capture_reviewed_shuffle_workflow "${workflow_predispatch_output}"
 predispatch_shuffle_action_image="$(capture_reviewed_shuffle_action_image)"
 [[ "${predispatch_shuffle_action_image}" == "${shuffle_action_image}" ]] \
   || fail "Shuffle action image identity changed after the trial snapshot"
-assert_repository_snapshot
-
-compose_scope full exec -T \
-  -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE="${shuffle_tools_image}" \
-  -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}" \
-  -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_IMMUTABLE_REF="${shuffle_tools_immutable_ref}" \
-  control-plane \
-  python3 /opt/aegisops/phase67-e2e/run_real_journey.py \
-    execute \
-    --trial-id "${trial_run_id}" \
-    --approver-identity "${approver_identity}" \
-    --approval-challenge "${approval_challenge}" \
-    --approval-method "${approval_method}" \
-    <"${preparation_output}" \
-    >"${journey_output}"
+run_reviewed_journey \
+  execute \
+  --trial-id "${trial_run_id}" \
+  --approver-identity "${approver_identity}" \
+  --approval-challenge "${approval_challenge}" \
+  --approval-method "${approval_method}" \
+  <"${preparation_output}" \
+  >"${journey_output}"
 for step_spec in \
   "8:approve_and_dispatch_real_shuffle_action" \
   "9:capture_authenticated_shuffle_receipt" \
@@ -488,12 +487,7 @@ restart_up_output="$("${LAB_DIR}/up.sh" full)"
 printf '%s\n' "${restart_up_output}"
 retain_status_evidence "${restart_up_output}" "${restart_status_output}"
 jq -c '.journey | .aegisops_alert_id = .alert_id' "${journey_output}" |
-  compose_scope full exec -T \
-    -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE="${shuffle_tools_image}" \
-    -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}" \
-    -e AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_IMMUTABLE_REF="${shuffle_tools_immutable_ref}" \
-    control-plane \
-    python3 /opt/aegisops/phase67-e2e/run_real_journey.py verify-restart \
+  run_reviewed_journey verify-restart \
     >"${restart_output}"
 record_step 14 \
   "restart_and_verify_persistence" \
