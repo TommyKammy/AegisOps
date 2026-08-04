@@ -240,6 +240,11 @@ def _manifest() -> dict[str, object]:
 
 class Phase674RealServiceE2ETests(unittest.TestCase):
     def test_valid_evidence_enforces_the_complete_real_identifier_chain(self) -> None:
+        self.assertEqual(builder.STEP_NAMES, validator.STEP_NAMES)
+        self.assertEqual(
+            builder.STEP_NAMES[-1],
+            "record_prerequisite_evaluation",
+        )
         self.assertEqual(builder.STEP_EVIDENCE_REFS, validator.STEP_EVIDENCE_REFS)
         self.assertEqual(
             builder.LIMITATION_STATUSES,
@@ -447,6 +452,83 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     "",
                 )
             )
+
+    def test_builder_binds_all_source_backed_step_observation_times(self) -> None:
+        observations = [
+            {
+                "step": index,
+                "name": name,
+                "observed_at": f"2026-08-01T10:00:{index:02d}Z",
+            }
+            for index, name in enumerate(builder.STEP_NAMES, start=1)
+        ]
+
+        def source_payloads() -> dict[str, dict[str, object]]:
+            return {
+                "preparation": {
+                    "step_observations": {
+                        builder.STEP_NAMES[index]: observations[index][
+                            "observed_at"
+                        ]
+                        for index in range(4, 7)
+                    }
+                },
+                "wazuh_observations": {
+                    builder.STEP_NAMES[index]: observations[index][
+                        "observed_at"
+                    ]
+                    for index in range(2, 4)
+                },
+                "journey": {
+                    "step_observations": {
+                        builder.STEP_NAMES[index]: observations[index][
+                            "observed_at"
+                        ]
+                        for index in range(7, 13)
+                    }
+                },
+                "restart": {"observed_at": observations[13]["observed_at"]},
+                "evaluation_record": {
+                    "evaluated_at": observations[14]["observed_at"]
+                },
+            }
+
+        builder._validate_step_observation_sources(
+            observations,
+            **source_payloads(),
+        )
+        for step_index in range(2, len(builder.STEP_NAMES)):
+            with self.subTest(step=step_index + 1):
+                sources = source_payloads()
+                step_name = builder.STEP_NAMES[step_index]
+                if step_index < 4:
+                    sources["wazuh_observations"][step_name] = (
+                        "2026-08-01T11:00:00Z"
+                    )
+                elif step_index < 7:
+                    sources["preparation"]["step_observations"][step_name] = (
+                        "2026-08-01T11:00:00Z"
+                    )
+                elif step_index < 13:
+                    sources["journey"]["step_observations"][step_name] = (
+                        "2026-08-01T11:00:00Z"
+                    )
+                elif step_index == 13:
+                    sources["restart"]["observed_at"] = (
+                        "2026-08-01T11:00:00Z"
+                    )
+                else:
+                    sources["evaluation_record"]["evaluated_at"] = (
+                        "2026-08-01T11:00:00Z"
+                    )
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "does not use the authoritative",
+                ):
+                    builder._validate_step_observation_sources(
+                        observations,
+                        **sources,
+                    )
 
     def test_negative_receipt_probes_rollback_authoritative_execution(self) -> None:
         record_types = (
@@ -744,6 +826,23 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         ):
             journey._verify_restart_records(FakeService(missing_duplicate), payload)
 
+    def test_validator_requires_the_exact_reviewed_restart_identifier_set(self) -> None:
+        extra = _manifest()
+        extra["restart"]["checked_identifiers"].append("unreviewed_id")
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "exactly the reviewed authoritative identifiers",
+        ):
+            validator.validate_manifest(extra, SCHEMA)
+
+        non_string = _manifest()
+        non_string["restart"]["checked_identifiers"][0] = None
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            r"checked_identifiers\[0\] must be a non-empty string",
+        ):
+            validator.validate_manifest(non_string, SCHEMA)
+
     def test_builder_binds_restart_to_exact_wazuh_reconciliation_scope(self) -> None:
         journey_scope = {
             "wazuh_reconciliation_ids": [
@@ -795,6 +894,14 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             validator.validate_manifest(incomplete, SCHEMA)
 
     def test_validator_rejects_inferred_human_control_or_receipt_success(self) -> None:
+        missing_requester = _manifest()
+        missing_requester["human_control"]["requester_identity"] = None
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "requires a requester and challenge digest",
+        ):
+            validator.validate_manifest(missing_requester, SCHEMA)
+
         same_actor = _manifest()
         same_actor["human_control"]["approver_identity"] = same_actor[
             "human_control"
@@ -812,6 +919,34 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "denied action",
         ):
             validator.validate_manifest(denied_dispatch, SCHEMA)
+
+        stale_denial = _manifest()
+        blocked_step_index = 5
+        for index in range(blocked_step_index, len(stale_denial["steps"])):
+            step = stale_denial["steps"][index]
+            if index == blocked_step_index:
+                step["status"] = "blocked"
+                step["evidence_refs"] = [
+                    builder.STEP_EVIDENCE_REFS[index][0]
+                ]
+                step["blocker"] = {
+                    "owner": "AegisOps integration engineering",
+                    "reason": "Reviewed request creation did not complete.",
+                }
+            else:
+                step["status"] = "not_run"
+                step["evidence_refs"] = ["not-run:prerequisite-blocked"]
+        stale_denial["verdict"] = "integration_trial_blocked"
+        for identifier, producing_step in validator.IDENTIFIER_PRODUCING_STEPS.items():
+            if validator.STEP_NAMES.index(producing_step) >= blocked_step_index:
+                stale_denial["identifiers"][identifier] = None
+        stale_denial["human_control"]["requester_identity"] = None
+        stale_denial["human_control"]["approval_challenge_sha256"] = None
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "cannot claim denial proof",
+        ):
+            validator.validate_manifest(stale_denial, SCHEMA)
 
         unattended = _manifest()
         unattended["human_control"]["approval_source"] = (
@@ -1236,6 +1371,44 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             first["action_request_id"],
         )
 
+    def test_runner_action_requests_pass_the_authoritative_policy_evaluator(self) -> None:
+        from aegisops.control_plane.actions.action_policy import (
+            ACTION_POLICY_ALLOWED_VALUES,
+            evaluate_action_policy_record,
+        )
+
+        service = SimpleNamespace(
+            persist_record=lambda record, *, transitioned_at: record
+        )
+        action_request = journey._persist_action_request(
+            service,
+            action_request_id="action-a1b2c3d4",
+            case=SimpleNamespace(
+                case_id="case-a1b2c3d4",
+                alert_id="alert-a1b2c3d4",
+                finding_id="finding-a1b2c3d4",
+            ),
+            idempotency_key="phase67-action-a1b2c3d4",
+            target_scope={"identity_id": "local-test-sink"},
+            payload={"action_type": "notify_identity_owner"},
+            payload_hash="a" * 64,
+            requested_at=datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc),
+        )
+        evaluated = evaluate_action_policy_record(action_request)
+        self.assertEqual(
+            set(action_request.policy_basis),
+            set(ACTION_POLICY_ALLOWED_VALUES),
+        )
+        self.assertEqual(
+            evaluated.policy_evaluation["approval_requirement"],
+            "human_required",
+        )
+        self.assertEqual(evaluated.policy_evaluation["routing_target"], "approval")
+        self.assertEqual(
+            evaluated.policy_evaluation["execution_surface_id"],
+            "shuffle",
+        )
+
     def test_denied_action_is_revalidated_from_authoritative_records(self) -> None:
         identifiers = {
             "denied_action_request_id": "denied-action-a1b2c3d4",
@@ -1355,6 +1528,14 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn('approval_method="macos_operator_dialog"', runner)
         self.assertIn('display dialog promptText', runner)
         self.assertIn('"APPROVE ${approval_challenge}"', runner)
+        self.assertIn(
+            'record_step 15 "record_prerequisite_evaluation"',
+            runner,
+        )
+        self.assertNotIn(
+            'record_step 15 "publish_prerequisite_evaluation"',
+            runner,
+        )
         self.assertIn('prepare \\', runner)
         self.assertIn('--approver-identity "${approver_identity}"', runner)
         self.assertIn('"shuffle-action-image"', runner)

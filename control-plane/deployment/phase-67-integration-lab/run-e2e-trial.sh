@@ -515,7 +515,7 @@ jq -n \
       ]
     }
   ' >"${evaluation_record_output}"
-record_step 15 "publish_prerequisite_evaluation" "${evaluated_at}"
+record_step 15 "record_prerequisite_evaluation" "${evaluated_at}"
 
 "${LAB_DIR}/cleanup.sh"
 cleaned=true

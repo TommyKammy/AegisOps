@@ -48,6 +48,10 @@ STEP_NAMES = (
     "replay_deliveries_for_idempotency",
     "run_negative_cases",
     "restart_and_verify_persistence",
+    "record_prerequisite_evaluation",
+)
+LEGACY_BLOCKED_STEP_NAMES = (
+    *STEP_NAMES[:-1],
     "publish_prerequisite_evaluation",
 )
 STEP_EVIDENCE_REFS = (
@@ -86,6 +90,10 @@ RESTART_REQUIRED_IDENTIFIER_FIELDS = (
     "approval_decision_id",
     "action_execution_id",
     "reconciliation_id",
+)
+RESTART_CHECKED_IDENTIFIER_FIELDS = (
+    *RESTART_REQUIRED_IDENTIFIER_FIELDS,
+    "wazuh_reconciliation_ids",
 )
 # The committed approval-blocked packet predates retained status/workflow captures.
 # Keep its concrete references reviewable without treating them as the current contract.
@@ -611,7 +619,10 @@ def _validate_steps(
     require(isinstance(value, list) and len(value) == len(STEP_NAMES), "$.steps must contain exactly 15 steps")
     statuses: list[str] = []
     observed_times: list[datetime] = []
-    for index, expected_name in enumerate(STEP_NAMES):
+    reviewed_step_names = (
+        LEGACY_BLOCKED_STEP_NAMES if allow_legacy_blocked_refs else STEP_NAMES
+    )
+    for index, expected_name in enumerate(reviewed_step_names):
         item = require_mapping(value[index], f"$.steps[{index}]")
         require_exact_keys(
             item,
@@ -784,14 +795,36 @@ def validate_manifest(manifest: object, schema: object) -> None:
     approval_method = require_nullable_string(human["approval_method"], "$.human_control.approval_method")
     approval_challenge_sha256 = require_nullable_string(human["approval_challenge_sha256"], "$.human_control.approval_challenge_sha256")
     approval_confirmed_at = human["approval_confirmed_at"]
+    if step_statuses[5] == "passed":
+        require(
+            requester is not None
+            and approval_challenge_sha256 is not None
+            and SHA256.fullmatch(approval_challenge_sha256) is not None,
+            "a reviewed action request requires a requester and challenge digest",
+        )
+    else:
+        require(
+            requester is None and approval_challenge_sha256 is None,
+            "a non-passed action-request step cannot claim request control proof",
+        )
     if step_statuses[6] == "passed":
         require(denied_count == 0 and denied_rejected is True, "denied action must produce no dispatch")
+    else:
+        require(
+            denied_count is None and denied_rejected is None,
+            "a non-passed denial step cannot claim denial proof",
+        )
     if step_statuses[7] == "passed":
+        require(
+            requester is not None
+            and approver is not None
+            and authenticated_approver is not None,
+            "an approved dispatch requires requester and approver identities",
+        )
         require(requester != approver, "requester and approver must be distinct")
         require(approver == authenticated_approver, "approver must match the authenticated local operator")
         require(approval_source == "interactive_local_operator_ceremony", "approval must come from the interactive ceremony")
         require(approval_method in {"macos_operator_dialog", "tty_challenge"}, "approval method is not independently interactive")
-        require(approval_challenge_sha256 is not None and SHA256.fullmatch(approval_challenge_sha256) is not None, "approval challenge digest must be SHA-256")
         require_datetime(approval_confirmed_at, "$.human_control.approval_confirmed_at")
     else:
         require(
@@ -890,15 +923,19 @@ def validate_manifest(manifest: object, schema: object) -> None:
     records_persisted = require_nullable_boolean(restart["records_persisted"], "$.restart.records_persisted")
     checked = restart["checked_identifiers"]
     require(isinstance(checked, list), "$.restart.checked_identifiers must be an array")
+    normalized_checked = tuple(
+        require_string(value, f"$.restart.checked_identifiers[{index}]")
+        for index, value in enumerate(checked)
+    )
     if step_statuses[13] == "passed":
         require(restart_performed is True and records_persisted is True, "passed trial requires restart persistence proof")
         require(
-            set(checked)
-            >= {
-                *RESTART_REQUIRED_IDENTIFIER_FIELDS,
-                "wazuh_reconciliation_ids",
-            },
-            "restart proof omits authoritative identifiers",
+            len(normalized_checked) == len(set(normalized_checked)),
+            "restart proof cannot contain duplicate identifiers",
+        )
+        require(
+            set(normalized_checked) == set(RESTART_CHECKED_IDENTIFIER_FIELDS),
+            "restart proof must contain exactly the reviewed authoritative identifiers",
         )
     else:
         require(restart_performed is None and records_persisted is None and checked == [], "a non-passed restart step cannot claim persistence proof")

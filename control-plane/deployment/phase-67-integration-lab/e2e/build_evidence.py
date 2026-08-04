@@ -27,7 +27,7 @@ STEP_NAMES = (
     "replay_deliveries_for_idempotency",
     "run_negative_cases",
     "restart_and_verify_persistence",
-    "publish_prerequisite_evaluation",
+    "record_prerequisite_evaluation",
 )
 STEP_EVIDENCE_REFS = (
     ("snapshot", "artifact:workflow-snapshot.json"),
@@ -117,6 +117,20 @@ def _required_text(value: object, path: str) -> str:
     if not isinstance(value, str) or value.strip() == "":
         raise ValueError(f"{path} must be a non-empty string")
     return value.strip()
+
+
+def _required_timestamp(value: object, path: str) -> str:
+    timestamp = _required_text(value, path)
+    normalized = (
+        timestamp[:-1] + "+00:00" if timestamp.endswith("Z") else timestamp
+    )
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ValueError(f"{path} is not RFC3339") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"{path} lacks a timezone")
+    return timestamp
 
 
 def _required_unique_record_ids(
@@ -309,19 +323,16 @@ def _load_step_observations(path: Path) -> list[dict[str, object]]:
             raise ValueError(
                 f"step observation {expected_step} is not {expected_name!r}"
             )
-        observed_at = _required_text(
+        observed_at = _required_timestamp(
             item.get("observed_at"),
             f"observations[{expected_step - 1}].observed_at",
         )
-        normalized = observed_at[:-1] + "+00:00" if observed_at.endswith("Z") else observed_at
-        try:
-            parsed = datetime.fromisoformat(normalized)
-        except ValueError as exc:
-            raise ValueError(
-                f"step observation {expected_step} is not RFC3339"
-            ) from exc
-        if parsed.tzinfo is None:
-            raise ValueError(f"step observation {expected_step} lacks a timezone")
+        normalized = (
+            observed_at[:-1] + "+00:00"
+            if observed_at.endswith("Z")
+            else observed_at
+        )
+        parsed = datetime.fromisoformat(normalized)
         parsed = parsed.astimezone(timezone.utc)
         if previous is not None and parsed <= previous:
             raise ValueError("step observations must be strictly chronological")
@@ -354,22 +365,60 @@ def _load_wazuh_observations(output: str) -> dict[str, str]:
             raise ValueError(
                 f"Wazuh output must contain exactly one {prefix[:-1]}"
             )
-        observed_at = _required_text(matches[0], f"wazuh observation {name}")
-        normalized = (
-            observed_at[:-1] + "+00:00"
-            if observed_at.endswith("Z")
-            else observed_at
+        observations[name] = _required_timestamp(
+            matches[0],
+            f"Wazuh observation {name}",
         )
-        try:
-            parsed = datetime.fromisoformat(normalized)
-        except ValueError as exc:
-            raise ValueError(
-                f"Wazuh observation {name} is not RFC3339"
-            ) from exc
-        if parsed.tzinfo is None:
-            raise ValueError(f"Wazuh observation {name} lacks a timezone")
-        observations[name] = observed_at
     return observations
+
+
+def _validate_step_observation_sources(
+    observations: Sequence[Mapping[str, object]],
+    *,
+    preparation: Mapping[str, object],
+    wazuh_observations: Mapping[str, str],
+    journey: Mapping[str, object],
+    restart: Mapping[str, object],
+    evaluation_record: Mapping[str, object],
+) -> None:
+    preparation_observations = _mapping(
+        preparation.get("step_observations"),
+        "preparation.step_observations",
+    )
+    journey_observations = _mapping(
+        journey.get("step_observations"),
+        "journey.step_observations",
+    )
+    preparation_names = STEP_NAMES[4:7]
+    journey_names = STEP_NAMES[7:13]
+    if set(preparation_observations) != set(preparation_names):
+        raise ValueError(
+            "preparation step observation fields do not match the reviewed contract"
+        )
+    if set(journey_observations) != set(journey_names):
+        raise ValueError(
+            "journey step observation fields do not match the reviewed contract"
+        )
+
+    source_times: dict[str, object] = {
+        STEP_NAMES[2]: wazuh_observations.get(STEP_NAMES[2]),
+        STEP_NAMES[3]: wazuh_observations.get(STEP_NAMES[3]),
+        **preparation_observations,
+        **journey_observations,
+        STEP_NAMES[13]: restart.get("observed_at"),
+        STEP_NAMES[14]: evaluation_record.get("evaluated_at"),
+    }
+    for step_index in range(2, len(STEP_NAMES)):
+        step_name = STEP_NAMES[step_index]
+        source_time = _required_timestamp(
+            source_times.get(step_name),
+            f"authoritative observation {step_name}",
+        )
+        if observations[step_index].get("observed_at") != source_time:
+            raise ValueError(
+                f"step {step_index + 1} does not use the authoritative "
+                f"{step_name} observation time"
+            )
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -412,16 +461,14 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     observations = _load_step_observations(args.observations)
     wazuh_output = args.wazuh_output.read_text(encoding="utf-8")
     wazuh_observations = _load_wazuh_observations(wazuh_output)
-    for step_index, observation_name in (
-        (2, "trigger_real_wazuh_detection"),
-        (3, "admit_wazuh_alert"),
-    ):
-        if observations[step_index]["observed_at"] != wazuh_observations[
-            observation_name
-        ]:
-            raise ValueError(
-                f"step {step_index + 1} does not use the Wazuh observation time"
-            )
+    _validate_step_observation_sources(
+        observations,
+        preparation=preparation,
+        wazuh_observations=wazuh_observations,
+        journey=journey,
+        restart=restart,
+        evaluation_record=evaluation_record,
+    )
     evaluation = args.evaluation.read_text(encoding="utf-8")
     if _sha256(args.reviewed_workflow) != snapshot.get(
         "shuffle_reviewed_workflow_sha256"
