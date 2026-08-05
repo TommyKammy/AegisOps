@@ -24,7 +24,6 @@ assert_fails_with() {
     | .trial_run_id == $trial
       and .snapshot.repository_revision == $revision
       and ([
-        "integration_trial_passed_ga_not_accepted",
         "integration_trial_passed_with_owned_limitations",
         "integration_trial_blocked",
         "integration_trial_failed"

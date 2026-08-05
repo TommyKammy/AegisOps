@@ -201,7 +201,14 @@ def _manifest() -> dict[str, object]:
                 "phase67-e2e-20260801T100000Z-0123456789ab-artifacts"
             ),
             "files": [
-                {"name": name, "sha256": "6" * 64}
+                {
+                    "name": name,
+                    "sha256": (
+                        "5" * 64
+                        if name == "evaluation-record.json"
+                        else "6" * 64
+                    ),
+                }
                 for name in sorted(validator.ARTIFACT_NAMES)
             ],
         },
@@ -258,6 +265,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             builder.LIMITATION_STATUSES,
             validator.OWNED_LIMITATION_STATUSES,
         )
+        self.assertEqual(builder.CURRENT_TRIAL_VERDICT, validator.PASSED_VERDICT)
         validator.validate_manifest(_manifest(), SCHEMA)
 
     def test_schema_allows_the_complete_runtime_image_inventory(self) -> None:
@@ -278,6 +286,52 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             ),
             validator.SUPPORTED_HOST_ARCHITECTURES,
         )
+
+    def test_schema_and_validator_share_the_reviewed_verdict_and_uuid_contracts(
+        self,
+    ) -> None:
+        verdict_schema = SCHEMA["properties"]["verdict"]
+        self.assertEqual(set(verdict_schema["enum"]), validator.VERDICTS)
+        execution_schema = SCHEMA["properties"]["identifiers"]["properties"][
+            "shuffle_execution_id"
+        ]
+        self.assertEqual(
+            execution_schema["pattern"],
+            validator.CANONICAL_UUID_PATTERN,
+        )
+
+        unsupported_verdict = _manifest()
+        unsupported_verdict["verdict"] = (
+            "integration_trial_passed_ga_not_accepted"
+        )
+        unsupported_verdict["evaluation"]["verdict"] = (
+            "integration_trial_passed_ga_not_accepted"
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "reviewed vocabulary",
+        ):
+            validator.validate_manifest(unsupported_verdict, SCHEMA)
+
+        drifted_schema = deepcopy(SCHEMA)
+        drifted_schema["properties"]["verdict"]["enum"].append(
+            "integration_trial_passed_ga_not_accepted"
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "schema verdict vocabulary drifted",
+        ):
+            validator.validate_manifest(_manifest(), drifted_schema)
+
+        drifted_uuid_schema = deepcopy(SCHEMA)
+        drifted_uuid_schema["properties"]["identifiers"]["properties"][
+            "shuffle_execution_id"
+        ]["pattern"] = ".+"
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "schema Shuffle execution ID contract drifted",
+        ):
+            validator.validate_manifest(_manifest(), drifted_uuid_schema)
 
     def test_snapshot_accepts_every_preflight_host_architecture(self) -> None:
         manifest = _manifest()
@@ -952,22 +1006,75 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         ):
             validator.validate_manifest(non_string, SCHEMA)
 
-    def test_builder_binds_restart_to_exact_wazuh_reconciliation_scope(self) -> None:
-        journey_scope = {
-            "wazuh_reconciliation_ids": [
-                "reconciliation-wazuh-admission",
-                "reconciliation-wazuh-duplicate",
-            ]
+    def test_builder_binds_every_wazuh_reconciliation_scope(self) -> None:
+        reconciliation_ids = [
+            "reconciliation-wazuh-admission",
+            "reconciliation-wazuh-duplicate",
+        ]
+        wazuh = {
+            "first_delivery": {"reconciliation_id": reconciliation_ids[0]},
+            "duplicate_delivery": {"reconciliation_id": reconciliation_ids[1]},
         }
-        builder._validate_restart_wazuh_scope(
-            {"wazuh_reconciliation_ids": list(journey_scope["wazuh_reconciliation_ids"])},
-            journey_scope,
+        sources = [
+            {"wazuh_reconciliation_ids": list(reconciliation_ids)}
+            for _ in range(3)
+        ]
+        builder._validate_wazuh_reconciliation_scope(wazuh, *sources)
+
+        for source_index, source_name in enumerate(
+            ("preparation", "journey", "restart")
+        ):
+            tampered_sources = deepcopy(sources)
+            tampered_sources[source_index]["wazuh_reconciliation_ids"] = [
+                reconciliation_ids[0]
+            ]
+            with self.subTest(source=source_name), self.assertRaisesRegex(
+                ValueError,
+                f"{source_name} Wazuh reconciliation scope does not match",
+            ):
+                builder._validate_wazuh_reconciliation_scope(
+                    wazuh,
+                    *tampered_sources,
+                )
+
+        duplicate = deepcopy(wazuh)
+        duplicate["duplicate_delivery"]["reconciliation_id"] = (
+            reconciliation_ids[0]
         )
-        with self.assertRaisesRegex(ValueError, "does not match the journey"):
-            builder._validate_restart_wazuh_scope(
-                {"wazuh_reconciliation_ids": ["reconciliation-wazuh-admission"]},
-                journey_scope,
+        with self.assertRaisesRegex(ValueError, "must have distinct"):
+            builder._validate_wazuh_reconciliation_scope(duplicate, *sources)
+
+    def test_builder_binds_preparation_to_the_complete_journey_request(self) -> None:
+        preparation = {
+            "trial_run_id": "phase67-e2e-20260801T100000Z-0123456789ab",
+            "action_request_id": "action-a1b2c3d4",
+            "idempotency_key": "phase67-idempotency-a1b2c3d4",
+            "payload_hash": "a" * 64,
+            "target_scope": {"identity_id": "local-test-sink"},
+            "requester_identity": "phase67-lab-requester",
+            "approval_challenge_sha256": "b" * 64,
+        }
+        journey_request = deepcopy(preparation)
+        builder._validate_preparation_journey_binding(
+            preparation,
+            journey_request,
+        )
+
+        for field_name in builder.PREPARATION_JOURNEY_BINDINGS:
+            tampered = deepcopy(journey_request)
+            tampered[field_name] = (
+                {"identity_id": "another-target"}
+                if field_name == "target_scope"
+                else f"different-{field_name}"
             )
+            with self.subTest(field_name=field_name), self.assertRaisesRegex(
+                ValueError,
+                f"preparation {field_name} does not match the journey",
+            ):
+                builder._validate_preparation_journey_binding(
+                    preparation,
+                    tampered,
+                )
 
     def test_live_workflow_digest_is_canonical_and_content_bound(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -1001,6 +1108,19 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "raw artifact inventory is incomplete",
         ):
             validator.validate_manifest(incomplete, SCHEMA)
+
+        mismatched_evaluation = _manifest()
+        evaluation_artifact = next(
+            artifact
+            for artifact in mismatched_evaluation["artifacts"]["files"]
+            if artifact["name"] == "evaluation-record.json"
+        )
+        evaluation_artifact["sha256"] = "7" * 64
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "evaluation digest does not match",
+        ):
+            validator.validate_manifest(mismatched_evaluation, SCHEMA)
 
     def test_validator_binds_dispatch_to_distinct_reviewed_records(self) -> None:
         mutations = {
@@ -1045,6 +1165,16 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "workflow version is not the reviewed version",
         ):
             validator.validate_manifest(wrong_version, SCHEMA)
+
+        invalid_execution_id = _manifest()
+        invalid_execution_id["identifiers"]["shuffle_execution_id"] = (
+            "not-a-real-run"
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "canonical UUID form",
+        ):
+            validator.validate_manifest(invalid_execution_id, SCHEMA)
 
     def test_validator_rejects_inferred_human_control_or_receipt_success(self) -> None:
         missing_requester = _manifest()
@@ -1208,8 +1338,12 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             ],
             "action_request_id": identifiers["action_request_id"],
             "approval_decision_id": identifiers["approval_decision_id"],
+            "delegation_id": identifiers["delegation_id"],
             "execution_id": identifiers["shuffle_execution_id"],
             "action_execution_id": identifiers["action_execution_id"],
+            "idempotency_key": "phase67-idempotency-a1b2c3d4",
+            "payload_hash": "a" * 64,
+            "target_scope": {"identity_id": "local-test-sink"},
             "reconciliation_id": identifiers["reconciliation_id"],
             "wazuh_reconciliation_ids": [
                 "phase67-admission-reconciliation"
@@ -1243,7 +1377,19 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     {
                         "action_execution_id": identifiers[
                             "action_execution_id"
-                        ]
+                        ],
+                        "action_request_id": identifiers["action_request_id"],
+                        "approval_decision_id": identifiers[
+                            "approval_decision_id"
+                        ],
+                        "delegation_id": identifiers["delegation_id"],
+                        "execution_run_id": identifiers["shuffle_execution_id"],
+                        "idempotency_key": "phase67-idempotency-a1b2c3d4",
+                        "payload_hash": "a" * 64,
+                        "target_scope": {"identity_id": "local-test-sink"},
+                        "execution_surface_type": "automation_substrate",
+                        "execution_surface_id": "shuffle",
+                        "lifecycle_state": "succeeded",
                     }
                 ],
                 "reconciliation": [
@@ -1268,6 +1414,38 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         }
         builder._validate_trial_report_scope(report, journey_record)
 
+        binding_mutations = {
+            "execution_run_id": "2f90e91d-e217-42da-bd83-a1b2c3d4e5f7",
+            "delegation_id": "delegation-from-another-trial",
+            "approval_decision_id": "approval-from-another-trial",
+            "action_request_id": "action-from-another-trial",
+            "idempotency_key": "idempotency-from-another-trial",
+            "payload_hash": "b" * 64,
+            "target_scope": {"identity_id": "another-target"},
+            "execution_surface_id": "unreviewed-automation",
+            "lifecycle_state": "failed",
+        }
+        for field_name, field_value in binding_mutations.items():
+            tampered = deepcopy(report)
+            tampered["records"]["action_execution"][0][field_name] = field_value
+            with self.subTest(field_name=field_name), self.assertRaisesRegex(
+                ValueError,
+                "report action execution is not bound to the journey",
+            ):
+                builder._validate_trial_report_scope(tampered, journey_record)
+
+        unbound_action_reconciliation = deepcopy(report)
+        action_reconciliation = unbound_action_reconciliation["records"][
+            "reconciliation"
+        ][1]
+        action_reconciliation["execution_run_id"] = None
+        action_reconciliation["linked_execution_run_ids"] = []
+        with self.assertRaisesRegex(ValueError, "record outside this trial"):
+            builder._validate_trial_report_scope(
+                unbound_action_reconciliation,
+                journey_record,
+            )
+
         previous_trial = deepcopy(report)
         previous_trial["records"]["action_request"].append(
             {"action_request_id": "phase67-action-from-previous-trial"}
@@ -1285,7 +1463,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 "linked_execution_run_ids": [],
             }
         )
-        with self.assertRaisesRegex(ValueError, "is not scoped to this trial"):
+        with self.assertRaisesRegex(ValueError, "record outside this trial"):
             builder._validate_trial_report_scope(
                 unrelated_reconciliation,
                 journey_record,
@@ -1817,6 +1995,15 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         real_journey = (E2E_ROOT / "run_real_journey.py").read_text(
             encoding="utf-8"
         )
+        self.assertGreaterEqual(
+            real_journey.count('"idempotency_key": action.idempotency_key'),
+            2,
+        )
+        self.assertGreaterEqual(
+            real_journey.count('"payload_hash": action.payload_hash'),
+            2,
+        )
+        self.assertIn('"target_scope": dict(action.target_scope)', real_journey)
         self.assertIn('lifecycle_state="rejected"', real_journey)
         self.assertNotIn('lifecycle_state="denied"', real_journey)
         self.assertNotIn("class _StaticTransport", real_journey)

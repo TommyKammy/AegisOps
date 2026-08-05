@@ -16,9 +16,9 @@ SCHEMA_ID = (
     "https://aegisops.local/schemas/"
     "phase67-4-real-service-e2e-evidence-v2.json"
 )
+PASSED_VERDICT = "integration_trial_passed_with_owned_limitations"
 VERDICTS = {
-    "integration_trial_passed_ga_not_accepted",
-    "integration_trial_passed_with_owned_limitations",
+    PASSED_VERDICT,
     "integration_trial_blocked",
     "integration_trial_failed",
 }
@@ -255,6 +255,10 @@ RUNTIME_IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 WORKFLOW_UUID = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
 )
+CANONICAL_UUID_PATTERN = (
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+CANONICAL_UUID = re.compile(CANONICAL_UUID_PATTERN)
 PLACEHOLDER = re.compile(
     r"(?:^|[-_.])(example|fixture|placeholder|synthetic|todo|tbd|unknown|"
     r"changeme|replace-me)(?:$|[-_.])",
@@ -423,6 +427,31 @@ def _validate_schema_contract(schema: object) -> None:
     require(isinstance(required, list), "schema required list is missing")
     require(set(required) == set(properties), "schema top-level required fields drifted")
     require(root.get("additionalProperties") is False, "schema must reject extra fields")
+    verdict_schema = require_mapping(
+        properties.get("verdict"),
+        "$schema.properties.verdict",
+    )
+    verdict_enum = verdict_schema.get("enum")
+    require(
+        isinstance(verdict_enum, list) and set(verdict_enum) == VERDICTS,
+        "schema verdict vocabulary drifted",
+    )
+    identifiers = require_mapping(
+        properties.get("identifiers"),
+        "$schema.properties.identifiers",
+    )
+    identifier_properties = require_mapping(
+        identifiers.get("properties"),
+        "$schema.properties.identifiers.properties",
+    )
+    shuffle_execution_id = require_mapping(
+        identifier_properties.get("shuffle_execution_id"),
+        "$schema.properties.identifiers.properties.shuffle_execution_id",
+    )
+    require(
+        shuffle_execution_id.get("pattern") == CANONICAL_UUID_PATTERN,
+        "schema Shuffle execution ID contract drifted",
+    )
     snapshot = require_mapping(properties.get("snapshot"), "$schema.properties.snapshot")
     snapshot_properties = require_mapping(
         snapshot.get("properties"),
@@ -718,7 +747,7 @@ def _validate_steps(
         ),
         "completed step observations must be strictly chronological",
     )
-    if verdict.startswith("integration_trial_passed"):
+    if verdict == PASSED_VERDICT:
         require(all(status == "passed" for status in statuses), "a passed verdict requires all journey steps to pass")
     elif verdict == "integration_trial_blocked":
         require(statuses.count("blocked") == 1, "a blocked verdict requires exactly one blocked step")
@@ -812,6 +841,10 @@ def validate_manifest(
     execution_id = normalized_ids["shuffle_execution_id"]
     if execution_id is not None:
         require(not execution_id.startswith("shuffle-run-"), "synthetic Shuffle execution ID cannot be live evidence")
+        require(
+            CANONICAL_UUID.fullmatch(execution_id) is not None,
+            "Shuffle execution ID must use canonical UUID form",
+        )
     if normalized_ids["native_wazuh_alert_id"] and normalized_ids["aegisops_alert_id"]:
         require(normalized_ids["native_wazuh_alert_id"] != normalized_ids["aegisops_alert_id"], "native Wazuh and AegisOps alert IDs must remain distinct")
     denied_action_request_id = normalized_ids["denied_action_request_id"]
@@ -1063,6 +1096,7 @@ def validate_manifest(
     files = artifacts["files"]
     require(isinstance(files, list), "$.artifacts.files must be an array")
     artifact_names: set[str] = set()
+    artifact_digests: dict[str, str] = {}
     for index, item in enumerate(files):
         artifact = require_mapping(item, f"$.artifacts.files[{index}]")
         require_exact_keys(artifact, required=("name", "sha256"), path=f"$.artifacts.files[{index}]")
@@ -1071,7 +1105,13 @@ def validate_manifest(
         artifact_names.add(name)
         digest = require_string(artifact["sha256"], f"$.artifacts.files[{index}].sha256")
         require(SHA256.fullmatch(digest) is not None, f"$.artifacts.files[{index}].sha256 must be SHA-256")
-    if verdict.startswith("integration_trial_passed"):
+        artifact_digests[name] = digest
+    if evaluation_present:
+        require(
+            artifact_digests.get("evaluation-record.json") == evaluation_sha,
+            "evaluation digest does not match evaluation-record.json artifact",
+        )
+    if verdict == PASSED_VERDICT:
         require(retention == "local_mode_0600", "passed trial raw artifacts must be retained in local 0600 mode")
         require(directory_name == f"{root['trial_run_id']}-artifacts", "artifact directory is not bound to this trial")
         require(artifact_names == ARTIFACT_NAMES, "raw artifact inventory is incomplete")
@@ -1081,7 +1121,7 @@ def validate_manifest(
     cleanup_mode = require_nullable_string(cleanup["mode"], "$.cleanup.mode")
     containers_stopped = require_nullable_boolean(cleanup["containers_stopped"], "$.cleanup.containers_stopped")
     data_preserved = require_nullable_boolean(cleanup["data_preserved"], "$.cleanup.data_preserved")
-    if verdict.startswith("integration_trial_passed"):
+    if verdict == PASSED_VERDICT:
         require(cleanup_mode == "non_destructive" and containers_stopped is True and data_preserved is True, "cleanup must stop services without deleting evidence or volumes")
 
     require(root["authority_posture"] == "aegisops_records_remain_authoritative", "$.authority_posture is invalid")
@@ -1117,7 +1157,7 @@ def validate_manifest(
                 limitation_statuses.get(limitation_id) == expected_status,
                 f"$.limitations must retain {limitation_id} with status {expected_status}",
             )
-        if verdict.startswith("integration_trial_passed"):
+        if verdict == PASSED_VERDICT:
             require(
                 limitation_statuses == OWNED_LIMITATION_STATUSES,
                 "passed trial limitation set must match the reviewed owned limitations",

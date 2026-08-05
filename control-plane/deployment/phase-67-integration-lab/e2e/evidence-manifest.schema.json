@@ -204,7 +204,10 @@
         "delegation_id": {"type": ["string", "null"]},
         "shuffle_workflow_id": {"type": ["string", "null"]},
         "shuffle_workflow_version": {"type": ["string", "null"]},
-        "shuffle_execution_id": {"type": ["string", "null"]},
+        "shuffle_execution_id": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
         "expected_receipt_id": {"type": ["string", "null"]},
         "action_execution_id": {"type": ["string", "null"]},
         "reconciliation_id": {"type": ["string", "null"]},
@@ -373,7 +376,6 @@
     "verdict": {
       "type": "string",
       "enum": [
-        "integration_trial_passed_ga_not_accepted",
         "integration_trial_passed_with_owned_limitations",
         "integration_trial_blocked",
         "integration_trial_failed"

@@ -80,6 +80,23 @@ REPORT_RECORD_ID_FIELDS = {
     "action_execution": "action_execution_id",
     "reconciliation": "reconciliation_id",
 }
+ACTION_EXECUTION_REPORT_BINDINGS = {
+    "action_request_id": "action_request_id",
+    "approval_decision_id": "approval_decision_id",
+    "delegation_id": "delegation_id",
+    "execution_run_id": "execution_id",
+    "idempotency_key": "idempotency_key",
+    "payload_hash": "payload_hash",
+}
+PREPARATION_JOURNEY_BINDINGS = (
+    "trial_run_id",
+    "action_request_id",
+    "idempotency_key",
+    "payload_hash",
+    "target_scope",
+    "requester_identity",
+    "approval_challenge_sha256",
+)
 
 
 def _mapping(value: object, path: str) -> Mapping[str, object]:
@@ -249,22 +266,61 @@ def _validate_status_snapshot(
         )
 
 
-def _validate_restart_wazuh_scope(
-    restart: Mapping[str, object],
+def _wazuh_manifest_reconciliation_ids(
+    wazuh: Mapping[str, object],
+) -> frozenset[str]:
+    reconciliation_ids = tuple(
+        _required_text(
+            _mapping(
+                wazuh.get(delivery_name),
+                f"wazuh.{delivery_name}",
+            ).get("reconciliation_id"),
+            f"wazuh.{delivery_name}.reconciliation_id",
+        )
+        for delivery_name in ("first_delivery", "duplicate_delivery")
+    )
+    if len(set(reconciliation_ids)) != len(reconciliation_ids):
+        raise ValueError(
+            "Wazuh first and duplicate deliveries must have distinct "
+            "reconciliation IDs"
+        )
+    return frozenset(reconciliation_ids)
+
+
+def _validate_preparation_journey_binding(
+    preparation: Mapping[str, object],
     journey: Mapping[str, object],
 ) -> None:
-    restart_ids = _required_unique_record_ids(
-        restart.get("wazuh_reconciliation_ids"),
-        "restart.wazuh_reconciliation_ids",
-    )
-    journey_ids = _required_unique_record_ids(
-        journey.get("wazuh_reconciliation_ids"),
-        "journey.wazuh_reconciliation_ids",
-    )
-    if restart_ids != journey_ids:
-        raise ValueError(
-            "restart Wazuh reconciliation scope does not match the journey"
+    for field_name in PREPARATION_JOURNEY_BINDINGS:
+        if preparation.get(field_name) != journey.get(field_name):
+            raise ValueError(
+                f"preparation {field_name} does not match the journey"
+            )
+
+
+def _validate_wazuh_reconciliation_scope(
+    wazuh: Mapping[str, object],
+    preparation: Mapping[str, object],
+    journey: Mapping[str, object],
+    restart: Mapping[str, object],
+) -> None:
+    expected_ids = _wazuh_manifest_reconciliation_ids(wazuh)
+    for source_name, source in (
+        ("preparation", preparation),
+        ("journey", journey),
+        ("restart", restart),
+    ):
+        observed_ids = frozenset(
+            _required_unique_record_ids(
+                source.get("wazuh_reconciliation_ids"),
+                f"{source_name}.wazuh_reconciliation_ids",
+            )
         )
+        if observed_ids != expected_ids:
+            raise ValueError(
+                f"{source_name} Wazuh reconciliation scope does not match "
+                "the Wazuh manifest"
+            )
 
 
 def _validate_trial_report_scope(
@@ -311,6 +367,39 @@ def _validate_trial_report_scope(
         ):
             raise ValueError(f"report.records.{family} is not scoped to this trial")
 
+    action_execution = _mapping(
+        records["action_execution"][0],
+        "report.records.action_execution[0]",
+    )
+    expected_action_execution = {
+        report_field: _required_text(
+            journey.get(journey_field),
+            f"journey.{journey_field}",
+        )
+        for report_field, journey_field in ACTION_EXECUTION_REPORT_BINDINGS.items()
+    }
+    expected_action_execution.update(
+        {
+            "execution_surface_type": "automation_substrate",
+            "execution_surface_id": "shuffle",
+            "lifecycle_state": "succeeded",
+        }
+    )
+    for field_name, expected_value in expected_action_execution.items():
+        if action_execution.get(field_name) != expected_value:
+            raise ValueError(
+                "report action execution is not bound to the journey: "
+                f"{field_name}"
+            )
+    expected_target_scope = _mapping(
+        journey.get("target_scope"),
+        "journey.target_scope",
+    )
+    if action_execution.get("target_scope") != expected_target_scope:
+        raise ValueError(
+            "report action execution is not bound to the journey: target_scope"
+        )
+
     reconciliation_records = records["reconciliation"]
     if not isinstance(reconciliation_records, list) or not reconciliation_records:
         raise ValueError("report must retain trial reconciliation records")
@@ -321,24 +410,32 @@ def _validate_trial_report_scope(
     )
     for index, item in enumerate(reconciliation_records):
         record = _mapping(item, f"report.records.reconciliation[{index}]")
-        reconciliation_ids.add(
-            _required_text(
-                record.get("reconciliation_id"),
-                f"report.records.reconciliation[{index}].reconciliation_id",
-            )
+        reconciliation_id = _required_text(
+            record.get("reconciliation_id"),
+            f"report.records.reconciliation[{index}].reconciliation_id",
         )
+        reconciliation_ids.add(reconciliation_id)
         linked_execution_ids = record.get("linked_execution_run_ids")
         if not isinstance(linked_execution_ids, list):
             raise ValueError(
                 f"report.records.reconciliation[{index}].linked_execution_run_ids "
                 "must be an array"
             )
-        if not (
+        alert_bound = (
             record.get("alert_id") == journey.get("alert_id")
-            or record.get("finding_id") == journey.get("finding_id")
-            or record.get("execution_run_id") == journey.get("execution_id")
+            and record.get("finding_id") == journey.get("finding_id")
+        )
+        execution_bound = (
+            record.get("execution_run_id") == journey.get("execution_id")
             or journey.get("execution_id") in linked_execution_ids
-        ):
+        )
+        if reconciliation_id in wazuh_reconciliation_ids:
+            in_trial_scope = alert_bound
+        elif reconciliation_id == journey.get("reconciliation_id"):
+            in_trial_scope = alert_bound and execution_bound
+        else:
+            in_trial_scope = False
+        if not in_trial_scope:
             raise ValueError(
                 "report.records.reconciliation contains a record outside this trial"
             )
@@ -592,25 +689,22 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         raise ValueError("report digest does not match the journey")
     if report.get("source_of_truth") != "aegisops_authoritative_records":
         raise ValueError("report is not derived from AegisOps source records")
+    _validate_wazuh_reconciliation_scope(
+        wazuh,
+        preparation,
+        journey,
+        restart,
+    )
     _validate_trial_report_scope(report, journey)
     if wazuh.get("aegisops_alert_id") != journey.get("alert_id"):
         raise ValueError("Wazuh admission and case journey use different alerts")
     if wazuh.get("first_delivery", {}).get("finding_id") != journey.get("finding_id"):
         raise ValueError("Wazuh admission and action journey use different findings")
-    for key in ("trial_run_id", "action_request_id", "payload_hash"):
-        if preparation.get(key) != journey.get(key):
-            raise ValueError(f"preparation {key} does not match the journey")
-    if preparation.get("requester_identity") != journey.get("requester_identity"):
-        raise ValueError("preparation requester does not match the journey")
-    if preparation.get("approval_challenge_sha256") != journey.get(
-        "approval_challenge_sha256"
-    ):
-        raise ValueError("interactive approval challenge is not bound to the journey")
+    _validate_preparation_journey_binding(preparation, journey)
     if restart.get("shuffle_execution_count") != journey.get(
         "idempotency_execution_count"
     ):
         raise ValueError("restart changed the Shuffle execution count")
-    _validate_restart_wazuh_scope(restart, journey)
     captured_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     snapshot_id = _required_text(snapshot.get("snapshot_id"), "snapshot.snapshot_id")
     steps = [
