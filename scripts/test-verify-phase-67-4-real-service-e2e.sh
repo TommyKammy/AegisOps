@@ -17,7 +17,7 @@ assert_fails_with() {
   cp "${sample}" "${manifest}"
   "$@" "${manifest}"
   # Any mutation of the retained historical packet invalidates its immutable
-  # compatibility fingerprint and returns it to the current image contract.
+  # compatibility fingerprint and returns it to the current schema contract.
   if jq -e --arg trial "phase67-e2e-20260801T135206Z-26c533b6ca31" \
     --arg revision "2473b66f5702a38f1d4630c990509bf812a6af7a" \
     '.verdict as $verdict
@@ -30,7 +30,7 @@ assert_fails_with() {
         "integration_trial_failed"
       ] | index($verdict) != null)' \
     "${manifest}" >/dev/null; then
-    expected='complete reviewed full-profile service inventory'
+    expected='does not match the validator schema'
   fi
   if python3 "${validator}" "${schema}" "${manifest}" \
     >"${workdir}/${name}.out" 2>"${workdir}/${name}.err"; then

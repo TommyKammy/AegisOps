@@ -60,6 +60,9 @@ REQUESTER_IDENTITY = "phase67-lab-requester"
 NEGATIVE_PROBE_APPROVER_IDENTITY = "phase67-lab-negative-probe-approver"
 REVIEWED_ACTION_ID = "phase67-harmless-local-log-action"
 REVIEWED_ACTION_NAME = "Harmless local log"
+REVIEWED_SHUFFLE_WORKFLOW_VERSION = (
+    "notify_identity_owner-v1-reviewed-2026-05-03"
+)
 RESTART_RECORD_TYPES = {
     "aegisops_alert_id": AlertRecord,
     "case_id": CaseRecord,
@@ -163,7 +166,7 @@ def _binding_and_payload(
 ) -> tuple[dict[str, object], dict[str, object]]:
     binding: dict[str, object] = {
         "workflow_id": "notify_identity_owner",
-        "workflow_version_id": "notify_identity_owner-v1-reviewed-2026-05-03",
+        "workflow_version_id": REVIEWED_SHUFFLE_WORKFLOW_VERSION,
         "correlation_id": correlation_id,
         "expected_execution_receipt_id": expected_receipt_id,
         "requested_scope": dict(target_scope),

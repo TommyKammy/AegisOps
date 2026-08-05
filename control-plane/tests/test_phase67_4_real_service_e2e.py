@@ -242,6 +242,14 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
     def test_valid_evidence_enforces_the_complete_real_identifier_chain(self) -> None:
         self.assertEqual(builder.STEP_NAMES, validator.STEP_NAMES)
         self.assertEqual(
+            builder.REVIEWED_SHUFFLE_WORKFLOW_VERSION,
+            validator.REVIEWED_SHUFFLE_WORKFLOW_VERSION,
+        )
+        self.assertEqual(
+            builder.REVIEWED_SHUFFLE_WORKFLOW_VERSION,
+            journey.REVIEWED_SHUFFLE_WORKFLOW_VERSION,
+        )
+        self.assertEqual(
             builder.STEP_NAMES[-1],
             "record_prerequisite_evaluation",
         )
@@ -426,6 +434,39 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             observations = builder._load_step_observations(path)
         self.assertEqual(len(observations), 15)
         self.assertEqual(observations[-1]["name"], builder.STEP_NAMES[-1])
+
+    def test_builder_parses_the_structured_prerequisite_contract(self) -> None:
+        evaluation_path = REPO_ROOT / "docs" / "phase-67-prerequisite-evaluation.md"
+        document = evaluation_path.read_text(encoding="utf-8")
+        parsed = builder._parse_prerequisite_evaluation(document)
+        self.assertEqual(parsed["direct_verdict"], "integration_trial_blocked")
+        self.assertEqual(
+            parsed["next_complete_trial_verdict"],
+            builder.CURRENT_TRIAL_VERDICT,
+        )
+        self.assertEqual(parsed["ga_acceptance"], "not_accepted")
+
+        mutations = {
+            "unknown direct verdict": document.replace(
+                "Direct verdict: `integration_trial_blocked`",
+                "Direct verdict: `integration_trial_unknown`",
+            ),
+            "wrong next verdict": document.replace(
+                "Next complete-trial verdict: "
+                "`integration_trial_passed_with_owned_limitations`",
+                "Next complete-trial verdict: `integration_trial_blocked`",
+            ),
+            "GA overclaim": document.replace(
+                "GA acceptance: `not_accepted`",
+                "GA acceptance: `accepted`",
+            ),
+            "duplicate field": (
+                document + "\nDirect verdict: `integration_trial_blocked`\n"
+            ),
+        }
+        for name, mutated in mutations.items():
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                builder._parse_prerequisite_evaluation(mutated)
 
     def test_builder_preserves_real_wazuh_subtrial_observation_times(self) -> None:
         output = "\n".join(
@@ -768,6 +809,63 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             baseline,
         )
 
+    def test_validator_binds_current_manifests_to_the_schema_file_digest(self) -> None:
+        schema_path = E2E_ROOT / "evidence-manifest.schema.json"
+        loaded_schema, schema_sha256 = validator.load_json_with_sha256(schema_path)
+        self.assertEqual(loaded_schema, SCHEMA)
+        manifest = _manifest()
+        manifest["snapshot"]["evidence_schema_sha256"] = schema_sha256
+        snapshot_id = validator._snapshot_identifier(
+            manifest["trial_run_id"],
+            manifest["snapshot"],
+        )
+        manifest["snapshot"]["snapshot_id"] = snapshot_id
+        manifest["evaluation"]["snapshot_id"] = snapshot_id
+        for step in manifest["steps"]:
+            step["snapshot_id"] = snapshot_id
+        validator.validate_manifest(
+            manifest,
+            SCHEMA,
+            schema_sha256=schema_sha256,
+        )
+
+        tampered = deepcopy(manifest)
+        tampered["snapshot"]["evidence_schema_sha256"] = "0" * 64
+        tampered_snapshot_id = validator._snapshot_identifier(
+            tampered["trial_run_id"],
+            tampered["snapshot"],
+        )
+        tampered["snapshot"]["snapshot_id"] = tampered_snapshot_id
+        tampered["evaluation"]["snapshot_id"] = tampered_snapshot_id
+        for step in tampered["steps"]:
+            step["snapshot_id"] = tampered_snapshot_id
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "does not match the validator schema",
+        ):
+            validator.validate_manifest(
+                tampered,
+                SCHEMA,
+                schema_sha256=schema_sha256,
+            )
+
+        legacy = validator.load_json(E2E_ROOT / "sample-evidence.json")
+        validator.validate_manifest(
+            legacy,
+            SCHEMA,
+            schema_sha256=schema_sha256,
+        )
+        legacy["snapshot"]["evidence_schema_sha256"] = "0" * 64
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "does not match the validator schema",
+        ):
+            validator.validate_manifest(
+                legacy,
+                SCHEMA,
+                schema_sha256=schema_sha256,
+            )
+
     def test_status_evidence_requires_one_complete_image_identity(self) -> None:
         snapshot = _manifest()["snapshot"]
         with TemporaryDirectory() as temporary_directory:
@@ -789,6 +887,17 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "different control-plane image"):
                 builder._validate_status_snapshot(status_path, snapshot)
+
+    def test_builder_binds_retained_images_to_the_snapshot_inventory(self) -> None:
+        snapshot = _manifest()["snapshot"]
+        images = deepcopy(snapshot["images"])
+        builder._validate_snapshot_images(images, snapshot)
+
+        images[0]["immutable_reference"] = "changed@sha256:" + "0" * 64
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            builder._validate_snapshot_images(images, snapshot)
+        with self.assertRaisesRegex(ValueError, "images.json must be an array"):
+            builder._validate_snapshot_images({}, snapshot)
 
     def test_restart_verifies_every_wazuh_reconciliation_record(self) -> None:
         identifiers = _manifest()["identifiers"]
@@ -892,6 +1001,50 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "raw artifact inventory is incomplete",
         ):
             validator.validate_manifest(incomplete, SCHEMA)
+
+    def test_validator_binds_dispatch_to_distinct_reviewed_records(self) -> None:
+        mutations = {
+            "reused action request": (
+                "denied_action_request_id",
+                "action_request_id",
+                "action request IDs must remain distinct",
+            ),
+            "reused approval decision": (
+                "denied_approval_decision_id",
+                "approval_decision_id",
+                "decision IDs must remain distinct",
+            ),
+        }
+        for name, (denied_key, approved_key, diagnostic) in mutations.items():
+            manifest = _manifest()
+            manifest["identifiers"][denied_key] = manifest["identifiers"][
+                approved_key
+            ]
+            with self.subTest(name=name), self.assertRaisesRegex(
+                validator.EvidenceValidationError,
+                diagnostic,
+            ):
+                validator.validate_manifest(manifest, SCHEMA)
+
+        wrong_workflow = _manifest()
+        wrong_workflow["identifiers"]["shuffle_workflow_id"] = (
+            "52c15ad7-ff1f-4d50-bf6c-a1b2c3d4e5f6"
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "workflow ID is not bound to the snapshot",
+        ):
+            validator.validate_manifest(wrong_workflow, SCHEMA)
+
+        wrong_version = _manifest()
+        wrong_version["identifiers"]["shuffle_workflow_version"] = (
+            "notify_identity_owner-v2-unreviewed"
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "workflow version is not the reviewed version",
+        ):
+            validator.validate_manifest(wrong_version, SCHEMA)
 
     def test_validator_rejects_inferred_human_control_or_receipt_success(self) -> None:
         missing_requester = _manifest()
@@ -1518,6 +1671,24 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             + reviewed_image_env["AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST"],
         )
         self.assertIn('"${LAB_DIR}/up.sh" full', runner)
+        wrapper_start = runner.index("run_reviewed_lab_command()")
+        wrapper_end = runner.index("run_reviewed_journey()", wrapper_start)
+        reviewed_lab_wrapper = runner[wrapper_start:wrapper_end]
+        self.assertRegex(
+            reviewed_lab_wrapper,
+            r'assert_repository_snapshot\s+"\$@"',
+        )
+        reviewed_lab_calls = (
+            'run_reviewed_lab_command "${LAB_DIR}/pin-shuffle-app-image.sh"',
+            'run_reviewed_lab_command "${LAB_DIR}/up.sh" full',
+            'run_reviewed_lab_command "${LAB_DIR}/status.sh" full --write-evidence',
+            'run_reviewed_lab_command "${LAB_DIR}/test-wazuh-intake.sh"',
+            'run_reviewed_lab_command "${LAB_DIR}/down.sh"',
+            'run_reviewed_lab_command "${LAB_DIR}/cleanup.sh"',
+        )
+        for reviewed_call in reviewed_lab_calls:
+            with self.subTest(reviewed_call=reviewed_call):
+                self.assertIn(reviewed_call, runner)
         self.assertIn("AEGISOPS_LAB_TRIAL_SCOPE=full", runner)
         self.assertIn("compose_scope full ps -aq", runner)
         self.assertIn("docker_lab inspect ${container_ids}", runner)
@@ -1626,6 +1797,21 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         evidence_build = runner.index('python3 "${builder}"', final_snapshot_check)
         self.assertLess(cleanup, final_snapshot_check)
         self.assertLess(final_snapshot_check, evidence_build)
+        post_build_snapshot_check = runner.index(
+            "assert_repository_snapshot",
+            evidence_build,
+        )
+        evidence_validation = runner.index(
+            'python3 "${validator}"',
+            post_build_snapshot_check,
+        )
+        post_validation_snapshot_check = runner.index(
+            "assert_repository_snapshot",
+            evidence_validation,
+        )
+        self.assertLess(evidence_build, post_build_snapshot_check)
+        self.assertLess(post_build_snapshot_check, evidence_validation)
+        self.assertLess(evidence_validation, post_validation_snapshot_check)
         self.assertIn("status --porcelain=v1 --untracked-files=all", runner)
         self.assertNotIn("destroy-data.sh", runner)
         real_journey = (E2E_ROOT / "run_real_journey.py").read_text(

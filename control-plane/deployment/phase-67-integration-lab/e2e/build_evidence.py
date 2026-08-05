@@ -56,6 +56,15 @@ STEP_EVIDENCE_REFS = (
     ("restart:checked_identifiers", "artifact:restart-status.txt"),
     ("evaluation-record:sha256",),
 )
+REVIEWED_SHUFFLE_WORKFLOW_VERSION = (
+    "notify_identity_owner-v1-reviewed-2026-05-03"
+)
+CURRENT_TRIAL_VERDICT = "integration_trial_passed_with_owned_limitations"
+EVALUATION_SCOPE = "committed_historical_trial"
+CONSERVATIVE_DIRECT_VERDICTS = {
+    "integration_trial_blocked",
+    CURRENT_TRIAL_VERDICT,
+}
 
 LIMITATION_STATUSES = {
     "phase67-single-host": "accepted",
@@ -131,6 +140,53 @@ def _required_timestamp(value: object, path: str) -> str:
     if parsed.tzinfo is None:
         raise ValueError(f"{path} lacks a timezone")
     return timestamp
+
+
+def _evaluation_field(document: str, field_name: str) -> str:
+    pattern = re.compile(
+        rf"^{re.escape(field_name)}: `([^`\n]+)`$",
+        re.MULTILINE,
+    )
+    matches = pattern.findall(document)
+    if len(matches) != 1:
+        raise ValueError(
+            f"prerequisite evaluation must contain exactly one {field_name}"
+        )
+    return matches[0]
+
+
+def _parse_prerequisite_evaluation(document: str) -> dict[str, str]:
+    evaluation = {
+        "direct_verdict": _evaluation_field(document, "Direct verdict"),
+        "evaluation_scope": _evaluation_field(document, "Evaluation scope"),
+        "next_complete_trial_verdict": _evaluation_field(
+            document,
+            "Next complete-trial verdict",
+        ),
+        "ga_acceptance": _evaluation_field(document, "GA acceptance"),
+    }
+    if evaluation["direct_verdict"] not in CONSERVATIVE_DIRECT_VERDICTS:
+        raise ValueError("prerequisite evaluation direct verdict is not conservative")
+    if evaluation["evaluation_scope"] != EVALUATION_SCOPE:
+        raise ValueError("prerequisite evaluation scope is not historical")
+    if evaluation["next_complete_trial_verdict"] != CURRENT_TRIAL_VERDICT:
+        raise ValueError("prerequisite evaluation does not authorize this trial verdict")
+    if evaluation["ga_acceptance"] != "not_accepted":
+        raise ValueError("prerequisite evaluation must not claim GA acceptance")
+    return evaluation
+
+
+def _validate_snapshot_images(
+    images: object,
+    snapshot: Mapping[str, object],
+) -> None:
+    if not isinstance(images, list):
+        raise ValueError("images.json must be an array")
+    snapshot_images = snapshot.get("images")
+    if not isinstance(snapshot_images, list):
+        raise ValueError("snapshot.images must be an array")
+    if images != snapshot_images:
+        raise ValueError("images.json does not match the snapshotted image inventory")
 
 
 def _required_unique_record_ids(
@@ -448,6 +504,8 @@ def _parser() -> argparse.ArgumentParser:
 
 def build(args: argparse.Namespace) -> dict[str, object]:
     snapshot = _mapping(_read_json(args.snapshot), "snapshot")
+    images = _read_json(args.images)
+    _validate_snapshot_images(images, snapshot)
     preparation = _mapping(_read_json(args.preparation), "preparation")
     wazuh = _mapping(_read_json(args.wazuh), "wazuh")
     combined_journey = _mapping(_read_json(args.journey), "journey output")
@@ -469,7 +527,9 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         restart=restart,
         evaluation_record=evaluation_record,
     )
-    evaluation = args.evaluation.read_text(encoding="utf-8")
+    evaluation_contract = _parse_prerequisite_evaluation(
+        args.evaluation.read_text(encoding="utf-8")
+    )
     if _sha256(args.reviewed_workflow) != snapshot.get(
         "shuffle_reviewed_workflow_sha256"
     ):
@@ -500,17 +560,16 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     ):
         if required_line not in wazuh_output:
             raise ValueError(f"Wazuh command output is missing {required_line!r}")
-    if (
-        "integration_trial_passed_with_owned_limitations" not in evaluation
-        or "GA acceptance: not accepted" not in evaluation
-    ):
-        raise ValueError("Phase 67 prerequisite evaluation is not conservative")
+    if journey.get("workflow_id") != snapshot.get("shuffle_api_workflow_id"):
+        raise ValueError("journey Shuffle workflow ID does not match the snapshot")
+    if journey.get("workflow_version") != REVIEWED_SHUFFLE_WORKFLOW_VERSION:
+        raise ValueError("journey Shuffle workflow version is not reviewed")
     expected_evaluation = {
         "schema_version": "phase67.4-prerequisite-evaluation-v1",
         "trial_run_id": snapshot.get("trial_run_id"),
         "snapshot_id": snapshot.get("snapshot_id"),
         "repository_revision": snapshot.get("repository_revision"),
-        "verdict": "integration_trial_passed_with_owned_limitations",
+        "verdict": CURRENT_TRIAL_VERDICT,
         "ga_accepted": False,
         "limitation_ids": list(LIMITATION_IDS),
     }
@@ -519,6 +578,10 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     for key, expected in expected_evaluation.items():
         if evaluation_record.get(key) != expected:
             raise ValueError(f"evaluation record {key} does not match this trial")
+    if evaluation_contract["next_complete_trial_verdict"] != evaluation_record.get(
+        "verdict"
+    ):
+        raise ValueError("evaluation record verdict is outside the documented contract")
     _required_text(evaluation_record.get("evaluated_at"), "evaluation.evaluated_at")
     if _sha256(args.schema) != snapshot.get("evidence_schema_sha256"):
         raise ValueError("snapshot evidence schema digest does not match")

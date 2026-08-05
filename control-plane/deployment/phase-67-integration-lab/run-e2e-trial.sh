@@ -36,6 +36,11 @@ assert_repository_snapshot() {
     || fail "real E2E evidence requires the reviewed repository worktree to remain clean"
 }
 
+run_reviewed_lab_command() {
+  assert_repository_snapshot
+  "$@"
+}
+
 run_reviewed_journey() {
   assert_repository_snapshot
   compose_scope full exec -T \
@@ -212,6 +217,7 @@ cleanup_on_exit() {
 }
 trap cleanup_on_exit EXIT
 
+assert_repository_snapshot
 compose_render_sha256="$(
   compose_scope full config |
     openssl dgst -sha256 -r |
@@ -225,8 +231,8 @@ shuffle_api_workflow_id="${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID}"
 [[ "${shuffle_api_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]] \
   || fail "real Shuffle workflow ID is not configured"
 
-"${LAB_DIR}/pin-shuffle-app-image.sh"
-startup_output="$("${LAB_DIR}/up.sh" full)"
+run_reviewed_lab_command "${LAB_DIR}/pin-shuffle-app-image.sh"
+startup_output="$(run_reviewed_lab_command "${LAB_DIR}/up.sh" full)"
 printf '%s\n' "${startup_output}"
 retain_status_evidence "${startup_output}" "${startup_status_output}"
 
@@ -348,7 +354,9 @@ jq --arg snapshot_id "${snapshot_id}" \
 rm -f "${snapshot_staging}"
 record_step 1 "capture_immutable_snapshot"
 
-initial_status_command_output="$("${LAB_DIR}/status.sh" full --write-evidence)"
+initial_status_command_output="$(
+  run_reviewed_lab_command "${LAB_DIR}/status.sh" full --write-evidence
+)"
 printf '%s\n' "${initial_status_command_output}"
 retain_status_evidence \
   "${initial_status_command_output}" \
@@ -356,7 +364,8 @@ retain_status_evidence \
 record_step 2 "start_lab_and_record_health"
 
 AEGISOPS_LAB_TRIAL_SCOPE=full \
-  "${LAB_DIR}/test-wazuh-intake.sh" | tee "${wazuh_output}"
+  run_reviewed_lab_command "${LAB_DIR}/test-wazuh-intake.sh" \
+  | tee "${wazuh_output}"
 wazuh_evidence="$(
   sed -n 's/^evidence=//p' "${wazuh_output}" | tail -n 1
 )"
@@ -482,8 +491,8 @@ Path(sys.argv[2]).write_text(
 )
 PY
 
-"${LAB_DIR}/down.sh"
-restart_up_output="$("${LAB_DIR}/up.sh" full)"
+run_reviewed_lab_command "${LAB_DIR}/down.sh"
+restart_up_output="$(run_reviewed_lab_command "${LAB_DIR}/up.sh" full)"
 printf '%s\n' "${restart_up_output}"
 retain_status_evidence "${restart_up_output}" "${restart_status_output}"
 jq -c '.journey | .aegisops_alert_id = .alert_id' "${journey_output}" |
@@ -517,7 +526,7 @@ jq -n \
   ' >"${evaluation_record_output}"
 record_step 15 "record_prerequisite_evaluation" "${evaluated_at}"
 
-"${LAB_DIR}/cleanup.sh"
+run_reviewed_lab_command "${LAB_DIR}/cleanup.sh"
 cleaned=true
 assert_repository_snapshot
 python3 "${builder}" \
@@ -541,7 +550,9 @@ python3 "${builder}" \
   --reviewed-workflow "${reviewed_workflow}" \
   --artifacts-directory-name "${trial_run_id}-artifacts" \
   --output "${evidence_output}"
+assert_repository_snapshot
 python3 "${validator}" "${schema}" "${evidence_output}"
+assert_repository_snapshot
 
 for destination in "${final_evidence}" "${final_report}" "${final_artifacts}"; do
   [[ ! -e "${destination}" && ! -L "${destination}" ]] \

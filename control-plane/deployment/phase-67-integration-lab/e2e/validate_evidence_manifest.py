@@ -33,6 +33,9 @@ SUPPORTED_HOST_ARCHITECTURES = frozenset(
 LEGACY_APPROVAL_BLOCKER_STATUSES = {
     "phase67-independent-human-approval-required": "blocking",
 }
+REVIEWED_SHUFFLE_WORKFLOW_VERSION = (
+    "notify_identity_owner-v1-reviewed-2026-05-03"
+)
 STEP_NAMES = (
     "capture_immutable_snapshot",
     "start_lab_and_record_health",
@@ -289,15 +292,31 @@ def _reject_duplicate_keys(
     return result
 
 
-def load_json(path: Path) -> object:
+def _read_json_bytes(path: Path) -> bytes:
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise EvidenceValidationError(f"cannot read {path}: {exc}") from exc
+
+
+def _parse_json_bytes(payload: bytes, path: Path) -> object:
     try:
         return json.loads(
-            path.read_text(encoding="utf-8"),
+            payload,
             object_pairs_hook=_reject_duplicate_keys,
             parse_constant=_reject_non_json_constant,
         )
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    except (UnicodeError, json.JSONDecodeError) as exc:
         raise EvidenceValidationError(f"cannot read {path}: {exc}") from exc
+
+
+def load_json(path: Path) -> object:
+    return _parse_json_bytes(_read_json_bytes(path), path)
+
+
+def load_json_with_sha256(path: Path) -> tuple[object, str]:
+    payload = _read_json_bytes(path)
+    return _parse_json_bytes(payload, path), hashlib.sha256(payload).hexdigest()
 
 
 def require(condition: bool, message: str) -> None:
@@ -543,6 +562,7 @@ def _validate_snapshot(
     *,
     trial_run_id: str,
     allow_legacy_blocked_inventory: bool = False,
+    expected_schema_sha256: str | None = None,
 ) -> Mapping[str, object]:
     snapshot = require_mapping(value, "$.snapshot")
     require_exact_keys(
@@ -581,6 +601,11 @@ def _validate_snapshot(
         "shuffle_live_workflow_sha256",
     ):
         require(SHA256.fullmatch(require_string(snapshot[key], f"$.snapshot.{key}")) is not None, f"$.snapshot.{key} must be SHA-256")
+    if expected_schema_sha256 is not None and not allow_legacy_blocked_inventory:
+        require(
+            snapshot["evidence_schema_sha256"] == expected_schema_sha256,
+            "$.snapshot.evidence_schema_sha256 does not match the validator schema",
+        )
     require(
         WORKFLOW_UUID.fullmatch(
             require_string(
@@ -708,7 +733,12 @@ def _validate_steps(
     return tuple(statuses)
 
 
-def validate_manifest(manifest: object, schema: object) -> None:
+def validate_manifest(
+    manifest: object,
+    schema: object,
+    *,
+    schema_sha256: str | None = None,
+) -> None:
     _validate_schema_contract(schema)
     root = require_mapping(manifest, "$")
     required = (
@@ -744,6 +774,7 @@ def validate_manifest(manifest: object, schema: object) -> None:
         root["snapshot"],
         trial_run_id=trial_run_id,
         allow_legacy_blocked_inventory=allow_legacy_blocked_packet,
+        expected_schema_sha256=schema_sha256,
     )
     snapshot_id = require_string(snapshot["snapshot_id"], "$.snapshot.snapshot_id")
     step_statuses = _validate_steps(
@@ -783,6 +814,34 @@ def validate_manifest(manifest: object, schema: object) -> None:
         require(not execution_id.startswith("shuffle-run-"), "synthetic Shuffle execution ID cannot be live evidence")
     if normalized_ids["native_wazuh_alert_id"] and normalized_ids["aegisops_alert_id"]:
         require(normalized_ids["native_wazuh_alert_id"] != normalized_ids["aegisops_alert_id"], "native Wazuh and AegisOps alert IDs must remain distinct")
+    denied_action_request_id = normalized_ids["denied_action_request_id"]
+    approved_action_request_id = normalized_ids["action_request_id"]
+    if denied_action_request_id is not None and approved_action_request_id is not None:
+        require(
+            denied_action_request_id != approved_action_request_id,
+            "denied and approved action request IDs must remain distinct",
+        )
+    denied_approval_decision_id = normalized_ids["denied_approval_decision_id"]
+    approved_approval_decision_id = normalized_ids["approval_decision_id"]
+    if (
+        denied_approval_decision_id is not None
+        and approved_approval_decision_id is not None
+    ):
+        require(
+            denied_approval_decision_id != approved_approval_decision_id,
+            "denied and approved decision IDs must remain distinct",
+        )
+    workflow_id = normalized_ids["shuffle_workflow_id"]
+    workflow_version = normalized_ids["shuffle_workflow_version"]
+    if workflow_id is not None:
+        require(
+            workflow_id == snapshot["shuffle_api_workflow_id"],
+            "Shuffle workflow ID is not bound to the snapshot",
+        )
+        require(
+            workflow_version == REVIEWED_SHUFFLE_WORKFLOW_VERSION,
+            "Shuffle workflow version is not the reviewed version",
+        )
 
     human = require_mapping(root["human_control"], "$.human_control")
     require_exact_keys(human, required=("requester_identity", "approver_identity", "authenticated_approver_identity", "denied_action_execution_count", "denied_dispatch_rejected", "approval_source", "approval_method", "approval_challenge_sha256", "approval_confirmed_at"), path="$.human_control")
@@ -1097,9 +1156,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         if arguments[0] == "--runtime-images":
             _validate_runtime_images(load_json(Path(arguments[1])))
         else:
-            schema = load_json(Path(arguments[0]))
+            schema_path = Path(arguments[0])
+            schema, schema_sha256 = load_json_with_sha256(schema_path)
             manifest = load_json(Path(arguments[1]))
-            validate_manifest(manifest, schema)
+            validate_manifest(
+                manifest,
+                schema,
+                schema_sha256=schema_sha256,
+            )
     except EvidenceValidationError as exc:
         print(f"Phase 67.4 evidence validation failed: {exc}", file=sys.stderr)
         return 1

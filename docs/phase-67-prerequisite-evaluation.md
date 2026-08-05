@@ -2,9 +2,10 @@
 
 ## Direct Verdict
 
-`integration_trial_blocked`
-
-GA acceptance: not accepted.
+Direct verdict: `integration_trial_blocked`
+Evaluation scope: `committed_historical_trial`
+Next complete-trial verdict: `integration_trial_passed_with_owned_limitations`
+GA acceptance: `not_accepted`
 
 The committed historical trial reached the independent approval boundary and
 stopped before Shuffle dispatch because no distinct human approval event was
