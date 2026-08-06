@@ -403,6 +403,82 @@ def _validate_wazuh_reconciliation_scope(
             )
 
 
+def _single_wazuh_output_value(output: str, prefix: str) -> str:
+    values = [
+        line[len(prefix) :]
+        for line in output.splitlines()
+        if line.startswith(prefix)
+    ]
+    if len(values) != 1:
+        raise ValueError(
+            f"Wazuh command output must contain exactly one {prefix!r} line"
+        )
+    return _required_text(values[0], f"Wazuh command output {prefix!r}")
+
+
+def _validate_wazuh_output_contract(
+    output: str,
+    wazuh: Mapping[str, object],
+) -> None:
+    lines = output.splitlines()
+    for required_line in (
+        "PASS invalid_bearer_secret=403",
+        "PASS proxy_bypass=403",
+        "PASS negative_authoritative_alert_delta=0",
+    ):
+        if lines.count(required_line) != 1:
+            raise ValueError(
+                "Wazuh command output must contain exactly one "
+                f"{required_line!r} line"
+            )
+
+    first_delivery = _mapping(
+        wazuh.get("first_delivery"),
+        "wazuh.first_delivery",
+    )
+    duplicate_delivery = _mapping(
+        wazuh.get("duplicate_delivery"),
+        "wazuh.duplicate_delivery",
+    )
+    expected_values = {
+        "PASS native_wazuh_alert_id=": _required_text(
+            wazuh.get("native_wazuh_alert_id"),
+            "wazuh.native_wazuh_alert_id",
+        ),
+        "PASS first_disposition=": _required_text(
+            first_delivery.get("disposition"),
+            "wazuh.first_delivery.disposition",
+        ),
+        "PASS duplicate_disposition=": _required_text(
+            duplicate_delivery.get("disposition"),
+            "wazuh.duplicate_delivery.disposition",
+        ),
+        "PASS analyst_queue_alert_id=": _required_text(
+            wazuh.get("aegisops_alert_id"),
+            "wazuh.aegisops_alert_id",
+        ),
+    }
+    for prefix, expected_value in expected_values.items():
+        if _single_wazuh_output_value(output, prefix) != expected_value:
+            raise ValueError(
+                f"Wazuh command output {prefix!r} does not match the manifest"
+            )
+
+
+def _validate_embedded_report(
+    combined_journey: Mapping[str, object],
+    report: Mapping[str, object],
+) -> None:
+    embedded_report = _mapping(
+        combined_journey.get("report"),
+        "journey output.report",
+    )
+    if embedded_report != report:
+        raise ValueError(
+            "journey output embedded report does not match the retained report"
+        )
+
+
 def _validate_report_record(
     record: Mapping[str, object],
     expected: Mapping[str, object],
@@ -418,6 +494,7 @@ def _validate_report_record(
 def _validate_trial_report_scope(
     report: Mapping[str, object],
     journey: Mapping[str, object],
+    wazuh: Mapping[str, object],
 ) -> None:
     records = _mapping(report.get("records"), "report.records")
     if set(records) != set(REPORT_RECORD_ID_FIELDS):
@@ -642,6 +719,34 @@ def _validate_trial_report_scope(
         journey.get("wazuh_reconciliation_ids"),
         "journey.wazuh_reconciliation_ids",
     )
+    manifest_wazuh_reconciliation_ids = _wazuh_manifest_reconciliation_ids(
+        wazuh
+    )
+    wazuh_deliveries_by_reconciliation_id: dict[
+        str, tuple[str, Mapping[str, object]]
+    ] = {}
+    for delivery_name in ("first_delivery", "duplicate_delivery"):
+        delivery = _mapping(
+            wazuh.get(delivery_name),
+            f"wazuh.{delivery_name}",
+        )
+        reconciliation_id = _required_text(
+            delivery.get("reconciliation_id"),
+            f"wazuh.{delivery_name}.reconciliation_id",
+        )
+        wazuh_deliveries_by_reconciliation_id[reconciliation_id] = (
+            delivery_name,
+            delivery,
+        )
+    if (
+        set(wazuh_deliveries_by_reconciliation_id)
+        != manifest_wazuh_reconciliation_ids
+        or set(wazuh_deliveries_by_reconciliation_id)
+        != set(wazuh_reconciliation_ids)
+    ):
+        raise ValueError(
+            "journey Wazuh reconciliation scope does not match the Wazuh manifest"
+        )
     for index, item in enumerate(reconciliation_records):
         record = _mapping(item, f"report.records.reconciliation[{index}]")
         if record.get("authority_role") != "authoritative_control_plane_record":
@@ -667,8 +772,47 @@ def _validate_trial_report_scope(
             record.get("execution_run_id") == journey.get("execution_id")
             or journey.get("execution_id") in linked_execution_ids
         )
-        if reconciliation_id in wazuh_reconciliation_ids:
-            in_trial_scope = alert_bound
+        if reconciliation_id in wazuh_deliveries_by_reconciliation_id:
+            delivery_name, delivery = wazuh_deliveries_by_reconciliation_id[
+                reconciliation_id
+            ]
+            expected_alert_id = _required_text(
+                wazuh.get("aegisops_alert_id"),
+                "wazuh.aegisops_alert_id",
+            )
+            expected_finding_id = _required_text(
+                delivery.get("finding_id"),
+                f"wazuh.{delivery_name}.finding_id",
+            )
+            expected_disposition = _required_text(
+                delivery.get("disposition"),
+                f"wazuh.{delivery_name}.disposition",
+            )
+            subject_linkage = _mapping(
+                record.get("subject_linkage"),
+                f"report {delivery_name} reconciliation subject_linkage",
+            )
+            in_trial_scope = (
+                alert_bound
+                and record.get("alert_id") == expected_alert_id
+                and record.get("finding_id") == expected_finding_id
+                and record.get("execution_run_id") is None
+                and linked_execution_ids == []
+                and record.get("ingest_disposition") == expected_disposition
+                and record.get("lifecycle_state") == "matched"
+                and record.get("mismatch_summary")
+                == (
+                    f"{expected_disposition} upstream analytic signal into "
+                    "alert lifecycle"
+                )
+                and subject_linkage.get("alert_ids") == [expected_alert_id]
+                and subject_linkage.get("finding_ids") == [expected_finding_id]
+            )
+            if not in_trial_scope:
+                raise ValueError(
+                    f"report {delivery_name} reconciliation is not bound "
+                    "to the Wazuh manifest"
+                )
         elif reconciliation_id == journey.get("reconciliation_id"):
             in_trial_scope = alert_bound and execution_bound
             subject_linkage = _mapping(
@@ -909,6 +1053,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     journey = _mapping(combined_journey.get("journey"), "journey output.journey")
     restart = _mapping(_read_json(args.restart), "restart")
     report = _mapping(_read_json(args.report), "report")
+    _validate_embedded_report(combined_journey, report)
     evaluation_record = _mapping(
         _read_json(args.evaluation_record),
         "evaluation record",
@@ -950,13 +1095,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         args.restart_status,
     ):
         _validate_status_snapshot(status_path, snapshot)
-    for required_line in (
-        "PASS invalid_bearer_secret=403",
-        "PASS proxy_bypass=403",
-        "PASS negative_authoritative_alert_delta=0",
-    ):
-        if required_line not in wazuh_output:
-            raise ValueError(f"Wazuh command output is missing {required_line!r}")
+    _validate_wazuh_output_contract(wazuh_output, wazuh)
     if journey.get("workflow_id") != snapshot.get("shuffle_api_workflow_id"):
         raise ValueError("journey Shuffle workflow ID does not match the snapshot")
     if journey.get("workflow_version") != REVIEWED_SHUFFLE_WORKFLOW_VERSION:
@@ -995,7 +1134,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         journey,
         restart,
     )
-    _validate_trial_report_scope(report, journey)
+    _validate_trial_report_scope(report, journey, wazuh)
     if wazuh.get("aegisops_alert_id") != journey.get("alert_id"):
         raise ValueError("Wazuh admission and case journey use different alerts")
     if wazuh.get("first_delivery", {}).get("finding_id") != journey.get("finding_id"):

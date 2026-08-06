@@ -696,6 +696,60 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 )
             )
 
+    def test_builder_binds_wazuh_command_output_to_the_manifest(self) -> None:
+        wazuh = {
+            "native_wazuh_alert_id": "wazuh-native-alert-a1b2c3d4",
+            "aegisops_alert_id": "alert-a1b2c3d4",
+            "first_delivery": {"disposition": "created"},
+            "duplicate_delivery": {"disposition": "deduplicated"},
+        }
+        output = "\n".join(
+            (
+                "PASS invalid_bearer_secret=403",
+                "PASS proxy_bypass=403",
+                "PASS negative_authoritative_alert_delta=0",
+                "PASS native_wazuh_alert_id=wazuh-native-alert-a1b2c3d4",
+                "PASS first_disposition=created",
+                "PASS duplicate_disposition=deduplicated",
+                "PASS analyst_queue_alert_id=alert-a1b2c3d4",
+            )
+        )
+        builder._validate_wazuh_output_contract(output, wazuh)
+
+        mutations = {
+            "native alert mismatch": output.replace(
+                "wazuh-native-alert-a1b2c3d4",
+                "wazuh-native-alert-from-another-trial",
+            ),
+            "AegisOps alert mismatch": output.replace(
+                "PASS analyst_queue_alert_id=alert-a1b2c3d4",
+                "PASS analyst_queue_alert_id=alert-from-another-trial",
+            ),
+            "disposition mismatch": output.replace(
+                "PASS duplicate_disposition=deduplicated",
+                "PASS duplicate_disposition=created",
+            ),
+            "duplicate claim": output
+            + "\nPASS native_wazuh_alert_id=wazuh-native-alert-a1b2c3d4",
+        }
+        for name, mutated in mutations.items():
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                builder._validate_wazuh_output_contract(mutated, wazuh)
+
+    def test_builder_requires_the_journey_embedded_report_to_match(self) -> None:
+        report = {
+            "export_id": "phase67-report-a1b2c3d4",
+            "records": {"alert": [{"alert_id": "alert-a1b2c3d4"}]},
+        }
+        builder._validate_embedded_report({"report": deepcopy(report)}, report)
+
+        mismatched = deepcopy(report)
+        mismatched["records"]["alert"][0]["alert_id"] = (
+            "alert-from-another-trial"
+        )
+        with self.assertRaisesRegex(ValueError, "embedded report does not match"):
+            builder._validate_embedded_report({"report": mismatched}, report)
+
     def test_builder_binds_all_source_backed_step_observation_times(self) -> None:
         observations = [
             {
@@ -1750,8 +1804,23 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "target_scope": target_scope,
             "reconciliation_id": identifiers["reconciliation_id"],
             "wazuh_reconciliation_ids": [
-                "phase67-admission-reconciliation"
+                "phase67-admission-reconciliation",
+                "phase67-duplicate-reconciliation",
             ],
+        }
+        wazuh = {
+            "native_wazuh_alert_id": "wazuh-native-alert-a1b2c3d4",
+            "aegisops_alert_id": identifiers["aegisops_alert_id"],
+            "first_delivery": {
+                "disposition": "created",
+                "finding_id": identifiers["finding_id"],
+                "reconciliation_id": "phase67-admission-reconciliation",
+            },
+            "duplicate_delivery": {
+                "disposition": "deduplicated",
+                "finding_id": identifiers["finding_id"],
+                "reconciliation_id": "phase67-duplicate-reconciliation",
+            },
         }
         report = {
             "records": {
@@ -1860,6 +1929,33 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                         "finding_id": identifiers["finding_id"],
                         "execution_run_id": None,
                         "linked_execution_run_ids": [],
+                        "ingest_disposition": "created",
+                        "lifecycle_state": "matched",
+                        "mismatch_summary": (
+                            "created upstream analytic signal into alert lifecycle"
+                        ),
+                        "subject_linkage": {
+                            "alert_ids": [identifiers["aegisops_alert_id"]],
+                            "finding_ids": [identifiers["finding_id"]],
+                        },
+                        "authority_role": "authoritative_control_plane_record",
+                    },
+                    {
+                        "reconciliation_id": "phase67-duplicate-reconciliation",
+                        "alert_id": identifiers["aegisops_alert_id"],
+                        "finding_id": identifiers["finding_id"],
+                        "execution_run_id": None,
+                        "linked_execution_run_ids": [],
+                        "ingest_disposition": "deduplicated",
+                        "lifecycle_state": "matched",
+                        "mismatch_summary": (
+                            "deduplicated upstream analytic signal into alert "
+                            "lifecycle"
+                        ),
+                        "subject_linkage": {
+                            "alert_ids": [identifiers["aegisops_alert_id"]],
+                            "finding_ids": [identifiers["finding_id"]],
+                        },
                         "authority_role": "authoritative_control_plane_record",
                     },
                     {
@@ -1900,7 +1996,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 ],
             }
         }
-        builder._validate_trial_report_scope(report, journey_record)
+        builder._validate_trial_report_scope(report, journey_record, wazuh)
 
         binding_mutations = {
             "execution_run_id": "2f90e91d-e217-42da-bd83-a1b2c3d4e5f7",
@@ -1920,7 +2016,11 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 ValueError,
                 "report action execution is not bound to the journey",
             ):
-                builder._validate_trial_report_scope(tampered, journey_record)
+                builder._validate_trial_report_scope(
+                    tampered,
+                    journey_record,
+                    wazuh,
+                )
 
         relationship_mutations = (
             ("alert", 0, "finding_id", "finding-from-another-trial"),
@@ -1957,7 +2057,11 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 family=family,
                 field_name=field_name,
             ), self.assertRaisesRegex(ValueError, "is not bound to the journey"):
-                builder._validate_trial_report_scope(tampered, journey_record)
+                builder._validate_trial_report_scope(
+                    tampered,
+                    journey_record,
+                    wazuh,
+                )
 
         non_authoritative = deepcopy(report)
         non_authoritative["records"]["approval_decision"][0][
@@ -1967,6 +2071,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             builder._validate_trial_report_scope(
                 non_authoritative,
                 journey_record,
+                wazuh,
             )
 
         altered_denial = deepcopy(journey_record)
@@ -1974,12 +2079,59 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "requester-from-another-trial"
         )
         with self.assertRaisesRegex(ValueError, "denied dispatch is not bound"):
-            builder._validate_trial_report_scope(report, altered_denial)
+            builder._validate_trial_report_scope(report, altered_denial, wazuh)
+
+        wazuh_reconciliation_mutations = (
+            (0, "ingest_disposition", "mismatch"),
+            (0, "lifecycle_state", "stale"),
+            (0, "mismatch_summary", "unrelated summary"),
+            (1, "execution_run_id", identifiers["shuffle_execution_id"]),
+            (1, "linked_execution_run_ids", [identifiers["shuffle_execution_id"]]),
+        )
+        for index, field_name, field_value in wazuh_reconciliation_mutations:
+            tampered = deepcopy(report)
+            tampered["records"]["reconciliation"][index][field_name] = field_value
+            delivery_name = (
+                "first_delivery" if index == 0 else "duplicate_delivery"
+            )
+            with self.subTest(
+                delivery=delivery_name,
+                field_name=field_name,
+            ), self.assertRaisesRegex(
+                ValueError,
+                f"report {delivery_name} reconciliation is not bound",
+            ):
+                builder._validate_trial_report_scope(
+                    tampered,
+                    journey_record,
+                    wazuh,
+                )
+
+        for index, linkage_name in ((0, "alert_ids"), (1, "finding_ids")):
+            tampered = deepcopy(report)
+            tampered["records"]["reconciliation"][index]["subject_linkage"][
+                linkage_name
+            ] = ["record-from-another-trial"]
+            delivery_name = (
+                "first_delivery" if index == 0 else "duplicate_delivery"
+            )
+            with self.subTest(
+                delivery=delivery_name,
+                linkage=linkage_name,
+            ), self.assertRaisesRegex(
+                ValueError,
+                f"report {delivery_name} reconciliation is not bound",
+            ):
+                builder._validate_trial_report_scope(
+                    tampered,
+                    journey_record,
+                    wazuh,
+                )
 
         unbound_action_reconciliation = deepcopy(report)
         action_reconciliation = unbound_action_reconciliation["records"][
             "reconciliation"
-        ][1]
+        ][2]
         action_reconciliation["execution_run_id"] = None
         action_reconciliation["linked_execution_run_ids"] = []
         with self.assertRaisesRegex(
@@ -1989,6 +2141,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             builder._validate_trial_report_scope(
                 unbound_action_reconciliation,
                 journey_record,
+                wazuh,
             )
 
         reconciliation_mutations = (
@@ -1998,24 +2151,32 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         )
         for field_name, field_value in reconciliation_mutations:
             tampered = deepcopy(report)
-            tampered["records"]["reconciliation"][1][field_name] = field_value
+            tampered["records"]["reconciliation"][2][field_name] = field_value
             with self.subTest(
                 reconciliation_field=field_name
             ), self.assertRaisesRegex(
                 ValueError,
                 "action reconciliation is not bound",
             ):
-                builder._validate_trial_report_scope(tampered, journey_record)
+                builder._validate_trial_report_scope(
+                    tampered,
+                    journey_record,
+                    wazuh,
+                )
 
         wrong_subject = deepcopy(report)
-        wrong_subject["records"]["reconciliation"][1]["subject_linkage"][
+        wrong_subject["records"]["reconciliation"][2]["subject_linkage"][
             "action_request_ids"
         ] = ["action-from-another-trial"]
         with self.assertRaisesRegex(
             ValueError,
             "action reconciliation is not bound",
         ):
-            builder._validate_trial_report_scope(wrong_subject, journey_record)
+            builder._validate_trial_report_scope(
+                wrong_subject,
+                journey_record,
+                wazuh,
+            )
 
         previous_trial = deepcopy(report)
         previous_trial["records"]["action_request"].append(
@@ -2025,7 +2186,11 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             }
         )
         with self.assertRaisesRegex(ValueError, "is not scoped to this trial"):
-            builder._validate_trial_report_scope(previous_trial, journey_record)
+            builder._validate_trial_report_scope(
+                previous_trial,
+                journey_record,
+                wazuh,
+            )
 
         unrelated_reconciliation = deepcopy(report)
         unrelated_reconciliation["records"]["reconciliation"].append(
@@ -2042,6 +2207,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             builder._validate_trial_report_scope(
                 unrelated_reconciliation,
                 journey_record,
+                wazuh,
             )
 
     def test_journey_report_scope_excludes_preserved_prior_trial_records(self) -> None:

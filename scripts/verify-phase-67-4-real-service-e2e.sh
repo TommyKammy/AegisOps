@@ -145,6 +145,13 @@ require_fixed "${e2e_root}/build_evidence.py" 'uses a different control-plane im
 require_fixed "${e2e_root}/build_evidence.py" '_validate_wazuh_reconciliation_scope'
 require_fixed "${e2e_root}/build_evidence.py" '_validate_preparation_journey_binding'
 require_fixed "${e2e_root}/build_evidence.py" '_load_wazuh_observations'
+require_fixed "${e2e_root}/build_evidence.py" '_validate_wazuh_output_contract'
+require_fixed \
+  "${e2e_root}/build_evidence.py" \
+  'f"report {delivery_name} reconciliation is not bound "'
+require_fixed \
+  "${e2e_root}/build_evidence.py" \
+  'journey output embedded report does not match the retained report'
 require_fixed "${e2e_root}/build_evidence.py" '_validate_step_observation_sources'
 require_fixed "${e2e_root}/build_evidence.py" 'does not use the authoritative'
 require_fixed "${e2e_root}/build_evidence.py" '_parse_prerequisite_evaluation'
