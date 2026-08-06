@@ -274,6 +274,88 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertEqual(builder.CURRENT_TRIAL_VERDICT, validator.PASSED_VERDICT)
         validator.validate_manifest(_manifest(), SCHEMA)
 
+    def test_published_file_validation_rehashes_the_complete_packet(self) -> None:
+        manifest = _manifest()
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifacts_directory = root / manifest["artifacts"]["directory_name"]
+            artifacts_directory.mkdir()
+            for index, item in enumerate(manifest["artifacts"]["files"]):
+                payload = f"artifact-{index}-{item['name']}\n".encode()
+                (artifacts_directory / item["name"]).write_bytes(payload)
+                item["sha256"] = hashlib.sha256(payload).hexdigest()
+            report_path = root / "report.json"
+            report_payload = b'{"source_of_truth":"aegisops_authoritative_records"}\n'
+            report_path.write_bytes(report_payload)
+            manifest["report"]["sha256"] = hashlib.sha256(
+                report_payload
+            ).hexdigest()
+
+            validator.validate_published_files(
+                manifest,
+                report_path,
+                artifacts_directory,
+            )
+            original_loader = validator._load_validated_manifest
+            try:
+                validator._load_validated_manifest = lambda *_args: manifest
+                self.assertEqual(
+                    validator.main(
+                        (
+                            "--published",
+                            str(root / "schema.json"),
+                            str(root / "evidence.json"),
+                            str(report_path),
+                            str(artifacts_directory),
+                        )
+                    ),
+                    0,
+                )
+            finally:
+                validator._load_validated_manifest = original_loader
+
+            first_artifact = artifacts_directory / manifest["artifacts"][
+                "files"
+            ][0]["name"]
+            first_artifact.write_text("tampered\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                validator.EvidenceValidationError,
+                "published artifact .* digest does not match",
+            ):
+                validator.validate_published_files(
+                    manifest,
+                    report_path,
+                    artifacts_directory,
+                )
+            first_payload = (
+                "artifact-0-" + manifest["artifacts"]["files"][0]["name"] + "\n"
+            ).encode()
+            first_artifact.write_bytes(first_payload)
+
+            unexpected = artifacts_directory / "unlisted-secret.txt"
+            unexpected.write_text("unlisted\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                validator.EvidenceValidationError,
+                "file set does not match",
+            ):
+                validator.validate_published_files(
+                    manifest,
+                    report_path,
+                    artifacts_directory,
+                )
+            unexpected.unlink()
+
+            report_path.write_text("tampered report\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                validator.EvidenceValidationError,
+                "published report digest does not match",
+            ):
+                validator.validate_published_files(
+                    manifest,
+                    report_path,
+                    artifacts_directory,
+                )
+
     def test_schema_selects_exact_historical_and_current_image_profiles(
         self,
     ) -> None:
@@ -335,6 +417,22 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
     ) -> None:
         verdict_schema = SCHEMA["properties"]["verdict"]
         self.assertEqual(set(verdict_schema["enum"]), validator.VERDICTS)
+        passed_branches = [
+            branch
+            for branch in SCHEMA["allOf"]
+            if branch.get("if", {})
+            .get("properties", {})
+            .get("verdict", {})
+            .get("const")
+            == validator.PASSED_VERDICT
+        ]
+        self.assertEqual(len(passed_branches), 1)
+        self.assertEqual(
+            passed_branches[0]["then"]["properties"]["steps"]["items"][
+                "properties"
+            ]["status"],
+            {"const": "passed"},
+        )
         execution_schema = SCHEMA["properties"]["identifiers"]["properties"][
             "shuffle_execution_id"
         ]
@@ -749,6 +847,78 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "embedded report does not match"):
             builder._validate_embedded_report({"report": mismatched}, report)
+
+    def test_builder_rejects_unredacted_report_values_recursively(self) -> None:
+        redacted_report = {
+            "records": {
+                "action_request": [
+                    {
+                        "credential_reference": "<redacted-secret>",
+                        "reviewed_context": {
+                            "source_path": "<redacted-local-path>/capture.json"
+                        },
+                    }
+                ]
+            }
+        }
+        self.assertTrue(builder._validate_report_redaction(redacted_report))
+
+        unsafe_reports = (
+            {"records": {"credential": "live-credential"}},
+            {"records": {"context": {"password": "plaintext"}}},
+            {"records": {"context": "Bearer live-token"}},
+            {"records": {"source_path": "/Users/operator/private.json"}},
+        )
+        for unsafe_report in unsafe_reports:
+            with self.subTest(report=unsafe_report), self.assertRaisesRegex(
+                ValueError,
+                "unredacted",
+            ):
+                builder._validate_report_redaction(unsafe_report)
+
+    def test_builder_binds_trial_and_wazuh_provenance_to_snapshot(self) -> None:
+        trial_run_id = "phase67-e2e-20260801T100000Z-0123456789ab"
+        snapshot = {
+            "trial_run_id": trial_run_id,
+            "repository_revision": "a" * 40,
+            "runtime_artifact_sha256": "b" * 64,
+        }
+        preparation = {"trial_run_id": trial_run_id}
+        journey_record = {"trial_run_id": trial_run_id}
+        wazuh = {
+            "repository_revision": "a" * 40,
+            "runtime_artifact_digest": "b" * 64,
+        }
+        builder._validate_snapshot_artifact_bindings(
+            snapshot,
+            preparation,
+            wazuh,
+            journey_record,
+        )
+
+        mutations = (
+            ("preparation", "trial_run_id", "phase67-e2e-other"),
+            ("journey", "trial_run_id", "phase67-e2e-other"),
+            ("wazuh", "repository_revision", "c" * 40),
+            ("wazuh", "runtime_artifact_digest", "d" * 64),
+        )
+        for source_name, field_name, field_value in mutations:
+            sources = {
+                "preparation": deepcopy(preparation),
+                "journey": deepcopy(journey_record),
+                "wazuh": deepcopy(wazuh),
+            }
+            sources[source_name][field_name] = field_value
+            with self.subTest(
+                source=source_name,
+                field=field_name,
+            ), self.assertRaisesRegex(ValueError, "does not match the snapshot"):
+                builder._validate_snapshot_artifact_bindings(
+                    snapshot,
+                    sources["preparation"],
+                    sources["wazuh"],
+                    sources["journey"],
+                )
 
     def test_builder_binds_all_source_backed_step_observation_times(self) -> None:
         observations = [
@@ -2849,13 +3019,22 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             'mv "${final_artifacts}/evidence.json" "${final_evidence}"'
         )
         final_manifest_validation = runner.index(
-            'python3 "${validator}" "${schema}" "${final_evidence}"',
+            "--published",
             final_manifest_move,
         )
         self.assertLess(final_manifest_move, final_manifest_validation)
+        publication_complete = runner.index(
+            "publication_manifest_published=true",
+            final_manifest_validation,
+        )
+        validation_block = runner[
+            final_manifest_validation:publication_complete
+        ]
+        self.assertIn('"${final_report}"', validation_block)
+        self.assertIn('"${final_artifacts}"', validation_block)
         self.assertLess(
             final_manifest_validation,
-            runner.index("publication_manifest_published=true"),
+            publication_complete,
         )
         self.assertIn("status --porcelain=v1 --untracked-files=all", runner)
         self.assertNotIn("destroy-data.sh", runner)

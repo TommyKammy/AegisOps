@@ -420,6 +420,27 @@
       "if": {"$ref": "#/$defs/legacy_blocked_identity"},
       "then": {"$ref": "#/$defs/legacy_blocked_image_inventory"},
       "else": {"$ref": "#/$defs/current_image_inventory"}
+    },
+    {
+      "if": {
+        "required": ["verdict"],
+        "properties": {
+          "verdict": {
+            "const": "integration_trial_passed_with_owned_limitations"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "steps": {
+            "items": {
+              "properties": {
+                "status": {"const": "passed"}
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "$defs": {

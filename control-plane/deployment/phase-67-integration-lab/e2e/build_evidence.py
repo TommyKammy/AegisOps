@@ -108,6 +108,24 @@ PREPARATION_JOURNEY_BINDINGS = (
     "requester_identity",
     "approval_challenge_sha256",
 )
+REPORT_REDACTED_SECRET_TOKEN = "<redacted-secret>"
+REPORT_SECRET_KEY_FRAGMENTS = (
+    "api_key",
+    "authorization",
+    "credential",
+    "password",
+    "private_key",
+    "secret",
+    "token",
+)
+REPORT_PRIVATE_VALUE_PATTERNS = (
+    re.compile(r"\bBearer\s+\S+", re.IGNORECASE),
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@", re.IGNORECASE),
+    re.compile(r"(?:^|[?&])(token|password|secret|api[_-]?key)=", re.IGNORECASE),
+    re.compile(r"(?:/(?:Users|home)/[^/\s]+(?:/[^\s]*)?|/root/[^\s]*)"),
+    re.compile(r"(?i)(?:[A-Z]:[\\/]+|/mnt/[a-z]/)Users[\\/]+[^\\/\s]+"),
+)
 
 
 def _mapping(value: object, path: str) -> Mapping[str, object]:
@@ -477,6 +495,72 @@ def _validate_embedded_report(
         raise ValueError(
             "journey output embedded report does not match the retained report"
         )
+
+
+def _report_key_is_secret(key: object) -> bool:
+    normalized = str(key).lower().replace("-", "_")
+    return any(fragment in normalized for fragment in REPORT_SECRET_KEY_FRAGMENTS)
+
+
+def _validate_report_redaction(
+    value: object,
+    path: str = "report",
+    *,
+    key: object | None = None,
+) -> bool:
+    if key is not None and _report_key_is_secret(key):
+        if value != REPORT_REDACTED_SECRET_TOKEN:
+            raise ValueError(f"{path} contains an unredacted secret field")
+        return True
+    if isinstance(value, Mapping):
+        for child_key, child_value in value.items():
+            _validate_report_redaction(
+                child_value,
+                f"{path}.{child_key}",
+                key=child_key,
+            )
+        return True
+    if isinstance(value, list):
+        for index, child_value in enumerate(value):
+            _validate_report_redaction(
+                child_value,
+                f"{path}[{index}]",
+            )
+        return True
+    if not isinstance(value, str):
+        return True
+    for pattern in REPORT_PRIVATE_VALUE_PATTERNS:
+        if pattern.search(value) is not None:
+            raise ValueError(
+                f"{path} contains an unredacted secret or private host path"
+            )
+    return True
+
+
+def _validate_snapshot_artifact_bindings(
+    snapshot: Mapping[str, object],
+    preparation: Mapping[str, object],
+    wazuh: Mapping[str, object],
+    journey: Mapping[str, object],
+) -> None:
+    trial_run_id = _required_text(
+        snapshot.get("trial_run_id"),
+        "snapshot.trial_run_id",
+    )
+    for source_name, source in (
+        ("preparation", preparation),
+        ("journey", journey),
+    ):
+        if source.get("trial_run_id") != trial_run_id:
+            raise ValueError(
+                f"{source_name} trial_run_id does not match the snapshot"
+            )
+    if wazuh.get("repository_revision") != snapshot.get("repository_revision"):
+        raise ValueError("Wazuh repository revision does not match the snapshot")
+    if wazuh.get("runtime_artifact_digest") != snapshot.get(
+        "runtime_artifact_sha256"
+    ):
+        raise ValueError("Wazuh runtime artifact digest does not match the snapshot")
 
 
 def _validate_report_record(
@@ -1054,6 +1138,13 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     restart = _mapping(_read_json(args.restart), "restart")
     report = _mapping(_read_json(args.report), "report")
     _validate_embedded_report(combined_journey, report)
+    report_redacted = _validate_report_redaction(report)
+    _validate_snapshot_artifact_bindings(
+        snapshot,
+        preparation,
+        wazuh,
+        journey,
+    )
     evaluation_record = _mapping(
         _read_json(args.evaluation_record),
         "evaluation record",
@@ -1300,7 +1391,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
             "report_id": journey.get("report_id"),
             "sha256": report_sha256,
             "source_of_truth": report.get("source_of_truth"),
-            "redacted": True,
+            "redacted": report_redacted,
         },
         "evaluation": {
             "trial_run_id": evaluation_record.get("trial_run_id"),

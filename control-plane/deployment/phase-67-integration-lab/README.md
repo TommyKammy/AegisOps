@@ -218,8 +218,10 @@ replay and receipt negative probes, so earlier Wazuh operations are not
 relabeled as later journey events. Publication prepares permissions and moves
 the report and raw artifact directory first; the passing manifest is moved last
 and partial publication is rolled back when that final commit cannot complete.
-The final manifest path is validated again after the move, so success refers to
-the exact published bytes rather than an earlier staging-path read.
+The final manifest path is validated again after the move, and the separately
+published report plus the complete artifact file set are rehashed against that
+manifest. Success therefore refers to the exact published bytes rather than an
+earlier staging-path read.
 
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 

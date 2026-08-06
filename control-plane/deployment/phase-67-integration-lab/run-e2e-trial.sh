@@ -794,7 +794,12 @@ publication_artifacts_published=true
 mv "${final_artifacts}/evidence.json" "${final_evidence}"
 publication_manifest_moved=true
 assert_repository_snapshot
-python3 "${validator}" "${schema}" "${final_evidence}"
+python3 "${validator}" \
+  --published \
+  "${schema}" \
+  "${final_evidence}" \
+  "${final_report}" \
+  "${final_artifacts}"
 chmod 400 "${final_evidence}"
 publication_manifest_published=true
 trap - EXIT

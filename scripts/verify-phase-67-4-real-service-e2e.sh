@@ -146,6 +146,10 @@ require_fixed "${e2e_root}/build_evidence.py" '_validate_wazuh_reconciliation_sc
 require_fixed "${e2e_root}/build_evidence.py" '_validate_preparation_journey_binding'
 require_fixed "${e2e_root}/build_evidence.py" '_load_wazuh_observations'
 require_fixed "${e2e_root}/build_evidence.py" '_validate_wazuh_output_contract'
+require_fixed "${e2e_root}/build_evidence.py" '_validate_snapshot_artifact_bindings'
+require_fixed \
+  "${e2e_root}/build_evidence.py" \
+  'report_redacted = _validate_report_redaction(report)'
 require_fixed \
   "${e2e_root}/build_evidence.py" \
   'f"report {delivery_name} reconciliation is not bound "'
@@ -182,9 +186,14 @@ require_fixed "${e2e_root}/validate_evidence_manifest.py" 'Shuffle workflow vers
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'Shuffle execution ID must use canonical UUID form'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'evaluation digest does not match evaluation-record.json artifact'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'PASSED_VERDICT'
+require_fixed "${e2e_root}/validate_evidence_manifest.py" 'validate_published_files'
+require_fixed \
+  "${e2e_root}/validate_evidence_manifest.py" \
+  'published artifact file set does not match the manifest'
 require_fixed \
   "${e2e_root}/validate_evidence_manifest.py" \
   'cleanup must be either unobserved or completed non-destructively'
+require_fixed "${schema}" '"status": {"const": "passed"}'
 require_fixed "${e2e_root}/run_real_journey.py" '"idempotency_key": action.idempotency_key'
 require_fixed "${e2e_root}/run_real_journey.py" 'NEGATIVE_RECONCILIATION_OUTCOMES'
 require_fixed "${e2e_root}/run_real_journey.py" '_verify_restart_report_contents'
@@ -240,7 +249,9 @@ require_fixed "${lab_root}/run-e2e-trial.sh" 'publication_manifest_moved=false'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'mv "${final_artifacts}/evidence.json" "${final_evidence}"'
 require_fixed \
   "${lab_root}/run-e2e-trial.sh" \
-  'python3 "${validator}" "${schema}" "${final_evidence}"'
+  '--published'
+require_fixed "${lab_root}/run-e2e-trial.sh" '"${final_report}"'
+require_fixed "${lab_root}/run-e2e-trial.sh" '"${final_artifacts}"'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'no passing manifest was published'
 require_fixed "${lab_root}/run-e2e-trial.sh" '"${LAB_DIR}/cleanup.sh"'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'assert_repository_snapshot'

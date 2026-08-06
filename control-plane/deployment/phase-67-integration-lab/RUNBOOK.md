@@ -185,10 +185,11 @@ behind the Shuffle action tag. After operator approval, the runner revalidates
 the live workflow and action image, then checks the complete repository
 snapshot immediately before dispatch. For publication, report and raw artifacts are moved only
 after every destination is checked, and the passing manifest is moved last.
-The final manifest path is validated once more after that move and made
-read-only before success is declared. Failure before that validation restores
-the unpublished packet where possible and never leaves a discoverable passing
-manifest with missing references.
+The final manifest path is validated once more after that move. The final report
+and exact artifact file set are then rehashed from their published paths against
+the manifest before it is made read-only and success is declared. Failure before
+that validation restores the unpublished packet where possible and never leaves
+a discoverable passing manifest with missing references.
 The prepare, approved execution, and restart-verification commands all enter
 the bind-mounted journey runner through one helper that checks the captured
 repository revision and complete worktree immediately before container

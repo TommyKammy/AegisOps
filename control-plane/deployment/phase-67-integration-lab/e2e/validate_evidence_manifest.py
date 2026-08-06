@@ -340,6 +340,12 @@ def load_json_with_sha256(path: Path) -> tuple[object, str]:
     return _parse_json_bytes(payload, path), hashlib.sha256(payload).hexdigest()
 
 
+def _published_file_sha256(path: Path, label: str) -> str:
+    require(not path.is_symlink(), f"{label} must not be a symbolic link")
+    require(path.is_file(), f"{label} must be a regular file")
+    return hashlib.sha256(_read_json_bytes(path)).hexdigest()
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise EvidenceValidationError(message)
@@ -371,6 +377,12 @@ def require_exact_keys(
 def require_string(value: object, path: str) -> str:
     require(isinstance(value, str) and value.strip() != "", f"{path} must be a non-empty string")
     return value.strip()  # type: ignore[union-attr]
+
+
+def require_sha256(value: object, path: str) -> str:
+    digest = require_string(value, path)
+    require(SHA256.fullmatch(digest) is not None, f"{path} must be SHA-256")
+    return digest
 
 
 def require_nullable_string(value: object, path: str) -> str | None:
@@ -554,9 +566,28 @@ def _validate_schema_contract(schema: object) -> None:
                 "if": {"$ref": "#/$defs/legacy_blocked_identity"},
                 "then": {"$ref": "#/$defs/legacy_blocked_image_inventory"},
                 "else": {"$ref": "#/$defs/current_image_inventory"},
-            }
+            },
+            {
+                "if": {
+                    "required": ["verdict"],
+                    "properties": {
+                        "verdict": {"const": PASSED_VERDICT},
+                    },
+                },
+                "then": {
+                    "properties": {
+                        "steps": {
+                            "items": {
+                                "properties": {
+                                    "status": {"const": "passed"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
         ],
-        "schema image inventory profile selection drifted",
+        "schema profile and passed-verdict selection drifted",
     )
     require(
         definitions.get("legacy_blocked_image_inventory")
@@ -1315,26 +1346,124 @@ def validate_manifest(
     _scan_secret_values(root)
 
 
+def validate_published_files(
+    manifest: Mapping[str, object],
+    report_path: Path,
+    artifacts_directory: Path,
+) -> None:
+    report = require_mapping(manifest.get("report"), "$.report")
+    expected_report_sha256 = require_string(
+        report.get("sha256"),
+        "$.report.sha256",
+    )
+    require(
+        _published_file_sha256(report_path, "published report")
+        == expected_report_sha256,
+        "published report digest does not match the manifest",
+    )
+
+    artifacts = require_mapping(manifest.get("artifacts"), "$.artifacts")
+    expected_directory_name = require_string(
+        artifacts.get("directory_name"),
+        "$.artifacts.directory_name",
+    )
+    require(
+        artifacts_directory.name == expected_directory_name,
+        "published artifact directory name does not match the manifest",
+    )
+    require(
+        not artifacts_directory.is_symlink() and artifacts_directory.is_dir(),
+        "published artifact directory must be a real directory",
+    )
+    files = artifacts.get("files")
+    require(isinstance(files, list), "$.artifacts.files must be an array")
+    expected_hashes: dict[str, str] = {}
+    for index, value in enumerate(files):  # type: ignore[union-attr]
+        item = require_mapping(value, f"$.artifacts.files[{index}]")
+        require_exact_keys(
+            item,
+            required=("name", "sha256"),
+            path=f"$.artifacts.files[{index}]",
+        )
+        name = require_string(item.get("name"), f"$.artifacts.files[{index}].name")
+        require(
+            Path(name).name == name and name not in {".", ".."},
+            f"$.artifacts.files[{index}].name must be a basename",
+        )
+        require(name not in expected_hashes, f"duplicate published artifact {name}")
+        expected_hashes[name] = require_sha256(
+            item.get("sha256"),
+            f"$.artifacts.files[{index}].sha256",
+        )
+    try:
+        published_paths = tuple(artifacts_directory.iterdir())
+    except OSError as exc:
+        raise EvidenceValidationError(
+            f"cannot list published artifact directory: {exc}"
+        ) from exc
+    require(
+        {path.name for path in published_paths} == set(expected_hashes),
+        "published artifact file set does not match the manifest",
+    )
+    for path in published_paths:
+        require(
+            _published_file_sha256(path, f"published artifact {path.name}")
+            == expected_hashes[path.name],
+            f"published artifact {path.name} digest does not match the manifest",
+        )
+
+
+def _load_validated_manifest(
+    schema_path: Path,
+    manifest_path: Path,
+) -> Mapping[str, object]:
+    schema, schema_sha256 = load_json_with_sha256(schema_path)
+    manifest = require_mapping(load_json(manifest_path), "$")
+    validate_manifest(
+        manifest,
+        schema,
+        schema_sha256=schema_sha256,
+    )
+    return manifest
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = tuple(sys.argv[1:] if argv is None else argv)
-    if len(arguments) != 2:
+    runtime_images_mode = (
+        len(arguments) == 2 and arguments[0] == "--runtime-images"
+    )
+    published_mode = (
+        len(arguments) == 5 and arguments[0] == "--published"
+    )
+    manifest_mode = (
+        len(arguments) == 2 and not arguments[0].startswith("--")
+    )
+    if not (runtime_images_mode or published_mode or manifest_mode):
         print(
             "usage: validate_evidence_manifest.py SCHEMA MANIFEST\n"
-            "       validate_evidence_manifest.py --runtime-images IMAGES",
+            "       validate_evidence_manifest.py --runtime-images IMAGES\n"
+            "       validate_evidence_manifest.py --published SCHEMA MANIFEST "
+            "REPORT ARTIFACTS",
             file=sys.stderr,
         )
         return 2
     try:
-        if arguments[0] == "--runtime-images":
+        if runtime_images_mode:
             _validate_runtime_images(load_json(Path(arguments[1])))
-        else:
-            schema_path = Path(arguments[0])
-            schema, schema_sha256 = load_json_with_sha256(schema_path)
-            manifest = load_json(Path(arguments[1]))
-            validate_manifest(
+        elif published_mode:
+            manifest = _load_validated_manifest(
+                Path(arguments[1]),
+                Path(arguments[2]),
+            )
+            validate_published_files(
                 manifest,
-                schema,
-                schema_sha256=schema_sha256,
+                Path(arguments[3]),
+                Path(arguments[4]),
+            )
+        else:
+            _load_validated_manifest(
+                Path(arguments[0]),
+                Path(arguments[1]),
             )
     except EvidenceValidationError as exc:
         print(f"Phase 67.4 evidence validation failed: {exc}", file=sys.stderr)
