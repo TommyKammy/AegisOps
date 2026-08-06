@@ -40,7 +40,11 @@ The combined runner requires a clean immutable repository revision and the
 `full` profile. It records digest-pinned services, all 15 reviewed journey
 steps, denied-action non-dispatch, duplicate delivery behavior, selected
 negative probes, persistence after restart, and non-destructive cleanup. The
-operator must interactively approve a challenge bound to the prepared action
+local raw artifact set retains a Compose digest record bound to the runner-held
+revision and Compose values at evidence-build time. The expanded render is
+verified from a mode-`0600` temporary file and deleted rather than retaining
+interpolated lab credentials. Both startups fail closed if that render changes.
+The operator must interactively approve a challenge bound to the prepared action
 through a macOS dialog or exact TTY response; the runner cannot complete from
 unattended input. The publishable sample omits raw logs, secret values, private
 host paths, and the full local report.
@@ -160,6 +164,10 @@ or evidence. The runner records each completed step in
 non-chronological observations. After the interactive pause and immediately
 before approved dispatch, the runner reloads the denied request, rejection
 decision, and authoritative execution count and fails if that proof changed.
+The evidence builder binds both the rejected and approved request/decision rows
+in the redacted report to their requester, approver, payload hash, target,
+lifecycle, and parent record relationships instead of accepting an ID-only
+match.
 Synthetic receipt failure probes execute
 through the real reconciliation service inside a rollback-only transaction,
 and the runner verifies that the successful authoritative execution is

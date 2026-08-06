@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -257,6 +258,10 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             journey.REVIEWED_SHUFFLE_WORKFLOW_VERSION,
         )
         self.assertEqual(
+            builder.NEGATIVE_PROBE_APPROVER_IDENTITY,
+            journey.NEGATIVE_PROBE_APPROVER_IDENTITY,
+        )
+        self.assertEqual(
             builder.STEP_NAMES[-1],
             "record_prerequisite_evaluation",
         )
@@ -270,6 +275,10 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
 
     def test_schema_allows_the_complete_runtime_image_inventory(self) -> None:
         images_schema = SCHEMA["properties"]["snapshot"]["properties"]["images"]
+        self.assertEqual(
+            images_schema["minItems"],
+            len(validator.EXPECTED_FULL_PROFILE_IMAGE_SERVICES),
+        )
         self.assertEqual(
             images_schema["maxItems"],
             len(validator.EXPECTED_FULL_PROFILE_IMAGE_SERVICES),
@@ -332,6 +341,16 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "schema Shuffle execution ID contract drifted",
         ):
             validator.validate_manifest(_manifest(), drifted_uuid_schema)
+
+        drifted_image_schema = deepcopy(SCHEMA)
+        drifted_image_schema["properties"]["snapshot"]["properties"]["images"][
+            "minItems"
+        ] = len(validator.EXPECTED_FULL_PROFILE_IMAGE_SERVICES) - 1
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "schema image inventory floor",
+        ):
+            validator.validate_manifest(_manifest(), drifted_image_schema)
 
     def test_snapshot_accepts_every_preflight_host_architecture(self) -> None:
         manifest = _manifest()
@@ -953,6 +972,80 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "images.json must be an array"):
             builder._validate_snapshot_images({}, snapshot)
 
+    def test_builder_binds_snapshot_provenance_to_runner_inputs(self) -> None:
+        with TemporaryDirectory() as directory:
+            compose_config = Path(directory) / "compose-config.yml"
+            compose_config.write_text(
+                "services:\n  control-plane: {}\n",
+                encoding="utf-8",
+            )
+            compose_sha256 = hashlib.sha256(compose_config.read_bytes()).hexdigest()
+            compose_digest_record = Path(directory) / "compose-config.sha256"
+            compose_digest_record.write_text(
+                f"{compose_sha256}  compose-config.yml\n",
+                encoding="utf-8",
+            )
+            snapshot = {
+                "repository_revision": "a" * 40,
+                "compose_sha256": compose_sha256,
+            }
+            builder._validate_snapshot_provenance(
+                snapshot,
+                expected_repository_revision="a" * 40,
+                expected_compose_sha256=compose_sha256,
+                compose_config=compose_config,
+                compose_digest_record=compose_digest_record,
+            )
+
+            changed_revision = deepcopy(snapshot)
+            changed_revision["repository_revision"] = "b" * 40
+            with self.assertRaisesRegex(ValueError, "does not match the checkout"):
+                builder._validate_snapshot_provenance(
+                    changed_revision,
+                    expected_repository_revision="a" * 40,
+                    expected_compose_sha256=compose_sha256,
+                    compose_config=compose_config,
+                    compose_digest_record=compose_digest_record,
+                )
+
+            changed_compose = deepcopy(snapshot)
+            changed_compose["compose_sha256"] = "c" * 64
+            with self.assertRaisesRegex(ValueError, "does not match the trial render"):
+                builder._validate_snapshot_provenance(
+                    changed_compose,
+                    expected_repository_revision="a" * 40,
+                    expected_compose_sha256=compose_sha256,
+                    compose_config=compose_config,
+                    compose_digest_record=compose_digest_record,
+                )
+
+            compose_config.write_text("services: {}\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "captured Compose render"):
+                builder._validate_snapshot_provenance(
+                    snapshot,
+                    expected_repository_revision="a" * 40,
+                    expected_compose_sha256=compose_sha256,
+                    compose_config=compose_config,
+                    compose_digest_record=compose_digest_record,
+                )
+
+            compose_config.write_text(
+                "services:\n  control-plane: {}\n",
+                encoding="utf-8",
+            )
+            compose_digest_record.write_text(
+                "c" * 64 + "  compose-config.yml\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "Compose digest record"):
+                builder._validate_snapshot_provenance(
+                    snapshot,
+                    expected_repository_revision="a" * 40,
+                    expected_compose_sha256=compose_sha256,
+                    compose_config=compose_config,
+                    compose_digest_record=compose_digest_record,
+                )
+
     def test_restart_verifies_every_wazuh_reconciliation_record(self) -> None:
         identifiers = _manifest()["identifiers"]
         payload = {
@@ -1047,6 +1140,25 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
     def test_builder_binds_preparation_to_the_complete_journey_request(self) -> None:
         preparation = {
             "trial_run_id": "phase67-e2e-20260801T100000Z-0123456789ab",
+            "alert_id": "alert-a1b2c3d4",
+            "finding_id": "finding-a1b2c3d4",
+            "case_id": "case-a1b2c3d4",
+            "denied_action_request_id": "action-denied-a1b2c3d4",
+            "denied_approval_decision_id": "approval-denied-a1b2c3d4",
+            "denied_dispatch": {
+                "binding_reviewed": True,
+                "dispatch_rejected": True,
+                "execution_count": 0,
+                "action_request_id": "action-denied-a1b2c3d4",
+                "approval_decision_id": "approval-denied-a1b2c3d4",
+                "idempotency_key": "denied-phase67-idempotency-a1b2c3d4",
+                "payload_hash": "c" * 64,
+                "target_scope": {"identity_id": "local-test-sink"},
+                "requester_identity": "phase67-lab-requester",
+                "action_request_lifecycle_state": "rejected",
+                "approval_decision_lifecycle_state": "rejected",
+                "approver_identities": [journey.NEGATIVE_PROBE_APPROVER_IDENTITY],
+            },
             "action_request_id": "action-a1b2c3d4",
             "idempotency_key": "phase67-idempotency-a1b2c3d4",
             "payload_hash": "a" * 64,
@@ -1328,22 +1440,47 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
 
     def test_builder_rejects_report_records_outside_the_trial_chain(self) -> None:
         identifiers = _manifest()["identifiers"]
+        target_scope = {"identity_id": "local-test-sink"}
+        approved_payload_hash = "a" * 64
+        denied_payload_hash = "b" * 64
+        requester_identity = "phase67-lab-requester"
+        approver_identity = "phase67-lab-independent-approver"
         journey_record = {
             "alert_id": identifiers["aegisops_alert_id"],
             "finding_id": identifiers["finding_id"],
             "case_id": identifiers["case_id"],
+            "requester_identity": requester_identity,
+            "approver_identity": approver_identity,
             "denied_action_request_id": identifiers["denied_action_request_id"],
             "denied_approval_decision_id": identifiers[
                 "denied_approval_decision_id"
             ],
+            "denied_dispatch": {
+                "binding_reviewed": True,
+                "dispatch_rejected": True,
+                "execution_count": 0,
+                "action_request_id": identifiers["denied_action_request_id"],
+                "approval_decision_id": identifiers[
+                    "denied_approval_decision_id"
+                ],
+                "idempotency_key": "denied-phase67-idempotency-a1b2c3d4",
+                "payload_hash": denied_payload_hash,
+                "target_scope": target_scope,
+                "requester_identity": requester_identity,
+                "action_request_lifecycle_state": "rejected",
+                "approval_decision_lifecycle_state": "rejected",
+                "approver_identities": [
+                    builder.NEGATIVE_PROBE_APPROVER_IDENTITY
+                ],
+            },
             "action_request_id": identifiers["action_request_id"],
             "approval_decision_id": identifiers["approval_decision_id"],
             "delegation_id": identifiers["delegation_id"],
             "execution_id": identifiers["shuffle_execution_id"],
             "action_execution_id": identifiers["action_execution_id"],
             "idempotency_key": "phase67-idempotency-a1b2c3d4",
-            "payload_hash": "a" * 64,
-            "target_scope": {"identity_id": "local-test-sink"},
+            "payload_hash": approved_payload_hash,
+            "target_scope": target_scope,
             "reconciliation_id": identifiers["reconciliation_id"],
             "wazuh_reconciliation_ids": [
                 "phase67-admission-reconciliation"
@@ -1351,26 +1488,82 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         }
         report = {
             "records": {
-                "alert": [{"alert_id": identifiers["aegisops_alert_id"]}],
-                "case": [{"case_id": identifiers["case_id"]}],
+                "alert": [
+                    {
+                        "alert_id": identifiers["aegisops_alert_id"],
+                        "finding_id": identifiers["finding_id"],
+                        "case_id": identifiers["case_id"],
+                        "authority_role": "authoritative_control_plane_record",
+                    }
+                ],
+                "case": [
+                    {
+                        "case_id": identifiers["case_id"],
+                        "alert_id": identifiers["aegisops_alert_id"],
+                        "finding_id": identifiers["finding_id"],
+                        "authority_role": "authoritative_control_plane_record",
+                    }
+                ],
                 "action_request": [
                     {
                         "action_request_id": identifiers[
                             "denied_action_request_id"
-                        ]
+                        ],
+                        "approval_decision_id": identifiers[
+                            "denied_approval_decision_id"
+                        ],
+                        "case_id": identifiers["case_id"],
+                        "alert_id": identifiers["aegisops_alert_id"],
+                        "finding_id": identifiers["finding_id"],
+                        "idempotency_key": "denied-phase67-idempotency-a1b2c3d4",
+                        "target_scope": target_scope,
+                        "payload_hash": denied_payload_hash,
+                        "lifecycle_state": "rejected",
+                        "requester_identity": requester_identity,
+                        "authority_role": "authoritative_control_plane_record",
                     },
-                    {"action_request_id": identifiers["action_request_id"]},
+                    {
+                        "action_request_id": identifiers["action_request_id"],
+                        "approval_decision_id": identifiers[
+                            "approval_decision_id"
+                        ],
+                        "case_id": identifiers["case_id"],
+                        "alert_id": identifiers["aegisops_alert_id"],
+                        "finding_id": identifiers["finding_id"],
+                        "idempotency_key": "phase67-idempotency-a1b2c3d4",
+                        "target_scope": target_scope,
+                        "payload_hash": approved_payload_hash,
+                        "lifecycle_state": "approved",
+                        "requester_identity": requester_identity,
+                        "authority_role": "authoritative_control_plane_record",
+                    },
                 ],
                 "approval_decision": [
                     {
                         "approval_decision_id": identifiers[
                             "denied_approval_decision_id"
-                        ]
+                        ],
+                        "action_request_id": identifiers[
+                            "denied_action_request_id"
+                        ],
+                        "approver_identities": [
+                            builder.NEGATIVE_PROBE_APPROVER_IDENTITY
+                        ],
+                        "target_snapshot": target_scope,
+                        "payload_hash": denied_payload_hash,
+                        "lifecycle_state": "rejected",
+                        "authority_role": "authoritative_control_plane_record",
                     },
                     {
                         "approval_decision_id": identifiers[
                             "approval_decision_id"
-                        ]
+                        ],
+                        "action_request_id": identifiers["action_request_id"],
+                        "approver_identities": [approver_identity],
+                        "target_snapshot": target_scope,
+                        "payload_hash": approved_payload_hash,
+                        "lifecycle_state": "approved",
+                        "authority_role": "authoritative_control_plane_record",
                     },
                 ],
                 "action_execution": [
@@ -1390,6 +1583,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                         "execution_surface_type": "automation_substrate",
                         "execution_surface_id": "shuffle",
                         "lifecycle_state": "succeeded",
+                        "authority_role": "authoritative_control_plane_record",
                     }
                 ],
                 "reconciliation": [
@@ -1399,6 +1593,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                         "finding_id": identifiers["finding_id"],
                         "execution_run_id": None,
                         "linked_execution_run_ids": [],
+                        "authority_role": "authoritative_control_plane_record",
                     },
                     {
                         "reconciliation_id": identifiers["reconciliation_id"],
@@ -1408,6 +1603,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                         "linked_execution_run_ids": [
                             identifiers["shuffle_execution_id"]
                         ],
+                        "authority_role": "authoritative_control_plane_record",
                     },
                 ],
             }
@@ -1434,6 +1630,60 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             ):
                 builder._validate_trial_report_scope(tampered, journey_record)
 
+        relationship_mutations = (
+            ("alert", 0, "finding_id", "finding-from-another-trial"),
+            ("case", 0, "alert_id", "alert-from-another-trial"),
+            (
+                "action_request",
+                0,
+                "payload_hash",
+                "c" * 64,
+            ),
+            (
+                "action_request",
+                1,
+                "requester_identity",
+                "requester-from-another-trial",
+            ),
+            (
+                "approval_decision",
+                0,
+                "target_snapshot",
+                {"identity_id": "another-target"},
+            ),
+            (
+                "approval_decision",
+                1,
+                "approver_identities",
+                ["approver-from-another-trial"],
+            ),
+        )
+        for family, index, field_name, field_value in relationship_mutations:
+            tampered = deepcopy(report)
+            tampered["records"][family][index][field_name] = field_value
+            with self.subTest(
+                family=family,
+                field_name=field_name,
+            ), self.assertRaisesRegex(ValueError, "is not bound to the journey"):
+                builder._validate_trial_report_scope(tampered, journey_record)
+
+        non_authoritative = deepcopy(report)
+        non_authoritative["records"]["approval_decision"][0][
+            "authority_role"
+        ] = "subordinate_evidence"
+        with self.assertRaisesRegex(ValueError, "is not authoritative"):
+            builder._validate_trial_report_scope(
+                non_authoritative,
+                journey_record,
+            )
+
+        altered_denial = deepcopy(journey_record)
+        altered_denial["denied_dispatch"]["requester_identity"] = (
+            "requester-from-another-trial"
+        )
+        with self.assertRaisesRegex(ValueError, "denied dispatch is not bound"):
+            builder._validate_trial_report_scope(report, altered_denial)
+
         unbound_action_reconciliation = deepcopy(report)
         action_reconciliation = unbound_action_reconciliation["records"][
             "reconciliation"
@@ -1448,7 +1698,10 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
 
         previous_trial = deepcopy(report)
         previous_trial["records"]["action_request"].append(
-            {"action_request_id": "phase67-action-from-previous-trial"}
+            {
+                "action_request_id": "phase67-action-from-previous-trial",
+                "authority_role": "authoritative_control_plane_record",
+            }
         )
         with self.assertRaisesRegex(ValueError, "is not scoped to this trial"):
             builder._validate_trial_report_scope(previous_trial, journey_record)
@@ -1461,6 +1714,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 "finding_id": identifiers["finding_id"],
                 "execution_run_id": identifiers["shuffle_execution_id"],
                 "linked_execution_run_ids": [],
+                "authority_role": "authoritative_control_plane_record",
             }
         )
         with self.assertRaisesRegex(ValueError, "record outside this trial"):
@@ -1758,6 +2012,10 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 approval_decision_id=identifiers[
                     "denied_approval_decision_id"
                 ],
+                idempotency_key="denied-phase67-idempotency-a1b2c3d4",
+                payload_hash="b" * 64,
+                target_scope={"identity_id": "local-test-sink"},
+                requester_identity="phase67-lab-requester",
                 requested_payload={
                     "shuffle_delegation_binding": {
                         "workflow_id": "notify_identity_owner"
@@ -1770,6 +2028,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 ],
                 action_request_id=identifiers["denied_action_request_id"],
                 lifecycle_state=decision_state,
+                approver_identities=(journey.NEGATIVE_PROBE_APPROVER_IDENTITY,),
             )
             records = {
                 identifiers["denied_action_request_id"]: action,
@@ -1795,6 +2054,19 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 "binding_reviewed": True,
                 "dispatch_rejected": True,
                 "execution_count": 0,
+                "action_request_id": identifiers["denied_action_request_id"],
+                "approval_decision_id": identifiers[
+                    "denied_approval_decision_id"
+                ],
+                "idempotency_key": "denied-phase67-idempotency-a1b2c3d4",
+                "payload_hash": "b" * 64,
+                "target_scope": {"identity_id": "local-test-sink"},
+                "requester_identity": "phase67-lab-requester",
+                "action_request_lifecycle_state": "rejected",
+                "approval_decision_lifecycle_state": "rejected",
+                "approver_identities": [
+                    journey.NEGATIVE_PROBE_APPROVER_IDENTITY
+                ],
             },
         )
         for kwargs in (
@@ -1858,7 +2130,6 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         )
         reviewed_lab_calls = (
             'run_reviewed_lab_command "${LAB_DIR}/pin-shuffle-app-image.sh"',
-            'run_reviewed_lab_command "${LAB_DIR}/up.sh" full',
             'run_reviewed_lab_command "${LAB_DIR}/status.sh" full --write-evidence',
             'run_reviewed_lab_command "${LAB_DIR}/test-wazuh-intake.sh"',
             'run_reviewed_lab_command "${LAB_DIR}/down.sh"',
@@ -1867,6 +2138,20 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         for reviewed_call in reviewed_lab_calls:
             with self.subTest(reviewed_call=reviewed_call):
                 self.assertIn(reviewed_call, runner)
+        self.assertEqual(
+            runner.count('run_reviewed_lab_startup "${LAB_DIR}/up.sh" full'),
+            2,
+        )
+        startup_wrapper_start = runner.index("run_reviewed_lab_startup()")
+        startup_wrapper_end = runner.index(
+            '[[ -f "${evaluation}" ]]',
+            startup_wrapper_start,
+        )
+        startup_wrapper = runner[startup_wrapper_start:startup_wrapper_end]
+        self.assertLess(
+            startup_wrapper.index("assert_repository_snapshot"),
+            startup_wrapper.index("assert_compose_snapshot"),
+        )
         self.assertIn("AEGISOPS_LAB_TRIAL_SCOPE=full", runner)
         self.assertIn("compose_scope full ps -aq", runner)
         self.assertIn("docker_lab inspect ${container_ids}", runner)
@@ -1908,6 +2193,29 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn('restart_status_output=', runner)
         self.assertIn('workflow_snapshot_output=', runner)
         self.assertIn('workflow_predispatch_output=', runner)
+        self.assertIn('compose_render_output=', runner)
+        self.assertIn('compose_digest_output=', runner)
+        self.assertIn(
+            'capture_reviewed_compose_config >"${compose_render_output}"',
+            runner,
+        )
+        self.assertIn('--compose-config "${compose_render_output}"', runner)
+        self.assertIn(
+            '--compose-digest-record "${compose_digest_output}"',
+            runner,
+        )
+        self.assertIn(
+            '--expected-repository-revision "${repository_revision}"',
+            runner,
+        )
+        self.assertIn(
+            '--expected-compose-sha256 "${compose_render_sha256}"',
+            runner,
+        )
+        self.assertGreaterEqual(
+            runner.count('rm -f "${compose_render_output}"'),
+            2,
+        )
         self.assertIn(
             'capture_reviewed_shuffle_workflow "${workflow_snapshot_output}"',
             runner,
@@ -1973,7 +2281,13 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         cleanup = runner.index('"${LAB_DIR}/cleanup.sh"')
         final_snapshot_check = runner.index("assert_repository_snapshot", cleanup)
         evidence_build = runner.index('python3 "${builder}"', final_snapshot_check)
+        final_compose_check = runner.index(
+            "assert_compose_snapshot",
+            final_snapshot_check,
+        )
         self.assertLess(cleanup, final_snapshot_check)
+        self.assertLess(final_snapshot_check, final_compose_check)
+        self.assertLess(final_compose_check, evidence_build)
         self.assertLess(final_snapshot_check, evidence_build)
         post_build_snapshot_check = runner.index(
             "assert_repository_snapshot",

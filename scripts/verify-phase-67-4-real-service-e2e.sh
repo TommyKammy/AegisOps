@@ -87,6 +87,7 @@ require_fixed "${e2e_root}/run_real_journey.py" 'delegated_at = datetime.now(tim
 reject_fixed "${e2e_root}/run_real_journey.py" 'delegated_at=decided_at + timedelta(seconds=1)'
 reject_fixed "${e2e_root}/run_real_journey.py" 'datetime.now(timezone.utc) - timedelta(seconds=5)'
 require_fixed "${e2e_root}/run_real_journey.py" '_authoritative_denied_action_state'
+require_fixed "${e2e_root}/run_real_journey.py" '_denied_action_evidence'
 require_fixed "${e2e_root}/run_real_journey.py" 'authoritative denied action state changed before dispatch'
 require_fixed "${e2e_root}/build_evidence.py" 'step observations must be strictly chronological'
 require_fixed "${e2e_root}/build_evidence.py" '_validate_trial_report_scope'
@@ -103,6 +104,10 @@ require_fixed "${e2e_root}/validate_evidence_manifest.py" 'observed Shuffle acti
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'a non-passed evaluation step cannot claim a published evaluation'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" '$.snapshot.host_architecture is not supported'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'schema host architecture contract drifted'
+require_fixed \
+  "${e2e_root}/validate_evidence_manifest.py" \
+  'schema image inventory floor does not match the full profile'
+require_fixed "${schema}" '"minItems": 13'
 require_fixed "${schema}" '"maxItems": 13'
 require_fixed "${schema}" '"runtime_image_id"'
 require_fixed "${schema}" '"enum": ["arm64", "aarch64", "amd64", "x86_64"]'
@@ -132,6 +137,16 @@ require_fixed "${e2e_root}/build_evidence.py" 'images.json does not match the sn
 require_fixed "${e2e_root}/build_evidence.py" 'journey Shuffle workflow version is not reviewed'
 require_fixed "${e2e_root}/build_evidence.py" 'ACTION_EXECUTION_REPORT_BINDINGS'
 require_fixed "${e2e_root}/build_evidence.py" 'report action execution is not bound to the journey'
+require_fixed "${e2e_root}/build_evidence.py" '_validate_snapshot_provenance'
+require_fixed \
+  "${e2e_root}/build_evidence.py" \
+  'captured Compose render does not match the trial digest'
+require_fixed \
+  "${e2e_root}/build_evidence.py" \
+  'Compose digest record does not match the trial digest'
+require_fixed "${e2e_root}/build_evidence.py" '_validate_report_record'
+require_fixed "${e2e_root}/build_evidence.py" '"approved action request"'
+require_fixed "${e2e_root}/build_evidence.py" '"approved decision"'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'does not match the validator schema'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'load_json_with_sha256'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'action request IDs must remain distinct'
@@ -146,7 +161,17 @@ reject_fixed "${schema}" 'integration_trial_passed_ga_not_accepted'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'verify-restart'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'run_reviewed_lab_command()'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'run_reviewed_lab_command "${LAB_DIR}/test-wazuh-intake.sh"'
-require_fixed "${lab_root}/run-e2e-trial.sh" 'run_reviewed_lab_command "${LAB_DIR}/up.sh" full'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'run_reviewed_lab_startup "${LAB_DIR}/up.sh" full'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'capture_reviewed_compose_config'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'assert_compose_snapshot'
+require_fixed "${lab_root}/run-e2e-trial.sh" '--compose-config "${compose_render_output}"'
+require_fixed "${lab_root}/run-e2e-trial.sh" '--compose-digest-record "${compose_digest_output}"'
+require_fixed \
+  "${lab_root}/run-e2e-trial.sh" \
+  '--expected-repository-revision "${repository_revision}"'
+require_fixed "${lab_root}/run-e2e-trial.sh" '--expected-compose-sha256 "${compose_render_sha256}"'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'rm -f "${compose_render_output}"'
+require_fixed "${e2e_root}/validate_evidence_manifest.py" '"compose-config.sha256"'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'record_step 15 "record_prerequisite_evaluation"'
 reject_fixed "${lab_root}/run-e2e-trial.sh" 'record_step 15 "publish_prerequisite_evaluation"'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'startup_status_output='

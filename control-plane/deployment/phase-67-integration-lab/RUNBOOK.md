@@ -138,7 +138,12 @@ trigger, admission, replay, and negative-boundary timestamps verbatim in
 Shuffle receipt replay and receipt negative probes. The runner rechecks both
 `HEAD` and the complete
 tracked and untracked worktree after cleanup, immediately before building the
-publishable packet. Every verdict
+publishable packet. A temporary Compose render is captured before the first
+startup, rechecked before both startups and publication, and compared by the
+builder with runner-held revision and Compose digest values that are not read
+back from staging JSON. Only `compose-config.sha256` is retained; the expanded
+render is deleted before publication so interpolated lab credentials are not
+kept as evidence. Every verdict
 recomputes its snapshot ID from all captured inputs, and each journey identifier
 must be present only when its producing step passed. `startup-status.txt`,
 `initial-status.txt`, and

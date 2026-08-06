@@ -26,8 +26,9 @@ verdict authorizes production rollout, autonomous remediation, or a GA claim.
   `control-plane/deployment/phase-67-integration-lab/e2e/evidence-manifest.schema.json`.
 - Publishable redacted packet:
   `control-plane/deployment/phase-67-integration-lab/e2e/sample-evidence.json`.
-- Raw service logs, command output, preparation record, per-run evaluation
-  record, and the full redacted report remain under the mode-`0600` local
+- Raw service logs, command output, the Compose digest record, preparation
+  record, per-run evaluation record, and the full redacted report remain under
+  the mode-`0600` local
   runtime evidence directory and are not committed.
 
 The historical trial ID, capture time, repository revision, snapshot ID, and

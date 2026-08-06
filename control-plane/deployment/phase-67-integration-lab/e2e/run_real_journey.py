@@ -271,7 +271,7 @@ def _prove_denied_action_non_dispatch(
         ),
         transitioned_at=decided_at,
     )
-    service.persist_record(
+    rejected_action = service.persist_record(
         replace(
             action,
             approval_decision_id=decision.approval_decision_id,
@@ -298,10 +298,36 @@ def _prove_denied_action_non_dispatch(
     )
     if not rejected or execution_count != 0:
         raise RuntimeError("denied action reached the execution surface")
+    return _denied_action_evidence(
+        action=rejected_action,
+        decision=decision,
+        binding_reviewed=binding["workflow_id"] == "notify_identity_owner",
+        dispatch_rejected=rejected,
+        execution_count=execution_count,
+    )
+
+
+def _denied_action_evidence(
+    *,
+    action: ActionRequestRecord,
+    decision: ApprovalDecisionRecord,
+    binding_reviewed: bool,
+    dispatch_rejected: bool,
+    execution_count: int,
+) -> dict[str, object]:
     return {
-        "binding_reviewed": binding["workflow_id"] == "notify_identity_owner",
-        "dispatch_rejected": rejected,
+        "binding_reviewed": binding_reviewed,
+        "dispatch_rejected": dispatch_rejected,
         "execution_count": execution_count,
+        "action_request_id": action.action_request_id,
+        "approval_decision_id": decision.approval_decision_id,
+        "idempotency_key": action.idempotency_key,
+        "payload_hash": action.payload_hash,
+        "target_scope": dict(action.target_scope),
+        "requester_identity": action.requester_identity,
+        "action_request_lifecycle_state": action.lifecycle_state,
+        "approval_decision_lifecycle_state": decision.lifecycle_state,
+        "approver_identities": list(decision.approver_identities),
     }
 
 
@@ -337,11 +363,13 @@ def _authoritative_denied_action_state(
         or binding.get("workflow_id") != "notify_identity_owner"
     ):
         raise RuntimeError("authoritative denied action lost its reviewed binding")
-    return {
-        "binding_reviewed": True,
-        "dispatch_rejected": True,
-        "execution_count": execution_count,
-    }
+    return _denied_action_evidence(
+        action=action,
+        decision=decision,
+        binding_reviewed=True,
+        dispatch_rejected=True,
+        execution_count=execution_count,
+    )
 
 
 def _poll_real_receipt(

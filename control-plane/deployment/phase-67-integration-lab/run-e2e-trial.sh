@@ -52,6 +52,28 @@ run_reviewed_journey() {
       "$@"
 }
 
+capture_reviewed_compose_config() {
+  assert_repository_snapshot
+  compose_scope full config
+}
+
+assert_compose_snapshot() {
+  local current_compose_sha256
+  current_compose_sha256="$(
+    capture_reviewed_compose_config |
+      openssl dgst -sha256 -r |
+      awk '{print $1}'
+  )"
+  [[ "${current_compose_sha256}" == "${compose_render_sha256}" ]] \
+    || fail "rendered Compose configuration changed during the E2E trial"
+}
+
+run_reviewed_lab_startup() {
+  assert_repository_snapshot
+  assert_compose_snapshot
+  "$@"
+}
+
 [[ -f "${evaluation}" ]] \
   || fail "Phase 67 prerequisite evaluation is missing: ${evaluation}"
 repository_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
@@ -66,6 +88,10 @@ journey_output="${staging_dir}/journey.json"
 restart_output="${staging_dir}/restart.json"
 report_output="${staging_dir}/report.json"
 snapshot_output="${staging_dir}/snapshot.json"
+compose_render_output="$(
+  mktemp "${AEGISOPS_LAB_EVIDENCE_DIR}/.phase67-compose-render.XXXXXX"
+)"
+compose_digest_output="${staging_dir}/compose-config.sha256"
 images_output="${staging_dir}/images.json"
 evaluation_record_output="${staging_dir}/evaluation-record.json"
 observations_output="${staging_dir}/step-observations.jsonl"
@@ -195,6 +221,7 @@ capture_reviewed_shuffle_action_image() {
 
 cleanup_on_exit() {
   local rc=$?
+  rm -f "${compose_render_output}" >/dev/null 2>&1 || true
   if [[ "${cleaned}" != true ]]; then
     "${LAB_DIR}/cleanup.sh" >/dev/null 2>&1 || true
   fi
@@ -218,11 +245,12 @@ cleanup_on_exit() {
 trap cleanup_on_exit EXIT
 
 assert_repository_snapshot
+capture_reviewed_compose_config >"${compose_render_output}"
 compose_render_sha256="$(
-  compose_scope full config |
-    openssl dgst -sha256 -r |
-    awk '{print $1}'
+  openssl dgst -sha256 -r "${compose_render_output}" | awk '{print $1}'
 )"
+printf '%s  compose-config.yml\n' \
+  "${compose_render_sha256}" >"${compose_digest_output}"
 schema_sha256="$(openssl dgst -sha256 -r "${schema}" | awk '{print $1}')"
 reviewed_workflow_sha256="$(
   openssl dgst -sha256 -r "${reviewed_workflow}" | awk '{print $1}'
@@ -232,7 +260,7 @@ shuffle_api_workflow_id="${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID}"
   || fail "real Shuffle workflow ID is not configured"
 
 run_reviewed_lab_command "${LAB_DIR}/pin-shuffle-app-image.sh"
-startup_output="$(run_reviewed_lab_command "${LAB_DIR}/up.sh" full)"
+startup_output="$(run_reviewed_lab_startup "${LAB_DIR}/up.sh" full)"
 printf '%s\n' "${startup_output}"
 retain_status_evidence "${startup_output}" "${startup_status_output}"
 
@@ -492,7 +520,7 @@ Path(sys.argv[2]).write_text(
 PY
 
 run_reviewed_lab_command "${LAB_DIR}/down.sh"
-restart_up_output="$(run_reviewed_lab_command "${LAB_DIR}/up.sh" full)"
+restart_up_output="$(run_reviewed_lab_startup "${LAB_DIR}/up.sh" full)"
 printf '%s\n' "${restart_up_output}"
 retain_status_evidence "${restart_up_output}" "${restart_status_output}"
 jq -c '.journey | .aegisops_alert_id = .alert_id' "${journey_output}" |
@@ -529,9 +557,14 @@ record_step 15 "record_prerequisite_evaluation" "${evaluated_at}"
 run_reviewed_lab_command "${LAB_DIR}/cleanup.sh"
 cleaned=true
 assert_repository_snapshot
+assert_compose_snapshot
 python3 "${builder}" \
   --schema "${schema}" \
   --snapshot "${snapshot_output}" \
+  --compose-config "${compose_render_output}" \
+  --compose-digest-record "${compose_digest_output}" \
+  --expected-repository-revision "${repository_revision}" \
+  --expected-compose-sha256 "${compose_render_sha256}" \
   --images "${images_output}" \
   --preparation "${preparation_output}" \
   --wazuh "${wazuh_manifest_output}" \
@@ -550,6 +583,7 @@ python3 "${builder}" \
   --reviewed-workflow "${reviewed_workflow}" \
   --artifacts-directory-name "${trial_run_id}-artifacts" \
   --output "${evidence_output}"
+rm -f "${compose_render_output}"
 assert_repository_snapshot
 python3 "${validator}" "${schema}" "${evidence_output}"
 assert_repository_snapshot

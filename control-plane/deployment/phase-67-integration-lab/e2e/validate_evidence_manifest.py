@@ -58,7 +58,11 @@ LEGACY_BLOCKED_STEP_NAMES = (
     "publish_prerequisite_evaluation",
 )
 STEP_EVIDENCE_REFS = (
-    ("snapshot", "artifact:workflow-snapshot.json"),
+    (
+        "snapshot",
+        "artifact:compose-config.sha256",
+        "artifact:workflow-snapshot.json",
+    ),
     ("artifact:initial-status.txt",),
     (
         "wazuh-manifest:native_wazuh_alert_id",
@@ -231,6 +235,7 @@ NEGATIVE_CASE_KEYS = (
     "reconciliation_mismatch",
 )
 ARTIFACT_NAMES = {
+    "compose-config.sha256",
     "preparation.json",
     "wazuh-manifest.json",
     "wazuh-output.txt",
@@ -470,6 +475,10 @@ def _validate_schema_contract(schema: object) -> None:
         isinstance(host_architecture_enum, list)
         and set(host_architecture_enum) == SUPPORTED_HOST_ARCHITECTURES,
         "schema host architecture contract drifted",
+    )
+    require(
+        images.get("minItems") == len(EXPECTED_FULL_PROFILE_IMAGE_SERVICES),
+        "schema image inventory floor does not match the full profile",
     )
     require(
         images.get("maxItems") == len(EXPECTED_FULL_PROFILE_IMAGE_SERVICES),

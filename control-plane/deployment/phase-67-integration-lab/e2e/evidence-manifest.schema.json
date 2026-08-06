@@ -102,7 +102,7 @@
         },
         "images": {
           "type": "array",
-          "minItems": 11,
+          "minItems": 13,
           "maxItems": 13,
           "uniqueItems": true,
           "items": {

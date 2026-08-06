@@ -30,7 +30,11 @@ STEP_NAMES = (
     "record_prerequisite_evaluation",
 )
 STEP_EVIDENCE_REFS = (
-    ("snapshot", "artifact:workflow-snapshot.json"),
+    (
+        "snapshot",
+        "artifact:compose-config.sha256",
+        "artifact:workflow-snapshot.json",
+    ),
     ("artifact:initial-status.txt",),
     (
         "wazuh-manifest:native_wazuh_alert_id",
@@ -59,6 +63,7 @@ STEP_EVIDENCE_REFS = (
 REVIEWED_SHUFFLE_WORKFLOW_VERSION = (
     "notify_identity_owner-v1-reviewed-2026-05-03"
 )
+NEGATIVE_PROBE_APPROVER_IDENTITY = "phase67-lab-negative-probe-approver"
 CURRENT_TRIAL_VERDICT = "integration_trial_passed_with_owned_limitations"
 EVALUATION_SCOPE = "committed_historical_trial"
 CONSERVATIVE_DIRECT_VERDICTS = {
@@ -90,6 +95,12 @@ ACTION_EXECUTION_REPORT_BINDINGS = {
 }
 PREPARATION_JOURNEY_BINDINGS = (
     "trial_run_id",
+    "alert_id",
+    "finding_id",
+    "case_id",
+    "denied_action_request_id",
+    "denied_approval_decision_id",
+    "denied_dispatch",
     "action_request_id",
     "idempotency_key",
     "payload_hash",
@@ -143,6 +154,37 @@ def _required_text(value: object, path: str) -> str:
     if not isinstance(value, str) or value.strip() == "":
         raise ValueError(f"{path} must be a non-empty string")
     return value.strip()
+
+
+def _validate_snapshot_provenance(
+    snapshot: Mapping[str, object],
+    *,
+    expected_repository_revision: str,
+    expected_compose_sha256: str,
+    compose_config: Path,
+    compose_digest_record: Path,
+) -> None:
+    repository_revision = _required_text(
+        expected_repository_revision,
+        "expected repository revision",
+    )
+    if re.fullmatch(r"[0-9a-f]{40}", repository_revision) is None:
+        raise ValueError("expected repository revision is not a full Git SHA")
+    compose_sha256 = _required_text(
+        expected_compose_sha256,
+        "expected Compose digest",
+    )
+    if re.fullmatch(r"[0-9a-f]{64}", compose_sha256) is None:
+        raise ValueError("expected Compose digest is not SHA-256")
+    if snapshot.get("repository_revision") != repository_revision:
+        raise ValueError("snapshot repository revision does not match the checkout")
+    if snapshot.get("compose_sha256") != compose_sha256:
+        raise ValueError("snapshot Compose digest does not match the trial render")
+    if _sha256(compose_config) != compose_sha256:
+        raise ValueError("captured Compose render does not match the trial digest")
+    expected_digest_record = f"{compose_sha256}  compose-config.yml\n"
+    if compose_digest_record.read_text(encoding="utf-8") != expected_digest_record:
+        raise ValueError("Compose digest record does not match the trial digest")
 
 
 def _required_timestamp(value: object, path: str) -> str:
@@ -323,6 +365,18 @@ def _validate_wazuh_reconciliation_scope(
             )
 
 
+def _validate_report_record(
+    record: Mapping[str, object],
+    expected: Mapping[str, object],
+    label: str,
+) -> None:
+    for field_name, expected_value in expected.items():
+        if record.get(field_name) != expected_value:
+            raise ValueError(
+                f"report {label} is not bound to the journey: {field_name}"
+            )
+
+
 def _validate_trial_report_scope(
     report: Mapping[str, object],
     journey: Mapping[str, object],
@@ -344,6 +398,7 @@ def _validate_trial_report_scope(
         },
         "action_execution": {journey.get("action_execution_id")},
     }
+    indexed_records: dict[str, dict[str, Mapping[str, object]]] = {}
     for family, family_expected_ids in expected_ids.items():
         if not all(
             isinstance(record_id, str) and record_id.strip()
@@ -353,24 +408,169 @@ def _validate_trial_report_scope(
         family_records = records[family]
         if not isinstance(family_records, list):
             raise ValueError(f"report.records.{family} must be an array")
-        observed_ids = {
-            _required_text(
-                _mapping(item, f"report.records.{family}[{index}]").get(
-                    REPORT_RECORD_ID_FIELDS[family]
-                ),
+        family_index: dict[str, Mapping[str, object]] = {}
+        for index, item in enumerate(family_records):
+            record = _mapping(item, f"report.records.{family}[{index}]")
+            record_id = _required_text(
+                record.get(REPORT_RECORD_ID_FIELDS[family]),
                 f"report.records.{family}[{index}].{REPORT_RECORD_ID_FIELDS[family]}",
             )
-            for index, item in enumerate(family_records)
-        }
+            if record.get("authority_role") != "authoritative_control_plane_record":
+                raise ValueError(
+                    f"report.records.{family}[{index}] is not authoritative"
+                )
+            family_index[record_id] = record
+        observed_ids = set(family_index)
         if observed_ids != family_expected_ids or len(family_records) != len(
             family_expected_ids
         ):
             raise ValueError(f"report.records.{family} is not scoped to this trial")
+        indexed_records[family] = family_index
 
-    action_execution = _mapping(
-        records["action_execution"][0],
-        "report.records.action_execution[0]",
+    alert_id = _required_text(journey.get("alert_id"), "journey.alert_id")
+    finding_id = _required_text(journey.get("finding_id"), "journey.finding_id")
+    case_id = _required_text(journey.get("case_id"), "journey.case_id")
+    _validate_report_record(
+        indexed_records["alert"][alert_id],
+        {
+            "alert_id": alert_id,
+            "finding_id": finding_id,
+            "case_id": case_id,
+        },
+        "alert",
     )
+    _validate_report_record(
+        indexed_records["case"][case_id],
+        {
+            "case_id": case_id,
+            "alert_id": alert_id,
+            "finding_id": finding_id,
+        },
+        "case",
+    )
+
+    requester_identity = _required_text(
+        journey.get("requester_identity"),
+        "journey.requester_identity",
+    )
+    target_scope = _mapping(journey.get("target_scope"), "journey.target_scope")
+    denied = _mapping(journey.get("denied_dispatch"), "journey.denied_dispatch")
+    payload_hash = _required_text(journey.get("payload_hash"), "journey.payload_hash")
+    denied_payload_hash = _required_text(
+        denied.get("payload_hash"),
+        "journey.denied_dispatch.payload_hash",
+    )
+    for field_name, value in (
+        ("journey.payload_hash", payload_hash),
+        ("journey.denied_dispatch.payload_hash", denied_payload_hash),
+    ):
+        if re.fullmatch(r"[0-9a-f]{64}", value) is None:
+            raise ValueError(f"{field_name} is not SHA-256")
+    expected_denied_dispatch = {
+        "binding_reviewed": True,
+        "dispatch_rejected": True,
+        "execution_count": 0,
+        "action_request_id": journey.get("denied_action_request_id"),
+        "approval_decision_id": journey.get("denied_approval_decision_id"),
+        "idempotency_key": "denied-"
+        + _required_text(journey.get("idempotency_key"), "journey.idempotency_key"),
+        "payload_hash": denied_payload_hash,
+        "target_scope": dict(target_scope),
+        "requester_identity": requester_identity,
+        "action_request_lifecycle_state": "rejected",
+        "approval_decision_lifecycle_state": "rejected",
+        "approver_identities": [NEGATIVE_PROBE_APPROVER_IDENTITY],
+    }
+    if set(denied) != set(expected_denied_dispatch):
+        raise ValueError("journey denied dispatch fields do not match the contract")
+    for field_name, expected_value in expected_denied_dispatch.items():
+        if denied.get(field_name) != expected_value:
+            raise ValueError(
+                f"journey denied dispatch is not bound to the trial: {field_name}"
+            )
+
+    approved_action_request_id = _required_text(
+        journey.get("action_request_id"),
+        "journey.action_request_id",
+    )
+    denied_action_request_id = _required_text(
+        journey.get("denied_action_request_id"),
+        "journey.denied_action_request_id",
+    )
+    approved_decision_id = _required_text(
+        journey.get("approval_decision_id"),
+        "journey.approval_decision_id",
+    )
+    denied_decision_id = _required_text(
+        journey.get("denied_approval_decision_id"),
+        "journey.denied_approval_decision_id",
+    )
+    shared_action_request_fields = {
+        "case_id": case_id,
+        "alert_id": alert_id,
+        "finding_id": finding_id,
+        "target_scope": dict(target_scope),
+        "requester_identity": requester_identity,
+    }
+    _validate_report_record(
+        indexed_records["action_request"][approved_action_request_id],
+        {
+            **shared_action_request_fields,
+            "action_request_id": approved_action_request_id,
+            "approval_decision_id": approved_decision_id,
+            "idempotency_key": journey.get("idempotency_key"),
+            "payload_hash": payload_hash,
+            "lifecycle_state": "approved",
+        },
+        "approved action request",
+    )
+    _validate_report_record(
+        indexed_records["action_request"][denied_action_request_id],
+        {
+            **shared_action_request_fields,
+            "action_request_id": denied_action_request_id,
+            "approval_decision_id": denied_decision_id,
+            "idempotency_key": denied.get("idempotency_key"),
+            "payload_hash": denied_payload_hash,
+            "lifecycle_state": "rejected",
+        },
+        "denied action request",
+    )
+    _validate_report_record(
+        indexed_records["approval_decision"][approved_decision_id],
+        {
+            "approval_decision_id": approved_decision_id,
+            "action_request_id": approved_action_request_id,
+            "approver_identities": [
+                _required_text(
+                    journey.get("approver_identity"),
+                    "journey.approver_identity",
+                )
+            ],
+            "target_snapshot": dict(target_scope),
+            "payload_hash": payload_hash,
+            "lifecycle_state": "approved",
+        },
+        "approved decision",
+    )
+    _validate_report_record(
+        indexed_records["approval_decision"][denied_decision_id],
+        {
+            "approval_decision_id": denied_decision_id,
+            "action_request_id": denied_action_request_id,
+            "approver_identities": denied.get("approver_identities"),
+            "target_snapshot": denied.get("target_scope"),
+            "payload_hash": denied_payload_hash,
+            "lifecycle_state": "rejected",
+        },
+        "denied decision",
+    )
+
+    action_execution_id = _required_text(
+        journey.get("action_execution_id"),
+        "journey.action_execution_id",
+    )
+    action_execution = indexed_records["action_execution"][action_execution_id]
     expected_action_execution = {
         report_field: _required_text(
             journey.get(journey_field),
@@ -391,11 +591,7 @@ def _validate_trial_report_scope(
                 "report action execution is not bound to the journey: "
                 f"{field_name}"
             )
-    expected_target_scope = _mapping(
-        journey.get("target_scope"),
-        "journey.target_scope",
-    )
-    if action_execution.get("target_scope") != expected_target_scope:
+    if action_execution.get("target_scope") != target_scope:
         raise ValueError(
             "report action execution is not bound to the journey: target_scope"
         )
@@ -410,6 +606,10 @@ def _validate_trial_report_scope(
     )
     for index, item in enumerate(reconciliation_records):
         record = _mapping(item, f"report.records.reconciliation[{index}]")
+        if record.get("authority_role") != "authoritative_control_plane_record":
+            raise ValueError(
+                f"report.records.reconciliation[{index}] is not authoritative"
+            )
         reconciliation_id = _required_text(
             record.get("reconciliation_id"),
             f"report.records.reconciliation[{index}].reconciliation_id",
@@ -578,6 +778,10 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--schema", type=Path, required=True)
     parser.add_argument("--snapshot", type=Path, required=True)
+    parser.add_argument("--compose-config", type=Path, required=True)
+    parser.add_argument("--compose-digest-record", type=Path, required=True)
+    parser.add_argument("--expected-repository-revision", required=True)
+    parser.add_argument("--expected-compose-sha256", required=True)
     parser.add_argument("--images", type=Path, required=True)
     parser.add_argument("--preparation", type=Path, required=True)
     parser.add_argument("--wazuh", type=Path, required=True)
@@ -601,6 +805,13 @@ def _parser() -> argparse.ArgumentParser:
 
 def build(args: argparse.Namespace) -> dict[str, object]:
     snapshot = _mapping(_read_json(args.snapshot), "snapshot")
+    _validate_snapshot_provenance(
+        snapshot,
+        expected_repository_revision=args.expected_repository_revision,
+        expected_compose_sha256=args.expected_compose_sha256,
+        compose_config=args.compose_config,
+        compose_digest_record=args.compose_digest_record,
+    )
     images = _read_json(args.images)
     _validate_snapshot_images(images, snapshot)
     preparation = _mapping(_read_json(args.preparation), "preparation")
@@ -756,6 +967,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         }
 
     artifact_paths = {
+        "compose-config.sha256": args.compose_digest_record,
         "preparation.json": args.preparation,
         "wazuh-manifest.json": args.wazuh,
         "wazuh-output.txt": args.wazuh_output,
