@@ -867,7 +867,13 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             {"records": {"credential": "live-credential"}},
             {"records": {"context": {"password": "plaintext"}}},
             {"records": {"context": "Bearer live-token"}},
-            {"records": {"source_path": "/Users/operator/private.json"}},
+            {
+                "records": {
+                    "source_path": str(
+                        Path("/") / "Users" / "operator" / "private.json"
+                    )
+                }
+            },
         )
         for unsafe_report in unsafe_reports:
             with self.subTest(report=unsafe_report), self.assertRaisesRegex(
