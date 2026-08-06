@@ -82,7 +82,8 @@ def _manifest() -> dict[str, object]:
     }
     snapshot_id = validator._snapshot_identifier(trial_run_id, snapshot)
     snapshot["snapshot_id"] = snapshot_id
-    observed_at = "2026-08-01T10:00:00Z"
+    approval_confirmed_at = "2026-08-01T10:00:07.500000Z"
+    evaluated_at = "2026-08-01T10:00:15Z"
     steps = [
         {
             "step": index,
@@ -133,7 +134,7 @@ def _manifest() -> dict[str, object]:
             "approval_source": "interactive_local_operator_ceremony",
             "approval_method": "tty_challenge",
             "approval_challenge_sha256": "4" * 64,
-            "approval_confirmed_at": observed_at,
+            "approval_confirmed_at": approval_confirmed_at,
         },
         "idempotency": {
             "wazuh_first_disposition": "created",
@@ -191,7 +192,7 @@ def _manifest() -> dict[str, object]:
             "trial_run_id": "phase67-e2e-20260801T100000Z-0123456789ab",
             "snapshot_id": snapshot_id,
             "repository_revision": "a" * 40,
-            "evaluated_at": observed_at,
+            "evaluated_at": evaluated_at,
             "verdict": "integration_trial_passed_with_owned_limitations",
             "ga_accepted": False,
             "sha256": "5" * 64,
@@ -273,19 +274,52 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertEqual(builder.CURRENT_TRIAL_VERDICT, validator.PASSED_VERDICT)
         validator.validate_manifest(_manifest(), SCHEMA)
 
-    def test_schema_allows_the_complete_runtime_image_inventory(self) -> None:
+    def test_schema_selects_exact_historical_and_current_image_profiles(
+        self,
+    ) -> None:
         images_schema = SCHEMA["properties"]["snapshot"]["properties"]["images"]
+        self.assertNotIn("minItems", images_schema)
+        self.assertNotIn("maxItems", images_schema)
+        current_images = SCHEMA["$defs"]["current_image_inventory"][
+            "properties"
+        ]["snapshot"]["properties"]["images"]
+        legacy_images = SCHEMA["$defs"]["legacy_blocked_image_inventory"][
+            "properties"
+        ]["snapshot"]["properties"]["images"]
         self.assertEqual(
-            images_schema["minItems"],
+            current_images["minItems"],
             len(validator.EXPECTED_FULL_PROFILE_IMAGE_SERVICES),
         )
         self.assertEqual(
-            images_schema["maxItems"],
+            current_images["maxItems"],
             len(validator.EXPECTED_FULL_PROFILE_IMAGE_SERVICES),
         )
         self.assertEqual(
             len(_manifest()["snapshot"]["images"]),
-            images_schema["maxItems"],
+            current_images["maxItems"],
+        )
+        historical = validator.load_json(E2E_ROOT / "sample-evidence.json")
+        self.assertEqual(
+            legacy_images["minItems"],
+            len(historical["snapshot"]["images"]),
+        )
+        self.assertEqual(legacy_images["maxItems"], legacy_images["minItems"])
+        legacy_identity = SCHEMA["$defs"]["legacy_blocked_identity"][
+            "properties"
+        ]
+        self.assertEqual(
+            legacy_identity["trial_run_id"]["const"],
+            historical["trial_run_id"],
+        )
+        self.assertEqual(
+            legacy_identity["snapshot"]["properties"]["snapshot_id"]["const"],
+            historical["snapshot"]["snapshot_id"],
+        )
+        self.assertEqual(
+            legacy_identity["snapshot"]["properties"]["repository_revision"][
+                "const"
+            ],
+            historical["snapshot"]["repository_revision"],
         )
         self.assertEqual(
             set(
@@ -307,6 +341,12 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertEqual(
             execution_schema["pattern"],
             validator.CANONICAL_UUID_PATTERN,
+        )
+        self.assertEqual(
+            SCHEMA["properties"]["identifiers"]["properties"]["wazuh_rule_id"][
+                "enum"
+            ],
+            [validator.REVIEWED_WAZUH_RULE_ID, None],
         )
 
         unsupported_verdict = _manifest()
@@ -343,14 +383,34 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             validator.validate_manifest(_manifest(), drifted_uuid_schema)
 
         drifted_image_schema = deepcopy(SCHEMA)
-        drifted_image_schema["properties"]["snapshot"]["properties"]["images"][
-            "minItems"
-        ] = len(validator.EXPECTED_FULL_PROFILE_IMAGE_SERVICES) - 1
+        drifted_image_schema["$defs"]["current_image_inventory"]["properties"][
+            "snapshot"
+        ]["properties"]["images"]["minItems"] -= 1
         with self.assertRaisesRegex(
             validator.EvidenceValidationError,
-            "schema image inventory floor",
+            "schema current image inventory contract drifted",
         ):
             validator.validate_manifest(_manifest(), drifted_image_schema)
+
+        drifted_legacy_identity = deepcopy(SCHEMA)
+        drifted_legacy_identity["$defs"]["legacy_blocked_identity"][
+            "required"
+        ].append("schema_version")
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "schema historical packet identity drifted",
+        ):
+            validator.validate_manifest(_manifest(), drifted_legacy_identity)
+
+        drifted_rule_schema = deepcopy(SCHEMA)
+        drifted_rule_schema["properties"]["identifiers"]["properties"][
+            "wazuh_rule_id"
+        ]["enum"] = ["999999", None]
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "schema Wazuh rule ID contract drifted",
+        ):
+            validator.validate_manifest(_manifest(), drifted_rule_schema)
 
     def test_snapshot_accepts_every_preflight_host_architecture(self) -> None:
         manifest = _manifest()
@@ -393,6 +453,15 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 with self.assertRaises(validator.EvidenceValidationError):
                     validator.validate_manifest(manifest, SCHEMA)
 
+    def test_validator_requires_the_reviewed_wazuh_rule(self) -> None:
+        manifest = _manifest()
+        manifest["identifiers"]["wazuh_rule_id"] = "999999"
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "outside the reviewed detection contract",
+        ):
+            validator.validate_manifest(manifest, SCHEMA)
+
     def test_validator_rejects_mixed_snapshots_and_missing_steps(self) -> None:
         mixed = _manifest()
         mixed["steps"][8]["snapshot_id"] = "phase67-snapshot-fedcba9876543210"
@@ -418,6 +487,47 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "strictly chronological",
         ):
             validator.validate_manifest(manifest, SCHEMA)
+
+    def test_validator_binds_approval_evaluation_and_capture_times(self) -> None:
+        temporal_mutations = {
+            "approval before denial proof": (
+                lambda manifest: manifest["human_control"].__setitem__(
+                    "approval_confirmed_at",
+                    "2026-08-01T10:00:06Z",
+                ),
+                "approval confirmation must follow denial proof",
+            ),
+            "approval after dispatch": (
+                lambda manifest: manifest["human_control"].__setitem__(
+                    "approval_confirmed_at",
+                    "2026-08-01T10:00:09Z",
+                ),
+                "approval confirmation must follow denial proof",
+            ),
+            "evaluation differs from step": (
+                lambda manifest: manifest["evaluation"].__setitem__(
+                    "evaluated_at",
+                    "2026-08-01T10:00:14.500000Z",
+                ),
+                "evaluation time must match",
+            ),
+            "capture predates last step": (
+                lambda manifest: manifest.__setitem__(
+                    "captured_at",
+                    "2026-08-01T10:00:14Z",
+                ),
+                "capture time must not precede",
+            ),
+        }
+        for name, (mutate, message) in temporal_mutations.items():
+            with self.subTest(name=name):
+                manifest = _manifest()
+                mutate(manifest)
+                with self.assertRaisesRegex(
+                    validator.EvidenceValidationError,
+                    message,
+                ):
+                    validator.validate_manifest(manifest, SCHEMA)
 
     def test_validator_rejects_unreviewed_step_evidence_references(self) -> None:
         manifest = _manifest()
@@ -594,6 +704,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     for index in range(2, 4)
                 },
                 "journey": {
+                    "approval_confirmed_at": "2026-08-01T10:00:07.500000Z",
                     "step_observations": {
                         builder.STEP_NAMES[index]: observations[index][
                             "observed_at"
@@ -638,6 +749,24 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 with self.assertRaisesRegex(
                     ValueError,
                     "does not use the authoritative",
+                ):
+                    builder._validate_step_observation_sources(
+                        observations,
+                        **sources,
+                    )
+
+        for approval_confirmed_at in (
+            "2026-08-01T10:00:06Z",
+            "2026-08-01T10:00:09Z",
+        ):
+            with self.subTest(approval_confirmed_at=approval_confirmed_at):
+                sources = source_payloads()
+                sources["journey"]["approval_confirmed_at"] = (
+                    approval_confirmed_at
+                )
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "approval confirmation must follow denial proof",
                 ):
                     builder._validate_step_observation_sources(
                         observations,
@@ -1828,6 +1957,27 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             else:
                 step["evidence_refs"] = ["not-run:upstream-blocker"]
         validator.validate_manifest(manifest, SCHEMA)
+
+        for key, producing_step in validator.NEGATIVE_CASE_PRODUCING_STEPS.items():
+            with self.subTest(key=key, producing_step=producing_step):
+                unobserved_probe = deepcopy(manifest)
+                unobserved_probe["negative_cases"][key] = {
+                    "status": "contained",
+                    "authority_before": 1,
+                    "authority_after": 1,
+                    "authority_delta": 0,
+                    "measurement_source": (
+                        "aegisops_authoritative_alert_count"
+                        if key in {"invalid_credential", "proxy_bypass"}
+                        else "aegisops_authoritative_record_count"
+                    ),
+                    "evidence_ref": "unobserved:negative-probe",
+                }
+                with self.assertRaisesRegex(
+                    validator.EvidenceValidationError,
+                    f"must be null when {producing_step} did not pass",
+                ):
+                    validator.validate_manifest(unobserved_probe, SCHEMA)
 
         claimed_evaluation = deepcopy(manifest)
         claimed_evaluation["evaluation"] = deepcopy(_manifest()["evaluation"])

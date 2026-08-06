@@ -166,6 +166,9 @@ failed packet must additionally use the deterministic blocking limitation ID
 derived from its terminal step. The historical approval-blocked packet retains
 its separately reviewed approval limitation contract only when the complete
 canonical packet SHA-256 matches the committed compatibility fingerprint.
+Its schema-level 11-image exception is selected only by the exact historical
+trial, snapshot, revision, and blocked verdict identity; all current packets
+require the 13-image full-profile inventory.
 Every retained status capture must also report the exact control-plane image ID
 from the snapshot, including after restart.
 The snapshot inventory also includes the digest-pinned dynamic Shuffle worker

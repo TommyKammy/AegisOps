@@ -36,6 +36,7 @@ LEGACY_APPROVAL_BLOCKER_STATUSES = {
 REVIEWED_SHUFFLE_WORKFLOW_VERSION = (
     "notify_identity_owner-v1-reviewed-2026-05-03"
 )
+REVIEWED_WAZUH_RULE_ID = "5710"
 STEP_NAMES = (
     "capture_immutable_snapshot",
     "start_lab_and_record_health",
@@ -125,6 +126,8 @@ LEGACY_BLOCKED_TRIAL = (
     "phase67-e2e-20260801T135206Z-26c533b6ca31",
     "2473b66f5702a38f1d4630c990509bf812a6af7a",
 )
+LEGACY_BLOCKED_SNAPSHOT_ID = "phase67-snapshot-0661c0413ecdd062"
+LEGACY_BLOCKED_IMAGE_COUNT = 11
 LEGACY_BLOCKED_MANIFEST_SHA256 = (
     "69024ef973dc820ef797bb6b5dfad66ff322a9f11673951f6a53ff0a168d09e8"
 )
@@ -234,6 +237,13 @@ NEGATIVE_CASE_KEYS = (
     "malformed_receipt",
     "reconciliation_mismatch",
 )
+NEGATIVE_CASE_PRODUCING_STEPS = {
+    "invalid_credential": "trigger_real_wazuh_detection",
+    "proxy_bypass": "trigger_real_wazuh_detection",
+    "failed_execution": "run_negative_cases",
+    "malformed_receipt": "run_negative_cases",
+    "reconciliation_mismatch": "run_negative_cases",
+}
 ARTIFACT_NAMES = {
     "compose-config.sha256",
     "preparation.json",
@@ -397,6 +407,12 @@ def require_datetime(value: object, path: str) -> str:
     return text
 
 
+def _datetime_value(value: object, path: str) -> datetime:
+    text = require_datetime(value, path)
+    normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+    return datetime.fromisoformat(normalized)
+
+
 def _scan_secret_values(value: object, path: str = "$") -> None:
     if isinstance(value, Mapping):
         for key, item in value.items():
@@ -413,6 +429,26 @@ def _scan_secret_values(value: object, path: str = "$") -> None:
             pattern.search(value) is None,
             f"{path} contains a secret value or private host path",
         )
+
+
+def _schema_image_inventory_profile(item_count: int) -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["snapshot"],
+        "properties": {
+            "snapshot": {
+                "type": "object",
+                "required": ["images"],
+                "properties": {
+                    "images": {
+                        "type": "array",
+                        "minItems": item_count,
+                        "maxItems": item_count,
+                    }
+                },
+            }
+        },
+    }
 
 
 def _validate_schema_contract(schema: object) -> None:
@@ -457,6 +493,14 @@ def _validate_schema_contract(schema: object) -> None:
         shuffle_execution_id.get("pattern") == CANONICAL_UUID_PATTERN,
         "schema Shuffle execution ID contract drifted",
     )
+    wazuh_rule_id = require_mapping(
+        identifier_properties.get("wazuh_rule_id"),
+        "$schema.properties.identifiers.properties.wazuh_rule_id",
+    )
+    require(
+        wazuh_rule_id.get("enum") == [REVIEWED_WAZUH_RULE_ID, None],
+        "schema Wazuh rule ID contract drifted",
+    )
     snapshot = require_mapping(properties.get("snapshot"), "$schema.properties.snapshot")
     snapshot_properties = require_mapping(
         snapshot.get("properties"),
@@ -477,12 +521,52 @@ def _validate_schema_contract(schema: object) -> None:
         "schema host architecture contract drifted",
     )
     require(
-        images.get("minItems") == len(EXPECTED_FULL_PROFILE_IMAGE_SERVICES),
-        "schema image inventory floor does not match the full profile",
+        "minItems" not in images and "maxItems" not in images,
+        "schema base image inventory must defer to reviewed profiles",
+    )
+    definitions = require_mapping(root.get("$defs"), "$schema.$defs")
+    expected_legacy_identity = {
+        "type": "object",
+        "required": ["trial_run_id", "snapshot", "verdict"],
+        "properties": {
+            "trial_run_id": {"const": LEGACY_BLOCKED_TRIAL[0]},
+            "snapshot": {
+                "type": "object",
+                "required": ["snapshot_id", "repository_revision"],
+                "properties": {
+                    "snapshot_id": {"const": LEGACY_BLOCKED_SNAPSHOT_ID},
+                    "repository_revision": {"const": LEGACY_BLOCKED_TRIAL[1]},
+                },
+            },
+            "verdict": {"const": "integration_trial_blocked"},
+        },
+    }
+    require(
+        definitions.get("legacy_blocked_identity") == expected_legacy_identity,
+        "schema historical packet identity drifted",
     )
     require(
-        images.get("maxItems") == len(EXPECTED_FULL_PROFILE_IMAGE_SERVICES),
-        "schema image inventory limit does not match the full profile",
+        root.get("allOf")
+        == [
+            {
+                "if": {"$ref": "#/$defs/legacy_blocked_identity"},
+                "then": {"$ref": "#/$defs/legacy_blocked_image_inventory"},
+                "else": {"$ref": "#/$defs/current_image_inventory"},
+            }
+        ],
+        "schema image inventory profile selection drifted",
+    )
+    require(
+        definitions.get("legacy_blocked_image_inventory")
+        == _schema_image_inventory_profile(LEGACY_BLOCKED_IMAGE_COUNT),
+        "schema historical image inventory contract drifted",
+    )
+    require(
+        definitions.get("current_image_inventory")
+        == _schema_image_inventory_profile(
+            len(EXPECTED_FULL_PROFILE_IMAGE_SERVICES)
+        ),
+        "schema current image inventory contract drifted",
     )
 
 
@@ -522,6 +606,7 @@ def _is_legacy_blocked_manifest(value: Mapping[str, object]) -> bool:
         and value.get("verdict") == "integration_trial_blocked"
         and value.get("trial_run_id") == LEGACY_BLOCKED_TRIAL[0]
         and isinstance(snapshot, Mapping)
+        and snapshot.get("snapshot_id") == LEGACY_BLOCKED_SNAPSHOT_ID
         and snapshot.get("repository_revision") == LEGACY_BLOCKED_TRIAL[1]
     )
 
@@ -678,7 +763,7 @@ def _validate_steps(
     verdict: str,
     *,
     allow_legacy_blocked_refs: bool = False,
-) -> tuple[str, ...]:
+) -> tuple[tuple[str, ...], tuple[datetime, ...]]:
     require(isinstance(value, list) and len(value) == len(STEP_NAMES), "$.steps must contain exactly 15 steps")
     statuses: list[str] = []
     observed_times: list[datetime] = []
@@ -699,18 +784,11 @@ def _validate_steps(
         require(status in {"passed", "failed", "blocked", "not_run"}, f"$.steps[{index}].status is invalid")
         statuses.append(status)
         require(item["snapshot_id"] == snapshot_id, f"$.steps[{index}] uses a mixed snapshot")
-        observed_at = require_datetime(
+        observed_at = _datetime_value(
             item["observed_at"],
             f"$.steps[{index}].observed_at",
         )
-        normalized_observed_at = (
-            observed_at[:-1] + "+00:00"
-            if observed_at.endswith("Z")
-            else observed_at
-        )
-        observed_times.append(
-            datetime.fromisoformat(normalized_observed_at).astimezone()
-        )
+        observed_times.append(observed_at)
         refs = item["evidence_refs"]
         require(isinstance(refs, list) and refs, f"$.steps[{index}].evidence_refs must be non-empty")
         for ref_index, evidence_ref in enumerate(refs):
@@ -768,7 +846,7 @@ def _validate_steps(
         failed_index = statuses.index("failed")
         require(all(status == "passed" for status in statuses[:failed_index]), "steps before a failure must pass")
         require(all(status == "not_run" for status in statuses[failed_index + 1 :]), "steps after a failure must be not_run")
-    return tuple(statuses)
+    return tuple(statuses), tuple(observed_times)
 
 
 def validate_manifest(
@@ -801,7 +879,7 @@ def validate_manifest(
     )
     require_exact_keys(root, required=required, path="$")
     require(root["schema_version"] == SCHEMA_VERSION, "$.schema_version is invalid")
-    require_datetime(root["captured_at"], "$.captured_at")
+    captured_at = _datetime_value(root["captured_at"], "$.captured_at")
     require(root["source_mode"] == "real_services", "$.source_mode must be real_services")
     allow_legacy_blocked_packet = _is_legacy_blocked_manifest(root)
     trial_run_id = require_string(root["trial_run_id"], "$.trial_run_id")
@@ -815,11 +893,20 @@ def validate_manifest(
         expected_schema_sha256=schema_sha256,
     )
     snapshot_id = require_string(snapshot["snapshot_id"], "$.snapshot.snapshot_id")
-    step_statuses = _validate_steps(
+    step_statuses, step_observed_times = _validate_steps(
         root["steps"],
         snapshot_id,
         verdict,
         allow_legacy_blocked_refs=allow_legacy_blocked_packet,
+    )
+    completed_step_times = tuple(
+        observed_at
+        for status, observed_at in zip(step_statuses, step_observed_times)
+        if status != "not_run"
+    )
+    require(
+        completed_step_times and captured_at >= completed_step_times[-1],
+        "manifest capture time must not precede the last completed step",
     )
 
     identifiers = require_mapping(root["identifiers"], "$.identifiers")
@@ -847,6 +934,12 @@ def validate_manifest(
     for key, value in normalized_ids.items():
         if value is not None:
             require(PLACEHOLDER.search(value) is None, f"$.identifiers.{key} looks synthetic or placeholder-derived")
+    wazuh_rule_id = normalized_ids["wazuh_rule_id"]
+    if wazuh_rule_id is not None:
+        require(
+            wazuh_rule_id == REVIEWED_WAZUH_RULE_ID,
+            "Wazuh rule ID is outside the reviewed detection contract",
+        )
     execution_id = normalized_ids["shuffle_execution_id"]
     if execution_id is not None:
         require(not execution_id.startswith("shuffle-run-"), "synthetic Shuffle execution ID cannot be live evidence")
@@ -926,7 +1019,15 @@ def validate_manifest(
         require(approver == authenticated_approver, "approver must match the authenticated local operator")
         require(approval_source == "interactive_local_operator_ceremony", "approval must come from the interactive ceremony")
         require(approval_method in {"macos_operator_dialog", "tty_challenge"}, "approval method is not independently interactive")
-        require_datetime(approval_confirmed_at, "$.human_control.approval_confirmed_at")
+        approval_time = _datetime_value(
+            approval_confirmed_at,
+            "$.human_control.approval_confirmed_at",
+        )
+        require(
+            step_observed_times[6] < approval_time <= step_observed_times[7],
+            "approval confirmation must follow denial proof and precede "
+            "the dispatch observation",
+        )
     else:
         require(
             all(
@@ -970,11 +1071,10 @@ def validate_manifest(
 
     negative_cases = require_mapping(root["negative_cases"], "$.negative_cases")
     require_exact_keys(negative_cases, required=NEGATIVE_CASE_KEYS, path="$.negative_cases")
-    receipt_probe_keys = {
-        "failed_execution",
-        "malformed_receipt",
-        "reconciliation_mismatch",
-    }
+    require(
+        set(NEGATIVE_CASE_PRODUCING_STEPS) == set(NEGATIVE_CASE_KEYS),
+        "negative-case producing step contract is incomplete",
+    )
     for key in NEGATIVE_CASE_KEYS:
         case = require_mapping(negative_cases[key], f"$.negative_cases.{key}")
         require_exact_keys(case, required=("status", "authority_before", "authority_after", "authority_delta", "measurement_source", "evidence_ref"), path=f"$.negative_cases.{key}")
@@ -984,7 +1084,9 @@ def validate_manifest(
         delta = require_nullable_integer(case["authority_delta"], f"$.negative_cases.{key}.authority_delta")
         measurement_source = require_nullable_string(case["measurement_source"], f"$.negative_cases.{key}.measurement_source")
         evidence_ref = require_nullable_string(case["evidence_ref"], f"$.negative_cases.{key}.evidence_ref")
-        if key in receipt_probe_keys and step_statuses[12] != "passed":
+        producing_step = NEGATIVE_CASE_PRODUCING_STEPS[key]
+        producing_step_status = step_statuses[STEP_NAMES.index(producing_step)]
+        if producing_step_status != "passed":
             require(
                 all(
                     value is None
@@ -997,7 +1099,7 @@ def validate_manifest(
                         evidence_ref,
                     )
                 ),
-                f"$.negative_cases.{key} must be null when run_negative_cases did not pass",
+                f"$.negative_cases.{key} must be null when {producing_step} did not pass",
             )
             continue
         if status is not None:
@@ -1013,9 +1115,9 @@ def validate_manifest(
             if key in {"invalid_credential", "proxy_bypass", "malformed_receipt"}:
                 require(delta == 0, f"$.negative_cases.{key} unexpectedly persisted authoritative state")
             require(evidence_ref is not None, f"$.negative_cases.{key} lacks evidence")
-        elif step_statuses[12] == "passed":
+        else:
             raise EvidenceValidationError(
-                f"$.negative_cases.{key} is missing from a passed negative-case step"
+                f"$.negative_cases.{key} is missing after {producing_step} passed"
             )
 
     restart = require_mapping(root["restart"], "$.restart")
@@ -1088,7 +1190,14 @@ def validate_manifest(
         require(evaluation_trial == root["trial_run_id"], "evaluation is not bound to this trial")
         require(evaluation_snapshot == snapshot_id, "evaluation is not bound to this snapshot")
         require(evaluation_revision == snapshot["repository_revision"], "evaluation is not bound to this repository revision")
-        require_datetime(evaluation["evaluated_at"], "$.evaluation.evaluated_at")
+        evaluation_time = _datetime_value(
+            evaluation["evaluated_at"],
+            "$.evaluation.evaluated_at",
+        )
+        require(
+            evaluation_time == step_observed_times[14],
+            "evaluation time must match the evaluation step observation",
+        )
         require(evaluation_verdict == verdict, "evaluation verdict does not match the manifest")
         require(evaluation_ga is False, "Phase 67 evidence cannot accept GA")
         require(evaluation_sha is not None and SHA256.fullmatch(evaluation_sha) is not None, "evaluation record digest must be SHA-256")

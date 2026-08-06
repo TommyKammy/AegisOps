@@ -106,14 +106,29 @@ require_fixed "${e2e_root}/validate_evidence_manifest.py" '$.snapshot.host_archi
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'schema host architecture contract drifted'
 require_fixed \
   "${e2e_root}/validate_evidence_manifest.py" \
-  'schema image inventory floor does not match the full profile'
+  'schema current image inventory contract drifted'
 require_fixed "${schema}" '"minItems": 13'
 require_fixed "${schema}" '"maxItems": 13'
+require_fixed "${schema}" '"legacy_blocked_identity"'
+require_fixed "${schema}" '"legacy_blocked_image_inventory"'
+require_fixed "${schema}" '"current_image_inventory"'
+require_fixed "${schema}" '"wazuh_rule_id": {"enum": ["5710", null]}'
 require_fixed "${schema}" '"runtime_image_id"'
 require_fixed "${schema}" '"enum": ["arm64", "aarch64", "amd64", "x86_64"]'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" '"--runtime-images"'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'steps after a failure must be not_run'
-require_fixed "${e2e_root}/validate_evidence_manifest.py" 'must be null when run_negative_cases did not pass'
+require_fixed \
+  "${e2e_root}/validate_evidence_manifest.py" \
+  'must be null when {producing_step} did not pass'
+require_fixed "${e2e_root}/validate_evidence_manifest.py" 'NEGATIVE_CASE_PRODUCING_STEPS'
+require_fixed "${e2e_root}/validate_evidence_manifest.py" 'outside the reviewed detection contract'
+require_fixed \
+  "${e2e_root}/validate_evidence_manifest.py" \
+  'approval confirmation must follow denial proof'
+require_fixed \
+  "${e2e_root}/validate_evidence_manifest.py" \
+  'evaluation time must match the evaluation step observation'
+require_fixed "${e2e_root}/build_evidence.py" 'approval confirmation must follow denial proof'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'OWNED_LIMITATION_STATUSES'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'historical approval-blocked limitation contract is incomplete'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'LEGACY_BLOCKED_MANIFEST_SHA256'

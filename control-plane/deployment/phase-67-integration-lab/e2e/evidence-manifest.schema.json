@@ -102,8 +102,6 @@
         },
         "images": {
           "type": "array",
-          "minItems": 13,
-          "maxItems": 13,
           "uniqueItems": true,
           "items": {
             "type": "object",
@@ -192,7 +190,7 @@
       "properties": {
         "wazuh_manager_id": {"type": ["string", "null"]},
         "wazuh_agent_id": {"type": ["string", "null"]},
-        "wazuh_rule_id": {"type": ["string", "null"]},
+        "wazuh_rule_id": {"enum": ["5710", null]},
         "native_wazuh_alert_id": {"type": ["string", "null"]},
         "aegisops_alert_id": {"type": ["string", "null"]},
         "finding_id": {"type": ["string", "null"]},
@@ -401,7 +399,60 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {"$ref": "#/$defs/legacy_blocked_identity"},
+      "then": {"$ref": "#/$defs/legacy_blocked_image_inventory"},
+      "else": {"$ref": "#/$defs/current_image_inventory"}
+    }
+  ],
   "$defs": {
+    "legacy_blocked_identity": {
+      "type": "object",
+      "required": ["trial_run_id", "snapshot", "verdict"],
+      "properties": {
+        "trial_run_id": {
+          "const": "phase67-e2e-20260801T135206Z-26c533b6ca31"
+        },
+        "snapshot": {
+          "type": "object",
+          "required": ["snapshot_id", "repository_revision"],
+          "properties": {
+            "snapshot_id": {"const": "phase67-snapshot-0661c0413ecdd062"},
+            "repository_revision": {
+              "const": "2473b66f5702a38f1d4630c990509bf812a6af7a"
+            }
+          }
+        },
+        "verdict": {"const": "integration_trial_blocked"}
+      }
+    },
+    "legacy_blocked_image_inventory": {
+      "type": "object",
+      "required": ["snapshot"],
+      "properties": {
+        "snapshot": {
+          "type": "object",
+          "required": ["images"],
+          "properties": {
+            "images": {"type": "array", "minItems": 11, "maxItems": 11}
+          }
+        }
+      }
+    },
+    "current_image_inventory": {
+      "type": "object",
+      "required": ["snapshot"],
+      "properties": {
+        "snapshot": {
+          "type": "object",
+          "required": ["images"],
+          "properties": {
+            "images": {"type": "array", "minItems": 13, "maxItems": 13}
+          }
+        }
+      }
+    },
     "sha256": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"

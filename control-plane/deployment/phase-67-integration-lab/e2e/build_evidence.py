@@ -201,6 +201,14 @@ def _required_timestamp(value: object, path: str) -> str:
     return timestamp
 
 
+def _timestamp_value(value: object, path: str) -> datetime:
+    timestamp = _required_timestamp(value, path)
+    normalized = (
+        timestamp[:-1] + "+00:00" if timestamp.endswith("Z") else timestamp
+    )
+    return datetime.fromisoformat(normalized)
+
+
 def _evaluation_field(document: str, field_name: str) -> str:
     pattern = re.compile(
         rf"^{re.escape(field_name)}: `([^`\n]+)`$",
@@ -772,6 +780,23 @@ def _validate_step_observation_sources(
                 f"step {step_index + 1} does not use the authoritative "
                 f"{step_name} observation time"
             )
+    denial_observed_at = _timestamp_value(
+        source_times[STEP_NAMES[6]],
+        f"authoritative observation {STEP_NAMES[6]}",
+    )
+    approval_confirmed_at = _timestamp_value(
+        journey.get("approval_confirmed_at"),
+        "journey.approval_confirmed_at",
+    )
+    dispatch_observed_at = _timestamp_value(
+        source_times[STEP_NAMES[7]],
+        f"authoritative observation {STEP_NAMES[7]}",
+    )
+    if not denial_observed_at < approval_confirmed_at <= dispatch_observed_at:
+        raise ValueError(
+            "approval confirmation must follow denial proof and precede "
+            "the dispatch observation"
+        )
 
 
 def _parser() -> argparse.ArgumentParser:
