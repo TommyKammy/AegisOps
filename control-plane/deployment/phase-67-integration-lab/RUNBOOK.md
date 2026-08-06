@@ -106,7 +106,9 @@ the repository revision, rendered Compose model, evidence schema, runtime
 artifacts, reviewed and live Shuffle workflow digests, workflow API ID, host
 and Colima identity, selected profile, and running image identities into one
 recomputable snapshot ID before it records step 1. It
-then executes the real Wazuh trial, promotes that exact admitted alert to a
+starts `full` before capturing runtime identities; step 2 records only the
+post-snapshot health status and does not claim to be the startup event. It then
+executes the real Wazuh trial, promotes that exact admitted alert to a
 case, and prepares a reviewed harmless action. A distinct local operator must
 inspect the displayed action request, payload hash, and challenge, then confirm
 the macOS operator dialog or type the exact `APPROVE <challenge>` phrase on a
@@ -114,8 +116,13 @@ TTY. Only that ceremony persists approval and allows dispatch to real Shuffle.
 Immediately before dispatch, the runner reloads the denied request and decision
 from PostgreSQL and recounts its executions; any lifecycle change or execution
 blocks the trial.
+Before snapshot capture, the runner creates the `shuffle-tools_1-2-0` Swarm
+service from the reviewed repository digest. The service and its running task
+must retain that digest and image ID before approval and again after execution;
+the mutable compatibility tag is not the execution reference.
 Receipt success is passed through AegisOps reconciliation instead of inferred
-from Shuffle state. Receipt failure probes run in a rollback-only transaction;
+from Shuffle state. Receipt failure probes must return the reviewed mismatch
+reason and run in a rollback-only transaction;
 the trial fails if the authoritative successful execution or record count is
 not restored exactly. The retained report uses an explicit record-ID allowlist
 for this trial's alert, case, denied and approved requests and decisions,
@@ -124,7 +131,8 @@ records preserved from earlier trials are excluded.
 
 After report export and delivery replay, the runner stops and starts the lab,
 checks the persisted action-chain identifiers, every Wazuh admission/replay
-reconciliation ID, and the one-execution count, and
+reconciliation ID, the one-execution count, and exact equality between the
+post-restart authoritative records and the retained report, and
 runs `cleanup.sh`. The runner retains a trial-specific raw artifact directory
 with mode `0700` and files with mode `0600`, plus the complete redacted report,
 below `${AEGISOPS_LAB_EVIDENCE_DIR}`. The manifest records every retained raw
@@ -177,8 +185,10 @@ behind the Shuffle action tag. After operator approval, the runner revalidates
 the live workflow and action image, then checks the complete repository
 snapshot immediately before dispatch. For publication, report and raw artifacts are moved only
 after every destination is checked, and the passing manifest is moved last.
-Failure before that final move restores the unpublished packet where possible
-and never leaves a discoverable passing manifest with missing references.
+The final manifest path is validated once more after that move and made
+read-only before success is declared. Failure before that validation restores
+the unpublished packet where possible and never leaves a discoverable passing
+manifest with missing references.
 The prepare, approved execution, and restart-verification commands all enter
 the bind-mounted journey runner through one helper that checks the captured
 repository revision and complete worktree immediately before container

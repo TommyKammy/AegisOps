@@ -366,7 +366,23 @@
         },
         "containers_stopped": {"type": ["boolean", "null"]},
         "data_preserved": {"type": ["boolean", "null"]}
-      }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "mode": {"const": "non_destructive"},
+            "containers_stopped": {"const": true},
+            "data_preserved": {"const": true}
+          }
+        },
+        {
+          "properties": {
+            "mode": {"const": null},
+            "containers_stopped": {"const": null},
+            "data_preserved": {"const": null}
+          }
+        }
+      ]
     },
     "authority_posture": {
       "const": "aegisops_records_remain_authoritative"

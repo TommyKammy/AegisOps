@@ -63,6 +63,31 @@ REVIEWED_ACTION_NAME = "Harmless local log"
 REVIEWED_SHUFFLE_WORKFLOW_VERSION = (
     "notify_identity_owner-v1-reviewed-2026-05-03"
 )
+NEGATIVE_RECONCILIATION_OUTCOMES = {
+    (
+        "mismatch",
+        "mismatched",
+        "approved binding mismatch between authoritative action execution "
+        "and observed downstream execution",
+    ): ("rejected", "payload_hash_mismatch"),
+    (
+        "mismatch",
+        "mismatched",
+        "downstream execution failed and requires operator review",
+    ): ("contained", "failed_execution_reconciled_for_review"),
+}
+EXPECTED_NEGATIVE_PROBE_CATEGORIES = {
+    "reconciliation_mismatch": "payload_hash_mismatch",
+    "failed_execution": "failed_execution_reconciled_for_review",
+}
+REPORT_RECORD_TYPES = (
+    AlertRecord,
+    CaseRecord,
+    ActionRequestRecord,
+    ApprovalDecisionRecord,
+    ActionExecutionRecord,
+    ReconciliationRecord,
+)
 RESTART_RECORD_TYPES = {
     "aegisops_alert_id": AlertRecord,
     "case_id": CaseRecord,
@@ -435,13 +460,10 @@ def _run_receipt_negative_probes(
     def probe(
         name: str,
         observed_execution: Mapping[str, object],
-        *,
-        expected_status: str,
-        expected_category: str,
     ) -> dict[str, object]:
         before = authority_count()
-        status = expected_status
-        category = expected_category
+        status: str
+        category: str
         try:
             reconciliation = service.reconcile_action_execution(
                 action_request_id=action.action_request_id,
@@ -459,11 +481,25 @@ def _run_receipt_negative_probes(
             if not str(exc):
                 raise RuntimeError("malformed receipt rejection lacks a diagnostic") from exc
         else:
-            if reconciliation.ingest_disposition != "mismatch":
+            observed_outcome = (
+                reconciliation.ingest_disposition,
+                reconciliation.lifecycle_state,
+                reconciliation.mismatch_summary,
+            )
+            measured_outcome = NEGATIVE_RECONCILIATION_OUTCOMES.get(
+                observed_outcome
+            )
+            expected_category = EXPECTED_NEGATIVE_PROBE_CATEGORIES.get(name)
+            if (
+                measured_outcome is None
+                or expected_category is None
+                or measured_outcome[1] != expected_category
+            ):
                 raise RuntimeError(
-                    f"{name} unexpectedly reconciled as "
-                    f"{reconciliation.ingest_disposition!r}"
+                    f"{name} reconciliation reason does not match "
+                    f"{expected_category!r}: {observed_outcome!r}"
                 )
+            status, category = measured_outcome
         after = authority_count()
         return {
             "status": status,
@@ -494,20 +530,14 @@ def _run_receipt_negative_probes(
                 "malformed_receipt": probe(
                     "malformed_receipt",
                     malformed_receipt,
-                    expected_status="rejected",
-                    expected_category="malformed_receipt",
                 ),
                 "reconciliation_mismatch": probe(
                     "reconciliation_mismatch",
                     mismatched_receipt,
-                    expected_status="rejected",
-                    expected_category="payload_hash_mismatch",
                 ),
                 "failed_execution": probe(
                     "failed_execution",
                     failed_receipt,
-                    expected_status="contained",
-                    expected_category="failed_execution_reconciled_for_review",
                 ),
             }
             raise RollbackNegativeProbes(results)
@@ -917,13 +947,85 @@ def _verify_restart_records(
     return checked, wazuh_reconciliation_ids
 
 
+def _verify_restart_report_contents(
+    service: AegisOpsControlPlaneService,
+    report: Mapping[str, object],
+) -> None:
+    records = report.get("records")
+    if not isinstance(records, Mapping):
+        raise RuntimeError("restart report lacks authoritative records")
+    record_ids_by_family: dict[str, frozenset[str]] = {}
+    retained_records_by_family: dict[
+        str, dict[str, Mapping[str, object]]
+    ] = {}
+    for record_type in REPORT_RECORD_TYPES:
+        family = record_type.record_family
+        family_records = records.get(family)
+        if not isinstance(family_records, list) or not family_records:
+            raise RuntimeError(
+                f"restart report lacks authoritative {family} records"
+            )
+        record_ids: list[str] = []
+        for index, item in enumerate(family_records):
+            if not isinstance(item, Mapping):
+                raise RuntimeError(
+                    f"restart report {family}[{index}] is not an object"
+                )
+            record_id = item.get(record_type.identifier_field)
+            if not isinstance(record_id, str) or not record_id.strip():
+                raise RuntimeError(
+                    f"restart report {family}[{index}] lacks its record ID"
+                )
+            record_ids.append(record_id)
+        if len(record_ids) != len(set(record_ids)):
+            raise RuntimeError(
+                f"restart report contains duplicate {family} record IDs"
+            )
+        record_ids_by_family[family] = frozenset(record_ids)
+        retained_records_by_family[family] = {
+            str(item[record_type.identifier_field]): item
+            for item in family_records
+        }
+
+    current_records_by_family = export_audit_retention_baseline(
+        store=service._store,
+        record_types=REPORT_RECORD_TYPES,
+        export_id="phase67-restart-content-verification",
+        exported_at=datetime.now(timezone.utc),
+        record_ids_by_family=record_ids_by_family,
+    )["records"]
+    if not isinstance(current_records_by_family, Mapping):
+        raise RuntimeError("restart export lacks authoritative records")
+    for record_type in REPORT_RECORD_TYPES:
+        family = record_type.record_family
+        current_family = current_records_by_family.get(family)
+        if not isinstance(current_family, list):
+            raise RuntimeError(
+                f"restart export lacks authoritative {family} records"
+            )
+        current_by_id = {
+            str(item.get(record_type.identifier_field)): item
+            for item in current_family
+            if isinstance(item, Mapping)
+        }
+        if current_by_id != retained_records_by_family[family]:
+            raise RuntimeError(
+                "restart changed authoritative record contents or relationships"
+            )
+
+
 def _verify_restart(args: argparse.Namespace) -> dict[str, object]:
     config = _require_lab_config()
     service = AegisOpsControlPlaneService(config)
-    payload = json.load(sys.stdin)
-    if not isinstance(payload, Mapping):
-        raise RuntimeError("restart input must be a journey object")
+    request = json.load(sys.stdin)
+    if not isinstance(request, Mapping):
+        raise RuntimeError("restart input must be an object")
+    payload = request.get("journey")
+    report = request.get("report")
+    if not isinstance(payload, Mapping) or not isinstance(report, Mapping):
+        raise RuntimeError("restart input must bind the journey and report")
     checked, wazuh_reconciliation_ids = _verify_restart_records(service, payload)
+    _verify_restart_report_contents(service, report)
     action_request_id = payload["action_request_id"]
     execution_count = sum(
         record.action_request_id == action_request_id

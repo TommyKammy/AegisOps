@@ -39,7 +39,7 @@ REVIEWED_SHUFFLE_WORKFLOW_VERSION = (
 REVIEWED_WAZUH_RULE_ID = "5710"
 STEP_NAMES = (
     "capture_immutable_snapshot",
-    "start_lab_and_record_health",
+    "record_lab_health_after_snapshot",
     "trigger_real_wazuh_detection",
     "admit_wazuh_alert",
     "promote_alert_to_case",
@@ -55,7 +55,9 @@ STEP_NAMES = (
     "record_prerequisite_evaluation",
 )
 LEGACY_BLOCKED_STEP_NAMES = (
-    *STEP_NAMES[:-1],
+    STEP_NAMES[0],
+    "start_lab_and_record_health",
+    *STEP_NAMES[2:-1],
     "publish_prerequisite_evaluation",
 )
 STEP_EVIDENCE_REFS = (
@@ -1239,8 +1241,20 @@ def validate_manifest(
     cleanup_mode = require_nullable_string(cleanup["mode"], "$.cleanup.mode")
     containers_stopped = require_nullable_boolean(cleanup["containers_stopped"], "$.cleanup.containers_stopped")
     data_preserved = require_nullable_boolean(cleanup["data_preserved"], "$.cleanup.data_preserved")
+    cleanup_state = (cleanup_mode, containers_stopped, data_preserved)
+    require(
+        cleanup_state
+        in {
+            (None, None, None),
+            ("non_destructive", True, True),
+        },
+        "cleanup must be either unobserved or completed non-destructively",
+    )
     if verdict == PASSED_VERDICT:
-        require(cleanup_mode == "non_destructive" and containers_stopped is True and data_preserved is True, "cleanup must stop services without deleting evidence or volumes")
+        require(
+            cleanup_state == ("non_destructive", True, True),
+            "cleanup must stop services without deleting evidence or volumes",
+        )
 
     require(root["authority_posture"] == "aegisops_records_remain_authoritative", "$.authority_posture is invalid")
     limitations = root["limitations"]

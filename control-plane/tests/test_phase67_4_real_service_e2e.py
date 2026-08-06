@@ -618,6 +618,25 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertEqual(len(observations), 15)
         self.assertEqual(observations[-1]["name"], builder.STEP_NAMES[-1])
 
+    def test_builder_rejects_duplicate_keys_in_retained_json_inputs(self) -> None:
+        with TemporaryDirectory() as directory:
+            retained_json = Path(directory) / "journey.json"
+            retained_json.write_text(
+                '{"trial_run_id":"first","trial_run_id":"second"}\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "duplicate JSON key"):
+                builder._read_json(retained_json)
+
+            observations = Path(directory) / "step-observations.jsonl"
+            observations.write_text(
+                '{"step":1,"step":2,"name":"capture_immutable_snapshot",'
+                '"observed_at":"2026-08-01T10:00:01Z"}\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "not valid JSON"):
+                builder._load_step_observations(observations)
+
     def test_builder_parses_the_structured_prerequisite_contract(self) -> None:
         evaluation_path = REPO_ROOT / "docs" / "phase-67-prerequisite-evaluation.md"
         document = evaluation_path.read_text(encoding="utf-8")
@@ -806,6 +825,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         class FakeService:
             def __init__(self) -> None:
                 self._store = FakeStore()
+                self.reason_override: str | None = None
 
             def get_record(self, record_type: object, record_id: str) -> object | None:
                 for record in self._store.list(record_type):
@@ -828,7 +848,17 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                             provenance={"normalized_receipt": {"status": "failed"}},
                         )
                     )
-                return SimpleNamespace(ingest_disposition="mismatch")
+                mismatch_summary = (
+                    "downstream execution failed and requires operator review"
+                    if observed["status"] == "failed"
+                    else "approved binding mismatch between authoritative "
+                    "action execution and observed downstream execution"
+                )
+                return SimpleNamespace(
+                    ingest_disposition="mismatch",
+                    lifecycle_state="mismatched",
+                    mismatch_summary=self.reason_override or mismatch_summary,
+                )
 
         service = FakeService()
         results = journey._run_receipt_negative_probes(
@@ -850,6 +880,23 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             ),
             baseline_execution,
         )
+
+        service.reason_override = "unrelated binding mismatch"
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "reconciliation reason does not match",
+        ):
+            journey._run_receipt_negative_probes(
+                service=service,
+                action=SimpleNamespace(action_request_id="action-real-1"),
+                execution=baseline_execution,
+                receipt={
+                    "execution_run_id": "real-run-1",
+                    "status": "succeeded",
+                    "payload_hash": "a" * 64,
+                },
+                compared_at=datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc),
+            )
 
     def test_validator_rejects_missing_action_image_and_stale_evaluation(self) -> None:
         missing_image = _manifest()
@@ -1211,6 +1258,53 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         ):
             journey._verify_restart_records(FakeService(missing_duplicate), payload)
 
+    def test_restart_compares_authoritative_record_contents_with_the_report(
+        self,
+    ) -> None:
+        records = {
+            record_type.record_family: [
+                {
+                    record_type.identifier_field: (
+                        f"{record_type.record_family}-retained"
+                    ),
+                    "lifecycle_state": "retained",
+                }
+            ]
+            for record_type in journey.REPORT_RECORD_TYPES
+        }
+        report = {"records": deepcopy(records)}
+        service = SimpleNamespace(_store=object())
+        original_export = journey.export_audit_retention_baseline
+
+        def exported_records(**kwargs: object) -> dict[str, object]:
+            expected_scope = {
+                record_type.record_family: frozenset(
+                    {f"{record_type.record_family}-retained"}
+                )
+                for record_type in journey.REPORT_RECORD_TYPES
+            }
+            self.assertEqual(kwargs["record_ids_by_family"], expected_scope)
+            return {"records": deepcopy(records)}
+
+        try:
+            journey.export_audit_retention_baseline = exported_records
+            journey._verify_restart_report_contents(service, report)
+
+            changed_records = deepcopy(records)
+            changed_records["action_request"][0]["lifecycle_state"] = (
+                "changed-after-restart"
+            )
+            journey.export_audit_retention_baseline = lambda **_kwargs: {
+                "records": changed_records
+            }
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "changed authoritative record contents",
+            ):
+                journey._verify_restart_report_contents(service, report)
+        finally:
+            journey.export_audit_retention_baseline = original_export
+
     def test_validator_requires_the_exact_reviewed_restart_identifier_set(self) -> None:
         extra = _manifest()
         extra["restart"]["checked_identifiers"].append("unreviewed_id")
@@ -1507,6 +1601,50 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 ):
                     validator.validate_manifest(manifest, SCHEMA)
 
+    def test_validator_enforces_complete_non_destructive_cleanup_states(
+        self,
+    ) -> None:
+        cleanup_schema = SCHEMA["properties"]["cleanup"]
+        self.assertEqual(len(cleanup_schema["oneOf"]), 2)
+
+        invalid_states = (
+            {
+                "mode": "destructive",
+                "containers_stopped": True,
+                "data_preserved": True,
+            },
+            {
+                "mode": "non_destructive",
+                "containers_stopped": False,
+                "data_preserved": True,
+            },
+            {
+                "mode": None,
+                "containers_stopped": True,
+                "data_preserved": None,
+            },
+        )
+        for cleanup in invalid_states:
+            manifest = _manifest()
+            manifest["cleanup"] = cleanup
+            with self.subTest(cleanup=cleanup), self.assertRaisesRegex(
+                validator.EvidenceValidationError,
+                "cleanup must be either unobserved or completed",
+            ):
+                validator.validate_manifest(manifest, SCHEMA)
+
+        missing_passed_cleanup = _manifest()
+        missing_passed_cleanup["cleanup"] = {
+            "mode": None,
+            "containers_stopped": None,
+            "data_preserved": None,
+        }
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "cleanup must stop services",
+        ):
+            validator.validate_manifest(missing_passed_cleanup, SCHEMA)
+
     def test_validator_binds_owned_limitations_to_the_trial_verdict(self) -> None:
         for mutation, message in (
             (
@@ -1732,6 +1870,31 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                         "linked_execution_run_ids": [
                             identifiers["shuffle_execution_id"]
                         ],
+                        "ingest_disposition": "matched",
+                        "lifecycle_state": "matched",
+                        "mismatch_summary": (
+                            "matched approved action request to reviewed "
+                            "execution run"
+                        ),
+                        "subject_linkage": {
+                            "action_request_ids": [
+                                identifiers["action_request_id"]
+                            ],
+                            "approval_decision_ids": [
+                                identifiers["approval_decision_id"]
+                            ],
+                            "action_execution_ids": [
+                                identifiers["action_execution_id"]
+                            ],
+                            "delegation_ids": [identifiers["delegation_id"]],
+                            "alert_ids": [identifiers["aegisops_alert_id"]],
+                            "case_ids": [identifiers["case_id"]],
+                            "finding_ids": [identifiers["finding_id"]],
+                            "execution_surface_types": [
+                                "automation_substrate"
+                            ],
+                            "execution_surface_ids": ["shuffle"],
+                        },
                         "authority_role": "authoritative_control_plane_record",
                     },
                 ],
@@ -1819,11 +1982,40 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         ][1]
         action_reconciliation["execution_run_id"] = None
         action_reconciliation["linked_execution_run_ids"] = []
-        with self.assertRaisesRegex(ValueError, "record outside this trial"):
+        with self.assertRaisesRegex(
+            ValueError,
+            "action reconciliation is not bound",
+        ):
             builder._validate_trial_report_scope(
                 unbound_action_reconciliation,
                 journey_record,
             )
+
+        reconciliation_mutations = (
+            ("ingest_disposition", "mismatch"),
+            ("lifecycle_state", "mismatched"),
+            ("mismatch_summary", "unrelated mismatch"),
+        )
+        for field_name, field_value in reconciliation_mutations:
+            tampered = deepcopy(report)
+            tampered["records"]["reconciliation"][1][field_name] = field_value
+            with self.subTest(
+                reconciliation_field=field_name
+            ), self.assertRaisesRegex(
+                ValueError,
+                "action reconciliation is not bound",
+            ):
+                builder._validate_trial_report_scope(tampered, journey_record)
+
+        wrong_subject = deepcopy(report)
+        wrong_subject["records"]["reconciliation"][1]["subject_linkage"][
+            "action_request_ids"
+        ] = ["action-from-another-trial"]
+        with self.assertRaisesRegex(
+            ValueError,
+            "action reconciliation is not bound",
+        ):
+            builder._validate_trial_report_scope(wrong_subject, journey_record)
 
         previous_trial = deepcopy(report)
         previous_trial["records"]["action_request"].append(
@@ -2280,8 +2472,10 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         )
         reviewed_lab_calls = (
             'run_reviewed_lab_command "${LAB_DIR}/pin-shuffle-app-image.sh"',
+            "run_reviewed_lab_command ensure_reviewed_shuffle_action_service",
             'run_reviewed_lab_command "${LAB_DIR}/status.sh" full --write-evidence',
             'run_reviewed_lab_command "${LAB_DIR}/test-wazuh-intake.sh"',
+            "run_reviewed_lab_command remove_reviewed_shuffle_action_service",
             'run_reviewed_lab_command "${LAB_DIR}/down.sh"',
             'run_reviewed_lab_command "${LAB_DIR}/cleanup.sh"',
         )
@@ -2325,6 +2519,23 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn('"shuffle-action-image"', runner)
         self.assertIn('"shuffle-worker-image"', runner)
         self.assertIn("capture_reviewed_shuffle_action_image()", runner)
+        self.assertIn("ensure_reviewed_shuffle_action_service()", runner)
+        self.assertIn("assert_reviewed_shuffle_action_service()", runner)
+        self.assertIn('--name "${shuffle_action_service}"', runner)
+        self.assertIn('"${shuffle_tools_immutable_ref}"', runner)
+        service_create = runner.index("docker_lab service create")
+        service_create_end = runner.index(
+            '"${shuffle_tools_immutable_ref}"',
+            service_create,
+        )
+        service_create_block = runner[service_create:service_create_end + 40]
+        self.assertIn('"${shuffle_tools_immutable_ref}"', service_create_block)
+        self.assertNotIn('"${shuffle_tools_image}"', service_create_block)
+        self.assertIn(".Image == $image_id", runner)
+        self.assertIn(
+            "postdispatch_shuffle_action_image=",
+            runner,
+        )
         self.assertIn('runtime_image_id: $runtime_image_id', runner)
         self.assertIn('SHUFFLE_WORKER_IMAGE=', runner)
         self.assertIn('final_artifacts=', runner)
@@ -2337,6 +2548,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             runner.index('mv "${final_artifacts}/evidence.json" "${final_evidence}"'),
         )
         self.assertIn('publication_manifest_published=false', runner)
+        self.assertIn('publication_manifest_moved=false', runner)
         self.assertIn('no passing manifest was published', runner)
         self.assertIn('startup_status_output=', runner)
         self.assertIn('initial_status_output=', runner)
@@ -2405,6 +2617,9 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn('retain_status_evidence "${startup_output}"', runner)
         self.assertIn('--startup-status "${startup_status_output}"', runner)
         snapshot_completed = runner.index('>"${snapshot_output}"')
+        action_service_ready = runner.index(
+            "run_reviewed_lab_command ensure_reviewed_shuffle_action_service"
+        )
         runtime_images_validated = runner.index(
             'python3 "${validator}" --runtime-images'
         )
@@ -2416,17 +2631,27 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             '"${initial_status_output}"\nrecord_step 2'
         )
         self.assertLess(runtime_images_validated, journey_prepared)
+        self.assertLess(action_service_ready, snapshot_completed)
         self.assertLess(snapshot_completed, step_one_recorded)
         self.assertLess(step_one_recorded, initial_status_retained)
+        self.assertIn(
+            'record_step 2 "record_lab_health_after_snapshot"',
+            runner,
+        )
+        self.assertNotIn(
+            'record_step 2 "start_lab_and_record_health"',
+            runner,
+        )
         self.assertNotIn("docker inspect ${container_ids}", runner)
         self.assertNotIn("docker context show", runner)
         self.assertNotIn('colima_profile="${COLIMA_PROFILE:-default}"', runner)
         self.assertNotIn('rm -rf "${staging_dir}"', runner)
         self.assertIn("verify-restart", runner)
         self.assertIn(
-            ".journey | .aegisops_alert_id = .alert_id",
+            "--slurpfile report \"${report_output}\"",
             runner,
         )
+        self.assertIn("report: $report[0]", runner)
         self.assertIn('"${LAB_DIR}/cleanup.sh"', runner)
         cleanup = runner.index('"${LAB_DIR}/cleanup.sh"')
         final_snapshot_check = runner.index("assert_repository_snapshot", cleanup)
@@ -2454,6 +2679,18 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertLess(evidence_build, post_build_snapshot_check)
         self.assertLess(post_build_snapshot_check, evidence_validation)
         self.assertLess(evidence_validation, post_validation_snapshot_check)
+        final_manifest_move = runner.index(
+            'mv "${final_artifacts}/evidence.json" "${final_evidence}"'
+        )
+        final_manifest_validation = runner.index(
+            'python3 "${validator}" "${schema}" "${final_evidence}"',
+            final_manifest_move,
+        )
+        self.assertLess(final_manifest_move, final_manifest_validation)
+        self.assertLess(
+            final_manifest_validation,
+            runner.index("publication_manifest_published=true"),
+        )
         self.assertIn("status --porcelain=v1 --untracked-files=all", runner)
         self.assertNotIn("destroy-data.sh", runner)
         real_journey = (E2E_ROOT / "run_real_journey.py").read_text(

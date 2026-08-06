@@ -14,7 +14,7 @@ from typing import Mapping, Sequence
 
 STEP_NAMES = (
     "capture_immutable_snapshot",
-    "start_lab_and_record_health",
+    "record_lab_health_after_snapshot",
     "trigger_real_wazuh_detection",
     "admit_wazuh_alert",
     "promote_alert_to_case",
@@ -116,8 +116,38 @@ def _mapping(value: object, path: str) -> Mapping[str, object]:
     return value
 
 
+def _reject_non_json_constant(value: str) -> object:
+    raise ValueError(f"non-JSON numeric constant {value!r}")
+
+
+def _reject_duplicate_keys(
+    pairs: Sequence[tuple[str, object]],
+) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key {key!r}")
+        result[key] = value
+    return result
+
+
+def _parse_json_text(payload: str, path: str) -> object:
+    try:
+        return json.loads(
+            payload,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_non_json_constant,
+        )
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read {path}: {exc}") from exc
+
+
 def _read_json(path: Path) -> object:
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise ValueError(f"cannot read {path}: {exc}") from exc
+    return _parse_json_text(payload, str(path))
 
 
 def _sha256(path: Path) -> str:
@@ -641,6 +671,37 @@ def _validate_trial_report_scope(
             in_trial_scope = alert_bound
         elif reconciliation_id == journey.get("reconciliation_id"):
             in_trial_scope = alert_bound and execution_bound
+            subject_linkage = _mapping(
+                record.get("subject_linkage"),
+                "report action reconciliation subject_linkage",
+            )
+            expected_linkages = {
+                "action_request_ids": journey.get("action_request_id"),
+                "approval_decision_ids": journey.get("approval_decision_id"),
+                "action_execution_ids": journey.get("action_execution_id"),
+                "delegation_ids": journey.get("delegation_id"),
+                "alert_ids": journey.get("alert_id"),
+                "case_ids": journey.get("case_id"),
+                "finding_ids": journey.get("finding_id"),
+                "execution_surface_types": "automation_substrate",
+                "execution_surface_ids": "shuffle",
+            }
+            action_reconciliation_bound = (
+                record.get("ingest_disposition") == "matched"
+                and record.get("lifecycle_state") == "matched"
+                and record.get("mismatch_summary")
+                == "matched approved action request to reviewed execution run"
+                and record.get("execution_run_id") == journey.get("execution_id")
+                and linked_execution_ids == [journey.get("execution_id")]
+                and all(
+                    subject_linkage.get(field_name) == [expected_value]
+                    for field_name, expected_value in expected_linkages.items()
+                )
+            )
+            if not action_reconciliation_bound:
+                raise ValueError(
+                    "report action reconciliation is not bound to the journey"
+                )
         else:
             in_trial_scope = False
         if not in_trial_scope:
@@ -667,8 +728,11 @@ def _load_step_observations(path: Path) -> list[dict[str, object]]:
     previous: datetime | None = None
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         try:
-            item = _mapping(json.loads(line), f"observations line {line_number}")
-        except json.JSONDecodeError as exc:
+            item = _mapping(
+                _parse_json_text(line, f"observations line {line_number}"),
+                f"observations line {line_number}",
+            )
+        except ValueError as exc:
             raise ValueError(
                 f"observations line {line_number} is not valid JSON"
             ) from exc

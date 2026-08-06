@@ -158,7 +158,7 @@ a separate approved real execution after an authenticated local operator
 confirms the displayed approval challenge, reconciles its authenticated
 receipt, exports a redacted AegisOps report, restarts the lab, checks
 every scoped Wazuh admission/replay reconciliation plus the action-chain record
-persistence, and stops the lab without deleting volumes
+persistence and exact retained record contents, and stops the lab without deleting volumes
 or evidence. The runner records each completed step in
 `step-observations.jsonl`; the evidence builder rejects missing, reordered, or
 non-chronological observations. After the interactive pause and immediately
@@ -170,8 +170,9 @@ lifecycle, and parent record relationships instead of accepting an ID-only
 match.
 Synthetic receipt failure probes execute
 through the real reconciliation service inside a rollback-only transaction,
-and the runner verifies that the successful authoritative execution is
-unchanged before publishing evidence. The snapshot ID commits to the revision,
+and the runner verifies both the expected authoritative mismatch reason and
+that the successful authoritative execution is unchanged before publishing
+evidence. The snapshot ID commits to the revision,
 rendered Compose and schema digests, startup runtime digest, reviewed and live
 Shuffle workflow digests, workflow API ID, host and Colima identity, selected
 profile, and every immutable image reference. The runner captures and validates
@@ -179,8 +180,12 @@ the live workflow again immediately before dispatch and rejects any change from
 the snapshot. The inventory includes the configured dynamic Shuffle worker
 image and the action tag's observed repository digest and runtime image ID
 because neither dynamic image is guaranteed to appear in the pre-dispatch
-Compose container enumeration. After approval, the runner rechecks that action
-identity and the complete repository snapshot immediately before dispatch.
+Compose container enumeration. Before snapshot capture, the runner creates the
+reviewed Shuffle Tools Swarm service directly from the immutable digest rather
+than leaving Orborus to resolve a mutable tag. It verifies the service task's
+actual image ID before and after approved execution. After approval, the runner
+also rechecks that action identity and the complete repository snapshot
+immediately before dispatch.
 Startup, initial health,
 restart status, and both workflow exports
 are retained with the raw packet. Each status capture must report the exact
@@ -213,6 +218,8 @@ replay and receipt negative probes, so earlier Wazuh operations are not
 relabeled as later journey events. Publication prepares permissions and moves
 the report and raw artifact directory first; the passing manifest is moved last
 and partial publication is rolled back when that final commit cannot complete.
+The final manifest path is validated again after the move, so success refers to
+the exact published bytes rather than an earlier staging-path read.
 
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 

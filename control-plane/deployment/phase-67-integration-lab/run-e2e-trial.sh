@@ -22,6 +22,18 @@ require_runtime_environment
 source "${LAB_DIR}/shuffle/reviewed-app-image.env"
 shuffle_tools_image="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}:${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_TAG}"
 shuffle_tools_immutable_ref="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}@${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}"
+shuffle_action_service="shuffle-tools_1-2-0"
+shuffle_action_service_port=33334
+shuffle_action_network="shuffle-executions"
+shuffle_backend_url="$(
+  printf 'http://%s-shuffle-backend-1:5001' \
+    "${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}"
+)"
+shuffle_action_publish_spec="$(
+  printf 'name=app-port,published=%s,target=%s,protocol=tcp,mode=ingress' \
+    "${shuffle_action_service_port}" \
+    "${shuffle_action_service_port}"
+)"
 schema="${LAB_DIR}/e2e/evidence-manifest.schema.json"
 validator="${LAB_DIR}/e2e/validate_evidence_manifest.py"
 builder="${LAB_DIR}/e2e/build_evidence.py"
@@ -74,6 +86,162 @@ run_reviewed_lab_startup() {
   "$@"
 }
 
+assert_reviewed_shuffle_action_service() {
+  local service_metadata
+  local service_image
+  local task_ids
+  local task_metadata
+  local task_container_ids
+  local container_metadata
+  local pinned_image_id
+
+  service_metadata="$(docker_lab service inspect "${shuffle_action_service}")"
+  service_image="$(
+    jq -er '.[0].Spec.TaskTemplate.ContainerSpec.Image' \
+      <<<"${service_metadata}"
+  )"
+  [[ "${service_image}" == "${shuffle_tools_immutable_ref}" ]] \
+    || fail "Shuffle action service is not pinned to the reviewed digest"
+  jq -e \
+    --arg phase "67.4" \
+    --arg component "shuffle-action-image" \
+    --argjson port "${shuffle_action_service_port}" '
+      .[0] as $service
+      | $service.Spec.Labels["com.aegisops.lab.phase"] == $phase
+      and $service.Spec.Labels["com.aegisops.lab.component"] == $component
+      and $service.Spec.Mode.Replicated.Replicas == 1
+      and (
+        [
+          $service.Endpoint.Spec.Ports[]
+          | select(
+              .Name == "app-port"
+              and .PublishedPort == $port
+              and .TargetPort == $port
+            )
+        ]
+        | length == 1
+      )
+    ' <<<"${service_metadata}" >/dev/null \
+    || fail "Shuffle action service does not match the reviewed lab contract"
+
+  task_ids="$(
+    docker_lab service ps \
+      --filter desired-state=running \
+      --quiet \
+      "${shuffle_action_service}"
+  )"
+  [[ "$(wc -w <<<"${task_ids}")" -eq 1 ]] \
+    || fail "Shuffle action service does not have exactly one running task"
+  # shellcheck disable=SC2086
+  task_metadata="$(docker_lab inspect ${task_ids})"
+  task_container_ids="$(
+    jq -er '
+      [.[].Status.ContainerStatus.ContainerID | select(length > 0)]
+      | if length == 1 then .[]
+        else error("expected one Shuffle action task container")
+        end
+    ' <<<"${task_metadata}"
+  )"
+  container_metadata="$(docker_lab inspect "${task_container_ids}")"
+  pinned_image_id="$(
+    docker_lab image inspect \
+      "${shuffle_tools_immutable_ref}" \
+      --format '{{.Id}}'
+  )"
+  jq -e --arg image_id "${pinned_image_id}" '
+    length == 1 and all(.[]; .Image == $image_id)
+  ' <<<"${container_metadata}" >/dev/null \
+    || fail "Shuffle action task did not use the reviewed image ID"
+}
+
+ensure_reviewed_shuffle_action_service() {
+  local attempt
+
+  assert_repository_snapshot
+  for attempt in {1..60}; do
+    if docker_lab network inspect "${shuffle_action_network}" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+  docker_lab network inspect "${shuffle_action_network}" >/dev/null 2>&1 \
+    || fail "Shuffle execution network was not initialized"
+
+  if docker_lab service inspect "${shuffle_action_service}" >/dev/null 2>&1; then
+    assert_reviewed_shuffle_action_service
+    return
+  fi
+
+  docker_lab service create \
+    --detach=true \
+    --name "${shuffle_action_service}" \
+    --label com.aegisops.lab.phase=67.4 \
+    --label com.aegisops.lab.component=shuffle-action-image \
+    --network "${shuffle_action_network}" \
+    --publish "${shuffle_action_publish_spec}" \
+    --replicas 1 \
+    --restart-condition any \
+    --log-driver json-file \
+    --log-opt max-size=10m \
+    --env "SHUFFLE_APP_EXPOSED_PORT=${shuffle_action_service_port}" \
+    --env SHUFFLE_SWARM_CONFIG=run \
+    --env SHUFFLE_LOGS_DISABLED=true \
+    --env "CALLBACK_URL=${shuffle_backend_url}" \
+    --env "BASE_URL=${shuffle_backend_url}" \
+    --env DOCKER_API_VERSION=1.40 \
+    --env SHUFFLE_APP_SDK_TIMEOUT=300 \
+    --env TZ=Europe/Amsterdam \
+    "${shuffle_tools_immutable_ref}" \
+    >/dev/null
+
+  for attempt in {1..120}; do
+    if [[ "$(
+      docker_lab service ps \
+        --filter desired-state=running \
+        --format '{{.CurrentState}}' \
+        "${shuffle_action_service}" 2>/dev/null \
+        | sed -n '/^Running /p' \
+        | wc -l \
+        | tr -d ' '
+    )" -eq 1 ]]; then
+      break
+    fi
+    sleep 1
+  done
+  assert_reviewed_shuffle_action_service
+}
+
+remove_reviewed_shuffle_action_service() {
+  local attempt
+  local service_metadata
+
+  if ! service_metadata="$(
+    docker_lab service inspect "${shuffle_action_service}" 2>/dev/null
+  )"; then
+    return
+  fi
+  jq -e '
+    .[0].Spec.Labels["com.aegisops.lab.phase"] == "67.4"
+    and .[0].Spec.Labels["com.aegisops.lab.component"]
+      == "shuffle-action-image"
+  ' <<<"${service_metadata}" >/dev/null \
+    || fail "refusing to remove an unowned Shuffle action service"
+  docker_lab service rm "${shuffle_action_service}" >/dev/null
+  for attempt in {1..60}; do
+    if [[ -z "$(
+      docker_lab ps \
+        --all \
+        --quiet \
+        --filter \
+          "label=com.docker.swarm.service.name=${shuffle_action_service}"
+    )" ]]; then
+      return
+    fi
+    sleep 1
+  done
+  fail "Shuffle action service tasks did not stop during cleanup"
+}
+
 [[ -f "${evaluation}" ]] \
   || fail "Phase 67 prerequisite evaluation is missing: ${evaluation}"
 repository_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
@@ -107,6 +275,7 @@ final_artifacts="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}-artifacts"
 cleaned=false
 publication_report_published=false
 publication_artifacts_published=false
+publication_manifest_moved=false
 publication_manifest_published=false
 
 observed_now() {
@@ -189,6 +358,7 @@ capture_reviewed_shuffle_action_image() {
   local runtime_image_id
   local runtime_immutable_ref
 
+  assert_reviewed_shuffle_action_service
   pinned_metadata="$(docker_lab image inspect "${shuffle_tools_immutable_ref}")"
   runtime_metadata="$(docker_lab image inspect "${shuffle_tools_image}")"
   pinned_image_id="$(jq -er '.[0].Id' <<<"${pinned_metadata}")"
@@ -222,11 +392,19 @@ capture_reviewed_shuffle_action_image() {
 cleanup_on_exit() {
   local rc=$?
   rm -f "${compose_render_output}" >/dev/null 2>&1 || true
+  remove_reviewed_shuffle_action_service >/dev/null 2>&1 || true
   if [[ "${cleaned}" != true ]]; then
     "${LAB_DIR}/cleanup.sh" >/dev/null 2>&1 || true
   fi
   if [[ "${rc}" -ne 0 ]]; then
     if [[ "${publication_manifest_published}" != true ]]; then
+      if [[ "${publication_manifest_moved}" == true ]] \
+        && [[ -f "${final_evidence}" ]] \
+        && [[ -d "${final_artifacts}" ]] \
+        && [[ ! -e "${final_artifacts}/evidence.json" ]]; then
+        mv "${final_evidence}" \
+          "${final_artifacts}/evidence.json" >/dev/null 2>&1 || true
+      fi
       if [[ "${publication_artifacts_published}" == true ]] \
         && [[ -d "${final_artifacts}" ]] \
         && [[ ! -e "${staging_dir}" ]]; then
@@ -263,6 +441,7 @@ run_reviewed_lab_command "${LAB_DIR}/pin-shuffle-app-image.sh"
 startup_output="$(run_reviewed_lab_startup "${LAB_DIR}/up.sh" full)"
 printf '%s\n' "${startup_output}"
 retain_status_evidence "${startup_output}" "${startup_status_output}"
+run_reviewed_lab_command ensure_reviewed_shuffle_action_service
 
 container_ids="$(compose_scope full ps -aq)"
 [[ -n "${container_ids}" ]] || fail "full lab started no containers"
@@ -389,7 +568,7 @@ printf '%s\n' "${initial_status_command_output}"
 retain_status_evidence \
   "${initial_status_command_output}" \
   "${initial_status_output}"
-record_step 2 "start_lab_and_record_health"
+record_step 2 "record_lab_health_after_snapshot"
 
 AEGISOPS_LAB_TRIAL_SCOPE=full \
   run_reviewed_lab_command "${LAB_DIR}/test-wazuh-intake.sh" \
@@ -493,6 +672,9 @@ run_reviewed_journey \
   --approval-method "${approval_method}" \
   <"${preparation_output}" \
   >"${journey_output}"
+postdispatch_shuffle_action_image="$(capture_reviewed_shuffle_action_image)"
+[[ "${postdispatch_shuffle_action_image}" == "${shuffle_action_image}" ]] \
+  || fail "Shuffle action service changed during reviewed execution"
 for step_spec in \
   "8:approve_and_dispatch_real_shuffle_action" \
   "9:capture_authenticated_shuffle_receipt" \
@@ -519,11 +701,22 @@ Path(sys.argv[2]).write_text(
 )
 PY
 
+run_reviewed_lab_command remove_reviewed_shuffle_action_service
 run_reviewed_lab_command "${LAB_DIR}/down.sh"
 restart_up_output="$(run_reviewed_lab_startup "${LAB_DIR}/up.sh" full)"
 printf '%s\n' "${restart_up_output}"
 retain_status_evidence "${restart_up_output}" "${restart_status_output}"
-jq -c '.journey | .aegisops_alert_id = .alert_id' "${journey_output}" |
+jq -cn \
+  --slurpfile journey "${journey_output}" \
+  --slurpfile report "${report_output}" '
+    {
+      journey: (
+        $journey[0].journey
+        | .aegisops_alert_id = .alert_id
+      ),
+      report: $report[0]
+    }
+  ' |
   run_reviewed_journey verify-restart \
     >"${restart_output}"
 record_step 14 \
@@ -599,6 +792,10 @@ publication_report_published=true
 mv "${staging_dir}" "${final_artifacts}"
 publication_artifacts_published=true
 mv "${final_artifacts}/evidence.json" "${final_evidence}"
+publication_manifest_moved=true
+assert_repository_snapshot
+python3 "${validator}" "${schema}" "${final_evidence}"
+chmod 400 "${final_evidence}"
 publication_manifest_published=true
 trap - EXIT
 
