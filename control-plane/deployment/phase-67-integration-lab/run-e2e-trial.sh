@@ -25,6 +25,10 @@ shuffle_tools_immutable_ref="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}@${AE
 shuffle_action_service="shuffle-tools_1-2-0"
 shuffle_worker_service="shuffle-workers"
 shuffle_worker_immutable_ref=""
+shuffle_worker_preflight_absent=false
+shuffle_worker_owned=false
+shuffle_worker_service_id=""
+captured_shuffle_worker_image_json=""
 shuffle_action_service_port=33334
 shuffle_action_network="shuffle-executions"
 shuffle_backend_url="$(
@@ -281,6 +285,66 @@ configured_shuffle_worker_immutable_ref() {
   ' <<<"${orborus_metadata}"
 }
 
+assert_shuffle_worker_service_absent() {
+  local service_names
+
+  service_names="$(docker_lab service ls --format '{{.Name}}')" \
+    || fail "cannot inspect existing Shuffle worker services"
+  if grep -Fx -- "${shuffle_worker_service}" \
+    <<<"${service_names}" >/dev/null; then
+    fail "refusing to start while a pre-existing Shuffle worker service exists"
+  fi
+  shuffle_worker_preflight_absent=true
+}
+
+shuffle_worker_service_is_trial_owned() {
+  local service_metadata="$1"
+
+  [[ "${shuffle_worker_owned}" == true ]] \
+    && [[ -n "${shuffle_worker_service_id}" ]] \
+    && jq -e \
+      --arg service_id "${shuffle_worker_service_id}" \
+      --arg trial_run_id "${trial_run_id}" '
+        .[0].ID == $service_id
+        and .[0].Spec.Labels["com.aegisops.lab.phase"] == "67.4"
+        and .[0].Spec.Labels["com.aegisops.lab.component"]
+          == "shuffle-worker-image"
+        and .[0].Spec.Labels["com.aegisops.lab.trial-run-id"]
+          == $trial_run_id
+      ' <<<"${service_metadata}" >/dev/null
+}
+
+claim_reviewed_shuffle_worker_service() {
+  local service_metadata="$1"
+  local service_id
+  local owned_metadata
+
+  if [[ "${shuffle_worker_owned}" == true ]]; then
+    shuffle_worker_service_is_trial_owned "${service_metadata}" \
+      || fail "Shuffle worker service ownership changed during the trial"
+    return
+  fi
+  [[ "${shuffle_worker_preflight_absent}" == true ]] \
+    || fail "Shuffle worker service absence was not established before startup"
+  jq -e '
+    (.[0].Spec.Labels["com.aegisops.lab.trial-run-id"] // "") == ""
+    and (.[0].Spec.Labels["com.aegisops.lab.component"] // "") == ""
+  ' <<<"${service_metadata}" >/dev/null \
+    || fail "new Shuffle worker service already carries ownership labels"
+  service_id="$(jq -er '.[0].ID' <<<"${service_metadata}")"
+  docker_lab service update \
+    --detach=true \
+    --label-add "com.aegisops.lab.phase=67.4" \
+    --label-add "com.aegisops.lab.component=shuffle-worker-image" \
+    --label-add "com.aegisops.lab.trial-run-id=${trial_run_id}" \
+    "${shuffle_worker_service}" >/dev/null
+  owned_metadata="$(docker_lab service inspect "${shuffle_worker_service}")"
+  shuffle_worker_service_id="${service_id}"
+  shuffle_worker_owned=true
+  shuffle_worker_service_is_trial_owned "${owned_metadata}" \
+    || fail "Shuffle worker service did not retain trial ownership labels"
+}
+
 remove_reviewed_shuffle_worker_service() {
   local attempt
   local expected_image
@@ -293,6 +357,10 @@ remove_reviewed_shuffle_worker_service() {
     docker_lab service inspect "${shuffle_worker_service}" 2>/dev/null
   )"; then
     return
+  fi
+  if ! shuffle_worker_service_is_trial_owned "${service_metadata}"; then
+    echo "BLOCKED: refusing to remove a Shuffle worker service without current-trial ownership" >&2
+    return 1
   fi
   if ! expected_image="$(configured_shuffle_worker_immutable_ref)"; then
     echo "BLOCKED: refusing to remove a Shuffle worker service without owned Orborus image evidence" >&2
@@ -510,6 +578,12 @@ capture_reviewed_shuffle_worker_image() {
   )"
   [[ "${service_image}" == "${shuffle_worker_immutable_ref}" ]] \
     || fail "Shuffle worker service is not pinned to the reviewed digest"
+  claim_reviewed_shuffle_worker_service "${service_metadata}"
+  service_metadata="$(
+    docker_lab service inspect "${shuffle_worker_service}"
+  )"
+  shuffle_worker_service_is_trial_owned "${service_metadata}" \
+    || fail "Shuffle worker service is not owned by the current trial"
   task_ids="$(
     docker_lab service ps \
       --filter desired-state=running \
@@ -555,7 +629,7 @@ capture_reviewed_shuffle_worker_image() {
       || fail "Shuffle worker container logs do not contain the reviewed execution ID"
   fi
 
-  jq -cn \
+  captured_shuffle_worker_image_json="$(jq -cn \
     --arg immutable_reference "${service_image}" \
     --arg runtime_image_id "${reviewed_image_id}" '
       {
@@ -563,7 +637,8 @@ capture_reviewed_shuffle_worker_image() {
         immutable_reference: $immutable_reference,
         runtime_image_id: $runtime_image_id
       }
-    '
+    ')"
+  printf '%s\n' "${captured_shuffle_worker_image_json}"
 }
 
 cleanup_on_exit() {
@@ -615,6 +690,7 @@ shuffle_api_workflow_id="${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID}"
 [[ "${shuffle_api_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]] \
   || fail "real Shuffle workflow ID is not configured"
 
+run_reviewed_lab_command assert_shuffle_worker_service_absent
 run_reviewed_lab_command "${LAB_DIR}/pin-shuffle-app-image.sh"
 startup_output="$(run_reviewed_lab_startup "${LAB_DIR}/up.sh" full)"
 printf '%s\n' "${startup_output}"
@@ -664,7 +740,8 @@ shuffle_worker_immutable_ref="$(
 [[ "${shuffle_worker_immutable_ref}" =~ ^[^[:space:]@]+@sha256:[0-9a-f]{64}$ ]] \
   || fail "Shuffle worker image is not digest-pinned"
 shuffle_action_image="$(capture_reviewed_shuffle_action_image)"
-shuffle_worker_image="$(capture_reviewed_shuffle_worker_image)"
+capture_reviewed_shuffle_worker_image >/dev/null
+shuffle_worker_image="${captured_shuffle_worker_image_json}"
 jq \
   --argjson action_image "${shuffle_action_image}" \
   --argjson worker_image "${shuffle_worker_image}" '
@@ -852,9 +929,8 @@ postdispatch_shuffle_action_image="$(capture_reviewed_shuffle_action_image)"
 [[ "${postdispatch_shuffle_action_image}" == "${shuffle_action_image}" ]] \
   || fail "Shuffle action service changed during reviewed execution"
 shuffle_execution_id="$(jq -er '.journey.execution_id' "${journey_output}")"
-postdispatch_shuffle_worker_image="$(
-  capture_reviewed_shuffle_worker_image "${shuffle_execution_id}"
-)"
+capture_reviewed_shuffle_worker_image "${shuffle_execution_id}" >/dev/null
+postdispatch_shuffle_worker_image="${captured_shuffle_worker_image_json}"
 [[ "${postdispatch_shuffle_worker_image}" == "${shuffle_worker_image}" ]] \
   || fail "Shuffle worker service changed during reviewed execution"
 for step_spec in \

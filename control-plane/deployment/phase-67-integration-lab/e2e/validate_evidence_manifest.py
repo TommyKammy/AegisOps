@@ -86,8 +86,15 @@ STEP_EVIDENCE_REFS = (
     ("journey:expected_receipt_id",),
     ("journey:reconciliation_id",),
     ("report:sha256",),
-    ("journey:replay_reconciliation_id",),
-    ("journey:measured_negative_probes",),
+    (
+        "wazuh-manifest:duplicate_delivery",
+        "artifact:wazuh-output.txt",
+        "journey:replay_reconciliation_id",
+    ),
+    (
+        "artifact:wazuh-output.txt",
+        "journey:measured_negative_probes",
+    ),
     ("restart:checked_identifiers", "artifact:restart-status.txt"),
     ("evaluation-record:sha256",),
 )
@@ -240,6 +247,32 @@ NEGATIVE_CASE_KEYS = (
     "failed_execution",
     "malformed_receipt",
     "reconciliation_mismatch",
+)
+LEGACY_IDEMPOTENCY_KEYS = (
+    "wazuh_first_disposition",
+    "wazuh_duplicate_disposition",
+    "wazuh_alert_identity_preserved",
+    "shuffle_execution_count",
+    "receipt_replay_reconciliation_id",
+    "receipt_identity_preserved",
+)
+IDEMPOTENCY_KEYS = (
+    *LEGACY_IDEMPOTENCY_KEYS[:3],
+    "wazuh_replay_observed_at",
+    *LEGACY_IDEMPOTENCY_KEYS[3:],
+    "shuffle_receipt_replay_observed_at",
+)
+LEGACY_NEGATIVE_CASE_VALUE_KEYS = (
+    "status",
+    "authority_before",
+    "authority_after",
+    "authority_delta",
+    "measurement_source",
+    "evidence_ref",
+)
+NEGATIVE_CASE_VALUE_KEYS = (
+    "observed_at",
+    *LEGACY_NEGATIVE_CASE_VALUE_KEYS,
 )
 NEGATIVE_CASE_PRODUCING_STEPS = {
     "invalid_credential": "trigger_real_wazuh_detection",
@@ -602,7 +635,12 @@ def _schema_passed_verdict_contract() -> dict[str, object]:
             authority_delta = {"const": 0}
         negative_case_properties[case_name] = {
             "type": "object",
+            "required": ["observed_at"],
             "properties": {
+                "observed_at": {
+                    "type": "string",
+                    "format": "date-time",
+                },
                 "status": {
                     "type": "string",
                     "enum": ["rejected", "contained"],
@@ -685,12 +723,20 @@ def _schema_passed_verdict_contract() -> dict[str, object]:
                     },
                 },
                 "idempotency": {
+                    "required": [
+                        "wazuh_replay_observed_at",
+                        "shuffle_receipt_replay_observed_at",
+                    ],
                     "properties": {
                         "wazuh_first_disposition": {"const": "created"},
                         "wazuh_duplicate_disposition": {
                             "const": "deduplicated",
                         },
                         "wazuh_alert_identity_preserved": {"const": True},
+                        "wazuh_replay_observed_at": {
+                            "type": "string",
+                            "format": "date-time",
+                        },
                         "shuffle_execution_count": {"const": 1},
                         "receipt_replay_reconciliation_id": {
                             "type": "string",
@@ -698,6 +744,10 @@ def _schema_passed_verdict_contract() -> dict[str, object]:
                             "pattern": r"\S",
                         },
                         "receipt_identity_preserved": {"const": True},
+                        "shuffle_receipt_replay_observed_at": {
+                            "type": "string",
+                            "format": "date-time",
+                        },
                     },
                 },
                 "negative_cases": {
@@ -1318,6 +1368,18 @@ def validate_manifest(
             wazuh_rule_id == REVIEWED_WAZUH_RULE_ID,
             "Wazuh rule ID is outside the reviewed detection contract",
         )
+    finding_id = normalized_ids["finding_id"]
+    if finding_id is not None:
+        expected_finding_id = (
+            f"finding:wazuh:rule:{wazuh_rule_id}:source:agent:"
+            f"{normalized_ids['wazuh_agent_id']}:alert:"
+            f"{normalized_ids['native_wazuh_alert_id']}"
+        )
+        require(
+            finding_id == expected_finding_id,
+            "Wazuh finding ID is not bound to the reviewed rule, agent, "
+            "and native alert",
+        )
     execution_id = normalized_ids["shuffle_execution_id"]
     if execution_id is not None:
         require(not execution_id.startswith("shuffle-run-"), "synthetic Shuffle execution ID cannot be live evidence")
@@ -1422,15 +1484,39 @@ def validate_manifest(
         )
 
     idempotency = require_mapping(root["idempotency"], "$.idempotency")
-    require_exact_keys(idempotency, required=("wazuh_first_disposition", "wazuh_duplicate_disposition", "wazuh_alert_identity_preserved", "shuffle_execution_count", "receipt_replay_reconciliation_id", "receipt_identity_preserved"), path="$.idempotency")
+    require_exact_keys(
+        idempotency,
+        required=(
+            LEGACY_IDEMPOTENCY_KEYS
+            if allow_legacy_blocked_packet
+            else IDEMPOTENCY_KEYS
+        ),
+        path="$.idempotency",
+    )
     first_disposition = require_nullable_string(idempotency["wazuh_first_disposition"], "$.idempotency.wazuh_first_disposition")
     duplicate_disposition = require_nullable_string(idempotency["wazuh_duplicate_disposition"], "$.idempotency.wazuh_duplicate_disposition")
     wazuh_preserved = require_nullable_boolean(idempotency["wazuh_alert_identity_preserved"], "$.idempotency.wazuh_alert_identity_preserved")
+    wazuh_replay_observed_at = idempotency.get("wazuh_replay_observed_at")
     execution_count = require_nullable_integer(idempotency["shuffle_execution_count"], "$.idempotency.shuffle_execution_count")
     replay_id = require_nullable_string(idempotency["receipt_replay_reconciliation_id"], "$.idempotency.receipt_replay_reconciliation_id")
     receipt_preserved = require_nullable_boolean(idempotency["receipt_identity_preserved"], "$.idempotency.receipt_identity_preserved")
+    shuffle_replay_observed_at = idempotency.get(
+        "shuffle_receipt_replay_observed_at"
+    )
     if step_statuses[3] == "passed":
         require(first_disposition == "created" and duplicate_disposition == "deduplicated" and wazuh_preserved is True, "Wazuh replay must preserve one admitted alert")
+        if not allow_legacy_blocked_packet:
+            wazuh_replay_time = _datetime_value(
+                wazuh_replay_observed_at,
+                "$.idempotency.wazuh_replay_observed_at",
+            )
+            require(
+                step_observed_times[3]
+                < wazuh_replay_time
+                < step_observed_times[4],
+                "Wazuh replay observation must follow admission and precede "
+                "case promotion",
+            )
     else:
         require(
             first_disposition is None
@@ -1438,13 +1524,31 @@ def validate_manifest(
             and wazuh_preserved is None,
             "a non-passed Wazuh admission step cannot claim replay success",
         )
+        require(
+            wazuh_replay_observed_at is None,
+            "a non-passed Wazuh admission step cannot claim a replay "
+            "observation",
+        )
     if step_statuses[11] == "passed":
         require(execution_count == 1 and receipt_preserved is True, "Shuffle replay must preserve one execution and receipt")
         require(replay_id == normalized_ids["reconciliation_id"], "receipt replay must reuse the reconciliation ID")
+        shuffle_replay_time = _datetime_value(
+            shuffle_replay_observed_at,
+            "$.idempotency.shuffle_receipt_replay_observed_at",
+        )
+        require(
+            shuffle_replay_time == step_observed_times[11],
+            "Shuffle receipt replay observation must match journey step 12",
+        )
     else:
         require(
             execution_count is None and replay_id is None and receipt_preserved is None,
             "a non-passed receipt replay step cannot claim Shuffle replay success",
+        )
+        require(
+            shuffle_replay_observed_at is None,
+            "a non-passed receipt replay step cannot claim a replay "
+            "observation",
         )
 
     negative_cases = require_mapping(root["negative_cases"], "$.negative_cases")
@@ -1453,9 +1557,19 @@ def validate_manifest(
         set(NEGATIVE_CASE_PRODUCING_STEPS) == set(NEGATIVE_CASE_KEYS),
         "negative-case producing step contract is incomplete",
     )
+    wazuh_negative_observation_times: list[datetime] = []
     for key in NEGATIVE_CASE_KEYS:
         case = require_mapping(negative_cases[key], f"$.negative_cases.{key}")
-        require_exact_keys(case, required=("status", "authority_before", "authority_after", "authority_delta", "measurement_source", "evidence_ref"), path=f"$.negative_cases.{key}")
+        require_exact_keys(
+            case,
+            required=(
+                LEGACY_NEGATIVE_CASE_VALUE_KEYS
+                if allow_legacy_blocked_packet
+                else NEGATIVE_CASE_VALUE_KEYS
+            ),
+            path=f"$.negative_cases.{key}",
+        )
+        observed_at = case.get("observed_at")
         status = require_nullable_string(case["status"], f"$.negative_cases.{key}.status")
         before = require_nullable_integer(case["authority_before"], f"$.negative_cases.{key}.authority_before")
         after = require_nullable_integer(case["authority_after"], f"$.negative_cases.{key}.authority_after")
@@ -1475,6 +1589,7 @@ def validate_manifest(
                         delta,
                         measurement_source,
                         evidence_ref,
+                        observed_at,
                     )
                 ),
                 f"$.negative_cases.{key} must be null when {producing_step} did not pass",
@@ -1493,10 +1608,38 @@ def validate_manifest(
             if key in {"invalid_credential", "proxy_bypass", "malformed_receipt"}:
                 require(delta == 0, f"$.negative_cases.{key} unexpectedly persisted authoritative state")
             require(evidence_ref is not None, f"$.negative_cases.{key} lacks evidence")
+            if not allow_legacy_blocked_packet:
+                observed_time = _datetime_value(
+                    observed_at,
+                    f"$.negative_cases.{key}.observed_at",
+                )
+                if key in {"invalid_credential", "proxy_bypass"}:
+                    require(
+                        step_observed_times[1]
+                        < observed_time
+                        < step_observed_times[2],
+                        f"$.negative_cases.{key}.observed_at must follow "
+                        "snapshotted health and precede native detection",
+                    )
+                    wazuh_negative_observation_times.append(observed_time)
+                else:
+                    require(
+                        observed_time == step_observed_times[12],
+                        f"$.negative_cases.{key}.observed_at must match "
+                        "journey step 13",
+                    )
         else:
             raise EvidenceValidationError(
                 f"$.negative_cases.{key} is missing after {producing_step} passed"
             )
+    if not allow_legacy_blocked_packet and step_statuses[2] == "passed":
+        require(
+            len(wazuh_negative_observation_times) == 2
+            and wazuh_negative_observation_times[0]
+            == wazuh_negative_observation_times[1],
+            "Wazuh ingress negative cases must share their authoritative "
+            "subtrial observation",
+        )
 
     restart = require_mapping(root["restart"], "$.restart")
     require_exact_keys(restart, required=("performed", "records_persisted", "checked_identifiers"), path="$.restart")

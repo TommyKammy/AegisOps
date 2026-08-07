@@ -85,6 +85,14 @@ assert_schema_fails_with \
   'schema profile, journey, and passed-verdict selection drifted' \
   'del(.allOf[] | select(.if.properties.verdict.const == "integration_trial_passed_with_owned_limitations") | .then.properties.restart)'
 assert_schema_fails_with \
+  missing-passed-replay-observation \
+  'schema profile, journey, and passed-verdict selection drifted' \
+  '(.allOf[] | select(.if.properties.verdict.const == "integration_trial_passed_with_owned_limitations") | .then.properties.idempotency.required) -= ["wazuh_replay_observed_at"]'
+assert_schema_fails_with \
+  missing-passed-negative-observation \
+  'schema profile, journey, and passed-verdict selection drifted' \
+  'del(.allOf[] | select(.if.properties.verdict.const == "integration_trial_passed_with_owned_limitations") | .then.properties.negative_cases.properties.invalid_credential.required)'
+assert_schema_fails_with \
   passed-ga-accepted \
   'schema profile, journey, and passed-verdict selection drifted' \
   '(.allOf[] | select(.if.properties.verdict.const == "integration_trial_passed_with_owned_limitations") | .then.properties.evaluation.properties.ga_accepted.const) = true'

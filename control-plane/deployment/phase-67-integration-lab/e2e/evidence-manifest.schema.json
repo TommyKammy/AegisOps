@@ -259,9 +259,17 @@
         "wazuh_first_disposition": {"type": ["string", "null"]},
         "wazuh_duplicate_disposition": {"type": ["string", "null"]},
         "wazuh_alert_identity_preserved": {"type": ["boolean", "null"]},
+        "wazuh_replay_observed_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
         "shuffle_execution_count": {"type": ["integer", "null"]},
         "receipt_replay_reconciliation_id": {"type": ["string", "null"]},
-        "receipt_identity_preserved": {"type": ["boolean", "null"]}
+        "receipt_identity_preserved": {"type": ["boolean", "null"]},
+        "shuffle_receipt_replay_observed_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
       }
     },
     "negative_cases": {
@@ -605,6 +613,10 @@
             }
           },
           "idempotency": {
+            "required": [
+              "wazuh_replay_observed_at",
+              "shuffle_receipt_replay_observed_at"
+            ],
             "properties": {
               "wazuh_first_disposition": {
                 "const": "created"
@@ -614,6 +626,10 @@
               },
               "wazuh_alert_identity_preserved": {
                 "const": true
+              },
+              "wazuh_replay_observed_at": {
+                "type": "string",
+                "format": "date-time"
               },
               "shuffle_execution_count": {
                 "const": 1
@@ -625,6 +641,10 @@
               },
               "receipt_identity_preserved": {
                 "const": true
+              },
+              "shuffle_receipt_replay_observed_at": {
+                "type": "string",
+                "format": "date-time"
               }
             }
           },
@@ -632,7 +652,14 @@
             "properties": {
               "invalid_credential": {
                 "type": "object",
+                "required": [
+                  "observed_at"
+                ],
                 "properties": {
+                  "observed_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -663,7 +690,14 @@
               },
               "proxy_bypass": {
                 "type": "object",
+                "required": [
+                  "observed_at"
+                ],
                 "properties": {
+                  "observed_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -694,7 +728,14 @@
               },
               "failed_execution": {
                 "type": "object",
+                "required": [
+                  "observed_at"
+                ],
                 "properties": {
+                  "observed_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -725,7 +766,14 @@
               },
               "malformed_receipt": {
                 "type": "object",
+                "required": [
+                  "observed_at"
+                ],
                 "properties": {
+                  "observed_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -756,7 +804,14 @@
               },
               "reconciliation_mismatch": {
                 "type": "object",
+                "required": [
+                  "observed_at"
+                ],
                 "properties": {
+                  "observed_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -1735,6 +1790,10 @@
         "evidence_ref"
       ],
       "properties": {
+        "observed_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
         "status": {
           "type": ["string", "null"],
           "enum": ["rejected", "contained", null]
@@ -2010,6 +2069,8 @@
                 },
                 "evidence_refs": {
                   "const": [
+                    "wazuh-manifest:duplicate_delivery",
+                    "artifact:wazuh-output.txt",
                     "journey:replay_reconciliation_id"
                   ]
                 }
@@ -2031,6 +2092,7 @@
                 },
                 "evidence_refs": {
                   "const": [
+                    "artifact:wazuh-output.txt",
                     "journey:measured_negative_probes"
                   ]
                 }

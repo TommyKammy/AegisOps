@@ -65,8 +65,15 @@ STEP_EVIDENCE_REFS = (
     ("journey:expected_receipt_id",),
     ("journey:reconciliation_id",),
     ("report:sha256",),
-    ("journey:replay_reconciliation_id",),
-    ("journey:measured_negative_probes",),
+    (
+        "wazuh-manifest:duplicate_delivery",
+        "artifact:wazuh-output.txt",
+        "journey:replay_reconciliation_id",
+    ),
+    (
+        "artifact:wazuh-output.txt",
+        "journey:measured_negative_probes",
+    ),
     ("restart:checked_identifiers", "artifact:restart-status.txt"),
     ("evaluation-record:sha256",),
 )
@@ -276,6 +283,43 @@ def _required_text(value: object, path: str) -> str:
     if not isinstance(value, str) or value.strip() == "":
         raise ValueError(f"{path} must be a non-empty string")
     return value.strip()
+
+
+def _validate_wazuh_finding_identity(
+    wazuh: Mapping[str, object],
+    journey_finding_id: object,
+) -> None:
+    rule_id = _required_text(
+        wazuh.get("native_wazuh_rule_id"),
+        "wazuh.native_wazuh_rule_id",
+    )
+    agent_id = _required_text(
+        wazuh.get("native_wazuh_agent_id"),
+        "wazuh.native_wazuh_agent_id",
+    )
+    native_alert_id = _required_text(
+        wazuh.get("native_wazuh_alert_id"),
+        "wazuh.native_wazuh_alert_id",
+    )
+    expected_finding_id = (
+        f"finding:wazuh:rule:{rule_id}:source:agent:{agent_id}:"
+        f"alert:{native_alert_id}"
+    )
+    for delivery_name in ("first_delivery", "duplicate_delivery"):
+        delivery = _mapping(
+            wazuh.get(delivery_name),
+            f"wazuh.{delivery_name}",
+        )
+        if delivery.get("finding_id") != expected_finding_id:
+            raise ValueError(
+                f"wazuh.{delivery_name}.finding_id is not bound to the "
+                "native rule, agent, and alert"
+            )
+    if journey_finding_id != expected_finding_id:
+        raise ValueError(
+            "journey finding_id is not bound to the native Wazuh rule, "
+            "agent, and alert"
+        )
 
 
 def _validate_snapshot_provenance(
@@ -1163,6 +1207,31 @@ def _load_wazuh_observations(output: str) -> dict[str, str]:
     return observations
 
 
+def _component_observation_times(
+    *,
+    wazuh_observations: Mapping[str, str],
+    journey_observations: Mapping[str, object],
+) -> dict[str, str]:
+    return {
+        "wazuh_negative_cases": _required_timestamp(
+            wazuh_observations.get("wazuh_negative_cases"),
+            "Wazuh negative-case observation",
+        ),
+        "replay_wazuh_delivery": _required_timestamp(
+            wazuh_observations.get("replay_wazuh_delivery"),
+            "Wazuh replay observation",
+        ),
+        "shuffle_receipt_replay": _required_timestamp(
+            journey_observations.get(STEP_NAMES[11]),
+            "Shuffle receipt replay observation",
+        ),
+        "shuffle_negative_cases": _required_timestamp(
+            journey_observations.get(STEP_NAMES[12]),
+            "Shuffle negative-case observation",
+        ),
+    }
+
+
 def _validate_step_observation_sources(
     observations: Sequence[Mapping[str, object]],
     *,
@@ -1171,7 +1240,7 @@ def _validate_step_observation_sources(
     journey: Mapping[str, object],
     restart: Mapping[str, object],
     evaluation_record: Mapping[str, object],
-) -> None:
+) -> dict[str, str]:
     preparation_observations = _mapping(
         preparation.get("step_observations"),
         "preparation.step_observations",
@@ -1190,6 +1259,10 @@ def _validate_step_observation_sources(
         raise ValueError(
             "journey step observation fields do not match the reviewed contract"
         )
+    component_times = _component_observation_times(
+        wazuh_observations=wazuh_observations,
+        journey_observations=journey_observations,
+    )
 
     source_times: dict[str, object] = {
         STEP_NAMES[2]: wazuh_observations.get(STEP_NAMES[2]),
@@ -1227,6 +1300,40 @@ def _validate_step_observation_sources(
             "approval confirmation must follow denial proof and precede "
             "the dispatch observation"
         )
+    lab_health_at = _timestamp_value(
+        observations[1].get("observed_at"),
+        "step 2 lab-health observation",
+    )
+    wazuh_negative_at = _timestamp_value(
+        component_times["wazuh_negative_cases"],
+        "Wazuh negative-case observation",
+    )
+    detection_at = _timestamp_value(
+        source_times[STEP_NAMES[2]],
+        f"authoritative observation {STEP_NAMES[2]}",
+    )
+    if not lab_health_at < wazuh_negative_at < detection_at:
+        raise ValueError(
+            "Wazuh negative probes must follow the snapshotted health check "
+            "and precede native detection"
+        )
+    admission_at = _timestamp_value(
+        source_times[STEP_NAMES[3]],
+        f"authoritative observation {STEP_NAMES[3]}",
+    )
+    wazuh_replay_at = _timestamp_value(
+        component_times["replay_wazuh_delivery"],
+        "Wazuh replay observation",
+    )
+    case_promotion_at = _timestamp_value(
+        source_times[STEP_NAMES[4]],
+        f"authoritative observation {STEP_NAMES[4]}",
+    )
+    if not admission_at < wazuh_replay_at < case_promotion_at:
+        raise ValueError(
+            "Wazuh replay must follow admission and precede case promotion"
+        )
+    return component_times
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -1295,7 +1402,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     observations = _load_step_observations(args.observations)
     wazuh_output = args.wazuh_output.read_text(encoding="utf-8")
     wazuh_observations = _load_wazuh_observations(wazuh_output)
-    _validate_step_observation_sources(
+    component_observation_times = _validate_step_observation_sources(
         observations,
         preparation=preparation,
         wazuh_observations=wazuh_observations,
@@ -1388,6 +1495,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         raise ValueError("Wazuh admission and case journey use different alerts")
     if wazuh.get("first_delivery", {}).get("finding_id") != journey.get("finding_id"):
         raise ValueError("Wazuh admission and action journey use different findings")
+    _validate_wazuh_finding_identity(wazuh, journey.get("finding_id"))
     _validate_preparation_journey_binding(preparation, journey)
     if restart.get("shuffle_execution_count") != journey.get(
         "idempotency_execution_count"
@@ -1423,6 +1531,9 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     def negative_case(name: str) -> dict[str, object]:
         probe = _mapping(probes.get(name), f"journey.negative_probes.{name}")
         return {
+            "observed_at": component_observation_times[
+                "shuffle_negative_cases"
+            ],
             "status": probe.get("status"),
             "authority_before": probe.get("authority_before"),
             "authority_after": probe.get("authority_after"),
@@ -1433,6 +1544,9 @@ def build(args: argparse.Namespace) -> dict[str, object]:
 
     def ingress_negative_case(name: str) -> dict[str, object]:
         return {
+            "observed_at": component_observation_times[
+                "wazuh_negative_cases"
+            ],
             "status": "rejected",
             "authority_before": negative_boundary.get("baseline_alert_count"),
             "authority_after": negative_boundary.get("after_alert_count"),
@@ -1517,6 +1631,9 @@ def build(args: argparse.Namespace) -> dict[str, object]:
                 first_delivery.get("finding_id")
                 == duplicate_delivery.get("finding_id")
             ),
+            "wazuh_replay_observed_at": component_observation_times[
+                "replay_wazuh_delivery"
+            ],
             "shuffle_execution_count": journey.get(
                 "idempotency_execution_count"
             ),
@@ -1525,6 +1642,9 @@ def build(args: argparse.Namespace) -> dict[str, object]:
             ),
             "receipt_identity_preserved": journey.get(
                 "receipt_identity_preserved"
+            ),
+            "shuffle_receipt_replay_observed_at": (
+                component_observation_times["shuffle_receipt_replay"]
             ),
         },
         "negative_cases": {

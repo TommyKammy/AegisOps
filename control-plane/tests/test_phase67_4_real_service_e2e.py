@@ -110,7 +110,10 @@ def _manifest() -> dict[str, object]:
             "wazuh_rule_id": "5710",
             "native_wazuh_alert_id": "1754042400.123456",
             "aegisops_alert_id": "alert-a1b2c3d4",
-            "finding_id": "finding-a1b2c3d4",
+            "finding_id": (
+                "finding:wazuh:rule:5710:source:agent:000:"
+                "alert:1754042400.123456"
+            ),
             "case_id": "case-a1b2c3d4",
             "denied_action_request_id": "action-denied-a1b2c3d4",
             "denied_approval_decision_id": "approval-denied-a1b2c3d4",
@@ -142,12 +145,21 @@ def _manifest() -> dict[str, object]:
             "wazuh_first_disposition": "created",
             "wazuh_duplicate_disposition": "deduplicated",
             "wazuh_alert_identity_preserved": True,
+            "wazuh_replay_observed_at": "2026-08-01T10:00:04.500000Z",
             "shuffle_execution_count": 1,
             "receipt_replay_reconciliation_id": "reconciliation-a1b2c3d4",
             "receipt_identity_preserved": True,
+            "shuffle_receipt_replay_observed_at": (
+                "2026-08-01T10:00:12Z"
+            ),
         },
         "negative_cases": {
             key: {
+                "observed_at": (
+                    "2026-08-01T10:00:02.500000Z"
+                    if key in {"invalid_credential", "proxy_bypass"}
+                    else "2026-08-01T10:00:13Z"
+                ),
                 "status": "rejected" if key != "failed_execution" else "contained",
                 "authority_before": 10,
                 "authority_after": (
@@ -273,13 +285,19 @@ def _wazuh_manifest() -> dict[str, object]:
         "first_delivery": {
             "http_status": 202,
             "disposition": "created",
-            "finding_id": "finding-phase67",
+            "finding_id": (
+                "finding:wazuh:rule:5710:source:agent:000:"
+                "alert:phase67-native-alert"
+            ),
             "reconciliation_id": "reconciliation-created",
         },
         "duplicate_delivery": {
             "http_status": 202,
             "disposition": "deduplicated",
-            "finding_id": "finding-phase67",
+            "finding_id": (
+                "finding:wazuh:rule:5710:source:agent:000:"
+                "alert:phase67-native-alert"
+            ),
             "reconciliation_id": "reconciliation-deduplicated",
         },
         "analyst_queue": {
@@ -574,6 +592,21 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             [validator.REVIEWED_WAZUH_RULE_ID, None],
         )
         passed_properties = passed_branches[0]["then"]["properties"]
+        self.assertEqual(
+            set(passed_properties["idempotency"]["required"]),
+            {
+                "wazuh_replay_observed_at",
+                "shuffle_receipt_replay_observed_at",
+            },
+        )
+        for case_name in validator.NEGATIVE_CASE_KEYS:
+            with self.subTest(case_name=case_name):
+                self.assertEqual(
+                    passed_properties["negative_cases"]["properties"][
+                        case_name
+                    ]["required"],
+                    ["observed_at"],
+                )
         for identity in (
             "requester_identity",
             "approver_identity",
@@ -720,6 +753,15 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         ):
             validator.validate_manifest(manifest, SCHEMA)
 
+    def test_validator_binds_the_wazuh_agent_to_the_finding(self) -> None:
+        manifest = _manifest()
+        manifest["identifiers"]["wazuh_agent_id"] = "999"
+        with self.assertRaisesRegex(
+            validator.EvidenceValidationError,
+            "finding ID is not bound",
+        ):
+            validator.validate_manifest(manifest, SCHEMA)
+
     def test_validator_rejects_mixed_snapshots_and_missing_steps(self) -> None:
         mixed = _manifest()
         mixed["steps"][8]["snapshot_id"] = "phase67-snapshot-fedcba9876543210"
@@ -745,6 +787,47 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "strictly chronological",
         ):
             validator.validate_manifest(manifest, SCHEMA)
+
+    def test_validator_binds_component_observations_to_actual_subtrials(
+        self,
+    ) -> None:
+        mutations = {
+            "Wazuh negatives after detection": (
+                lambda manifest: manifest["negative_cases"][
+                    "invalid_credential"
+                ].__setitem__("observed_at", "2026-08-01T10:00:03.500000Z"),
+                "precede native detection",
+            ),
+            "Wazuh replay after promotion": (
+                lambda manifest: manifest["idempotency"].__setitem__(
+                    "wazuh_replay_observed_at",
+                    "2026-08-01T10:00:05.500000Z",
+                ),
+                "precede case promotion",
+            ),
+            "Shuffle replay differs from step": (
+                lambda manifest: manifest["idempotency"].__setitem__(
+                    "shuffle_receipt_replay_observed_at",
+                    "2026-08-01T10:00:11.500000Z",
+                ),
+                "must match journey step 12",
+            ),
+            "Shuffle negative differs from step": (
+                lambda manifest: manifest["negative_cases"][
+                    "malformed_receipt"
+                ].__setitem__("observed_at", "2026-08-01T10:00:12.500000Z"),
+                "must match journey step 13",
+            ),
+        }
+        for name, (mutate, message) in mutations.items():
+            with self.subTest(name=name):
+                manifest = _manifest()
+                mutate(manifest)
+                with self.assertRaisesRegex(
+                    validator.EvidenceValidationError,
+                    message,
+                ):
+                    validator.validate_manifest(manifest, SCHEMA)
 
     def test_validator_binds_approval_evaluation_and_capture_times(self) -> None:
         temporal_mutations = {
@@ -1111,6 +1194,14 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                         "observed_at"
                     ]
                     for index in range(2, 4)
+                }
+                | {
+                    "wazuh_negative_cases": (
+                        "2026-08-01T10:00:02.500000Z"
+                    ),
+                    "replay_wazuh_delivery": (
+                        "2026-08-01T10:00:04.500000Z"
+                    ),
                 },
                 "journey": {
                     "approval_confirmed_at": "2026-08-01T10:00:07.500000Z",
@@ -1127,9 +1218,18 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 },
             }
 
-        builder._validate_step_observation_sources(
+        component_times = builder._validate_step_observation_sources(
             observations,
             **source_payloads(),
+        )
+        self.assertEqual(
+            component_times,
+            {
+                "wazuh_negative_cases": "2026-08-01T10:00:02.500000Z",
+                "replay_wazuh_delivery": "2026-08-01T10:00:04.500000Z",
+                "shuffle_receipt_replay": "2026-08-01T10:00:12Z",
+                "shuffle_negative_cases": "2026-08-01T10:00:13Z",
+            },
         )
         for step_index in range(2, len(builder.STEP_NAMES)):
             with self.subTest(step=step_index + 1):
@@ -1159,6 +1259,27 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     ValueError,
                     "does not use the authoritative",
                 ):
+                    builder._validate_step_observation_sources(
+                        observations,
+                        **sources,
+                    )
+
+        for observation_name, invalid_time, message in (
+            (
+                "wazuh_negative_cases",
+                "2026-08-01T10:00:03.500000Z",
+                "Wazuh negative probes",
+            ),
+            (
+                "replay_wazuh_delivery",
+                "2026-08-01T10:00:05.500000Z",
+                "Wazuh replay",
+            ),
+        ):
+            with self.subTest(observation_name=observation_name):
+                sources = source_payloads()
+                sources["wazuh_observations"][observation_name] = invalid_time
+                with self.assertRaisesRegex(ValueError, message):
                     builder._validate_step_observation_sources(
                         observations,
                         **sources,
@@ -1610,6 +1731,35 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 schema_path=WAZUH_ROOT / "evidence-manifest.schema.json",
                 validator_path=WAZUH_ROOT / "validate_evidence_manifest.py",
             )
+
+    def test_builder_binds_the_wazuh_agent_to_both_delivery_findings(
+        self,
+    ) -> None:
+        wazuh = _wazuh_manifest()
+        finding_id = wazuh["first_delivery"]["finding_id"]
+        builder._validate_wazuh_finding_identity(wazuh, finding_id)
+
+        for source in ("agent", "first delivery", "journey"):
+            with self.subTest(source=source):
+                tampered = deepcopy(wazuh)
+                journey_finding_id = finding_id
+                if source == "agent":
+                    tampered["native_wazuh_agent_id"] = "999"
+                elif source == "first delivery":
+                    tampered["first_delivery"]["finding_id"] = (
+                        "finding:wazuh:rule:5710:source:agent:999:"
+                        "alert:phase67-native-alert"
+                    )
+                else:
+                    journey_finding_id = (
+                        "finding:wazuh:rule:5710:source:agent:999:"
+                        "alert:phase67-native-alert"
+                    )
+                with self.assertRaisesRegex(ValueError, "not bound"):
+                    builder._validate_wazuh_finding_identity(
+                        tampered,
+                        journey_finding_id,
+                    )
 
     def test_builder_revalidates_both_retained_shuffle_workflows(self) -> None:
         self.assertEqual(
@@ -2700,6 +2850,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             manifest["idempotency"][key] = None
         for case in manifest["negative_cases"].values():
             case.update(
+                observed_at=None,
                 status=None,
                 authority_before=None,
                 authority_after=None,
@@ -2763,6 +2914,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             with self.subTest(key=key, producing_step=producing_step):
                 unobserved_probe = deepcopy(manifest)
                 unobserved_probe["negative_cases"][key] = {
+                    "observed_at": None,
                     "status": "contained",
                     "authority_before": 1,
                     "authority_after": 1,
@@ -3171,7 +3323,31 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             runner,
         )
         self.assertIn("configured_shuffle_worker_immutable_ref()", runner)
+        self.assertIn("assert_shuffle_worker_service_absent()", runner)
+        self.assertIn("claim_reviewed_shuffle_worker_service()", runner)
+        self.assertIn("shuffle_worker_service_is_trial_owned()", runner)
+        self.assertIn(
+            "com.aegisops.lab.trial-run-id=${trial_run_id}",
+            runner,
+        )
+        preflight = runner.index(
+            "run_reviewed_lab_command assert_shuffle_worker_service_absent"
+        )
+        first_startup = runner.index(
+            'run_reviewed_lab_startup "${LAB_DIR}/up.sh" full'
+        )
+        self.assertLess(preflight, first_startup)
         self.assertIn("remove_reviewed_shuffle_worker_service()", runner)
+        remove_start = runner.index("remove_reviewed_shuffle_worker_service()")
+        remove_end = runner.index(
+            '[[ -f "${evaluation}" ]]',
+            remove_start,
+        )
+        remove_worker = runner[remove_start:remove_end]
+        self.assertLess(
+            remove_worker.index("shuffle_worker_service_is_trial_owned"),
+            remove_worker.index('docker_lab service rm "${shuffle_worker_service}"'),
+        )
         self.assertIn(
             '[[ "${service_image}" != "${expected_image}" ]]',
             runner,
@@ -3284,7 +3460,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "run_reviewed_lab_command ensure_reviewed_shuffle_action_service"
         )
         worker_image_captured = runner.index(
-            'shuffle_worker_image="$(capture_reviewed_shuffle_worker_image)"'
+            "capture_reviewed_shuffle_worker_image >/dev/null"
         )
         runtime_images_validated = runner.index(
             'python3 "${validator}" --runtime-images'

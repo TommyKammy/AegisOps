@@ -120,10 +120,12 @@ Before snapshot capture, the runner creates the `shuffle-tools_1-2-0` Swarm
 service from the reviewed repository digest. The service and its running task
 must retain that digest and image ID before approval and again after execution;
 the mutable compatibility tag is not the execution reference.
-It separately inspects Orborus's `shuffle-workers` service, its sole running
-task container, and that container's image ID. After dispatch, the same worker
-image identity must remain in place and the running task container's logs must
-contain the current Shuffle execution ID.
+Before startup, the runner fails closed if a `shuffle-workers` service already
+exists. It separately inspects the service created after that preflight, binds
+its service ID to the current trial with Phase, component, and trial-run labels,
+and verifies its sole running task container and image ID. After dispatch, the
+same owned service and worker image identity must remain in place and the
+running task container's logs must contain the current Shuffle execution ID.
 Receipt success is passed through AegisOps reconciliation instead of inferred
 from Shuffle state. Receipt failure probes must return the reviewed mismatch
 reason and run in a rollback-only transaction;
@@ -137,10 +139,11 @@ After report export and delivery replay, the runner stops and starts the lab,
 checks the persisted action-chain identifiers, every Wazuh admission/replay
 reconciliation ID, the one-execution count, and exact equality between the
 post-restart authoritative records and the retained report, and
-removes the owned `shuffle-workers` service after matching its image to the
-digest captured from Orborus. It waits for the service and all worker task
-containers to disappear before `cleanup.sh`; the same ordered cleanup runs on
-the failure trap. The runner retains a trial-specific raw artifact directory
+removes the owned `shuffle-workers` service only after its service ID, all three
+ownership labels, and image match the current trial and the digest captured from
+Orborus. It waits for the service and all worker task containers to disappear
+before `cleanup.sh`; the same ordered cleanup runs on the failure trap. The
+runner retains a trial-specific raw artifact directory
 with mode `0700` and files with mode `0600`, plus the complete redacted report,
 below `${AEGISOPS_LAB_EVIDENCE_DIR}`. The manifest records every retained raw
 artifact digest and binds a generated evaluation record to the trial, snapshot,
@@ -149,8 +152,11 @@ completion time of all 15 steps. The validator requires every completed or
 terminal step before `not_run` to be strictly chronological for passed,
 blocked, and failed manifests. The prerequisite Wazuh harness retains its own
 trigger, admission, replay, and negative-boundary timestamps verbatim in
-`wazuh-output.txt`; ordered journey steps 12 and 13 attest only to the later
-Shuffle receipt replay and receipt negative probes. The runner rechecks both
+`wazuh-output.txt`. The manifest binds the Wazuh replay time between admission
+and case promotion and the Wazuh negative-boundary time between snapshotted
+health and native detection. It separately binds the later Shuffle receipt
+replay and receipt-negative times to ordered journey steps 12 and 13. The
+runner rechecks both
 `HEAD` and the complete
 tracked and untracked worktree after cleanup, immediately before building the
 publishable packet. A temporary Compose render is captured before the first
