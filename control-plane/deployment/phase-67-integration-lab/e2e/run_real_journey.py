@@ -417,7 +417,6 @@ def _poll_real_receipt(
                 execution_id=execution.execution_run_id,
                 idempotency_key=idempotency_key,
                 expected_binding=expected_binding,
-                observed_at=datetime.now(timezone.utc),
             )
         except ShuffleTransportFailure as exc:
             if exc.category != "missing_receipt" and not exc.transient:

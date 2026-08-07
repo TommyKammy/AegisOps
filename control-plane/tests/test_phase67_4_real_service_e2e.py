@@ -3337,6 +3337,47 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             'run_reviewed_lab_startup "${LAB_DIR}/up.sh" full'
         )
         self.assertLess(preflight, first_startup)
+        first_worker_capture = runner.index(
+            "capture_reviewed_shuffle_worker_image >/dev/null",
+            first_startup,
+        )
+        self.assertLess(
+            first_worker_capture,
+            runner.index(
+                'retain_status_evidence "${startup_output}"',
+                first_startup,
+            ),
+        )
+        self.assertLess(
+            first_worker_capture,
+            runner.index(
+                "run_reviewed_lab_command ensure_reviewed_shuffle_action_service",
+                first_startup,
+            ),
+        )
+        capture_start = runner.index("capture_reviewed_shuffle_worker_image()")
+        capture_end = runner.index("cleanup_on_exit()", capture_start)
+        worker_capture = runner[capture_start:capture_end]
+        self.assertLess(
+            worker_capture.index("claim_reviewed_shuffle_worker_service"),
+            worker_capture.index('service_image="$('),
+        )
+        claim_start = runner.index("claim_reviewed_shuffle_worker_service()")
+        claim_end = runner.index(
+            "remove_reviewed_shuffle_worker_service()",
+            claim_start,
+        )
+        worker_claim = runner[claim_start:claim_end]
+        self.assertLess(
+            worker_claim.index(
+                '[[ "${service_image}" != "${shuffle_worker_immutable_ref}" ]]'
+            ),
+            worker_claim.index("docker_lab service update"),
+        )
+        self.assertLess(
+            worker_claim.index('shuffle_worker_service_id="${service_id}"'),
+            worker_claim.index('owned_metadata="$('),
+        )
         self.assertIn("remove_reviewed_shuffle_worker_service()", runner)
         remove_start = runner.index("remove_reviewed_shuffle_worker_service()")
         remove_end = runner.index(
@@ -3346,14 +3387,28 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         remove_worker = runner[remove_start:remove_end]
         self.assertLess(
             remove_worker.index("shuffle_worker_service_is_trial_owned"),
-            remove_worker.index('docker_lab service rm "${shuffle_worker_service}"'),
+            remove_worker.index('docker_lab service rm "${shuffle_worker_service_id}"'),
+        )
+        self.assertLess(
+            remove_worker.index(
+                '[[ "${shuffle_worker_preflight_absent}" != true ]]'
+            ),
+            remove_worker.index("claim_reviewed_shuffle_worker_service"),
+        )
+        self.assertLess(
+            remove_worker.index('shuffle_worker_immutable_ref="${expected_image}"'),
+            remove_worker.index("claim_reviewed_shuffle_worker_service"),
+        )
+        self.assertIn(
+            "refusing to claim an unverified Shuffle worker service during cleanup",
+            remove_worker,
         )
         self.assertIn(
             '[[ "${service_image}" != "${expected_image}" ]]',
             runner,
         )
         self.assertIn(
-            'docker_lab service rm "${shuffle_worker_service}"',
+            'docker_lab service rm "${shuffle_worker_service_id}"',
             runner,
         )
         self.assertIn(

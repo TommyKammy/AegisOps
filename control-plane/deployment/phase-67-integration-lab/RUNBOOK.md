@@ -122,13 +122,17 @@ must retain that digest and image ID before approval and again after execution;
 the mutable compatibility tag is not the execution reference.
 Before startup, the runner fails closed if a `shuffle-workers` service already
 exists. It separately inspects the service created after that preflight, binds
-its service ID to the current trial with Phase, component, and trial-run labels,
-and verifies its sole running task container and image ID. After dispatch, the
-same owned service and worker image identity must remain in place and the
-running task container's logs must contain the current Shuffle execution ID.
-Receipt success is passed through AegisOps reconciliation instead of inferred
-from Shuffle state. Receipt failure probes must return the reviewed mismatch
-reason and run in a rollback-only transaction;
+its service ID immediately to the current trial with Phase, component, and
+trial-run labels, and verifies its sole running task container and image ID.
+If startup fails before this initial capture completes, cleanup claims the
+newly appeared service only when the preflight absence and reviewed Orborus
+image both match, then applies the same ID and ownership checks before removal.
+After dispatch, the same owned service and worker image identity must remain in
+place and the running task container's logs must contain the current Shuffle
+execution ID. Receipt success is timestamped only after its authenticated
+response is returned and validated, then passed through AegisOps reconciliation
+instead of inferred from Shuffle state. Receipt failure probes must return the
+reviewed mismatch reason and run in a rollback-only transaction;
 the trial fails if the authoritative successful execution or record count is
 not restored exactly. The retained report uses an explicit record-ID allowlist
 for this trial's alert, case, denied and approved requests and decisions,

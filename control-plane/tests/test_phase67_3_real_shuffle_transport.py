@@ -946,6 +946,47 @@ class RealShuffleTransportTests(unittest.TestCase):
             "fixture-api-key",
         )
 
+    def test_poll_timestamps_receipt_after_transport_response_by_default(
+        self,
+    ) -> None:
+        class TimestampingTransport(_QueueTransport):
+            responded_at: datetime | None = None
+
+            def request_json(self, **kwargs: object) -> object:
+                response = super().request_json(**kwargs)
+                self.responded_at = datetime.now(timezone.utc)
+                return response
+
+        argument = _execution_argument()
+        transport = TimestampingTransport(
+            {
+                "executions": [
+                    {
+                        "execution_id": REAL_EXECUTION_ID,
+                        "execution_argument": argument,
+                        "status": "FINISHED",
+                        "results": [_reviewed_action_result()],
+                    }
+                ]
+            }
+        )
+        client = ShuffleReceiptPollingClient(
+            base_url="https://proxy:8443/shuffle-api",
+            api_key="fixture-api-key",
+            api_workflow_id=API_WORKFLOW_ID,
+            transport=transport,
+        )
+
+        receipt = client.poll_normalized_receipt(
+            execution_id=REAL_EXECUTION_ID,
+            idempotency_key="idempotency-001",
+            expected_binding=argument,
+        )
+
+        self.assertIsNotNone(transport.responded_at)
+        assert transport.responded_at is not None
+        self.assertGreaterEqual(receipt["observed_at"], transport.responded_at)
+
     def test_poll_rejects_correlation_mismatch_and_duplicate_receipt(self) -> None:
         expected = _execution_argument()
         mismatched = {**expected, "payload_hash": "different"}

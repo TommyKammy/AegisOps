@@ -51,11 +51,14 @@ component evidence instead of trusting artifact hashes alone. The snapshot also
 binds the real Shuffle worker service, running task container, reviewed digest,
 and runtime image ID before and after the reviewed execution. The runner first
 proves that no `shuffle-workers` service exists, then binds the created service
-ID to the trial with ownership labels; cleanup refuses to remove a service
-unless its ID, labels, and reviewed image still match. Component observation
-times separately retain the early Wazuh negative probes and replay as well as
-the later Shuffle replay and receipt-negative probes, so the 15-step summary
-does not flatten their actual chronology.
+ID to the trial with ownership labels as soon as it appears; cleanup refuses to
+remove a service unless its ID, labels, and reviewed image still match.
+If startup fails before the first capture completes, cleanup may claim the new
+service only after the preflight absence and reviewed Orborus image both match.
+Component observation times separately retain the early Wazuh negative probes
+and replay as well as the later Shuffle replay and receipt-negative probes, so
+the 15-step summary does not flatten their actual chronology. Receipt capture
+is timestamped only after the authenticated response is returned and validated.
 The operator must interactively approve a challenge bound to the prepared action
 through a macOS dialog or exact TTY response; the runner cannot complete from
 unattended input. The publishable sample omits raw logs, secret values, private

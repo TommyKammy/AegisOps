@@ -300,8 +300,7 @@ assert_shuffle_worker_service_absent() {
 shuffle_worker_service_is_trial_owned() {
   local service_metadata="$1"
 
-  [[ "${shuffle_worker_owned}" == true ]] \
-    && [[ -n "${shuffle_worker_service_id}" ]] \
+  [[ -n "${shuffle_worker_service_id}" ]] \
     && jq -e \
       --arg service_id "${shuffle_worker_service_id}" \
       --arg trial_run_id "${trial_run_id}" '
@@ -317,32 +316,63 @@ shuffle_worker_service_is_trial_owned() {
 claim_reviewed_shuffle_worker_service() {
   local service_metadata="$1"
   local service_id
+  local service_image
   local owned_metadata
 
   if [[ "${shuffle_worker_owned}" == true ]]; then
-    shuffle_worker_service_is_trial_owned "${service_metadata}" \
-      || fail "Shuffle worker service ownership changed during the trial"
-    return
+    if ! shuffle_worker_service_is_trial_owned "${service_metadata}"; then
+      echo "BLOCKED: Shuffle worker service ownership changed during the trial" >&2
+      return 1
+    fi
+    return 0
   fi
-  [[ "${shuffle_worker_preflight_absent}" == true ]] \
-    || fail "Shuffle worker service absence was not established before startup"
-  jq -e '
+  if [[ "${shuffle_worker_preflight_absent}" != true ]]; then
+    echo "BLOCKED: Shuffle worker service absence was not established before startup" >&2
+    return 1
+  fi
+  if ! jq -e '
     (.[0].Spec.Labels["com.aegisops.lab.trial-run-id"] // "") == ""
     and (.[0].Spec.Labels["com.aegisops.lab.component"] // "") == ""
-  ' <<<"${service_metadata}" >/dev/null \
-    || fail "new Shuffle worker service already carries ownership labels"
-  service_id="$(jq -er '.[0].ID' <<<"${service_metadata}")"
-  docker_lab service update \
+  ' <<<"${service_metadata}" >/dev/null; then
+    echo "BLOCKED: new Shuffle worker service already carries ownership labels" >&2
+    return 1
+  fi
+  if ! service_id="$(jq -er '.[0].ID' <<<"${service_metadata}")"; then
+    echo "BLOCKED: new Shuffle worker service has no stable service ID" >&2
+    return 1
+  fi
+  if ! service_image="$(
+    jq -er '.[0].Spec.TaskTemplate.ContainerSpec.Image' \
+      <<<"${service_metadata}"
+  )"; then
+    echo "BLOCKED: new Shuffle worker service has no image identity" >&2
+    return 1
+  fi
+  if [[ "${service_image}" != "${shuffle_worker_immutable_ref}" ]]; then
+    echo "BLOCKED: Shuffle worker service is not pinned to the reviewed digest" >&2
+    return 1
+  fi
+  shuffle_worker_service_id="${service_id}"
+  if ! docker_lab service update \
     --detach=true \
     --label-add "com.aegisops.lab.phase=67.4" \
     --label-add "com.aegisops.lab.component=shuffle-worker-image" \
     --label-add "com.aegisops.lab.trial-run-id=${trial_run_id}" \
-    "${shuffle_worker_service}" >/dev/null
-  owned_metadata="$(docker_lab service inspect "${shuffle_worker_service}")"
-  shuffle_worker_service_id="${service_id}"
+    "${service_id}" >/dev/null; then
+    echo "BLOCKED: failed to label the new Shuffle worker service" >&2
+    return 1
+  fi
   shuffle_worker_owned=true
-  shuffle_worker_service_is_trial_owned "${owned_metadata}" \
-    || fail "Shuffle worker service did not retain trial ownership labels"
+  if ! owned_metadata="$(
+    docker_lab service inspect "${shuffle_worker_service_id}"
+  )"; then
+    echo "BLOCKED: failed to inspect the claimed Shuffle worker service" >&2
+    return 1
+  fi
+  if ! shuffle_worker_service_is_trial_owned "${owned_metadata}"; then
+    echo "BLOCKED: Shuffle worker service did not retain trial ownership labels" >&2
+    return 1
+  fi
 }
 
 remove_reviewed_shuffle_worker_service() {
@@ -358,13 +388,29 @@ remove_reviewed_shuffle_worker_service() {
   )"; then
     return
   fi
-  if ! shuffle_worker_service_is_trial_owned "${service_metadata}"; then
-    echo "BLOCKED: refusing to remove a Shuffle worker service without current-trial ownership" >&2
-    return 1
-  fi
   if ! expected_image="$(configured_shuffle_worker_immutable_ref)"; then
     echo "BLOCKED: refusing to remove a Shuffle worker service without owned Orborus image evidence" >&2
     return 1
+  fi
+  if ! shuffle_worker_service_is_trial_owned "${service_metadata}"; then
+    if [[ "${shuffle_worker_owned}" == true ]] \
+      || [[ "${shuffle_worker_preflight_absent}" != true ]]; then
+      echo "BLOCKED: refusing to remove a Shuffle worker service without current-trial ownership" >&2
+      return 1
+    fi
+    shuffle_worker_immutable_ref="${expected_image}"
+    if ! claim_reviewed_shuffle_worker_service "${service_metadata}"; then
+      echo "BLOCKED: initial Shuffle worker cleanup claim did not complete" >&2
+    fi
+    if [[ -z "${shuffle_worker_service_id}" ]] \
+      || ! service_metadata="$(
+        docker_lab service inspect "${shuffle_worker_service_id}" 2>/dev/null
+      )" \
+      || ! shuffle_worker_service_is_trial_owned "${service_metadata}"; then
+      echo "BLOCKED: refusing to claim an unverified Shuffle worker service during cleanup" >&2
+      return 1
+    fi
+    shuffle_worker_owned=true
   fi
   service_image="$(
     jq -er '.[0].Spec.TaskTemplate.ContainerSpec.Image' \
@@ -375,11 +421,11 @@ remove_reviewed_shuffle_worker_service() {
     return 1
   fi
 
-  docker_lab service rm "${shuffle_worker_service}" >/dev/null
+  docker_lab service rm "${shuffle_worker_service_id}" >/dev/null
   for attempt in {1..60}; do
     service_removed=false
     if ! docker_lab service inspect \
-      "${shuffle_worker_service}" >/dev/null 2>&1; then
+      "${shuffle_worker_service_id}" >/dev/null 2>&1; then
       service_removed=true
     fi
     if ! task_container_ids="$(
@@ -566,6 +612,8 @@ capture_reviewed_shuffle_worker_image() {
     if service_metadata="$(
       docker_lab service inspect "${shuffle_worker_service}" 2>/dev/null
     )"; then
+      claim_reviewed_shuffle_worker_service "${service_metadata}" \
+        || fail "cannot claim the reviewed Shuffle worker service"
       break
     fi
     sleep 1
@@ -578,9 +626,8 @@ capture_reviewed_shuffle_worker_image() {
   )"
   [[ "${service_image}" == "${shuffle_worker_immutable_ref}" ]] \
     || fail "Shuffle worker service is not pinned to the reviewed digest"
-  claim_reviewed_shuffle_worker_service "${service_metadata}"
   service_metadata="$(
-    docker_lab service inspect "${shuffle_worker_service}"
+    docker_lab service inspect "${shuffle_worker_service_id}"
   )"
   shuffle_worker_service_is_trial_owned "${service_metadata}" \
     || fail "Shuffle worker service is not owned by the current trial"
@@ -694,6 +741,13 @@ run_reviewed_lab_command assert_shuffle_worker_service_absent
 run_reviewed_lab_command "${LAB_DIR}/pin-shuffle-app-image.sh"
 startup_output="$(run_reviewed_lab_startup "${LAB_DIR}/up.sh" full)"
 printf '%s\n' "${startup_output}"
+shuffle_worker_immutable_ref="$(
+  run_reviewed_lab_command configured_shuffle_worker_immutable_ref
+)"
+[[ "${shuffle_worker_immutable_ref}" =~ ^[^[:space:]@]+@sha256:[0-9a-f]{64}$ ]] \
+  || fail "Shuffle worker image is not digest-pinned"
+capture_reviewed_shuffle_worker_image >/dev/null
+shuffle_worker_image="${captured_shuffle_worker_image_json}"
 retain_status_evidence "${startup_output}" "${startup_status_output}"
 run_reviewed_lab_command ensure_reviewed_shuffle_action_service
 
@@ -717,31 +771,7 @@ docker_lab inspect ${container_ids} |
     )
     | sort_by(.service)
   ' >"${images_output}"
-shuffle_worker_immutable_ref="$(
-  # shellcheck disable=SC2086
-  docker_lab inspect ${container_ids} |
-    jq -er '
-      [
-        .[]
-        | select(
-            .Config.Labels["com.docker.compose.service"]
-            == "shuffle-orborus"
-          )
-        | .Config.Env[]
-        | select(startswith("SHUFFLE_WORKER_IMAGE="))
-        | ltrimstr("SHUFFLE_WORKER_IMAGE=")
-      ]
-      | unique
-      | if length == 1 then .[0]
-        else error("expected one Shuffle worker image")
-        end
-    '
-)"
-[[ "${shuffle_worker_immutable_ref}" =~ ^[^[:space:]@]+@sha256:[0-9a-f]{64}$ ]] \
-  || fail "Shuffle worker image is not digest-pinned"
 shuffle_action_image="$(capture_reviewed_shuffle_action_image)"
-capture_reviewed_shuffle_worker_image >/dev/null
-shuffle_worker_image="${captured_shuffle_worker_image_json}"
 jq \
   --argjson action_image "${shuffle_action_image}" \
   --argjson worker_image "${shuffle_worker_image}" '
