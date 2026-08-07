@@ -82,6 +82,9 @@ REVIEWED_SHUFFLE_WORKFLOW_VERSION = (
 )
 NEGATIVE_PROBE_APPROVER_IDENTITY = "phase67-lab-negative-probe-approver"
 CURRENT_TRIAL_VERDICT = "integration_trial_passed_with_owned_limitations"
+PREREQUISITE_EVALUATION_SCHEMA_VERSION = (
+    "phase67.4-prerequisite-evaluation-v1"
+)
 EVALUATION_SCOPE = "committed_historical_trial"
 CONSERVATIVE_DIRECT_VERDICTS = {
     "integration_trial_blocked",
@@ -283,6 +286,29 @@ def _required_text(value: object, path: str) -> str:
     if not isinstance(value, str) or value.strip() == "":
         raise ValueError(f"{path} must be a non-empty string")
     return value.strip()
+
+
+def _validated_authority_counts(
+    source: Mapping[str, object],
+    *,
+    path: str,
+    before_field: str = "authority_before",
+    after_field: str = "authority_after",
+    delta_field: str = "authority_delta",
+) -> tuple[int, int]:
+    values: dict[str, int] = {}
+    for field_name in (before_field, after_field, delta_field):
+        value = source.get(field_name)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"{path}.{field_name} must be an integer")
+        values[field_name] = value
+    before = values[before_field]
+    after = values[after_field]
+    if before < 0 or after < 0:
+        raise ValueError(f"{path} authority counts must be non-negative")
+    if values[delta_field] != after - before:
+        raise ValueError(f"{path}.{delta_field} is not derived from its counts")
+    return before, after
 
 
 def _approval_challenge_sha256(
@@ -1534,7 +1560,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     if journey.get("workflow_version") != REVIEWED_SHUFFLE_WORKFLOW_VERSION:
         raise ValueError("journey Shuffle workflow version is not reviewed")
     expected_evaluation = {
-        "schema_version": "phase67.4-prerequisite-evaluation-v1",
+        "schema_version": PREREQUISITE_EVALUATION_SCHEMA_VERSION,
         "trial_run_id": snapshot.get("trial_run_id"),
         "snapshot_id": snapshot.get("snapshot_id"),
         "repository_revision": snapshot.get("repository_revision"),
@@ -1607,29 +1633,36 @@ def build(args: argparse.Namespace) -> dict[str, object]:
 
     def negative_case(name: str) -> dict[str, object]:
         probe = _mapping(probes.get(name), f"journey.negative_probes.{name}")
+        authority_before, authority_after = _validated_authority_counts(
+            probe,
+            path=f"journey.negative_probes.{name}",
+        )
         return {
             "observed_at": component_observation_times[
                 "shuffle_negative_cases"
             ],
             "status": probe.get("status"),
-            "authority_before": probe.get("authority_before"),
-            "authority_after": probe.get("authority_after"),
-            "authority_delta": probe.get("authority_delta"),
+            "authority_before": authority_before,
+            "authority_after": authority_after,
             "measurement_source": probe.get("measurement_source"),
             "evidence_ref": f"journey:negative_probes.{name}:{probe.get('category')}",
         }
 
     def ingress_negative_case(name: str) -> dict[str, object]:
+        authority_before, authority_after = _validated_authority_counts(
+            negative_boundary,
+            path="wazuh.negative_boundary",
+            before_field="baseline_alert_count",
+            after_field="after_alert_count",
+            delta_field="authoritative_alert_delta",
+        )
         return {
             "observed_at": component_observation_times[
                 "wazuh_negative_cases"
             ],
             "status": "rejected",
-            "authority_before": negative_boundary.get("baseline_alert_count"),
-            "authority_after": negative_boundary.get("after_alert_count"),
-            "authority_delta": negative_boundary.get(
-                "authoritative_alert_delta"
-            ),
+            "authority_before": authority_before,
+            "authority_after": authority_after,
             "measurement_source": "aegisops_authoritative_alert_count",
             "evidence_ref": f"wazuh-command:{name}=403",
         }
@@ -1749,11 +1782,6 @@ def build(args: argparse.Namespace) -> dict[str, object]:
             "redacted": report_redacted,
         },
         "evaluation": {
-            "trial_run_id": evaluation_record.get("trial_run_id"),
-            "snapshot_id": evaluation_record.get("snapshot_id"),
-            "repository_revision": evaluation_record.get(
-                "repository_revision"
-            ),
             "evaluated_at": evaluation_record.get("evaluated_at"),
             "verdict": evaluation_record.get("verdict"),
             "ga_accepted": evaluation_record.get("ga_accepted"),

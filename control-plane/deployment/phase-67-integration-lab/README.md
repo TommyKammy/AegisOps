@@ -195,9 +195,12 @@ the live workflow again immediately before dispatch and rejects any change from
 the snapshot. The inventory includes the configured dynamic Shuffle worker
 image and the action tag's observed repository digest and runtime image ID
 because neither dynamic image is guaranteed to appear in the pre-dispatch
-Compose container enumeration. Before snapshot capture, the runner creates the
-reviewed Shuffle Tools Swarm service directly from the immutable digest rather
-than leaving Orborus to resolve a mutable tag. It verifies the service task's
+Compose container enumeration. Before startup, the runner proves that no
+`shuffle-tools_1-2-0` service exists, then creates the reviewed Shuffle Tools
+Swarm service directly from the immutable digest rather than leaving Orborus to
+resolve a mutable tag. It binds the returned service ID to the current trial
+with ownership labels and removes only that ID after revalidating its labels and
+image. It verifies the service task's
 actual image ID before and after approved execution. After approval, the runner
 also rechecks that action identity and the complete repository snapshot
 immediately before dispatch.

@@ -23,6 +23,9 @@ source "${LAB_DIR}/shuffle/reviewed-app-image.env"
 shuffle_tools_image="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}:${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_TAG}"
 shuffle_tools_immutable_ref="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}@${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}"
 shuffle_action_service="shuffle-tools_1-2-0"
+shuffle_action_preflight_absent=false
+shuffle_action_owned=false
+shuffle_action_service_id=""
 shuffle_worker_service="shuffle-workers"
 shuffle_worker_immutable_ref=""
 shuffle_worker_preflight_absent=false
@@ -101,7 +104,12 @@ assert_reviewed_shuffle_action_service() {
   local container_metadata
   local pinned_image_id
 
-  service_metadata="$(docker_lab service inspect "${shuffle_action_service}")"
+  [[ "${shuffle_action_owned}" == true ]] \
+    && [[ -n "${shuffle_action_service_id}" ]] \
+    || fail "Shuffle action service is not owned by the current trial"
+  service_metadata="$(
+    docker_lab service inspect "${shuffle_action_service_id}"
+  )"
   service_image="$(
     jq -er '.[0].Spec.TaskTemplate.ContainerSpec.Image' \
       <<<"${service_metadata}"
@@ -111,10 +119,15 @@ assert_reviewed_shuffle_action_service() {
   jq -e \
     --arg phase "67.4" \
     --arg component "shuffle-action-image" \
+    --arg trial_run_id "${trial_run_id}" \
+    --arg service_id "${shuffle_action_service_id}" \
     --argjson port "${shuffle_action_service_port}" '
       .[0] as $service
-      | $service.Spec.Labels["com.aegisops.lab.phase"] == $phase
+      | $service.ID == $service_id
+      and $service.Spec.Labels["com.aegisops.lab.phase"] == $phase
       and $service.Spec.Labels["com.aegisops.lab.component"] == $component
+      and $service.Spec.Labels["com.aegisops.lab.trial-run-id"]
+        == $trial_run_id
       and $service.Spec.Mode.Replicated.Replicas == 1
       and (
         [
@@ -134,7 +147,7 @@ assert_reviewed_shuffle_action_service() {
     docker_lab service ps \
       --filter desired-state=running \
       --quiet \
-      "${shuffle_action_service}"
+      "${shuffle_action_service_id}"
   )"
   [[ "$(wc -w <<<"${task_ids}")" -eq 1 ]] \
     || fail "Shuffle action service does not have exactly one running task"
@@ -142,7 +155,7 @@ assert_reviewed_shuffle_action_service() {
   jq -e '
     length == 1 and all(.[]; .Status.State == "running")
   ' <<<"${task_metadata}" >/dev/null \
-    || fail "Shuffle worker task is not running"
+    || fail "Shuffle action task is not running"
   task_container_ids="$(
     jq -er '
       [.[].Status.ContainerStatus.ContainerID | select(length > 0)]
@@ -163,10 +176,24 @@ assert_reviewed_shuffle_action_service() {
     || fail "Shuffle action task did not use the reviewed image ID"
 }
 
+assert_shuffle_action_service_absent() {
+  local service_names
+
+  service_names="$(docker_lab service ls --format '{{.Name}}')" \
+    || fail "cannot inspect existing Shuffle action services"
+  if grep -Fx -- "${shuffle_action_service}" \
+    <<<"${service_names}" >/dev/null; then
+    fail "refusing to start while a pre-existing Shuffle action service exists"
+  fi
+  shuffle_action_preflight_absent=true
+}
+
 ensure_reviewed_shuffle_action_service() {
   local attempt
 
   assert_repository_snapshot
+  [[ "${shuffle_action_preflight_absent}" == true ]] \
+    || fail "Shuffle action service absence was not established before startup"
   for attempt in {1..60}; do
     if docker_lab network inspect "${shuffle_action_network}" >/dev/null 2>&1; then
       break
@@ -176,16 +203,16 @@ ensure_reviewed_shuffle_action_service() {
   docker_lab network inspect "${shuffle_action_network}" >/dev/null 2>&1 \
     || fail "Shuffle execution network was not initialized"
 
-  if docker_lab service inspect "${shuffle_action_service}" >/dev/null 2>&1; then
-    assert_reviewed_shuffle_action_service
-    return
-  fi
+  ! docker_lab service inspect "${shuffle_action_service}" >/dev/null 2>&1 \
+    || fail "Shuffle action service appeared after the preflight absence check"
 
-  docker_lab service create \
+  shuffle_action_service_id="$(docker_lab service create \
     --detach=true \
+    --quiet \
     --name "${shuffle_action_service}" \
     --label com.aegisops.lab.phase=67.4 \
     --label com.aegisops.lab.component=shuffle-action-image \
+    --label "com.aegisops.lab.trial-run-id=${trial_run_id}" \
     --network "${shuffle_action_network}" \
     --publish "${shuffle_action_publish_spec}" \
     --replicas 1 \
@@ -200,15 +227,17 @@ ensure_reviewed_shuffle_action_service() {
     --env DOCKER_API_VERSION=1.40 \
     --env SHUFFLE_APP_SDK_TIMEOUT=300 \
     --env TZ=Europe/Amsterdam \
-    "${shuffle_tools_immutable_ref}" \
-    >/dev/null
+    "${shuffle_tools_immutable_ref}")"
+  [[ -n "${shuffle_action_service_id}" ]] \
+    || fail "Shuffle action service creation did not return a service ID"
+  shuffle_action_owned=true
 
   for attempt in {1..120}; do
     if [[ "$(
       docker_lab service ps \
         --filter desired-state=running \
         --format '{{.CurrentState}}' \
-        "${shuffle_action_service}" 2>/dev/null \
+        "${shuffle_action_service_id}" 2>/dev/null \
         | sed -n '/^Running /p' \
         | wc -l \
         | tr -d ' '
@@ -222,28 +251,41 @@ ensure_reviewed_shuffle_action_service() {
 
 remove_reviewed_shuffle_action_service() {
   local attempt
+  local owned_service_id
   local service_metadata
 
+  [[ "${shuffle_action_owned}" == true ]] \
+    && [[ -n "${shuffle_action_service_id}" ]] \
+    || return
+  owned_service_id="${shuffle_action_service_id}"
   if ! service_metadata="$(
-    docker_lab service inspect "${shuffle_action_service}" 2>/dev/null
+    docker_lab service inspect "${owned_service_id}" 2>/dev/null
   )"; then
     return
   fi
-  jq -e '
-    .[0].Spec.Labels["com.aegisops.lab.phase"] == "67.4"
+  jq -e \
+    --arg service_id "${owned_service_id}" \
+    --arg trial_run_id "${trial_run_id}" \
+    --arg image "${shuffle_tools_immutable_ref}" '
+    .[0].ID == $service_id
+    and .[0].Spec.Labels["com.aegisops.lab.phase"] == "67.4"
     and .[0].Spec.Labels["com.aegisops.lab.component"]
       == "shuffle-action-image"
+    and .[0].Spec.Labels["com.aegisops.lab.trial-run-id"] == $trial_run_id
+    and .[0].Spec.TaskTemplate.ContainerSpec.Image == $image
   ' <<<"${service_metadata}" >/dev/null \
     || fail "refusing to remove an unowned Shuffle action service"
-  docker_lab service rm "${shuffle_action_service}" >/dev/null
+  docker_lab service rm "${owned_service_id}" >/dev/null
   for attempt in {1..60}; do
     if [[ -z "$(
       docker_lab ps \
         --all \
         --quiet \
         --filter \
-          "label=com.docker.swarm.service.name=${shuffle_action_service}"
+          "label=com.docker.swarm.service.id=${owned_service_id}"
     )" ]]; then
+      shuffle_action_owned=false
+      shuffle_action_service_id=""
       return
     fi
     sleep 1
@@ -737,6 +779,7 @@ shuffle_api_workflow_id="${AEGISOPS_LAB_SHUFFLE_API_WORKFLOW_ID}"
 [[ "${shuffle_api_workflow_id}" =~ ^[0-9a-fA-F-]{36}$ ]] \
   || fail "real Shuffle workflow ID is not configured"
 
+run_reviewed_lab_command assert_shuffle_action_service_absent
 run_reviewed_lab_command assert_shuffle_worker_service_absent
 run_reviewed_lab_command "${LAB_DIR}/pin-shuffle-app-image.sh"
 startup_output="$(run_reviewed_lab_startup "${LAB_DIR}/up.sh" full)"

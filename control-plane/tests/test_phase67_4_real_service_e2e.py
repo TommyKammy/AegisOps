@@ -167,11 +167,6 @@ def _manifest() -> dict[str, object]:
                     if key in {"failed_execution", "reconciliation_mismatch"}
                     else 10
                 ),
-                "authority_delta": (
-                    1
-                    if key in {"failed_execution", "reconciliation_mismatch"}
-                    else 0
-                ),
                 "measurement_source": (
                     "aegisops_authoritative_alert_count"
                     if key in {"invalid_credential", "proxy_bypass"}
@@ -203,9 +198,6 @@ def _manifest() -> dict[str, object]:
             "redacted": True,
         },
         "evaluation": {
-            "trial_run_id": "phase67-e2e-20260801T100000Z-0123456789ab",
-            "snapshot_id": snapshot_id,
-            "repository_revision": "a" * 40,
             "evaluated_at": evaluated_at,
             "verdict": "integration_trial_passed_with_owned_limitations",
             "ga_accepted": False,
@@ -257,6 +249,29 @@ def _manifest() -> dict[str, object]:
                 "description": "Production and GA gates remain open.",
                 "follow_up_issue": None,
             },
+        ],
+    }
+
+
+def _evaluation_record(manifest: dict[str, object]) -> dict[str, object]:
+    snapshot = manifest["snapshot"]
+    evaluation = manifest["evaluation"]
+    limitations = manifest["limitations"]
+    assert isinstance(snapshot, dict)
+    assert isinstance(evaluation, dict)
+    assert isinstance(limitations, list)
+    return {
+        "schema_version": builder.PREREQUISITE_EVALUATION_SCHEMA_VERSION,
+        "trial_run_id": manifest["trial_run_id"],
+        "snapshot_id": snapshot["snapshot_id"],
+        "repository_revision": snapshot["repository_revision"],
+        "evaluated_at": evaluation["evaluated_at"],
+        "verdict": evaluation["verdict"],
+        "ga_accepted": evaluation["ga_accepted"],
+        "limitation_ids": [
+            limitation["limitation_id"]
+            for limitation in limitations
+            if isinstance(limitation, dict)
         ],
     }
 
@@ -367,6 +382,10 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             validator.OWNED_LIMITATION_STATUSES,
         )
         self.assertEqual(builder.CURRENT_TRIAL_VERDICT, validator.PASSED_VERDICT)
+        self.assertEqual(
+            builder.PREREQUISITE_EVALUATION_SCHEMA_VERSION,
+            validator.PREREQUISITE_EVALUATION_SCHEMA_VERSION,
+        )
         validator.validate_manifest(_manifest(), SCHEMA)
 
     def test_published_file_validation_rehashes_the_complete_packet(self) -> None:
@@ -376,9 +395,21 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             artifacts_directory = root / manifest["artifacts"]["directory_name"]
             artifacts_directory.mkdir()
             for index, item in enumerate(manifest["artifacts"]["files"]):
-                payload = f"artifact-{index}-{item['name']}\n".encode()
+                if item["name"] == "evaluation-record.json":
+                    payload = (
+                        json.dumps(
+                            _evaluation_record(manifest),
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        )
+                        + "\n"
+                    ).encode()
+                else:
+                    payload = f"artifact-{index}-{item['name']}\n".encode()
                 (artifacts_directory / item["name"]).write_bytes(payload)
                 item["sha256"] = hashlib.sha256(payload).hexdigest()
+                if item["name"] == "evaluation-record.json":
+                    manifest["evaluation"]["sha256"] = item["sha256"]
             report_path = root / "report.json"
             report_payload = b'{"source_of_truth":"aegisops_authoritative_records"}\n'
             report_path.write_bytes(report_payload)
@@ -450,6 +481,79 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     report_path,
                     artifacts_directory,
                 )
+
+    def test_published_file_validation_rebinds_evaluation_record(self) -> None:
+        manifest = _manifest()
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifacts_directory = root / manifest["artifacts"]["directory_name"]
+            artifacts_directory.mkdir()
+            evaluation_item = None
+            for index, item in enumerate(manifest["artifacts"]["files"]):
+                if item["name"] == "evaluation-record.json":
+                    evaluation_item = item
+                    payload = (
+                        json.dumps(
+                            _evaluation_record(manifest),
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        )
+                        + "\n"
+                    ).encode()
+                else:
+                    payload = f"artifact-{index}-{item['name']}\n".encode()
+                (artifacts_directory / item["name"]).write_bytes(payload)
+                item["sha256"] = hashlib.sha256(payload).hexdigest()
+            assert evaluation_item is not None
+            manifest["evaluation"]["sha256"] = evaluation_item["sha256"]
+            report_path = root / "report.json"
+            report_payload = b'{"source_of_truth":"aegisops_authoritative_records"}\n'
+            report_path.write_bytes(report_payload)
+            manifest["report"]["sha256"] = hashlib.sha256(
+                report_payload
+            ).hexdigest()
+
+            validator.validate_published_files(
+                manifest,
+                report_path,
+                artifacts_directory,
+            )
+            mismatches = {
+                "schema_version": "phase67.4-prerequisite-evaluation-v0",
+                "trial_run_id": "phase67-e2e-20260801T100001Z-0123456789ab",
+                "snapshot_id": "sha256:" + "0" * 64,
+                "repository_revision": "0" * 40,
+                "evaluated_at": "2026-08-01T10:00:14Z",
+                "verdict": "integration_trial_failed",
+                "ga_accepted": True,
+                "limitation_ids": ["phase67-single-host"],
+            }
+            evaluation_path = artifacts_directory / "evaluation-record.json"
+            for field, replacement in mismatches.items():
+                with self.subTest(field=field):
+                    record = _evaluation_record(manifest)
+                    record[field] = replacement
+                    payload = (
+                        json.dumps(
+                            record,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        )
+                        + "\n"
+                    ).encode()
+                    evaluation_path.write_bytes(payload)
+                    digest = hashlib.sha256(payload).hexdigest()
+                    evaluation_item["sha256"] = digest
+                    manifest["evaluation"]["sha256"] = digest
+                    with self.assertRaisesRegex(
+                        validator.EvidenceValidationError,
+                        f"published evaluation record {field} does not match",
+                    ):
+                        validator.validate_published_files(
+                            manifest,
+                            report_path,
+                            artifacts_directory,
+                        )
 
     def test_schema_selects_exact_historical_and_current_profiles(
         self,
@@ -601,11 +705,13 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         )
         for case_name in validator.NEGATIVE_CASE_KEYS:
             with self.subTest(case_name=case_name):
-                self.assertEqual(
-                    passed_properties["negative_cases"]["properties"][
-                        case_name
-                    ]["required"],
-                    ["observed_at"],
+                case_contract = passed_properties["negative_cases"][
+                    "properties"
+                ][case_name]
+                self.assertEqual(case_contract["required"], ["observed_at"])
+                self.assertIs(
+                    case_contract["properties"]["authority_delta"],
+                    False,
                 )
         for identity in (
             "requester_identity",
@@ -639,6 +745,22 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             passed_properties["evaluation"]["properties"]["ga_accepted"],
             {"const": False},
         )
+        self.assertEqual(
+            passed_properties["evaluation"]["required"],
+            list(validator.EVALUATION_KEYS),
+        )
+        for duplicate_identity in (
+            "trial_run_id",
+            "snapshot_id",
+            "repository_revision",
+        ):
+            with self.subTest(duplicate_identity=duplicate_identity):
+                self.assertIs(
+                    passed_properties["evaluation"]["properties"][
+                        duplicate_identity
+                    ],
+                    False,
+                )
 
         unsupported_verdict = _manifest()
         unsupported_verdict["verdict"] = (
@@ -1517,15 +1639,19 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         ):
             validator.validate_manifest(unexpected_service, SCHEMA)
 
-        stale_evaluation = _manifest()
-        stale_evaluation["evaluation"]["trial_run_id"] = (
-            "phase67-e2e-20260801T100001Z-0123456789ab"
-        )
-        with self.assertRaisesRegex(
-            validator.EvidenceValidationError,
-            "evaluation is not bound to this trial",
-        ):
-            validator.validate_manifest(stale_evaluation, SCHEMA)
+        duplicate_evaluation_identities = {
+            "trial_run_id": "phase67-e2e-20260801T100001Z-0123456789ab",
+            "snapshot_id": "phase67-snapshot-fedcba9876543210",
+            "repository_revision": "9" * 40,
+        }
+        for field_name, field_value in duplicate_evaluation_identities.items():
+            stale_evaluation = _manifest()
+            stale_evaluation["evaluation"][field_name] = field_value
+            with self.subTest(field_name=field_name), self.assertRaisesRegex(
+                validator.EvidenceValidationError,
+                r"\$\.evaluation has unexpected keys",
+            ):
+                validator.validate_manifest(stale_evaluation, SCHEMA)
 
         altered_snapshot = _manifest()
         altered_snapshot["snapshot"]["docker_context"] = "different-colima"
@@ -1581,7 +1707,6 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             manifest["snapshot"],
         )
         manifest["snapshot"]["snapshot_id"] = snapshot_id
-        manifest["evaluation"]["snapshot_id"] = snapshot_id
         for step in manifest["steps"]:
             step["snapshot_id"] = snapshot_id
         validator.validate_manifest(
@@ -1597,7 +1722,6 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             tampered["snapshot"],
         )
         tampered["snapshot"]["snapshot_id"] = tampered_snapshot_id
-        tampered["evaluation"]["snapshot_id"] = tampered_snapshot_id
         for step in tampered["steps"]:
             step["snapshot_id"] = tampered_snapshot_id
         with self.assertRaisesRegex(
@@ -2114,13 +2238,39 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             )
 
     def test_validator_rejects_unmeasured_negative_and_missing_artifact(self) -> None:
-        unmeasured = _manifest()
-        unmeasured["negative_cases"]["failed_execution"]["authority_delta"] = 0
+        contradictory = _manifest()
+        contradictory["negative_cases"]["failed_execution"][
+            "authority_delta"
+        ] = 0
         with self.assertRaisesRegex(
             validator.EvidenceValidationError,
-            "authority delta is not measured",
+            "has unexpected keys: authority_delta",
         ):
-            validator.validate_manifest(unmeasured, SCHEMA)
+            validator.validate_manifest(contradictory, SCHEMA)
+
+        self.assertEqual(
+            builder._validated_authority_counts(
+                {
+                    "authority_before": 1,
+                    "authority_after": 2,
+                    "authority_delta": 1,
+                },
+                path="probe",
+            ),
+            (1, 2),
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "authority_delta is not derived from its counts",
+        ):
+            builder._validated_authority_counts(
+                {
+                    "authority_before": 1,
+                    "authority_after": 2,
+                    "authority_delta": 0,
+                },
+                path="probe",
+            )
 
         incomplete = _manifest()
         incomplete["artifacts"]["files"].pop()
@@ -2952,7 +3102,6 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 status=None,
                 authority_before=None,
                 authority_after=None,
-                authority_delta=None,
                 measurement_source=None,
                 evidence_ref=None,
             )
@@ -2968,9 +3117,6 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "redacted": None,
         }
         manifest["evaluation"] = {
-            "trial_run_id": None,
-            "snapshot_id": None,
-            "repository_revision": None,
             "evaluated_at": None,
             "verdict": None,
             "ga_accepted": None,
@@ -3016,7 +3162,6 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     "status": "contained",
                     "authority_before": 1,
                     "authority_after": 1,
-                    "authority_delta": 0,
                     "measurement_source": (
                         "aegisops_authoritative_alert_count"
                         if key in {"invalid_credential", "proxy_bypass"}
@@ -3419,6 +3564,15 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         service_create_block = runner[service_create:service_create_end + 40]
         self.assertIn('"${shuffle_tools_immutable_ref}"', service_create_block)
         self.assertNotIn('"${shuffle_tools_image}"', service_create_block)
+        self.assertIn("--quiet", service_create_block)
+        self.assertIn(
+            'com.aegisops.lab.trial-run-id=${trial_run_id}',
+            service_create_block,
+        )
+        self.assertIn(
+            'shuffle_action_service_id="$(docker_lab service create',
+            runner,
+        )
         self.assertIn(".Image == $image_id", runner)
         self.assertIn(
             "postdispatch_shuffle_action_image=",
@@ -3448,6 +3602,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             runner,
         )
         self.assertIn("configured_shuffle_worker_immutable_ref()", runner)
+        self.assertIn("assert_shuffle_action_service_absent()", runner)
         self.assertIn("assert_shuffle_worker_service_absent()", runner)
         self.assertIn("claim_reviewed_shuffle_worker_service()", runner)
         self.assertIn("shuffle_worker_service_is_trial_owned()", runner)
@@ -3455,13 +3610,17 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "com.aegisops.lab.trial-run-id=${trial_run_id}",
             runner,
         )
-        preflight = runner.index(
+        action_preflight = runner.index(
+            "run_reviewed_lab_command assert_shuffle_action_service_absent"
+        )
+        worker_preflight = runner.index(
             "run_reviewed_lab_command assert_shuffle_worker_service_absent"
         )
         first_startup = runner.index(
             'run_reviewed_lab_startup "${LAB_DIR}/up.sh" full'
         )
-        self.assertLess(preflight, first_startup)
+        self.assertLess(action_preflight, worker_preflight)
+        self.assertLess(worker_preflight, first_startup)
         first_worker_capture = runner.index(
             "capture_reviewed_shuffle_worker_image >/dev/null",
             first_startup,
@@ -3504,6 +3663,36 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             worker_claim.index('owned_metadata="$('),
         )
         self.assertIn("remove_reviewed_shuffle_worker_service()", runner)
+        remove_action_start = runner.index(
+            "remove_reviewed_shuffle_action_service()"
+        )
+        remove_action_end = runner.index(
+            "configured_shuffle_worker_immutable_ref()",
+            remove_action_start,
+        )
+        remove_action = runner[remove_action_start:remove_action_end]
+        self.assertLess(
+            remove_action.index('[[ "${shuffle_action_owned}" == true ]]'),
+            remove_action.index(
+                'docker_lab service inspect "${owned_service_id}"'
+            ),
+        )
+        self.assertLess(
+            remove_action.index(
+                'com.aegisops.lab.trial-run-id"] == $trial_run_id'
+            ),
+            remove_action.index('docker_lab service rm "${owned_service_id}"'),
+        )
+        self.assertLess(
+            remove_action.index(
+                ".Spec.TaskTemplate.ContainerSpec.Image == $image"
+            ),
+            remove_action.index('docker_lab service rm "${owned_service_id}"'),
+        )
+        self.assertIn(
+            'label=com.docker.swarm.service.id=${owned_service_id}',
+            remove_action,
+        )
         remove_start = runner.index("remove_reviewed_shuffle_worker_service()")
         remove_end = runner.index(
             '[[ -f "${evaluation}" ]]',

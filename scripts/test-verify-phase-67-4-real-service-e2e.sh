@@ -219,7 +219,6 @@ assert_fails_with \
     "status": "contained",
     "authority_before": 1,
     "authority_after": 1,
-    "authority_delta": 0,
     "measurement_source": "aegisops_authoritative_record_count",
     "evidence_ref": "journey:negative-probe"
   }'

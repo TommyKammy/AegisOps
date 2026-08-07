@@ -116,10 +116,14 @@ TTY. Only that ceremony persists approval and allows dispatch to real Shuffle.
 Immediately before dispatch, the runner reloads the denied request and decision
 from PostgreSQL and recounts its executions; any lifecycle change or execution
 blocks the trial.
-Before snapshot capture, the runner creates the `shuffle-tools_1-2-0` Swarm
-service from the reviewed repository digest. The service and its running task
-must retain that digest and image ID before approval and again after execution;
-the mutable compatibility tag is not the execution reference.
+Before startup, the runner fails closed if a `shuffle-tools_1-2-0` Swarm
+service already exists. It creates that service from the reviewed repository
+digest, records the returned service ID, and labels it with the current trial
+identity. The service and its running task must retain that ID, all ownership
+labels, the reviewed digest, and image ID before approval and again after
+execution; the mutable compatibility tag is not the execution reference.
+Cleanup removes only that recorded service ID after revalidating its labels and
+image, so a pre-existing or replacement service cannot be adopted or removed.
 Before startup, the runner fails closed if a `shuffle-workers` service already
 exists. It separately inspects the service created after that preflight, binds
 its service ID immediately to the current trial with Phase, component, and

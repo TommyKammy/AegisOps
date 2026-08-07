@@ -17,6 +17,9 @@ SCHEMA_ID = (
     "phase67-4-real-service-e2e-evidence-v2.json"
 )
 PASSED_VERDICT = "integration_trial_passed_with_owned_limitations"
+PREREQUISITE_EVALUATION_SCHEMA_VERSION = (
+    "phase67.4-prerequisite-evaluation-v1"
+)
 VERDICTS = {
     PASSED_VERDICT,
     "integration_trial_blocked",
@@ -272,7 +275,11 @@ LEGACY_NEGATIVE_CASE_VALUE_KEYS = (
 )
 NEGATIVE_CASE_VALUE_KEYS = (
     "observed_at",
-    *LEGACY_NEGATIVE_CASE_VALUE_KEYS,
+    "status",
+    "authority_before",
+    "authority_after",
+    "measurement_source",
+    "evidence_ref",
 )
 NEGATIVE_CASE_PRODUCING_STEPS = {
     "invalid_credential": "trigger_real_wazuh_detection",
@@ -281,6 +288,21 @@ NEGATIVE_CASE_PRODUCING_STEPS = {
     "malformed_receipt": "run_negative_cases",
     "reconciliation_mismatch": "run_negative_cases",
 }
+LEGACY_EVALUATION_KEYS = (
+    "trial_run_id",
+    "snapshot_id",
+    "repository_revision",
+    "evaluated_at",
+    "verdict",
+    "ga_accepted",
+    "sha256",
+)
+EVALUATION_KEYS = (
+    "evaluated_at",
+    "verdict",
+    "ga_accepted",
+    "sha256",
+)
 ARTIFACT_NAMES = {
     "compose-config.sha256",
     "preparation.json",
@@ -375,10 +397,14 @@ def load_json_with_sha256(path: Path) -> tuple[object, str]:
     return _parse_json_bytes(payload, path), hashlib.sha256(payload).hexdigest()
 
 
-def _published_file_sha256(path: Path, label: str) -> str:
+def _read_published_file_bytes(path: Path, label: str) -> bytes:
     require(not path.is_symlink(), f"{label} must not be a symbolic link")
     require(path.is_file(), f"{label} must be a regular file")
-    return hashlib.sha256(_read_json_bytes(path)).hexdigest()
+    return _read_json_bytes(path)
+
+
+def _published_file_sha256(path: Path, label: str) -> str:
+    return hashlib.sha256(_read_published_file_bytes(path, label)).hexdigest()
 
 
 def require(condition: bool, message: str) -> None:
@@ -626,13 +652,6 @@ def _schema_passed_verdict_contract() -> dict[str, object]:
             if case_name in {"invalid_credential", "proxy_bypass"}
             else "aegisops_authoritative_record_count"
         )
-        authority_delta: dict[str, object] = {"type": "integer"}
-        if case_name in {
-            "invalid_credential",
-            "proxy_bypass",
-            "malformed_receipt",
-        }:
-            authority_delta = {"const": 0}
         negative_case_properties[case_name] = {
             "type": "object",
             "required": ["observed_at"],
@@ -653,7 +672,7 @@ def _schema_passed_verdict_contract() -> dict[str, object]:
                     "type": "integer",
                     "minimum": 0,
                 },
-                "authority_delta": authority_delta,
+                "authority_delta": False,
                 "measurement_source": {"const": measurement_source},
                 "evidence_ref": {
                     "type": "string",
@@ -786,19 +805,11 @@ def _schema_passed_verdict_contract() -> dict[str, object]:
                     },
                 },
                 "evaluation": {
+                    "required": list(EVALUATION_KEYS),
                     "properties": {
-                        "trial_run_id": {
-                            "type": "string",
-                            "pattern": TRIAL_ID.pattern,
-                        },
-                        "snapshot_id": {
-                            "type": "string",
-                            "pattern": SNAPSHOT_ID.pattern,
-                        },
-                        "repository_revision": {
-                            "type": "string",
-                            "pattern": REVISION.pattern,
-                        },
+                        "trial_run_id": False,
+                        "snapshot_id": False,
+                        "repository_revision": False,
                         "evaluated_at": {
                             "type": "string",
                             "format": "date-time",
@@ -1573,7 +1584,18 @@ def validate_manifest(
         status = require_nullable_string(case["status"], f"$.negative_cases.{key}.status")
         before = require_nullable_integer(case["authority_before"], f"$.negative_cases.{key}.authority_before")
         after = require_nullable_integer(case["authority_after"], f"$.negative_cases.{key}.authority_after")
-        delta = require_nullable_integer(case["authority_delta"], f"$.negative_cases.{key}.authority_delta")
+        delta = (
+            require_nullable_integer(
+                case["authority_delta"],
+                f"$.negative_cases.{key}.authority_delta",
+            )
+            if allow_legacy_blocked_packet
+            else (
+                after - before
+                if before is not None and after is not None
+                else None
+            )
+        )
         measurement_source = require_nullable_string(case["measurement_source"], f"$.negative_cases.{key}.measurement_source")
         evidence_ref = require_nullable_string(case["evidence_ref"], f"$.negative_cases.{key}.evidence_ref")
         producing_step = NEGATIVE_CASE_PRODUCING_STEPS[key]
@@ -1598,7 +1620,8 @@ def validate_manifest(
         if status is not None:
             require(status in {"rejected", "contained"}, f"$.negative_cases.{key} did not reject or contain the probe")
             require(before is not None and before >= 0 and after is not None and after >= 0, f"$.negative_cases.{key} lacks authoritative before/after counts")
-            require(delta == after - before, f"$.negative_cases.{key} authority delta is not measured")
+            if allow_legacy_blocked_packet:
+                require(delta == after - before, f"$.negative_cases.{key} authority delta is not measured")
             expected_source = (
                 "aegisops_authoritative_alert_count"
                 if key in {"invalid_credential", "proxy_bypass"}
@@ -1684,10 +1707,39 @@ def validate_manifest(
         )
 
     evaluation = require_mapping(root["evaluation"], "$.evaluation")
-    require_exact_keys(evaluation, required=("trial_run_id", "snapshot_id", "repository_revision", "evaluated_at", "verdict", "ga_accepted", "sha256"), path="$.evaluation")
-    evaluation_trial = require_nullable_string(evaluation["trial_run_id"], "$.evaluation.trial_run_id")
-    evaluation_snapshot = require_nullable_string(evaluation["snapshot_id"], "$.evaluation.snapshot_id")
-    evaluation_revision = require_nullable_string(evaluation["repository_revision"], "$.evaluation.repository_revision")
+    require_exact_keys(
+        evaluation,
+        required=(
+            LEGACY_EVALUATION_KEYS
+            if allow_legacy_blocked_packet
+            else EVALUATION_KEYS
+        ),
+        path="$.evaluation",
+    )
+    evaluation_trial = (
+        require_nullable_string(
+            evaluation["trial_run_id"],
+            "$.evaluation.trial_run_id",
+        )
+        if allow_legacy_blocked_packet
+        else None
+    )
+    evaluation_snapshot = (
+        require_nullable_string(
+            evaluation["snapshot_id"],
+            "$.evaluation.snapshot_id",
+        )
+        if allow_legacy_blocked_packet
+        else None
+    )
+    evaluation_revision = (
+        require_nullable_string(
+            evaluation["repository_revision"],
+            "$.evaluation.repository_revision",
+        )
+        if allow_legacy_blocked_packet
+        else None
+    )
     evaluation_verdict = require_nullable_string(evaluation["verdict"], "$.evaluation.verdict")
     evaluation_ga = require_nullable_boolean(evaluation["ga_accepted"], "$.evaluation.ga_accepted")
     evaluation_sha = require_nullable_string(evaluation["sha256"], "$.evaluation.sha256")
@@ -1708,9 +1760,10 @@ def validate_manifest(
             evaluation_present,
             "a passed evaluation step requires a bound evaluation record",
         )
-        require(evaluation_trial == root["trial_run_id"], "evaluation is not bound to this trial")
-        require(evaluation_snapshot == snapshot_id, "evaluation is not bound to this snapshot")
-        require(evaluation_revision == snapshot["repository_revision"], "evaluation is not bound to this repository revision")
+        if allow_legacy_blocked_packet:
+            require(evaluation_trial == root["trial_run_id"], "evaluation is not bound to this trial")
+            require(evaluation_snapshot == snapshot_id, "evaluation is not bound to this snapshot")
+            require(evaluation_revision == snapshot["repository_revision"], "evaluation is not bound to this repository revision")
         evaluation_time = _datetime_value(
             evaluation["evaluated_at"],
             "$.evaluation.evaluated_at",
@@ -1834,6 +1887,92 @@ def validate_manifest(
     _scan_secret_values(root)
 
 
+def _validate_published_evaluation_record(
+    manifest: Mapping[str, object],
+    value: object,
+) -> None:
+    record = require_mapping(value, "$.published_evaluation_record")
+    require_exact_keys(
+        record,
+        required=(
+            "schema_version",
+            "trial_run_id",
+            "snapshot_id",
+            "repository_revision",
+            "evaluated_at",
+            "verdict",
+            "ga_accepted",
+            "limitation_ids",
+        ),
+        path="$.published_evaluation_record",
+    )
+    snapshot = require_mapping(manifest.get("snapshot"), "$.snapshot")
+    evaluation = require_mapping(manifest.get("evaluation"), "$.evaluation")
+    expected_values: dict[str, object] = {
+        "schema_version": PREREQUISITE_EVALUATION_SCHEMA_VERSION,
+        "trial_run_id": require_string(
+            manifest.get("trial_run_id"),
+            "$.trial_run_id",
+        ),
+        "snapshot_id": require_string(
+            snapshot.get("snapshot_id"),
+            "$.snapshot.snapshot_id",
+        ),
+        "repository_revision": require_string(
+            snapshot.get("repository_revision"),
+            "$.snapshot.repository_revision",
+        ),
+        "evaluated_at": require_string(
+            evaluation.get("evaluated_at"),
+            "$.evaluation.evaluated_at",
+        ),
+        "verdict": require_string(
+            evaluation.get("verdict"),
+            "$.evaluation.verdict",
+        ),
+        "ga_accepted": False,
+    }
+    require(
+        evaluation.get("ga_accepted") is False,
+        "$.evaluation.ga_accepted must be false",
+    )
+    for field, expected in expected_values.items():
+        actual = record.get(field)
+        require(
+            type(actual) is type(expected) and actual == expected,
+            f"published evaluation record {field} does not match the manifest",
+        )
+
+    limitation_values = manifest.get("limitations")
+    require(isinstance(limitation_values, list), "$.limitations must be an array")
+    manifest_limitation_ids = {
+        require_string(
+            require_mapping(item, f"$.limitations[{index}]").get(
+                "limitation_id"
+            ),
+            f"$.limitations[{index}].limitation_id",
+        )
+        for index, item in enumerate(limitation_values)
+    }
+    record_limitation_values = record.get("limitation_ids")
+    require(
+        isinstance(record_limitation_values, list),
+        "$.published_evaluation_record.limitation_ids must be an array",
+    )
+    record_limitation_ids = [
+        require_string(
+            item,
+            f"$.published_evaluation_record.limitation_ids[{index}]",
+        )
+        for index, item in enumerate(record_limitation_values)
+    ]
+    require(
+        len(record_limitation_ids) == len(set(record_limitation_ids))
+        and set(record_limitation_ids) == manifest_limitation_ids,
+        "published evaluation record limitation_ids does not match the manifest",
+    )
+
+
 def validate_published_files(
     manifest: Mapping[str, object],
     report_path: Path,
@@ -1893,11 +2032,34 @@ def validate_published_files(
         {path.name for path in published_paths} == set(expected_hashes),
         "published artifact file set does not match the manifest",
     )
+    published_evaluation_record: object | None = None
     for path in published_paths:
+        label = f"published artifact {path.name}"
+        payload = _read_published_file_bytes(path, label)
         require(
-            _published_file_sha256(path, f"published artifact {path.name}")
-            == expected_hashes[path.name],
+            hashlib.sha256(payload).hexdigest() == expected_hashes[path.name],
             f"published artifact {path.name} digest does not match the manifest",
+        )
+        if path.name == "evaluation-record.json":
+            published_evaluation_record = _parse_json_bytes(payload, path)
+
+    if "evaluation-record.json" in expected_hashes:
+        evaluation = require_mapping(manifest.get("evaluation"), "$.evaluation")
+        require(
+            expected_hashes["evaluation-record.json"]
+            == require_sha256(
+                evaluation.get("sha256"),
+                "$.evaluation.sha256",
+            ),
+            "published evaluation digest does not match the manifest",
+        )
+        require(
+            published_evaluation_record is not None,
+            "published evaluation record is missing",
+        )
+        _validate_published_evaluation_record(
+            manifest,
+            published_evaluation_record,
         )
 
 

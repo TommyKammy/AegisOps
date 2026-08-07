@@ -70,6 +70,8 @@ require_fixed "${lab_root}/RUNBOOK.md" 'run-e2e-trial.sh'
 require_fixed "${lab_root}/RUNBOOK.md" 'explicit record-ID allowlist'
 require_fixed "${lab_root}/RUNBOOK.md" 'tracked and untracked worktree after cleanup'
 require_fixed "${lab_root}/RUNBOOK.md" 'derived from its terminal step'
+require_fixed "${lab_root}/RUNBOOK.md" 'shuffle-tools_1-2-0'
+require_fixed "${lab_root}/RUNBOOK.md" 'pre-existing or replacement service'
 require_fixed "${repo_root}/README.md" 'Phase 67.4 real-service E2E prerequisite evaluation'
 require_fixed "${lab_root}/README.md" 'records in preserved volumes from'
 require_fixed "${lab_root}/test-wazuh-intake.sh" 'native_wazuh_agent_id: $agent_id'
@@ -175,6 +177,7 @@ require_fixed "${lab_root}/shuffle/validate_preserved_workflow.py" 'def validate
 require_fixed "${e2e_root}/build_evidence.py" '_validate_wazuh_reconciliation_scope'
 require_fixed "${e2e_root}/build_evidence.py" '_validate_preparation_journey_binding'
 require_fixed "${e2e_root}/build_evidence.py" '_approval_challenge_sha256'
+require_fixed "${e2e_root}/build_evidence.py" '_validated_authority_counts'
 require_fixed "${e2e_root}/build_evidence.py" '_validate_report_expected_receipt_id'
 require_fixed "${e2e_root}/build_evidence.py" 'expected_execution_receipt_id'
 require_fixed "${e2e_root}/build_evidence.py" '_load_wazuh_observations'
@@ -228,6 +231,24 @@ require_fixed "${e2e_root}/validate_evidence_manifest.py" 'Shuffle workflow ID i
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'Shuffle workflow version is not the reviewed version'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'Shuffle execution ID must use canonical UUID form'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'evaluation digest does not match evaluation-record.json artifact'
+require_fixed "${e2e_root}/validate_evidence_manifest.py" 'LEGACY_EVALUATION_KEYS'
+require_fixed "${e2e_root}/validate_evidence_manifest.py" 'EVALUATION_KEYS'
+require_fixed "${schema}" '"authority_delta": false'
+reject_fixed \
+  "${e2e_root}/build_evidence.py" \
+  '"trial_run_id": evaluation_record.get("trial_run_id")'
+reject_fixed \
+  "${e2e_root}/build_evidence.py" \
+  '"snapshot_id": evaluation_record.get("snapshot_id")'
+reject_fixed \
+  "${e2e_root}/build_evidence.py" \
+  '"repository_revision": evaluation_record.get('
+reject_fixed \
+  "${e2e_root}/build_evidence.py" \
+  '"authority_delta": probe.get("authority_delta")'
+reject_fixed \
+  "${e2e_root}/build_evidence.py" \
+  '"authority_delta": negative_boundary.get('
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'PASSED_VERDICT'
 require_fixed "${e2e_root}/validate_evidence_manifest.py" 'validate_published_files'
 require_fixed \
@@ -272,6 +293,12 @@ require_fixed "${lab_root}/run-e2e-trial.sh" 'workflow_predispatch_output='
 require_fixed "${lab_root}/run-e2e-trial.sh" 'capture_reviewed_shuffle_action_image'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'ensure_reviewed_shuffle_action_service'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'assert_reviewed_shuffle_action_service'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'assert_shuffle_action_service_absent'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_action_preflight_absent=true'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_action_owned=true'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_action_service_id="$(docker_lab service create'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab service rm "${owned_service_id}"'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'label=com.docker.swarm.service.id=${owned_service_id}'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab service create'
 require_fixed "${lab_root}/run-e2e-trial.sh" '.Image == $image_id'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'postdispatch_shuffle_action_image'

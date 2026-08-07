@@ -321,9 +321,6 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "trial_run_id",
-        "snapshot_id",
-        "repository_revision",
         "evaluated_at",
         "verdict",
         "ga_accepted",
@@ -675,9 +672,7 @@
                     "type": "integer",
                     "minimum": 0
                   },
-                  "authority_delta": {
-                    "const": 0
-                  },
+                  "authority_delta": false,
                   "measurement_source": {
                     "const": "aegisops_authoritative_alert_count"
                   },
@@ -713,9 +708,7 @@
                     "type": "integer",
                     "minimum": 0
                   },
-                  "authority_delta": {
-                    "const": 0
-                  },
+                  "authority_delta": false,
                   "measurement_source": {
                     "const": "aegisops_authoritative_alert_count"
                   },
@@ -751,9 +744,7 @@
                     "type": "integer",
                     "minimum": 0
                   },
-                  "authority_delta": {
-                    "type": "integer"
-                  },
+                  "authority_delta": false,
                   "measurement_source": {
                     "const": "aegisops_authoritative_record_count"
                   },
@@ -789,9 +780,7 @@
                     "type": "integer",
                     "minimum": 0
                   },
-                  "authority_delta": {
-                    "const": 0
-                  },
+                  "authority_delta": false,
                   "measurement_source": {
                     "const": "aegisops_authoritative_record_count"
                   },
@@ -827,9 +816,7 @@
                     "type": "integer",
                     "minimum": 0
                   },
-                  "authority_delta": {
-                    "type": "integer"
-                  },
+                  "authority_delta": false,
                   "measurement_source": {
                     "const": "aegisops_authoritative_record_count"
                   },
@@ -891,19 +878,16 @@
             }
           },
           "evaluation": {
+            "required": [
+              "evaluated_at",
+              "verdict",
+              "ga_accepted",
+              "sha256"
+            ],
             "properties": {
-              "trial_run_id": {
-                "type": "string",
-                "pattern": "^phase67-e2e-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
-              },
-              "snapshot_id": {
-                "type": "string",
-                "pattern": "^phase67-snapshot-[0-9a-f]{16}$"
-              },
-              "repository_revision": {
-                "type": "string",
-                "pattern": "^[0-9a-f]{40}$"
-              },
+              "trial_run_id": false,
+              "snapshot_id": false,
+              "repository_revision": false,
               "evaluated_at": {
                 "type": "string",
                 "format": "date-time"
@@ -1785,7 +1769,6 @@
         "status",
         "authority_before",
         "authority_after",
-        "authority_delta",
         "measurement_source",
         "evidence_ref"
       ],
