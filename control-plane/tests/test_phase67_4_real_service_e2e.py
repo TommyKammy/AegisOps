@@ -2008,8 +2008,11 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             builder._validate_wazuh_reconciliation_scope(duplicate, *sources)
 
     def test_builder_binds_preparation_to_the_complete_journey_request(self) -> None:
+        trial_run_id = "phase67-e2e-20260801T100000Z-0123456789ab"
+        action_request_id = "action-a1b2c3d4"
+        payload_hash = "a" * 64
         preparation = {
-            "trial_run_id": "phase67-e2e-20260801T100000Z-0123456789ab",
+            "trial_run_id": trial_run_id,
             "alert_id": "alert-a1b2c3d4",
             "finding_id": "finding-a1b2c3d4",
             "case_id": "case-a1b2c3d4",
@@ -2029,12 +2032,16 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 "approval_decision_lifecycle_state": "rejected",
                 "approver_identities": [journey.NEGATIVE_PROBE_APPROVER_IDENTITY],
             },
-            "action_request_id": "action-a1b2c3d4",
+            "action_request_id": action_request_id,
             "idempotency_key": "phase67-idempotency-a1b2c3d4",
-            "payload_hash": "a" * 64,
+            "payload_hash": payload_hash,
             "target_scope": {"identity_id": "local-test-sink"},
             "requester_identity": "phase67-lab-requester",
-            "approval_challenge_sha256": "b" * 64,
+            "approval_challenge_sha256": builder._approval_challenge_sha256(
+                trial_run_id=trial_run_id,
+                action_request_id=action_request_id,
+                payload_hash=payload_hash,
+            ),
         }
         journey_request = deepcopy(preparation)
         builder._validate_preparation_journey_binding(
@@ -2056,6 +2063,38 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 builder._validate_preparation_journey_binding(
                     preparation,
                     tampered,
+                )
+
+        jointly_tampered = deepcopy(preparation)
+        jointly_tampered["approval_challenge_sha256"] = "b" * 64
+        with self.assertRaisesRegex(
+            ValueError,
+            "approval challenge digest does not match the deterministic",
+        ):
+            builder._validate_preparation_journey_binding(
+                jointly_tampered,
+                deepcopy(jointly_tampered),
+            )
+
+        challenge_input_mutations = {
+            "trial_run_id": "phase67-e2e-20260801T100000Z-othertrial",
+            "action_request_id": "action-from-another-trial",
+            "payload_hash": "d" * 64,
+        }
+        for field_name, field_value in challenge_input_mutations.items():
+            tampered_preparation = deepcopy(preparation)
+            tampered_journey = deepcopy(preparation)
+            tampered_preparation[field_name] = field_value
+            tampered_journey[field_name] = field_value
+            with self.subTest(
+                challenge_input=field_name
+            ), self.assertRaisesRegex(
+                ValueError,
+                "approval challenge digest does not match the deterministic",
+            ):
+                builder._validate_preparation_journey_binding(
+                    tampered_preparation,
+                    tampered_journey,
                 )
 
     def test_live_workflow_digest_is_canonical_and_content_bound(self) -> None:
@@ -2357,6 +2396,13 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         target_scope = {"identity_id": "local-test-sink"}
         approved_payload_hash = "a" * 64
         denied_payload_hash = "b" * 64
+        expected_receipt_id = identifiers["expected_receipt_id"]
+        approved_payload = {
+            "action_type": "notify_identity_owner",
+            "shuffle_delegation_binding": {
+                "expected_execution_receipt_id": expected_receipt_id,
+            },
+        }
         requester_identity = "phase67-lab-requester"
         approver_identity = "phase67-lab-independent-approver"
         journey_record = {
@@ -2395,6 +2441,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "idempotency_key": "phase67-idempotency-a1b2c3d4",
             "payload_hash": approved_payload_hash,
             "target_scope": target_scope,
+            "expected_receipt_id": expected_receipt_id,
             "reconciliation_id": identifiers["reconciliation_id"],
             "wazuh_reconciliation_ids": [
                 "phase67-admission-reconciliation",
@@ -2462,6 +2509,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                         "idempotency_key": "phase67-idempotency-a1b2c3d4",
                         "target_scope": target_scope,
                         "payload_hash": approved_payload_hash,
+                        "requested_payload": deepcopy(approved_payload),
                         "lifecycle_state": "approved",
                         "requester_identity": requester_identity,
                         "authority_role": "authoritative_control_plane_record",
@@ -2508,6 +2556,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                         "execution_run_id": identifiers["shuffle_execution_id"],
                         "idempotency_key": "phase67-idempotency-a1b2c3d4",
                         "payload_hash": "a" * 64,
+                        "approved_payload": deepcopy(approved_payload),
                         "target_scope": {"identity_id": "local-test-sink"},
                         "execution_surface_type": "automation_substrate",
                         "execution_surface_id": "shuffle",
@@ -2590,6 +2639,55 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             }
         }
         builder._validate_trial_report_scope(report, journey_record, wazuh)
+
+        tampered_journey_receipt = deepcopy(journey_record)
+        tampered_journey_receipt["expected_receipt_id"] = (
+            "phase67-receipt-from-another-trial"
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "approved action request is not bound to the journey: "
+            "expected_execution_receipt_id",
+        ):
+            builder._validate_trial_report_scope(
+                report,
+                tampered_journey_receipt,
+                wazuh,
+            )
+
+        tampered_request_receipt = deepcopy(report)
+        tampered_request_receipt["records"]["action_request"][1][
+            "requested_payload"
+        ]["shuffle_delegation_binding"]["expected_execution_receipt_id"] = (
+            "phase67-receipt-from-another-trial"
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "approved action request is not bound to the journey: "
+            "expected_execution_receipt_id",
+        ):
+            builder._validate_trial_report_scope(
+                tampered_request_receipt,
+                journey_record,
+                wazuh,
+            )
+
+        tampered_execution_receipt = deepcopy(report)
+        tampered_execution_receipt["records"]["action_execution"][0][
+            "approved_payload"
+        ]["shuffle_delegation_binding"]["expected_execution_receipt_id"] = (
+            "phase67-receipt-from-another-trial"
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "action execution is not bound to the journey: "
+            "expected_execution_receipt_id",
+        ):
+            builder._validate_trial_report_scope(
+                tampered_execution_receipt,
+                journey_record,
+                wazuh,
+            )
 
         binding_mutations = {
             "execution_run_id": "2f90e91d-e217-42da-bd83-a1b2c3d4e5f7",
@@ -3036,17 +3134,44 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     validator.validate_manifest(tampered, SCHEMA)
 
     def test_runner_uses_bound_approval_challenges_and_deterministic_record_ids(self) -> None:
-        challenge = journey._approval_challenge(
-            trial_id="phase67-e2e-20260801T100000Z-0123456789ab",
-            action_request_id="action-a1b2c3d4",
-            payload_hash="a" * 64,
+        challenge_inputs = {
+            "trial_id": "phase67-e2e-20260801T100000Z-0123456789ab",
+            "action_request_id": "action-a1b2c3d4",
+            "payload_hash": "a" * 64,
+        }
+        challenge = journey._approval_challenge(**challenge_inputs)
+        challenge_sha256 = journey._approval_challenge_sha256(
+            **challenge_inputs
         )
-        changed = journey._approval_challenge(
-            trial_id="phase67-e2e-20260801T100000Z-0123456789ab",
-            action_request_id="action-a1b2c3d4",
-            payload_hash="b" * 64,
+        self.assertEqual(
+            challenge_sha256,
+            hashlib.sha256(challenge.encode("utf-8")).hexdigest(),
         )
-        self.assertNotEqual(challenge, changed)
+        self.assertEqual(
+            challenge_sha256,
+            builder._approval_challenge_sha256(
+                trial_run_id=challenge_inputs["trial_id"],
+                action_request_id=challenge_inputs["action_request_id"],
+                payload_hash=challenge_inputs["payload_hash"],
+            ),
+        )
+        challenge_input_mutations = {
+            "trial_id": "phase67-e2e-20260801T100000Z-othertrial",
+            "action_request_id": "action-from-another-trial",
+            "payload_hash": "b" * 64,
+        }
+        for field_name, field_value in challenge_input_mutations.items():
+            changed_inputs = dict(challenge_inputs)
+            changed_inputs[field_name] = field_value
+            with self.subTest(challenge_input=field_name):
+                self.assertNotEqual(
+                    challenge,
+                    journey._approval_challenge(**changed_inputs),
+                )
+                self.assertNotEqual(
+                    challenge_sha256,
+                    journey._approval_challenge_sha256(**changed_inputs),
+                )
         first = journey._identifiers_for_trial(
             "phase67-e2e-20260801T100000Z-0123456789ab"
         )

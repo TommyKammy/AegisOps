@@ -183,6 +183,20 @@ def _approval_challenge(
     return hashlib.sha256(encoded).hexdigest()[:16].upper()
 
 
+def _approval_challenge_sha256(
+    *,
+    trial_id: str,
+    action_request_id: str,
+    payload_hash: str,
+) -> str:
+    challenge = _approval_challenge(
+        trial_id=trial_id,
+        action_request_id=action_request_id,
+        payload_hash=payload_hash,
+    )
+    return hashlib.sha256(challenge.encode("utf-8")).hexdigest()
+
+
 def _binding_and_payload(
     *,
     correlation_id: str,
@@ -617,9 +631,11 @@ def _prepare(args: argparse.Namespace) -> dict[str, object]:
         "payload_hash": action.payload_hash,
         "target_scope": dict(action.target_scope),
         "approval_challenge": challenge,
-        "approval_challenge_sha256": hashlib.sha256(
-            challenge.encode("utf-8")
-        ).hexdigest(),
+        "approval_challenge_sha256": _approval_challenge_sha256(
+            trial_id=args.trial_id,
+            action_request_id=action.action_request_id,
+            payload_hash=action.payload_hash,
+        ),
         "denied_action_request_id": identifiers["denied_action_request_id"],
         "denied_approval_decision_id": identifiers[
             "denied_approval_decision_id"
@@ -712,9 +728,11 @@ def _execute(args: argparse.Namespace) -> dict[str, object]:
         "payload_hash": action.payload_hash,
         "target_scope": dict(action.target_scope),
         "approval_challenge": challenge,
-        "approval_challenge_sha256": hashlib.sha256(
-            challenge.encode("utf-8")
-        ).hexdigest(),
+        "approval_challenge_sha256": _approval_challenge_sha256(
+            trial_id=args.trial_id,
+            action_request_id=action.action_request_id,
+            payload_hash=action.payload_hash,
+        ),
     }
     for field_name, expected_value in expected_preparation.items():
         if preparation.get(field_name) != expected_value:

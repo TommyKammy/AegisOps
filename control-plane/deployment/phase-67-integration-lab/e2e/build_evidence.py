@@ -285,6 +285,19 @@ def _required_text(value: object, path: str) -> str:
     return value.strip()
 
 
+def _approval_challenge_sha256(
+    *,
+    trial_run_id: str,
+    action_request_id: str,
+    payload_hash: str,
+) -> str:
+    challenge_input = "\0".join(
+        (trial_run_id, action_request_id, payload_hash)
+    ).encode("utf-8")
+    challenge = hashlib.sha256(challenge_input).hexdigest()[:16].upper()
+    return hashlib.sha256(challenge.encode("utf-8")).hexdigest()
+
+
 def _validate_wazuh_finding_identity(
     wazuh: Mapping[str, object],
     journey_finding_id: object,
@@ -576,6 +589,54 @@ def _validate_preparation_journey_binding(
             raise ValueError(
                 f"preparation {field_name} does not match the journey"
             )
+    expected_challenge_sha256 = _approval_challenge_sha256(
+        trial_run_id=_required_text(
+            journey.get("trial_run_id"),
+            "journey.trial_run_id",
+        ),
+        action_request_id=_required_text(
+            journey.get("action_request_id"),
+            "journey.action_request_id",
+        ),
+        payload_hash=_required_text(
+            journey.get("payload_hash"),
+            "journey.payload_hash",
+        ),
+    )
+    if journey.get("approval_challenge_sha256") != expected_challenge_sha256:
+        raise ValueError(
+            "approval challenge digest does not match the deterministic "
+            "trial inputs"
+        )
+
+
+def _validate_report_expected_receipt_id(
+    record: Mapping[str, object],
+    *,
+    payload_field: str,
+    expected_receipt_id: str,
+    label: str,
+) -> None:
+    payload = _mapping(
+        record.get(payload_field),
+        f"report {label}.{payload_field}",
+    )
+    binding = _mapping(
+        payload.get("shuffle_delegation_binding"),
+        f"report {label}.{payload_field}.shuffle_delegation_binding",
+    )
+    observed_receipt_id = _required_text(
+        binding.get("expected_execution_receipt_id"),
+        (
+            f"report {label}.{payload_field}.shuffle_delegation_binding."
+            "expected_execution_receipt_id"
+        ),
+    )
+    if observed_receipt_id != expected_receipt_id:
+        raise ValueError(
+            f"report {label} is not bound to the journey: "
+            "expected_execution_receipt_id"
+        )
 
 
 def _validate_wazuh_reconciliation_scope(
@@ -905,6 +966,16 @@ def _validate_trial_report_scope(
         },
         "approved action request",
     )
+    expected_receipt_id = _required_text(
+        journey.get("expected_receipt_id"),
+        "journey.expected_receipt_id",
+    )
+    _validate_report_expected_receipt_id(
+        indexed_records["action_request"][approved_action_request_id],
+        payload_field="requested_payload",
+        expected_receipt_id=expected_receipt_id,
+        label="approved action request",
+    )
     _validate_report_record(
         indexed_records["action_request"][denied_action_request_id],
         {
@@ -976,6 +1047,12 @@ def _validate_trial_report_scope(
         raise ValueError(
             "report action execution is not bound to the journey: target_scope"
         )
+    _validate_report_expected_receipt_id(
+        action_execution,
+        payload_field="approved_payload",
+        expected_receipt_id=expected_receipt_id,
+        label="action execution",
+    )
 
     reconciliation_records = records["reconciliation"]
     if not isinstance(reconciliation_records, list) or not reconciliation_records:

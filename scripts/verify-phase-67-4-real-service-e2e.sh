@@ -174,6 +174,9 @@ require_fixed "${e2e_root}/build_evidence.py" 'WORKFLOW_VALIDATOR_PATH = ('
 require_fixed "${lab_root}/shuffle/validate_preserved_workflow.py" 'def validate_preserved_workflow('
 require_fixed "${e2e_root}/build_evidence.py" '_validate_wazuh_reconciliation_scope'
 require_fixed "${e2e_root}/build_evidence.py" '_validate_preparation_journey_binding'
+require_fixed "${e2e_root}/build_evidence.py" '_approval_challenge_sha256'
+require_fixed "${e2e_root}/build_evidence.py" '_validate_report_expected_receipt_id'
+require_fixed "${e2e_root}/build_evidence.py" 'expected_execution_receipt_id'
 require_fixed "${e2e_root}/build_evidence.py" '_load_wazuh_observations'
 require_fixed "${e2e_root}/build_evidence.py" '_validate_wazuh_output_contract'
 require_fixed "${e2e_root}/build_evidence.py" '_validate_snapshot_artifact_bindings'
@@ -203,6 +206,16 @@ require_fixed \
 require_fixed "${e2e_root}/build_evidence.py" '_validate_report_record'
 require_fixed "${e2e_root}/build_evidence.py" '"approved action request"'
 require_fixed "${e2e_root}/build_evidence.py" '"approved decision"'
+require_fixed "${e2e_root}/run_real_journey.py" '_approval_challenge_sha256'
+require_fixed \
+  "${repo_root}/control-plane/tests/test_phase67_4_real_service_e2e.py" \
+  'jointly_tampered["approval_challenge_sha256"]'
+require_fixed \
+  "${repo_root}/control-plane/tests/test_phase67_4_real_service_e2e.py" \
+  'tampered_request_receipt'
+require_fixed \
+  "${repo_root}/control-plane/tests/test_phase67_4_real_service_e2e.py" \
+  'tampered_execution_receipt'
 require_fixed "${e2e_root}/build_evidence.py" '_reject_duplicate_keys'
 require_fixed \
   "${e2e_root}/build_evidence.py" \
