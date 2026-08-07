@@ -1441,6 +1441,9 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
         )
         self.assertIn("control_plane_container_image_id", status)
         self.assertIn("^sha256:[0-9a-f]{64}$", status)
+        self.assertIn('ps --all --format json', status)
+        self.assertIn('compose_ps_json=%s', status)
+        self.assertIn('sort_by(.Service)', status)
 
     def test_prepare_substrates_blocks_dirty_tracked_wazuh_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1913,6 +1916,11 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
             fake_docker.write_text(
                 "#!/usr/bin/env bash\n"
                 'case "$*" in\n'
+                '  *" ps --all --format json") '
+                "printf '%s\\n' "
+                "'[{\"Service\":\"control-plane\","
+                "\"State\":\"running\",\"Health\":\"healthy\","
+                "\"ExitCode\":0}]' ;;\n"
                 '  *" ps --all --quiet control-plane") '
                 'printf "phase67-control-plane\\n" ;;\n'
                 '  *" inspect --format {{.Image}} phase67-control-plane") '
@@ -1953,6 +1961,11 @@ class Phase67ColimaIntegrationLabTests(unittest.TestCase):
                 self.assertIn(
                     "control_plane_container_image_id=sha256:"
                     + "0" * 64,
+                    evidence_text,
+                )
+                self.assertIn(
+                    'compose_ps_json=[{"Service":"control-plane",'
+                    '"State":"running","Health":"healthy","ExitCode":0}]',
                     evidence_text,
                 )
 

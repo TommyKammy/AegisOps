@@ -417,13 +417,21 @@
   },
   "allOf": [
     {
-      "if": {"$ref": "#/$defs/legacy_blocked_identity"},
-      "then": {"$ref": "#/$defs/legacy_blocked_image_inventory"},
-      "else": {"$ref": "#/$defs/current_image_inventory"}
+      "if": {
+        "$ref": "#/$defs/legacy_blocked_identity"
+      },
+      "then": {
+        "$ref": "#/$defs/legacy_blocked_image_inventory"
+      },
+      "else": {
+        "$ref": "#/$defs/current_image_inventory"
+      }
     },
     {
       "if": {
-        "required": ["verdict"],
+        "required": [
+          "verdict"
+        ],
         "properties": {
           "verdict": {
             "const": "integration_trial_passed_with_owned_limitations"
@@ -435,7 +443,106 @@
           "steps": {
             "items": {
               "properties": {
-                "status": {"const": "passed"}
+                "status": {
+                  "const": "passed"
+                }
+              }
+            }
+          },
+          "identifiers": {
+            "properties": {
+              "wazuh_manager_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "wazuh_agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "wazuh_rule_id": {
+                "const": "5710"
+              },
+              "native_wazuh_alert_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "aegisops_alert_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "finding_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "case_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "denied_action_request_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "denied_approval_decision_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "action_request_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "approval_decision_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "delegation_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "shuffle_workflow_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "shuffle_workflow_version": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "shuffle_execution_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "expected_receipt_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "action_execution_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "reconciliation_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "report_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
               }
             }
           }
@@ -466,26 +573,510 @@
     },
     "legacy_blocked_image_inventory": {
       "type": "object",
-      "required": ["snapshot"],
+      "required": [
+        "snapshot"
+      ],
       "properties": {
         "snapshot": {
           "type": "object",
-          "required": ["images"],
+          "required": [
+            "images"
+          ],
           "properties": {
-            "images": {"type": "array", "minItems": 11, "maxItems": 11}
+            "images": {
+              "type": "array",
+              "minItems": 11,
+              "maxItems": 11,
+              "allOf": [
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "control-plane"
+                      },
+                      "immutable_reference": {
+                        "pattern": "^control-plane@sha256:[0-9a-f]{64}$"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "postgres"
+                      },
+                      "immutable_reference": {
+                        "const": "postgres:16.4@sha256:e62fbf9d3e2b49816a32c400ed2dba83e3b361e6833e624024309c35d334b412"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "proxy"
+                      },
+                      "immutable_reference": {
+                        "const": "nginx:1.27.0@sha256:98f8ec75657d21b924fe4f69b6b9bff2f6550ea48838af479d8894a852000e40"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "shuffle-action-image"
+                      },
+                      "immutable_reference": {
+                        "const": "frikky/shuffle@sha256:fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "shuffle-backend"
+                      },
+                      "immutable_reference": {
+                        "const": "ghcr.io/shuffle/shuffle-backend:2.2.1@sha256:0cc1775e48b7d94b7f16d0be713aa274ced52be24ad521beaaf58c67023fd2e5"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "shuffle-frontend"
+                      },
+                      "immutable_reference": {
+                        "const": "ghcr.io/shuffle/shuffle-frontend:2.2.1@sha256:0561dd421382f70d15cada11a324b40762f0930522fcc1b51edcce9c87cc0f00"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "shuffle-opensearch"
+                      },
+                      "immutable_reference": {
+                        "const": "opensearchproject/opensearch:3.2.0@sha256:23297b8d8545e129dd58c254ed08d786dc552410ba772983ad2af31048d2f04b"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "shuffle-orborus"
+                      },
+                      "immutable_reference": {
+                        "const": "ghcr.io/shuffle/shuffle-orborus:2.2.1@sha256:3519810b3ca4fe568acefdf15ce6f2deba0ae6f0ff6b84412354d59d663dff31"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "wazuh-dashboard"
+                      },
+                      "immutable_reference": {
+                        "const": "wazuh/wazuh-dashboard:4.14.6@sha256:16aa978eaa6355fe3965e310ef8eaaed4df6f701dcf5885ebd0783fcd5ee6f16"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "wazuh-indexer"
+                      },
+                      "immutable_reference": {
+                        "const": "wazuh/wazuh-indexer:4.14.6@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "wazuh-manager"
+                      },
+                      "immutable_reference": {
+                        "const": "wazuh/wazuh-manager:4.14.6@sha256:4683ddc88474c79ae6171d9132adbd45fda86bdfb22ad0d8ddee167654c9e841"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                }
+              ]
+            }
           }
         }
       }
     },
     "current_image_inventory": {
       "type": "object",
-      "required": ["snapshot"],
+      "required": [
+        "snapshot"
+      ],
       "properties": {
         "snapshot": {
           "type": "object",
-          "required": ["images"],
+          "required": [
+            "images"
+          ],
           "properties": {
-            "images": {"type": "array", "minItems": 13, "maxItems": 13}
+            "images": {
+              "type": "array",
+              "minItems": 13,
+              "maxItems": 13,
+              "allOf": [
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "control-plane"
+                      },
+                      "immutable_reference": {
+                        "pattern": "^control-plane@sha256:[0-9a-f]{64}$"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "postgres"
+                      },
+                      "immutable_reference": {
+                        "const": "postgres:16.4@sha256:e62fbf9d3e2b49816a32c400ed2dba83e3b361e6833e624024309c35d334b412"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "proxy"
+                      },
+                      "immutable_reference": {
+                        "const": "nginx:1.27.0@sha256:98f8ec75657d21b924fe4f69b6b9bff2f6550ea48838af479d8894a852000e40"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference",
+                      "runtime_image_id"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "shuffle-action-image"
+                      },
+                      "immutable_reference": {
+                        "const": "frikky/shuffle@sha256:fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8"
+                      },
+                      "runtime_image_id": {
+                        "pattern": "^sha256:[0-9a-f]{64}$"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "shuffle-backend"
+                      },
+                      "immutable_reference": {
+                        "const": "ghcr.io/shuffle/shuffle-backend:2.2.1@sha256:0cc1775e48b7d94b7f16d0be713aa274ced52be24ad521beaaf58c67023fd2e5"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "shuffle-frontend"
+                      },
+                      "immutable_reference": {
+                        "const": "ghcr.io/shuffle/shuffle-frontend:2.2.1@sha256:0561dd421382f70d15cada11a324b40762f0930522fcc1b51edcce9c87cc0f00"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "shuffle-opensearch"
+                      },
+                      "immutable_reference": {
+                        "const": "opensearchproject/opensearch:3.2.0@sha256:23297b8d8545e129dd58c254ed08d786dc552410ba772983ad2af31048d2f04b"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "shuffle-orborus"
+                      },
+                      "immutable_reference": {
+                        "const": "ghcr.io/shuffle/shuffle-orborus:2.2.1@sha256:3519810b3ca4fe568acefdf15ce6f2deba0ae6f0ff6b84412354d59d663dff31"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference",
+                      "runtime_image_id"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "shuffle-worker-image"
+                      },
+                      "immutable_reference": {
+                        "const": "ghcr.io/shuffle/shuffle-worker:2.2.1@sha256:9541c1fef2bc8511727610b565adbd0f7c817c53afee2dd9fef6aad8a971ffb1"
+                      },
+                      "runtime_image_id": {
+                        "pattern": "^sha256:[0-9a-f]{64}$"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "wazuh-dashboard"
+                      },
+                      "immutable_reference": {
+                        "const": "wazuh/wazuh-dashboard:4.14.6@sha256:16aa978eaa6355fe3965e310ef8eaaed4df6f701dcf5885ebd0783fcd5ee6f16"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "wazuh-indexer"
+                      },
+                      "immutable_reference": {
+                        "const": "wazuh/wazuh-indexer:4.14.6@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "wazuh-manager"
+                      },
+                      "immutable_reference": {
+                        "const": "wazuh/wazuh-manager:4.14.6@sha256:4683ddc88474c79ae6171d9132adbd45fda86bdfb22ad0d8ddee167654c9e841"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "service",
+                      "immutable_reference"
+                    ],
+                    "properties": {
+                      "service": {
+                        "const": "wazuh-security-bootstrap"
+                      },
+                      "immutable_reference": {
+                        "const": "wazuh/wazuh-indexer:4.14.6@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5"
+                      }
+                    }
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                }
+              ]
+            }
           }
         }
       }

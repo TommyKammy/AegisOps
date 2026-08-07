@@ -65,9 +65,10 @@ jq '
         service: "shuffle-worker-image",
         immutable_reference: "ghcr.io/shuffle/shuffle-worker:2.2.1@sha256:9541c1fef2bc8511727610b565adbd0f7c817c53afee2dd9fef6aad8a971ffb1"
       }
-    ]
+  ]
   | map(
       if .service == "shuffle-action-image"
+        or .service == "shuffle-worker-image"
       then . + {runtime_image_id: ("sha256:" + ("f" * 64))}
       else .
       end
@@ -92,8 +93,27 @@ if python3 "${validator}" --runtime-images "${missing_action_runtime_image}" \
   exit 1
 fi
 grep -Fq -- \
-  'must retain the observed Shuffle action runtime image ID' \
+  'must retain observed Shuffle action and worker runtime image IDs' \
   "${workdir}/missing-action-runtime-image.err"
+
+missing_worker_runtime_image="${workdir}/missing-worker-runtime-image.json"
+jq '
+  map(
+    if .service == "shuffle-worker-image"
+    then del(.runtime_image_id)
+    else .
+    end
+  )
+' "${runtime_images}" >"${missing_worker_runtime_image}"
+if python3 "${validator}" --runtime-images "${missing_worker_runtime_image}" \
+  >"${workdir}/missing-worker-runtime-image.out" \
+  2>"${workdir}/missing-worker-runtime-image.err"; then
+  echo "self-test expected missing worker runtime image rejection" >&2
+  exit 1
+fi
+grep -Fq -- \
+  'must retain observed Shuffle action and worker runtime image IDs' \
+  "${workdir}/missing-worker-runtime-image.err"
 
 assert_fails_with \
   placeholder-id \

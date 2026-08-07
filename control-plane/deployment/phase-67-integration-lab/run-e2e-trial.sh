@@ -23,6 +23,7 @@ source "${LAB_DIR}/shuffle/reviewed-app-image.env"
 shuffle_tools_image="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}:${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_TAG}"
 shuffle_tools_immutable_ref="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}@${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}"
 shuffle_action_service="shuffle-tools_1-2-0"
+shuffle_worker_service="shuffle-workers"
 shuffle_action_service_port=33334
 shuffle_action_network="shuffle-executions"
 shuffle_backend_url="$(
@@ -132,8 +133,11 @@ assert_reviewed_shuffle_action_service() {
   )"
   [[ "$(wc -w <<<"${task_ids}")" -eq 1 ]] \
     || fail "Shuffle action service does not have exactly one running task"
-  # shellcheck disable=SC2086
-  task_metadata="$(docker_lab inspect ${task_ids})"
+  task_metadata="$(docker_lab inspect "${task_ids}")"
+  jq -e '
+    length == 1 and all(.[]; .Status.State == "running")
+  ' <<<"${task_metadata}" >/dev/null \
+    || fail "Shuffle worker task is not running"
   task_container_ids="$(
     jq -er '
       [.[].Status.ContainerStatus.ContainerID | select(length > 0)]
@@ -358,6 +362,7 @@ capture_reviewed_shuffle_action_image() {
   local runtime_image_id
   local runtime_immutable_ref
 
+  assert_repository_snapshot
   assert_reviewed_shuffle_action_service
   pinned_metadata="$(docker_lab image inspect "${shuffle_tools_immutable_ref}")"
   runtime_metadata="$(docker_lab image inspect "${shuffle_tools_image}")"
@@ -383,6 +388,91 @@ capture_reviewed_shuffle_action_image() {
     --arg runtime_image_id "${runtime_image_id}" '
       {
         service: "shuffle-action-image",
+        immutable_reference: $immutable_reference,
+        runtime_image_id: $runtime_image_id
+      }
+  '
+}
+
+capture_reviewed_shuffle_worker_image() {
+  local execution_id="${1:-}"
+  local attempt
+  local service_metadata
+  local service_image
+  local task_ids
+  local task_metadata
+  local task_container_id
+  local container_metadata
+  local reviewed_image_id
+  local execution_observed=false
+
+  assert_repository_snapshot
+  for attempt in {1..120}; do
+    if service_metadata="$(
+      docker_lab service inspect "${shuffle_worker_service}" 2>/dev/null
+    )"; then
+      break
+    fi
+    sleep 1
+  done
+  [[ -n "${service_metadata:-}" ]] \
+    || fail "Shuffle worker service was not created"
+  service_image="$(
+    jq -er '.[0].Spec.TaskTemplate.ContainerSpec.Image' \
+      <<<"${service_metadata}"
+  )"
+  [[ "${service_image}" == "${shuffle_worker_immutable_ref}" ]] \
+    || fail "Shuffle worker service is not pinned to the reviewed digest"
+  task_ids="$(
+    docker_lab service ps \
+      --filter desired-state=running \
+      --quiet \
+      "${shuffle_worker_service}"
+  )"
+  [[ "$(wc -w <<<"${task_ids}")" -eq 1 ]] \
+    || fail "Shuffle worker service does not have exactly one running task"
+  # shellcheck disable=SC2086
+  task_metadata="$(docker_lab inspect ${task_ids})"
+  task_container_id="$(
+    jq -er '
+      [.[].Status.ContainerStatus.ContainerID | select(length > 0)]
+      | if length == 1 then .[]
+        else error("expected one Shuffle worker task container")
+        end
+    ' <<<"${task_metadata}"
+  )"
+  container_metadata="$(docker_lab inspect "${task_container_id}")"
+  reviewed_image_id="$(
+    docker_lab image inspect \
+      "${shuffle_worker_immutable_ref}" \
+      --format '{{.Id}}'
+  )"
+  jq -e --arg image_id "${reviewed_image_id}" '
+    length == 1
+    and all(.[]; .Image == $image_id and .State.Running == true)
+  ' <<<"${container_metadata}" >/dev/null \
+    || fail "Shuffle worker container is not running the reviewed image ID"
+
+  if [[ -n "${execution_id}" ]]; then
+    for attempt in {1..30}; do
+      if docker_lab logs \
+        --tail 10000 \
+        "${task_container_id}" 2>&1 \
+        | grep -F -- "${execution_id}" >/dev/null; then
+        execution_observed=true
+        break
+      fi
+      sleep 1
+    done
+    [[ "${execution_observed}" == true ]] \
+      || fail "Shuffle worker container logs do not contain the reviewed execution ID"
+  fi
+
+  jq -cn \
+    --arg immutable_reference "${service_image}" \
+    --arg runtime_image_id "${reviewed_image_id}" '
+      {
+        service: "shuffle-worker-image",
         immutable_reference: $immutable_reference,
         runtime_image_id: $runtime_image_id
       }
@@ -486,15 +576,13 @@ shuffle_worker_immutable_ref="$(
 [[ "${shuffle_worker_immutable_ref}" == *@sha256:* ]] \
   || fail "Shuffle worker image is not digest-pinned"
 shuffle_action_image="$(capture_reviewed_shuffle_action_image)"
+shuffle_worker_image="$(capture_reviewed_shuffle_worker_image)"
 jq \
   --argjson action_image "${shuffle_action_image}" \
-  --arg worker_reference "${shuffle_worker_immutable_ref}" '
+  --argjson worker_image "${shuffle_worker_image}" '
     . + [
       $action_image,
-      {
-        service: "shuffle-worker-image",
-        immutable_reference: $worker_reference
-      }
+      $worker_image
     ]
     | sort_by(.service)
   ' \
@@ -675,6 +763,12 @@ run_reviewed_journey \
 postdispatch_shuffle_action_image="$(capture_reviewed_shuffle_action_image)"
 [[ "${postdispatch_shuffle_action_image}" == "${shuffle_action_image}" ]] \
   || fail "Shuffle action service changed during reviewed execution"
+shuffle_execution_id="$(jq -er '.journey.execution_id' "${journey_output}")"
+postdispatch_shuffle_worker_image="$(
+  capture_reviewed_shuffle_worker_image "${shuffle_execution_id}"
+)"
+[[ "${postdispatch_shuffle_worker_image}" == "${shuffle_worker_image}" ]] \
+  || fail "Shuffle worker service changed during reviewed execution"
 for step_spec in \
   "8:approve_and_dispatch_real_shuffle_action" \
   "9:capture_authenticated_shuffle_receipt" \

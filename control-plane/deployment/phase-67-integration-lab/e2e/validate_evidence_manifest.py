@@ -129,7 +129,6 @@ LEGACY_BLOCKED_TRIAL = (
     "2473b66f5702a38f1d4630c990509bf812a6af7a",
 )
 LEGACY_BLOCKED_SNAPSHOT_ID = "phase67-snapshot-0661c0413ecdd062"
-LEGACY_BLOCKED_IMAGE_COUNT = 11
 LEGACY_BLOCKED_MANIFEST_SHA256 = (
     "69024ef973dc820ef797bb6b5dfad66ff322a9f11673951f6a53ff0a168d09e8"
 )
@@ -189,6 +188,9 @@ EXPECTED_FULL_PROFILE_IMAGE_SERVICES = frozenset(
 LEGACY_BLOCKED_IMAGE_SERVICES = (
     EXPECTED_FULL_PROFILE_IMAGE_SERVICES
     - {"wazuh-security-bootstrap", "shuffle-worker-image"}
+)
+CURRENT_RUNTIME_IMAGE_ID_SERVICES = frozenset(
+    {"shuffle-action-image", "shuffle-worker-image"}
 )
 IDENTIFIER_KEYS = (
     "wazuh_manager_id",
@@ -445,7 +447,39 @@ def _scan_secret_values(value: object, path: str = "$") -> None:
         )
 
 
-def _schema_image_inventory_profile(item_count: int) -> dict[str, object]:
+def _schema_image_inventory_entry(
+    service: str,
+    *,
+    require_runtime_image_id: bool,
+) -> dict[str, object]:
+    immutable_reference = (
+        {"pattern": r"^control-plane@sha256:[0-9a-f]{64}$"}
+        if service == "control-plane"
+        else {"const": REVIEWED_IMMUTABLE_IMAGE_REFERENCES[service]}
+    )
+    required = ["service", "immutable_reference"]
+    properties: dict[str, object] = {
+        "service": {"const": service},
+        "immutable_reference": immutable_reference,
+    }
+    if require_runtime_image_id:
+        required.append("runtime_image_id")
+        properties["runtime_image_id"] = {
+            "pattern": r"^sha256:[0-9a-f]{64}$",
+        }
+    return {
+        "type": "object",
+        "required": required,
+        "properties": properties,
+    }
+
+
+def _schema_image_inventory_profile(
+    services: frozenset[str],
+    *,
+    runtime_image_id_services: frozenset[str] = frozenset(),
+) -> dict[str, object]:
+    ordered_services = sorted(services)
     return {
         "type": "object",
         "required": ["snapshot"],
@@ -456,11 +490,60 @@ def _schema_image_inventory_profile(item_count: int) -> dict[str, object]:
                 "properties": {
                     "images": {
                         "type": "array",
-                        "minItems": item_count,
-                        "maxItems": item_count,
+                        "minItems": len(ordered_services),
+                        "maxItems": len(ordered_services),
+                        "allOf": [
+                            {
+                                "contains": _schema_image_inventory_entry(
+                                    service,
+                                    require_runtime_image_id=(
+                                        service in runtime_image_id_services
+                                    ),
+                                ),
+                                "minContains": 1,
+                                "maxContains": 1,
+                            }
+                            for service in ordered_services
+                        ],
                     }
                 },
             }
+        },
+    }
+
+
+def _schema_passed_verdict_contract() -> dict[str, object]:
+    identifier_properties = {
+        identifier: {
+            "type": "string",
+            "minLength": 1,
+            "pattern": r"\S",
+        }
+        for identifier in IDENTIFIER_KEYS
+    }
+    identifier_properties["wazuh_rule_id"] = {
+        "const": REVIEWED_WAZUH_RULE_ID,
+    }
+    return {
+        "if": {
+            "required": ["verdict"],
+            "properties": {
+                "verdict": {"const": PASSED_VERDICT},
+            },
+        },
+        "then": {
+            "properties": {
+                "steps": {
+                    "items": {
+                        "properties": {
+                            "status": {"const": "passed"},
+                        },
+                    },
+                },
+                "identifiers": {
+                    "properties": identifier_properties,
+                },
+            },
         },
     }
 
@@ -567,37 +650,20 @@ def _validate_schema_contract(schema: object) -> None:
                 "then": {"$ref": "#/$defs/legacy_blocked_image_inventory"},
                 "else": {"$ref": "#/$defs/current_image_inventory"},
             },
-            {
-                "if": {
-                    "required": ["verdict"],
-                    "properties": {
-                        "verdict": {"const": PASSED_VERDICT},
-                    },
-                },
-                "then": {
-                    "properties": {
-                        "steps": {
-                            "items": {
-                                "properties": {
-                                    "status": {"const": "passed"},
-                                },
-                            },
-                        },
-                    },
-                },
-            },
+            _schema_passed_verdict_contract(),
         ],
         "schema profile and passed-verdict selection drifted",
     )
     require(
         definitions.get("legacy_blocked_image_inventory")
-        == _schema_image_inventory_profile(LEGACY_BLOCKED_IMAGE_COUNT),
+        == _schema_image_inventory_profile(LEGACY_BLOCKED_IMAGE_SERVICES),
         "schema historical image inventory contract drifted",
     )
     require(
         definitions.get("current_image_inventory")
         == _schema_image_inventory_profile(
-            len(EXPECTED_FULL_PROFILE_IMAGE_SERVICES)
+            EXPECTED_FULL_PROFILE_IMAGE_SERVICES,
+            runtime_image_id_services=CURRENT_RUNTIME_IMAGE_ID_SERVICES,
         ),
         "schema current image inventory contract drifted",
     )
@@ -693,8 +759,9 @@ def _validate_runtime_images(
     )
     if not allow_legacy_blocked_inventory:
         require(
-            "shuffle-action-image" in runtime_image_ids,
-            "$.snapshot.images must retain the observed Shuffle action runtime image ID",
+            CURRENT_RUNTIME_IMAGE_ID_SERVICES <= set(runtime_image_ids),
+            "$.snapshot.images must retain observed Shuffle action and worker "
+            "runtime image IDs",
         )
     require(
         re.fullmatch(

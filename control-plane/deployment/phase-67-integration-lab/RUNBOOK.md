@@ -120,6 +120,10 @@ Before snapshot capture, the runner creates the `shuffle-tools_1-2-0` Swarm
 service from the reviewed repository digest. The service and its running task
 must retain that digest and image ID before approval and again after execution;
 the mutable compatibility tag is not the execution reference.
+It separately inspects Orborus's `shuffle-workers` service, its sole running
+task container, and that container's image ID. After dispatch, the same worker
+image identity must remain in place and the running task container's logs must
+contain the current Shuffle execution ID.
 Receipt success is passed through AegisOps reconciliation instead of inferred
 from Shuffle state. Receipt failure probes must return the reviewed mismatch
 reason and run in a rollback-only transaction;
@@ -156,10 +160,14 @@ recomputes its snapshot ID from all captured inputs, and each journey identifier
 must be present only when its producing step passed. `startup-status.txt`,
 `initial-status.txt`, and
 `restart-status.txt` retain the exact status captures used by the snapshot,
-health, and restart steps. `workflow-snapshot.json` and
+health, and restart steps, including the complete Compose service state and
+health inventory. `workflow-snapshot.json` and
 `workflow-pre-dispatch.json` retain the semantically validated live exports;
 their canonical digests must match before the adapter performs its own live
-validation and dispatch. Only a separately reviewed, redacted manifest may be
+validation and dispatch. The evidence builder reruns the canonical Wazuh
+manifest validator and Shuffle workflow validator against all retained
+component artifacts before it assembles the final packet. Only a separately
+reviewed, redacted manifest may be
 copied to the tracked sample path. Do not commit the raw command output, report,
 service logs, runtime env, or host-local paths.
 
@@ -177,13 +185,14 @@ canonical packet SHA-256 matches the committed compatibility fingerprint.
 Its schema-level 11-image exception is selected only by the exact historical
 trial, snapshot, revision, and blocked verdict identity; all current packets
 require the 13-image full-profile inventory.
-Every retained status capture must also report the exact control-plane image ID
-from the snapshot, including after restart.
-The snapshot inventory also includes the digest-pinned dynamic Shuffle worker
-configured on Orborus plus the observed repository digest and runtime image ID
-behind the Shuffle action tag. After operator approval, the runner revalidates
-the live workflow and action image, then checks the complete repository
-snapshot immediately before dispatch. For publication, report and raw artifacts are moved only
+Every retained status capture must report the exact control-plane image ID and
+the exact reviewed Compose service inventory, including successful completion
+of the one-shot Wazuh security bootstrap and healthy running services after
+restart. The snapshot inventory includes observed runtime image IDs for both
+the digest-pinned Shuffle worker task and the Shuffle action service. After
+operator approval, the runner revalidates the live workflow and both runtime
+image identities, then checks the complete repository snapshot immediately
+before dispatch. For publication, report and raw artifacts are moved only
 after every destination is checked, and the passing manifest is moved last.
 The final manifest path is validated once more after that move. The final report
 and exact artifact file set are then rehashed from their published paths against

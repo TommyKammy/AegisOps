@@ -44,6 +44,12 @@ local raw artifact set retains a Compose digest record bound to the runner-held
 revision and Compose values at evidence-build time. The expanded render is
 verified from a mode-`0600` temporary file and deleted rather than retaining
 interpolated lab credentials. Both startups fail closed if that render changes.
+Each retained status capture includes the machine-readable state and health of
+the exact reviewed Compose service inventory. Before publication, the builder
+reruns the canonical Wazuh and Shuffle semantic validators over the retained
+component evidence instead of trusting artifact hashes alone. The snapshot also
+binds the real Shuffle worker service, running task container, reviewed digest,
+and runtime image ID before and after the reviewed execution.
 The operator must interactively approve a challenge bound to the prepared action
 through a macOS dialog or exact TTY response; the runner cannot complete from
 unattended input. The publishable sample omits raw logs, secret values, private

@@ -5,11 +5,21 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import re
 import sys
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
+
+
+E2E_ROOT = Path(__file__).resolve().parent
+LAB_ROOT = E2E_ROOT.parent
+WAZUH_SCHEMA_PATH = LAB_ROOT / "wazuh" / "evidence-manifest.schema.json"
+WAZUH_VALIDATOR_PATH = LAB_ROOT / "wazuh" / "validate_evidence_manifest.py"
+WORKFLOW_VALIDATOR_PATH = (
+    LAB_ROOT / "shuffle" / "validate_preserved_workflow.py"
+)
 
 
 STEP_NAMES = (
@@ -126,6 +136,11 @@ REPORT_PRIVATE_VALUE_PATTERNS = (
     re.compile(r"(?:/(?:Users|home)/[^/\s]+(?:/[^\s]*)?|/root/[^\s]*)"),
     re.compile(r"(?i)(?:[A-Z]:[\\/]+|/mnt/[a-z]/)Users[\\/]+[^\\/\s]+"),
 )
+RUNTIME_ONLY_IMAGE_SERVICES = frozenset(
+    {"shuffle-action-image", "shuffle-worker-image"}
+)
+COMPLETED_COMPOSE_SERVICES = frozenset({"wazuh-security-bootstrap"})
+COMPOSE_SERVICES_WITHOUT_HEALTHCHECKS = frozenset({"shuffle-orborus"})
 
 
 def _mapping(value: object, path: str) -> Mapping[str, object]:
@@ -184,6 +199,65 @@ def _canonical_json_sha256(path: Path) -> str:
         sort_keys=True,
     ).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _load_validator_callable(
+    validator_path: Path,
+    function_name: str,
+) -> Callable[..., object]:
+    module_name = (
+        "phase67_4_retained_validator_"
+        + hashlib.sha256(str(validator_path).encode()).hexdigest()[:12]
+    )
+    spec = importlib.util.spec_from_file_location(module_name, validator_path)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"cannot load validator {validator_path}")
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except (ImportError, OSError, SyntaxError, ValueError) as exc:
+        raise ValueError(f"cannot load validator {validator_path}: {exc}") from exc
+    validator = getattr(module, function_name, None)
+    if not callable(validator):
+        raise ValueError(
+            f"{validator_path.name} does not expose {function_name}"
+        )
+    return validator
+
+
+def _validate_wazuh_manifest_contract(
+    wazuh: Mapping[str, object],
+    *,
+    schema_path: Path,
+    validator_path: Path,
+) -> None:
+    schema = _read_json(schema_path)
+    validator = _load_validator_callable(
+        validator_path,
+        "validate_evidence_manifest",
+    )
+    try:
+        validator(wazuh, schema)
+    except ValueError as exc:
+        raise ValueError(f"retained Wazuh manifest is invalid: {exc}") from exc
+
+
+def _validate_preserved_workflow_contract(
+    reviewed_workflow: Mapping[str, object],
+    observed_workflow: Mapping[str, object],
+    workflow_id: str,
+    *,
+    validator_path: Path,
+    label: str,
+) -> None:
+    validator = _load_validator_callable(
+        validator_path,
+        "validate_preserved_workflow",
+    )
+    try:
+        validator(reviewed_workflow, observed_workflow, workflow_id)
+    except ValueError as exc:
+        raise ValueError(f"{label} violates the reviewed workflow: {exc}") from exc
 
 
 def _status_value(path: Path, key: str) -> str:
@@ -361,6 +435,70 @@ def _validate_status_snapshot(
     if control_plane_image_id != _snapshot_control_plane_image_id(snapshot):
         raise ValueError(
             f"{status_path.name} uses a different control-plane image"
+        )
+    inventory = _parse_json_text(
+        _status_value(status_path, "compose_ps_json"),
+        f"{status_path.name}.compose_ps_json",
+    )
+    if not isinstance(inventory, list) or not inventory:
+        raise ValueError(f"{status_path.name} must retain Compose service status")
+    snapshot_images = snapshot.get("images")
+    if not isinstance(snapshot_images, list):
+        raise ValueError("snapshot.images must be an array")
+    expected_services = {
+        _required_text(
+            _mapping(image, f"snapshot.images[{index}]").get("service"),
+            f"snapshot.images[{index}].service",
+        )
+        for index, image in enumerate(snapshot_images)
+    } - RUNTIME_ONLY_IMAGE_SERVICES
+    observed_services: set[str] = set()
+    for index, value in enumerate(inventory):
+        row = _mapping(value, f"{status_path.name}.compose_ps_json[{index}]")
+        service = _required_text(
+            row.get("Service"),
+            f"{status_path.name}.compose_ps_json[{index}].Service",
+        )
+        if service in observed_services:
+            raise ValueError(f"{status_path.name} repeats Compose service {service}")
+        observed_services.add(service)
+        state = _required_text(
+            row.get("State"),
+            f"{status_path.name}.compose_ps_json[{index}].State",
+        ).lower()
+        health = row.get("Health")
+        if health is not None and not isinstance(health, str):
+            raise ValueError(
+                f"{status_path.name} has invalid health for {service}"
+            )
+        normalized_health = health.strip().lower() if isinstance(health, str) else ""
+        if service in COMPLETED_COMPOSE_SERVICES:
+            exit_code = row.get("ExitCode")
+            if (
+                state != "exited"
+                or isinstance(exit_code, bool)
+                or not isinstance(exit_code, int)
+                or exit_code != 0
+            ):
+                raise ValueError(
+                    f"{status_path.name} does not show {service} completed successfully"
+                )
+            continue
+        if state != "running":
+            raise ValueError(f"{status_path.name} shows {service} is not running")
+        if (
+            service not in COMPOSE_SERVICES_WITHOUT_HEALTHCHECKS
+            and normalized_health != "healthy"
+        ):
+            raise ValueError(f"{status_path.name} shows {service} is not healthy")
+        if (
+            service in COMPOSE_SERVICES_WITHOUT_HEALTHCHECKS
+            and normalized_health not in {"", "healthy"}
+        ):
+            raise ValueError(f"{status_path.name} shows {service} is unhealthy")
+    if observed_services != expected_services:
+        raise ValueError(
+            f"{status_path.name} Compose service inventory does not match the snapshot"
         )
 
 
@@ -1133,6 +1271,11 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     _validate_snapshot_images(images, snapshot)
     preparation = _mapping(_read_json(args.preparation), "preparation")
     wazuh = _mapping(_read_json(args.wazuh), "wazuh")
+    _validate_wazuh_manifest_contract(
+        wazuh,
+        schema_path=WAZUH_SCHEMA_PATH,
+        validator_path=WAZUH_VALIDATOR_PATH,
+    )
     combined_journey = _mapping(_read_json(args.journey), "journey output")
     journey = _mapping(combined_journey.get("journey"), "journey output.journey")
     restart = _mapping(_read_json(args.restart), "restart")
@@ -1167,13 +1310,28 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         "shuffle_reviewed_workflow_sha256"
     ):
         raise ValueError("snapshot reviewed Shuffle workflow digest does not match")
+    reviewed_workflow = _mapping(
+        _read_json(args.reviewed_workflow),
+        "reviewed workflow",
+    )
+    workflow_id = _required_text(
+        snapshot.get("shuffle_api_workflow_id"),
+        "snapshot.shuffle_api_workflow_id",
+    )
     for workflow_path in (
         args.workflow_snapshot,
         args.workflow_pre_dispatch,
     ):
         workflow = _mapping(_read_json(workflow_path), workflow_path.name)
-        if workflow.get("id") != snapshot.get("shuffle_api_workflow_id"):
+        if workflow.get("id") != workflow_id:
             raise ValueError(f"{workflow_path.name} uses a different workflow ID")
+        _validate_preserved_workflow_contract(
+            reviewed_workflow,
+            workflow,
+            workflow_id,
+            validator_path=WORKFLOW_VALIDATOR_PATH,
+            label=workflow_path.name,
+        )
         if _canonical_json_sha256(workflow_path) != snapshot.get(
             "shuffle_live_workflow_sha256"
         ):

@@ -18,6 +18,8 @@ CONTROL_PLANE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = CONTROL_PLANE_ROOT.parent
 LAB_ROOT = CONTROL_PLANE_ROOT / "deployment" / "phase-67-integration-lab"
 E2E_ROOT = LAB_ROOT / "e2e"
+WAZUH_ROOT = LAB_ROOT / "wazuh"
+SHUFFLE_ROOT = LAB_ROOT / "shuffle"
 
 
 def _load_module(name: str, path: Path):
@@ -70,7 +72,7 @@ def _manifest() -> dict[str, object]:
                     "immutable_reference": immutable_reference,
                     **(
                         {"runtime_image_id": "sha256:" + "f" * 64}
-                        if service == "shuffle-action-image"
+                        if service in validator.CURRENT_RUNTIME_IMAGE_ID_SERVICES
                         else {}
                     ),
                 }
@@ -247,6 +249,81 @@ def _manifest() -> dict[str, object]:
     }
 
 
+def _wazuh_manifest() -> dict[str, object]:
+    return {
+        "schema_version": "phase67-wazuh-intake-evidence-v1",
+        "source_mode": "real_wazuh",
+        "fixture_provenance": "live_capture_sanitized",
+        "captured_at": "2026-07-29T00:00:00Z",
+        "repository_revision": "a" * 40,
+        "worktree_artifact_digest": "b" * 64,
+        "runtime_artifact_digest": "b" * 64,
+        "wazuh_manager_health": "healthy",
+        "native_wazuh_alert_id": "phase67-native-alert",
+        "native_wazuh_manager_id": "wazuh.manager",
+        "native_wazuh_agent_id": "000",
+        "native_wazuh_rule_id": "5710",
+        "native_event_timestamp": "2026-07-29T00:00:00+00:00",
+        "aegisops_alert_id": "alert-phase67",
+        "negative_boundary": {
+            "baseline_alert_count": 3,
+            "after_alert_count": 3,
+            "authoritative_alert_delta": 0,
+        },
+        "first_delivery": {
+            "http_status": 202,
+            "disposition": "created",
+            "finding_id": "finding-phase67",
+            "reconciliation_id": "reconciliation-created",
+        },
+        "duplicate_delivery": {
+            "http_status": 202,
+            "disposition": "deduplicated",
+            "finding_id": "finding-phase67",
+            "reconciliation_id": "reconciliation-deduplicated",
+        },
+        "analyst_queue": {
+            "source_system": "wazuh",
+            "case_id": None,
+        },
+        "case_promotion": "not_performed",
+        "authority_boundary": "aegisops_admission_is_authoritative",
+    }
+
+
+def _compose_status_inventory(snapshot: dict[str, object]) -> list[dict[str, object]]:
+    services = {
+        image["service"]
+        for image in snapshot["images"]
+        if image["service"] not in builder.RUNTIME_ONLY_IMAGE_SERVICES
+    }
+    inventory: list[dict[str, object]] = []
+    for service in sorted(services):
+        if service in builder.COMPLETED_COMPOSE_SERVICES:
+            inventory.append(
+                {
+                    "Service": service,
+                    "State": "exited",
+                    "Health": "",
+                    "ExitCode": 0,
+                }
+            )
+            continue
+        inventory.append(
+            {
+                "Service": service,
+                "State": "running",
+                "Health": (
+                    ""
+                    if service in builder.COMPOSE_SERVICES_WITHOUT_HEALTHCHECKS
+                    else "healthy"
+                ),
+                "ExitCode": 0,
+            }
+        )
+    return inventory
+
+
 class Phase674RealServiceE2ETests(unittest.TestCase):
     def test_valid_evidence_enforces_the_complete_real_identifier_chain(self) -> None:
         self.assertEqual(builder.STEP_NAMES, validator.STEP_NAMES)
@@ -377,6 +454,15 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             len(validator.EXPECTED_FULL_PROFILE_IMAGE_SERVICES),
         )
         self.assertEqual(
+            SCHEMA["$defs"]["current_image_inventory"],
+            validator._schema_image_inventory_profile(
+                validator.EXPECTED_FULL_PROFILE_IMAGE_SERVICES,
+                runtime_image_id_services=(
+                    validator.CURRENT_RUNTIME_IMAGE_ID_SERVICES
+                ),
+            ),
+        )
+        self.assertEqual(
             len(_manifest()["snapshot"]["images"]),
             current_images["maxItems"],
         )
@@ -386,6 +472,12 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             len(historical["snapshot"]["images"]),
         )
         self.assertEqual(legacy_images["maxItems"], legacy_images["minItems"])
+        self.assertEqual(
+            SCHEMA["$defs"]["legacy_blocked_image_inventory"],
+            validator._schema_image_inventory_profile(
+                validator.LEGACY_BLOCKED_IMAGE_SERVICES,
+            ),
+        )
         legacy_identity = SCHEMA["$defs"]["legacy_blocked_identity"][
             "properties"
         ]
@@ -432,6 +524,12 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 "properties"
             ]["status"],
             {"const": "passed"},
+        )
+        self.assertEqual(
+            passed_branches[0]["then"]["properties"]["identifiers"],
+            validator._schema_passed_verdict_contract()["then"]["properties"][
+                "identifiers"
+            ],
         )
         execution_schema = SCHEMA["properties"]["identifiers"]["properties"][
             "shuffle_execution_id"
@@ -1178,24 +1276,25 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         ):
             validator.validate_manifest(unreviewed_action, SCHEMA)
 
-        missing_runtime_identity = _manifest()
-        action_image = next(
-            image
-            for image in missing_runtime_identity["snapshot"]["images"]
-            if image["service"] == "shuffle-action-image"
-        )
-        action_image.pop("runtime_image_id")
-        missing_runtime_identity["snapshot"]["snapshot_id"] = (
-            validator._snapshot_identifier(
-                missing_runtime_identity["trial_run_id"],
-                missing_runtime_identity["snapshot"],
+        for service in validator.CURRENT_RUNTIME_IMAGE_ID_SERVICES:
+            missing_runtime_identity = _manifest()
+            runtime_image = next(
+                image
+                for image in missing_runtime_identity["snapshot"]["images"]
+                if image["service"] == service
             )
-        )
-        with self.assertRaisesRegex(
-            validator.EvidenceValidationError,
-            "observed Shuffle action runtime image ID",
-        ):
-            validator.validate_manifest(missing_runtime_identity, SCHEMA)
+            runtime_image.pop("runtime_image_id")
+            missing_runtime_identity["snapshot"]["snapshot_id"] = (
+                validator._snapshot_identifier(
+                    missing_runtime_identity["trial_run_id"],
+                    missing_runtime_identity["snapshot"],
+                )
+            )
+            with self.subTest(service=service), self.assertRaisesRegex(
+                validator.EvidenceValidationError,
+                "Shuffle action and worker runtime image IDs",
+            ):
+                validator.validate_manifest(missing_runtime_identity, SCHEMA)
 
         unreviewed_service = _manifest()
         postgres_image = next(
@@ -1347,25 +1446,73 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
 
     def test_status_evidence_requires_one_complete_image_identity(self) -> None:
         snapshot = _manifest()["snapshot"]
+
+        def status_text(
+            inventory: list[dict[str, object]],
+            *,
+            control_plane_image_id: str = "sha256:" + "e" * 64,
+        ) -> str:
+            return (
+                "repository_commit="
+                + "a" * 40
+                + "\nrepository_runtime_state=clean\n"
+                + "repository_runtime_artifact_sha256="
+                + "d" * 64
+                + "\ncontrol_plane_container_image_id="
+                + control_plane_image_id
+                + "\ncompose_ps_json="
+                + json.dumps(inventory, separators=(",", ":"))
+                + "\n"
+            )
+
+        inventory = _compose_status_inventory(snapshot)
         with TemporaryDirectory() as temporary_directory:
             status_path = Path(temporary_directory) / "status.txt"
             status_path.write_text(
-                "repository_commit=" + "a" * 40 + "\n"
-                "repository_runtime_state=clean\n"
-                "repository_runtime_artifact_sha256=" + "d" * 64 + "\n"
-                "control_plane_container_image_id=sha256:" + "e" * 64 + "\n",
+                status_text(inventory),
                 encoding="utf-8",
             )
             builder._validate_status_snapshot(status_path, snapshot)
             status_path.write_text(
-                "repository_commit=" + "a" * 40 + "\n"
-                "repository_runtime_state=clean\n"
-                "repository_runtime_artifact_sha256=" + "d" * 64 + "\n"
-                "control_plane_container_image_id=sha256:" + "f" * 64 + "\n",
+                status_text(
+                    inventory,
+                    control_plane_image_id="sha256:" + "f" * 64,
+                ),
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "different control-plane image"):
                 builder._validate_status_snapshot(status_path, snapshot)
+
+            unhealthy = deepcopy(inventory)
+            next(
+                row for row in unhealthy if row["Service"] == "wazuh-manager"
+            )["Health"] = "unhealthy"
+            status_path.write_text(status_text(unhealthy), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "wazuh-manager is not healthy"):
+                builder._validate_status_snapshot(status_path, snapshot)
+
+            incomplete = [
+                row for row in inventory if row["Service"] != "shuffle-backend"
+            ]
+            status_path.write_text(status_text(incomplete), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "inventory does not match"):
+                builder._validate_status_snapshot(status_path, snapshot)
+
+            for invalid_exit_code in (1, False, "0"):
+                failed_bootstrap = deepcopy(inventory)
+                next(
+                    row
+                    for row in failed_bootstrap
+                    if row["Service"] == "wazuh-security-bootstrap"
+                )["ExitCode"] = invalid_exit_code
+                status_path.write_text(
+                    status_text(failed_bootstrap),
+                    encoding="utf-8",
+                )
+                with self.subTest(
+                    invalid_exit_code=invalid_exit_code
+                ), self.assertRaisesRegex(ValueError, "completed successfully"):
+                    builder._validate_status_snapshot(status_path, snapshot)
 
     def test_builder_binds_retained_images_to_the_snapshot_inventory(self) -> None:
         snapshot = _manifest()["snapshot"]
@@ -1377,6 +1524,64 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             builder._validate_snapshot_images(images, snapshot)
         with self.assertRaisesRegex(ValueError, "images.json must be an array"):
             builder._validate_snapshot_images({}, snapshot)
+
+    def test_builder_revalidates_the_retained_wazuh_manifest(self) -> None:
+        self.assertEqual(
+            builder.WAZUH_SCHEMA_PATH,
+            WAZUH_ROOT / "evidence-manifest.schema.json",
+        )
+        self.assertEqual(
+            builder.WAZUH_VALIDATOR_PATH,
+            WAZUH_ROOT / "validate_evidence_manifest.py",
+        )
+        manifest = _wazuh_manifest()
+        builder._validate_wazuh_manifest_contract(
+            manifest,
+            schema_path=WAZUH_ROOT / "evidence-manifest.schema.json",
+            validator_path=WAZUH_ROOT / "validate_evidence_manifest.py",
+        )
+
+        manifest["wazuh_manager_health"] = "unhealthy"
+        with self.assertRaisesRegex(ValueError, "retained Wazuh manifest is invalid"):
+            builder._validate_wazuh_manifest_contract(
+                manifest,
+                schema_path=WAZUH_ROOT / "evidence-manifest.schema.json",
+                validator_path=WAZUH_ROOT / "validate_evidence_manifest.py",
+            )
+
+    def test_builder_revalidates_both_retained_shuffle_workflows(self) -> None:
+        self.assertEqual(
+            builder.WORKFLOW_VALIDATOR_PATH,
+            SHUFFLE_ROOT / "validate_preserved_workflow.py",
+        )
+        workflow_id = _manifest()["snapshot"]["shuffle_api_workflow_id"]
+        reviewed = builder._read_json(
+            SHUFFLE_ROOT / "harmless-local-log-workflow.json"
+        )
+        observed = deepcopy(reviewed)
+        observed["id"] = workflow_id
+        validator_path = SHUFFLE_ROOT / "validate_preserved_workflow.py"
+
+        for label in ("snapshot", "pre-dispatch"):
+            with self.subTest(label=label):
+                builder._validate_preserved_workflow_contract(
+                    reviewed,
+                    observed,
+                    workflow_id,
+                    validator_path=validator_path,
+                    label=label,
+                )
+
+        drifted = deepcopy(observed)
+        drifted["actions"][0]["name"] = "send_email"
+        with self.assertRaisesRegex(ValueError, "violates the reviewed workflow"):
+            builder._validate_preserved_workflow_contract(
+                reviewed,
+                drifted,
+                workflow_id,
+                validator_path=validator_path,
+                label="pre-dispatch",
+            )
 
     def test_builder_binds_snapshot_provenance_to_runner_inputs(self) -> None:
         with TemporaryDirectory() as directory:
@@ -2861,6 +3066,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn('"shuffle-action-image"', runner)
         self.assertIn('"shuffle-worker-image"', runner)
         self.assertIn("capture_reviewed_shuffle_action_image()", runner)
+        self.assertIn("capture_reviewed_shuffle_worker_image()", runner)
         self.assertIn("ensure_reviewed_shuffle_action_service()", runner)
         self.assertIn("assert_reviewed_shuffle_action_service()", runner)
         self.assertIn('--name "${shuffle_action_service}"', runner)
@@ -2880,6 +3086,27 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         )
         self.assertIn('runtime_image_id: $runtime_image_id', runner)
         self.assertIn('SHUFFLE_WORKER_IMAGE=', runner)
+        self.assertIn(
+            'docker_lab service inspect "${shuffle_worker_service}"',
+            runner,
+        )
+        self.assertIn("docker_lab service ps \\", runner)
+        self.assertIn('.Status.State == "running"', runner)
+        self.assertIn(".Status.ContainerStatus.ContainerID", runner)
+        self.assertIn('.State.Running == true', runner)
+        self.assertIn('docker_lab logs \\', runner)
+        self.assertIn(
+            'capture_reviewed_shuffle_worker_image "${shuffle_execution_id}"',
+            runner,
+        )
+        self.assertIn(
+            "Shuffle worker container logs do not contain the reviewed execution ID",
+            runner,
+        )
+        self.assertIn(
+            '[[ "${postdispatch_shuffle_worker_image}" == "${shuffle_worker_image}" ]]',
+            runner,
+        )
         self.assertIn('final_artifacts=', runner)
         self.assertLess(
             runner.index('mv "${report_output}" "${final_report}"'),
@@ -2916,6 +3143,9 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             '--expected-compose-sha256 "${compose_render_sha256}"',
             runner,
         )
+        self.assertNotIn("--wazuh-schema", runner)
+        self.assertNotIn("--wazuh-validator", runner)
+        self.assertNotIn("--workflow-validator", runner)
         self.assertGreaterEqual(
             runner.count('rm -f "${compose_render_output}"'),
             2,
@@ -2962,6 +3192,9 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         action_service_ready = runner.index(
             "run_reviewed_lab_command ensure_reviewed_shuffle_action_service"
         )
+        worker_image_captured = runner.index(
+            'shuffle_worker_image="$(capture_reviewed_shuffle_worker_image)"'
+        )
         runtime_images_validated = runner.index(
             'python3 "${validator}" --runtime-images'
         )
@@ -2974,6 +3207,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         )
         self.assertLess(runtime_images_validated, journey_prepared)
         self.assertLess(action_service_ready, snapshot_completed)
+        self.assertLess(worker_image_captured, snapshot_completed)
         self.assertLess(snapshot_completed, step_one_recorded)
         self.assertLess(step_one_recorded, initial_status_retained)
         self.assertIn(
