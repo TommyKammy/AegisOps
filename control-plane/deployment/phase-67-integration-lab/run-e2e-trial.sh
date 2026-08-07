@@ -24,6 +24,7 @@ shuffle_tools_image="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}:${AEGISOPS_L
 shuffle_tools_immutable_ref="${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_REPOSITORY}@${AEGISOPS_LAB_SHUFFLE_TOOLS_IMAGE_DIGEST}"
 shuffle_action_service="shuffle-tools_1-2-0"
 shuffle_worker_service="shuffle-workers"
+shuffle_worker_immutable_ref=""
 shuffle_action_service_port=33334
 shuffle_action_network="shuffle-executions"
 shuffle_backend_url="$(
@@ -244,6 +245,92 @@ remove_reviewed_shuffle_action_service() {
     sleep 1
   done
   fail "Shuffle action service tasks did not stop during cleanup"
+}
+
+configured_shuffle_worker_immutable_ref() {
+  local orborus_container_ids
+  local orborus_metadata
+
+  if [[ -n "${shuffle_worker_immutable_ref}" ]]; then
+    printf '%s\n' "${shuffle_worker_immutable_ref}"
+    return
+  fi
+  orborus_container_ids="$(
+    compose_scope full ps --quiet shuffle-orborus 2>/dev/null || true
+  )"
+  [[ "$(wc -w <<<"${orborus_container_ids}")" -eq 1 ]] || return 1
+  # shellcheck disable=SC2086
+  orborus_metadata="$(docker_lab inspect ${orborus_container_ids})"
+  jq -er '
+    [
+      .[]
+      | select(
+          .Config.Labels["com.docker.compose.service"]
+          == "shuffle-orborus"
+        )
+      | .Config.Env[]
+      | select(startswith("SHUFFLE_WORKER_IMAGE="))
+      | ltrimstr("SHUFFLE_WORKER_IMAGE=")
+    ]
+    | unique
+    | if length == 1
+        and (.[0] | test("^[^[:space:]@]+@sha256:[0-9a-f]{64}$"))
+      then .[0]
+      else error("expected one digest-pinned Shuffle worker image")
+      end
+  ' <<<"${orborus_metadata}"
+}
+
+remove_reviewed_shuffle_worker_service() {
+  local attempt
+  local expected_image
+  local service_metadata
+  local service_image
+  local service_removed
+  local task_container_ids
+
+  if ! service_metadata="$(
+    docker_lab service inspect "${shuffle_worker_service}" 2>/dev/null
+  )"; then
+    return
+  fi
+  if ! expected_image="$(configured_shuffle_worker_immutable_ref)"; then
+    echo "BLOCKED: refusing to remove a Shuffle worker service without owned Orborus image evidence" >&2
+    return 1
+  fi
+  service_image="$(
+    jq -er '.[0].Spec.TaskTemplate.ContainerSpec.Image' \
+      <<<"${service_metadata}"
+  )"
+  if [[ "${service_image}" != "${expected_image}" ]]; then
+    echo "BLOCKED: refusing to remove a Shuffle worker service with an unreviewed image" >&2
+    return 1
+  fi
+
+  docker_lab service rm "${shuffle_worker_service}" >/dev/null
+  for attempt in {1..60}; do
+    service_removed=false
+    if ! docker_lab service inspect \
+      "${shuffle_worker_service}" >/dev/null 2>&1; then
+      service_removed=true
+    fi
+    if ! task_container_ids="$(
+      docker_lab ps \
+        --all \
+        --quiet \
+        --filter \
+          "label=com.docker.swarm.service.name=${shuffle_worker_service}"
+    )"; then
+      sleep 1
+      continue
+    fi
+    if [[ "${service_removed}" == true && -z "${task_container_ids}" ]]; then
+      return
+    fi
+    sleep 1
+  done
+  echo "BLOCKED: Shuffle worker service tasks did not stop during cleanup" >&2
+  return 1
 }
 
 [[ -f "${evaluation}" ]] \
@@ -482,6 +569,7 @@ capture_reviewed_shuffle_worker_image() {
 cleanup_on_exit() {
   local rc=$?
   rm -f "${compose_render_output}" >/dev/null 2>&1 || true
+  remove_reviewed_shuffle_worker_service >/dev/null 2>&1 || true
   remove_reviewed_shuffle_action_service >/dev/null 2>&1 || true
   if [[ "${cleaned}" != true ]]; then
     "${LAB_DIR}/cleanup.sh" >/dev/null 2>&1 || true
@@ -573,7 +661,7 @@ shuffle_worker_immutable_ref="$(
         end
     '
 )"
-[[ "${shuffle_worker_immutable_ref}" == *@sha256:* ]] \
+[[ "${shuffle_worker_immutable_ref}" =~ ^[^[:space:]@]+@sha256:[0-9a-f]{64}$ ]] \
   || fail "Shuffle worker image is not digest-pinned"
 shuffle_action_image="$(capture_reviewed_shuffle_action_image)"
 shuffle_worker_image="$(capture_reviewed_shuffle_worker_image)"
@@ -841,6 +929,7 @@ jq -n \
   ' >"${evaluation_record_output}"
 record_step 15 "record_prerequisite_evaluation" "${evaluated_at}"
 
+run_reviewed_lab_command remove_reviewed_shuffle_worker_service
 run_reviewed_lab_command "${LAB_DIR}/cleanup.sh"
 cleaned=true
 assert_repository_snapshot

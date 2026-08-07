@@ -429,6 +429,17 @@
     },
     {
       "if": {
+        "$ref": "#/$defs/legacy_blocked_identity"
+      },
+      "then": {
+        "$ref": "#/$defs/legacy_blocked_step_journey"
+      },
+      "else": {
+        "$ref": "#/$defs/current_step_journey"
+      }
+    },
+    {
+      "if": {
         "required": [
           "verdict"
         ],
@@ -446,6 +457,11 @@
                 "status": {
                   "const": "passed"
                 }
+              },
+              "not": {
+                "required": [
+                  "blocker"
+                ]
               }
             }
           },
@@ -545,6 +561,628 @@
                 "pattern": "\\S"
               }
             }
+          },
+          "human_control": {
+            "properties": {
+              "requester_identity": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "approver_identity": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "authenticated_approver_identity": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "denied_action_execution_count": {
+                "const": 0
+              },
+              "denied_dispatch_rejected": {
+                "const": true
+              },
+              "approval_source": {
+                "const": "interactive_local_operator_ceremony"
+              },
+              "approval_method": {
+                "enum": [
+                  "macos_operator_dialog",
+                  "tty_challenge"
+                ]
+              },
+              "approval_challenge_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "approval_confirmed_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "idempotency": {
+            "properties": {
+              "wazuh_first_disposition": {
+                "const": "created"
+              },
+              "wazuh_duplicate_disposition": {
+                "const": "deduplicated"
+              },
+              "wazuh_alert_identity_preserved": {
+                "const": true
+              },
+              "shuffle_execution_count": {
+                "const": 1
+              },
+              "receipt_replay_reconciliation_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "receipt_identity_preserved": {
+                "const": true
+              }
+            }
+          },
+          "negative_cases": {
+            "properties": {
+              "invalid_credential": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "rejected",
+                      "contained"
+                    ]
+                  },
+                  "authority_before": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "authority_after": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "authority_delta": {
+                    "const": 0
+                  },
+                  "measurement_source": {
+                    "const": "aegisops_authoritative_alert_count"
+                  },
+                  "evidence_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              "proxy_bypass": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "rejected",
+                      "contained"
+                    ]
+                  },
+                  "authority_before": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "authority_after": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "authority_delta": {
+                    "const": 0
+                  },
+                  "measurement_source": {
+                    "const": "aegisops_authoritative_alert_count"
+                  },
+                  "evidence_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              "failed_execution": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "rejected",
+                      "contained"
+                    ]
+                  },
+                  "authority_before": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "authority_after": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "authority_delta": {
+                    "type": "integer"
+                  },
+                  "measurement_source": {
+                    "const": "aegisops_authoritative_record_count"
+                  },
+                  "evidence_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              "malformed_receipt": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "rejected",
+                      "contained"
+                    ]
+                  },
+                  "authority_before": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "authority_after": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "authority_delta": {
+                    "const": 0
+                  },
+                  "measurement_source": {
+                    "const": "aegisops_authoritative_record_count"
+                  },
+                  "evidence_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              "reconciliation_mismatch": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "rejected",
+                      "contained"
+                    ]
+                  },
+                  "authority_before": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "authority_after": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "authority_delta": {
+                    "type": "integer"
+                  },
+                  "measurement_source": {
+                    "const": "aegisops_authoritative_record_count"
+                  },
+                  "evidence_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  }
+                }
+              }
+            }
+          },
+          "restart": {
+            "properties": {
+              "performed": {
+                "const": true
+              },
+              "records_persisted": {
+                "const": true
+              },
+              "checked_identifiers": {
+                "type": "array",
+                "minItems": 9,
+                "maxItems": 9,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "aegisops_alert_id",
+                    "case_id",
+                    "denied_action_request_id",
+                    "denied_approval_decision_id",
+                    "action_request_id",
+                    "approval_decision_id",
+                    "action_execution_id",
+                    "reconciliation_id",
+                    "wazuh_reconciliation_ids"
+                  ]
+                }
+              }
+            }
+          },
+          "report": {
+            "properties": {
+              "report_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "source_of_truth": {
+                "const": "aegisops_authoritative_records"
+              },
+              "redacted": {
+                "const": true
+              }
+            }
+          },
+          "evaluation": {
+            "properties": {
+              "trial_run_id": {
+                "type": "string",
+                "pattern": "^phase67-e2e-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+              },
+              "snapshot_id": {
+                "type": "string",
+                "pattern": "^phase67-snapshot-[0-9a-f]{16}$"
+              },
+              "repository_revision": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{40}$"
+              },
+              "evaluated_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "verdict": {
+                "const": "integration_trial_passed_with_owned_limitations"
+              },
+              "ga_accepted": {
+                "const": false
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "artifacts": {
+            "properties": {
+              "retention": {
+                "const": "local_mode_0600"
+              },
+              "directory_name": {
+                "type": "string",
+                "pattern": "^phase67-e2e-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}-artifacts$"
+              },
+              "files": {
+                "type": "array",
+                "minItems": 15,
+                "maxItems": 15,
+                "allOf": [
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "compose-config.sha256"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "evaluation-record.json"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "images.json"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "initial-status.txt"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "journey.json"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "preparation.json"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "restart-status.txt"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "restart.json"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "snapshot.json"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "startup-status.txt"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "step-observations.jsonl"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "wazuh-manifest.json"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "wazuh-output.txt"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "workflow-pre-dispatch.json"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "const": "workflow-snapshot.json"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  }
+                ]
+              }
+            }
+          },
+          "cleanup": {
+            "properties": {
+              "mode": {
+                "const": "non_destructive"
+              },
+              "containers_stopped": {
+                "const": true
+              },
+              "data_preserved": {
+                "const": true
+              }
+            }
+          },
+          "limitations": {
+            "minItems": 3,
+            "maxItems": 3,
+            "allOf": [
+              {
+                "contains": {
+                  "type": "object",
+                  "required": [
+                    "limitation_id",
+                    "status"
+                  ],
+                  "properties": {
+                    "limitation_id": {
+                      "const": "phase67-bounded-connectors"
+                    },
+                    "status": {
+                      "const": "follow_up_required"
+                    }
+                  }
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "required": [
+                    "limitation_id",
+                    "status"
+                  ],
+                  "properties": {
+                    "limitation_id": {
+                      "const": "phase67-ga-gates-open"
+                    },
+                    "status": {
+                      "const": "blocking"
+                    }
+                  }
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "required": [
+                    "limitation_id",
+                    "status"
+                  ],
+                  "properties": {
+                    "limitation_id": {
+                      "const": "phase67-single-host"
+                    },
+                    "status": {
+                      "const": "accepted"
+                    }
+                  }
+                },
+                "minContains": 1,
+                "maxContains": 1
+              }
+            ]
           }
         }
       }
@@ -1106,6 +1744,673 @@
         "authority_delta": {"type": ["integer", "null"]},
         "measurement_source": {"type": ["string", "null"]},
         "evidence_ref": {"type": ["string", "null"]}
+      }
+    },
+    "current_step_journey": {
+      "type": "object",
+      "required": [
+        "steps"
+      ],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "minItems": 15,
+          "maxItems": 15,
+          "prefixItems": [
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 1
+                },
+                "name": {
+                  "const": "capture_immutable_snapshot"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "snapshot",
+                    "artifact:compose-config.sha256",
+                    "artifact:workflow-snapshot.json"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 2
+                },
+                "name": {
+                  "const": "record_lab_health_after_snapshot"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "artifact:initial-status.txt"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 3
+                },
+                "name": {
+                  "const": "trigger_real_wazuh_detection"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "wazuh-manifest:native_wazuh_alert_id",
+                    "artifact:wazuh-output.txt"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 4
+                },
+                "name": {
+                  "const": "admit_wazuh_alert"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "wazuh-manifest:aegisops_alert_id",
+                    "artifact:wazuh-output.txt"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 5
+                },
+                "name": {
+                  "const": "promote_alert_to_case"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "journey:case_id"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 6
+                },
+                "name": {
+                  "const": "create_reviewed_action_request"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "journey:action_request_id"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 7
+                },
+                "name": {
+                  "const": "prove_denied_action_non_dispatch"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "journey:denied_dispatch"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 8
+                },
+                "name": {
+                  "const": "approve_and_dispatch_real_shuffle_action"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "journey:approval_challenge_sha256",
+                    "artifact:workflow-pre-dispatch.json",
+                    "journey:execution_id"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 9
+                },
+                "name": {
+                  "const": "capture_authenticated_shuffle_receipt"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "journey:expected_receipt_id"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 10
+                },
+                "name": {
+                  "const": "reconcile_from_aegisops_records"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "journey:reconciliation_id"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 11
+                },
+                "name": {
+                  "const": "export_redacted_aegisops_report"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "report:sha256"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 12
+                },
+                "name": {
+                  "const": "replay_deliveries_for_idempotency"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "journey:replay_reconciliation_id"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 13
+                },
+                "name": {
+                  "const": "run_negative_cases"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "journey:measured_negative_probes"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 14
+                },
+                "name": {
+                  "const": "restart_and_verify_persistence"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "restart:checked_identifiers",
+                    "artifact:restart-status.txt"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 15
+                },
+                "name": {
+                  "const": "record_prerequisite_evaluation"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "evaluation-record:sha256"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "legacy_blocked_step_journey": {
+      "type": "object",
+      "required": [
+        "steps"
+      ],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "minItems": 15,
+          "maxItems": 15,
+          "prefixItems": [
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 1
+                },
+                "name": {
+                  "const": "capture_immutable_snapshot"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "snapshot"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 2
+                },
+                "name": {
+                  "const": "start_lab_and_record_health"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "lab-status:full"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 3
+                },
+                "name": {
+                  "const": "trigger_real_wazuh_detection"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "wazuh-manifest:native_wazuh_alert_id"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 4
+                },
+                "name": {
+                  "const": "admit_wazuh_alert"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "wazuh-manifest:aegisops_alert_id"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 5
+                },
+                "name": {
+                  "const": "promote_alert_to_case"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "preparation:case_id"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 6
+                },
+                "name": {
+                  "const": "create_reviewed_action_request"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "preparation:action_request_id"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 7
+                },
+                "name": {
+                  "const": "prove_denied_action_non_dispatch"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "preparation:denied_dispatch"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 8
+                },
+                "name": {
+                  "const": "approve_and_dispatch_real_shuffle_action"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "preparation:approval_challenge_sha256"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 9
+                },
+                "name": {
+                  "const": "capture_authenticated_shuffle_receipt"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "not-run:approval-blocked"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 10
+                },
+                "name": {
+                  "const": "reconcile_from_aegisops_records"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "not-run:approval-blocked"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 11
+                },
+                "name": {
+                  "const": "export_redacted_aegisops_report"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "not-run:approval-blocked"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 12
+                },
+                "name": {
+                  "const": "replay_deliveries_for_idempotency"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "wazuh-manifest:duplicate_delivery"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 13
+                },
+                "name": {
+                  "const": "run_negative_cases"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "wazuh-command:negative-boundaries"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 14
+                },
+                "name": {
+                  "const": "restart_and_verify_persistence"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "not-run:approval-blocked"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "step",
+                "name",
+                "evidence_refs"
+              ],
+              "properties": {
+                "step": {
+                  "const": 15
+                },
+                "name": {
+                  "const": "publish_prerequisite_evaluation"
+                },
+                "evidence_refs": {
+                  "const": [
+                    "evaluation-record:sha256"
+                  ]
+                }
+              }
+            }
+          ]
+        }
       }
     }
   }

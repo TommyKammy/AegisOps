@@ -512,6 +512,68 @@ def _schema_image_inventory_profile(
     }
 
 
+def _schema_ordered_step_journey(
+    step_names: Sequence[str],
+    *,
+    evidence_refs: Sequence[Sequence[str]] | None = None,
+) -> dict[str, object]:
+    prefix_items: list[dict[str, object]] = []
+    for index, step_name in enumerate(step_names):
+        properties: dict[str, object] = {
+            "step": {"const": index + 1},
+            "name": {"const": step_name},
+        }
+        required = ["step", "name"]
+        if evidence_refs is not None:
+            properties["evidence_refs"] = {
+                "const": list(evidence_refs[index]),
+            }
+            required.append("evidence_refs")
+        prefix_items.append(
+            {
+                "type": "object",
+                "required": required,
+                "properties": properties,
+            }
+        )
+    return {
+        "type": "object",
+        "required": ["steps"],
+        "properties": {
+            "steps": {
+                "type": "array",
+                "minItems": len(step_names),
+                "maxItems": len(step_names),
+                "prefixItems": prefix_items,
+            },
+        },
+    }
+
+
+def _schema_exact_named_item(
+    property_name: str,
+    value: str,
+    *,
+    additional_properties: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    properties: dict[str, object] = {
+        property_name: {"const": value},
+    }
+    required = [property_name]
+    if additional_properties is not None:
+        properties.update(additional_properties)
+        required.extend(additional_properties)
+    return {
+        "contains": {
+            "type": "object",
+            "required": required,
+            "properties": properties,
+        },
+        "minContains": 1,
+        "maxContains": 1,
+    }
+
+
 def _schema_passed_verdict_contract() -> dict[str, object]:
     identifier_properties = {
         identifier: {
@@ -524,6 +586,46 @@ def _schema_passed_verdict_contract() -> dict[str, object]:
     identifier_properties["wazuh_rule_id"] = {
         "const": REVIEWED_WAZUH_RULE_ID,
     }
+    negative_case_properties: dict[str, object] = {}
+    for case_name in NEGATIVE_CASE_KEYS:
+        measurement_source = (
+            "aegisops_authoritative_alert_count"
+            if case_name in {"invalid_credential", "proxy_bypass"}
+            else "aegisops_authoritative_record_count"
+        )
+        authority_delta: dict[str, object] = {"type": "integer"}
+        if case_name in {
+            "invalid_credential",
+            "proxy_bypass",
+            "malformed_receipt",
+        }:
+            authority_delta = {"const": 0}
+        negative_case_properties[case_name] = {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": ["rejected", "contained"],
+                },
+                "authority_before": {
+                    "type": "integer",
+                    "minimum": 0,
+                },
+                "authority_after": {
+                    "type": "integer",
+                    "minimum": 0,
+                },
+                "authority_delta": authority_delta,
+                "measurement_source": {"const": measurement_source},
+                "evidence_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": r"\S",
+                },
+            },
+        }
+    artifact_names = sorted(ARTIFACT_NAMES)
+    limitation_statuses = sorted(OWNED_LIMITATION_STATUSES.items())
     return {
         "if": {
             "required": ["verdict"],
@@ -538,10 +640,165 @@ def _schema_passed_verdict_contract() -> dict[str, object]:
                         "properties": {
                             "status": {"const": "passed"},
                         },
+                        "not": {"required": ["blocker"]},
                     },
                 },
                 "identifiers": {
                     "properties": identifier_properties,
+                },
+                "human_control": {
+                    "properties": {
+                        "requester_identity": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": r"\S",
+                        },
+                        "approver_identity": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": r"\S",
+                        },
+                        "authenticated_approver_identity": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": r"\S",
+                        },
+                        "denied_action_execution_count": {"const": 0},
+                        "denied_dispatch_rejected": {"const": True},
+                        "approval_source": {
+                            "const": "interactive_local_operator_ceremony",
+                        },
+                        "approval_method": {
+                            "enum": [
+                                "macos_operator_dialog",
+                                "tty_challenge",
+                            ],
+                        },
+                        "approval_challenge_sha256": {
+                            "type": "string",
+                            "pattern": SHA256.pattern,
+                        },
+                        "approval_confirmed_at": {
+                            "type": "string",
+                            "format": "date-time",
+                        },
+                    },
+                },
+                "idempotency": {
+                    "properties": {
+                        "wazuh_first_disposition": {"const": "created"},
+                        "wazuh_duplicate_disposition": {
+                            "const": "deduplicated",
+                        },
+                        "wazuh_alert_identity_preserved": {"const": True},
+                        "shuffle_execution_count": {"const": 1},
+                        "receipt_replay_reconciliation_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": r"\S",
+                        },
+                        "receipt_identity_preserved": {"const": True},
+                    },
+                },
+                "negative_cases": {
+                    "properties": negative_case_properties,
+                },
+                "restart": {
+                    "properties": {
+                        "performed": {"const": True},
+                        "records_persisted": {"const": True},
+                        "checked_identifiers": {
+                            "type": "array",
+                            "minItems": len(RESTART_CHECKED_IDENTIFIER_FIELDS),
+                            "maxItems": len(RESTART_CHECKED_IDENTIFIER_FIELDS),
+                            "uniqueItems": True,
+                            "items": {
+                                "enum": list(RESTART_CHECKED_IDENTIFIER_FIELDS),
+                            },
+                        },
+                    },
+                },
+                "report": {
+                    "properties": {
+                        "report_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": r"\S",
+                        },
+                        "sha256": {
+                            "type": "string",
+                            "pattern": SHA256.pattern,
+                        },
+                        "source_of_truth": {
+                            "const": "aegisops_authoritative_records",
+                        },
+                        "redacted": {"const": True},
+                    },
+                },
+                "evaluation": {
+                    "properties": {
+                        "trial_run_id": {
+                            "type": "string",
+                            "pattern": TRIAL_ID.pattern,
+                        },
+                        "snapshot_id": {
+                            "type": "string",
+                            "pattern": SNAPSHOT_ID.pattern,
+                        },
+                        "repository_revision": {
+                            "type": "string",
+                            "pattern": REVISION.pattern,
+                        },
+                        "evaluated_at": {
+                            "type": "string",
+                            "format": "date-time",
+                        },
+                        "verdict": {"const": PASSED_VERDICT},
+                        "ga_accepted": {"const": False},
+                        "sha256": {
+                            "type": "string",
+                            "pattern": SHA256.pattern,
+                        },
+                    },
+                },
+                "artifacts": {
+                    "properties": {
+                        "retention": {"const": "local_mode_0600"},
+                        "directory_name": {
+                            "type": "string",
+                            "pattern": TRIAL_ID.pattern[:-1] + r"-artifacts$",
+                        },
+                        "files": {
+                            "type": "array",
+                            "minItems": len(artifact_names),
+                            "maxItems": len(artifact_names),
+                            "allOf": [
+                                _schema_exact_named_item("name", name)
+                                for name in artifact_names
+                            ],
+                        },
+                    },
+                },
+                "cleanup": {
+                    "properties": {
+                        "mode": {"const": "non_destructive"},
+                        "containers_stopped": {"const": True},
+                        "data_preserved": {"const": True},
+                    },
+                },
+                "limitations": {
+                    "minItems": len(limitation_statuses),
+                    "maxItems": len(limitation_statuses),
+                    "allOf": [
+                        _schema_exact_named_item(
+                            "limitation_id",
+                            limitation_id,
+                            additional_properties={
+                                "status": {"const": status},
+                            },
+                        )
+                        for limitation_id, status in limitation_statuses
+                    ],
                 },
             },
         },
@@ -650,9 +907,14 @@ def _validate_schema_contract(schema: object) -> None:
                 "then": {"$ref": "#/$defs/legacy_blocked_image_inventory"},
                 "else": {"$ref": "#/$defs/current_image_inventory"},
             },
+            {
+                "if": {"$ref": "#/$defs/legacy_blocked_identity"},
+                "then": {"$ref": "#/$defs/legacy_blocked_step_journey"},
+                "else": {"$ref": "#/$defs/current_step_journey"},
+            },
             _schema_passed_verdict_contract(),
         ],
-        "schema profile and passed-verdict selection drifted",
+        "schema profile, journey, and passed-verdict selection drifted",
     )
     require(
         definitions.get("legacy_blocked_image_inventory")
@@ -666,6 +928,22 @@ def _validate_schema_contract(schema: object) -> None:
             runtime_image_id_services=CURRENT_RUNTIME_IMAGE_ID_SERVICES,
         ),
         "schema current image inventory contract drifted",
+    )
+    require(
+        definitions.get("legacy_blocked_step_journey")
+        == _schema_ordered_step_journey(
+            LEGACY_BLOCKED_STEP_NAMES,
+            evidence_refs=LEGACY_BLOCKED_STEP_EVIDENCE_REFS,
+        ),
+        "schema historical step journey contract drifted",
+    )
+    require(
+        definitions.get("current_step_journey")
+        == _schema_ordered_step_journey(
+            STEP_NAMES,
+            evidence_refs=STEP_EVIDENCE_REFS,
+        ),
+        "schema current step journey contract drifted",
     )
 
 

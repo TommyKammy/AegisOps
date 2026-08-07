@@ -433,7 +433,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     artifacts_directory,
                 )
 
-    def test_schema_selects_exact_historical_and_current_image_profiles(
+    def test_schema_selects_exact_historical_and_current_profiles(
         self,
     ) -> None:
         images_schema = SCHEMA["properties"]["snapshot"]["properties"]["images"]
@@ -503,6 +503,31 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             ),
             validator.SUPPORTED_HOST_ARCHITECTURES,
         )
+        self.assertEqual(
+            SCHEMA["$defs"]["current_step_journey"],
+            validator._schema_ordered_step_journey(
+                validator.STEP_NAMES,
+                evidence_refs=validator.STEP_EVIDENCE_REFS,
+            ),
+        )
+        self.assertEqual(
+            SCHEMA["$defs"]["legacy_blocked_step_journey"],
+            validator._schema_ordered_step_journey(
+                validator.LEGACY_BLOCKED_STEP_NAMES,
+                evidence_refs=validator.LEGACY_BLOCKED_STEP_EVIDENCE_REFS,
+            ),
+        )
+        current_steps = SCHEMA["$defs"]["current_step_journey"][
+            "properties"
+        ]["steps"]["prefixItems"]
+        self.assertEqual(
+            [item["properties"]["step"]["const"] for item in current_steps],
+            list(range(1, len(validator.STEP_NAMES) + 1)),
+        )
+        self.assertEqual(
+            [item["properties"]["name"]["const"] for item in current_steps],
+            list(validator.STEP_NAMES),
+        )
 
     def test_schema_and_validator_share_the_reviewed_verdict_and_uuid_contracts(
         self,
@@ -519,6 +544,10 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             == validator.PASSED_VERDICT
         ]
         self.assertEqual(len(passed_branches), 1)
+        self.assertEqual(
+            passed_branches[0],
+            validator._schema_passed_verdict_contract(),
+        )
         self.assertEqual(
             passed_branches[0]["then"]["properties"]["steps"]["items"][
                 "properties"
@@ -543,6 +572,39 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                 "enum"
             ],
             [validator.REVIEWED_WAZUH_RULE_ID, None],
+        )
+        passed_properties = passed_branches[0]["then"]["properties"]
+        for identity in (
+            "requester_identity",
+            "approver_identity",
+            "authenticated_approver_identity",
+        ):
+            with self.subTest(identity=identity):
+                self.assertEqual(
+                    passed_properties["human_control"]["properties"][identity][
+                        "type"
+                    ],
+                    "string",
+                )
+        self.assertEqual(
+            passed_properties["restart"]["properties"]["performed"],
+            {"const": True},
+        )
+        self.assertEqual(
+            passed_properties["restart"]["properties"]["records_persisted"],
+            {"const": True},
+        )
+        self.assertEqual(
+            set(
+                passed_properties["restart"]["properties"][
+                    "checked_identifiers"
+                ]["items"]["enum"]
+            ),
+            set(validator.RESTART_CHECKED_IDENTIFIER_FIELDS),
+        )
+        self.assertEqual(
+            passed_properties["evaluation"]["properties"]["ga_accepted"],
+            {"const": False},
         )
 
         unsupported_verdict = _manifest()
@@ -3023,6 +3085,7 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             'run_reviewed_lab_command "${LAB_DIR}/status.sh" full --write-evidence',
             'run_reviewed_lab_command "${LAB_DIR}/test-wazuh-intake.sh"',
             "run_reviewed_lab_command remove_reviewed_shuffle_action_service",
+            "run_reviewed_lab_command remove_reviewed_shuffle_worker_service",
             'run_reviewed_lab_command "${LAB_DIR}/down.sh"',
             'run_reviewed_lab_command "${LAB_DIR}/cleanup.sh"',
         )
@@ -3107,6 +3170,34 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             '[[ "${postdispatch_shuffle_worker_image}" == "${shuffle_worker_image}" ]]',
             runner,
         )
+        self.assertIn("configured_shuffle_worker_immutable_ref()", runner)
+        self.assertIn("remove_reviewed_shuffle_worker_service()", runner)
+        self.assertIn(
+            '[[ "${service_image}" != "${expected_image}" ]]',
+            runner,
+        )
+        self.assertIn(
+            'docker_lab service rm "${shuffle_worker_service}"',
+            runner,
+        )
+        self.assertIn(
+            'label=com.docker.swarm.service.name=${shuffle_worker_service}',
+            runner,
+        )
+        exit_cleanup_start = runner.index("cleanup_on_exit()")
+        exit_cleanup_end = runner.index("trap cleanup_on_exit EXIT")
+        exit_cleanup = runner[exit_cleanup_start:exit_cleanup_end]
+        self.assertLess(
+            exit_cleanup.index("remove_reviewed_shuffle_worker_service"),
+            exit_cleanup.index('"${LAB_DIR}/cleanup.sh"'),
+        )
+        normal_worker_cleanup = runner.rindex(
+            "run_reviewed_lab_command remove_reviewed_shuffle_worker_service"
+        )
+        normal_compose_cleanup = runner.rindex(
+            'run_reviewed_lab_command "${LAB_DIR}/cleanup.sh"'
+        )
+        self.assertLess(normal_worker_cleanup, normal_compose_cleanup)
         self.assertIn('final_artifacts=', runner)
         self.assertLess(
             runner.index('mv "${report_output}" "${final_report}"'),

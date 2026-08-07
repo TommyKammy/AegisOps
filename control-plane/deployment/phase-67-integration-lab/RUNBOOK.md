@@ -137,7 +137,10 @@ After report export and delivery replay, the runner stops and starts the lab,
 checks the persisted action-chain identifiers, every Wazuh admission/replay
 reconciliation ID, the one-execution count, and exact equality between the
 post-restart authoritative records and the retained report, and
-runs `cleanup.sh`. The runner retains a trial-specific raw artifact directory
+removes the owned `shuffle-workers` service after matching its image to the
+digest captured from Orborus. It waits for the service and all worker task
+containers to disappear before `cleanup.sh`; the same ordered cleanup runs on
+the failure trap. The runner retains a trial-specific raw artifact directory
 with mode `0700` and files with mode `0600`, plus the complete redacted report,
 below `${AEGISOPS_LAB_EVIDENCE_DIR}`. The manifest records every retained raw
 artifact digest and binds a generated evaluation record to the trial, snapshot,

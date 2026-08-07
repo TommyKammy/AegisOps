@@ -52,7 +52,42 @@ mutate_json() {
   mv "${staging}" "${path}"
 }
 
+assert_schema_fails_with() {
+  local name="$1"
+  local expected="$2"
+  local expression="$3"
+  local mutated_schema="${workdir}/${name}-schema.json"
+  jq "${expression}" "${schema}" >"${mutated_schema}"
+  if python3 "${validator}" "${mutated_schema}" "${sample}" \
+    >"${workdir}/${name}.out" 2>"${workdir}/${name}.err"; then
+    echo "self-test expected schema rejection for ${name}" >&2
+    exit 1
+  fi
+  grep -Fq -- "${expected}" "${workdir}/${name}.err" \
+    || {
+      cat "${workdir}/${name}.err" >&2
+      echo "self-test ${name} missed schema diagnostic: ${expected}" >&2
+      exit 1
+    }
+}
+
 python3 "${validator}" "${schema}" "${sample}"
+assert_schema_fails_with \
+  reordered-current-journey \
+  'schema current step journey contract drifted' \
+  '.["$defs"].current_step_journey.properties.steps.prefixItems[0].properties.name.const = "wrong-step"'
+assert_schema_fails_with \
+  nullable-passed-requester \
+  'schema profile, journey, and passed-verdict selection drifted' \
+  '(.allOf[] | select(.if.properties.verdict.const == "integration_trial_passed_with_owned_limitations") | .then.properties.human_control.properties.requester_identity.type) = ["string", "null"]'
+assert_schema_fails_with \
+  missing-passed-restart-proof \
+  'schema profile, journey, and passed-verdict selection drifted' \
+  'del(.allOf[] | select(.if.properties.verdict.const == "integration_trial_passed_with_owned_limitations") | .then.properties.restart)'
+assert_schema_fails_with \
+  passed-ga-accepted \
+  'schema profile, journey, and passed-verdict selection drifted' \
+  '(.allOf[] | select(.if.properties.verdict.const == "integration_trial_passed_with_owned_limitations") | .then.properties.evaluation.properties.ga_accepted.const) = true'
 runtime_images="${workdir}/runtime-images.json"
 jq '
   .snapshot.images
