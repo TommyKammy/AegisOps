@@ -46,6 +46,7 @@ shuffle_action_publish_spec="$(
 schema="${LAB_DIR}/e2e/evidence-manifest.schema.json"
 validator="${LAB_DIR}/e2e/validate_evidence_manifest.py"
 builder="${LAB_DIR}/e2e/build_evidence.py"
+swarm_service_labeler="${LAB_DIR}/e2e/update_swarm_service_labels.py"
 evaluation="${REPO_ROOT}/docs/phase-67-prerequisite-evaluation.md"
 reviewed_workflow="${LAB_DIR}/shuffle/harmless-local-log-workflow.json"
 workflow_validator="${LAB_DIR}/shuffle/validate_preserved_workflow.py"
@@ -345,8 +346,12 @@ shuffle_worker_service_is_trial_owned() {
   [[ -n "${shuffle_worker_service_id}" ]] \
     && jq -e \
       --arg service_id "${shuffle_worker_service_id}" \
+      --arg service_name "${shuffle_worker_service}" \
+      --arg service_image "${shuffle_worker_immutable_ref}" \
       --arg trial_run_id "${trial_run_id}" '
         .[0].ID == $service_id
+        and .[0].Spec.Name == $service_name
+        and .[0].Spec.TaskTemplate.ContainerSpec.Image == $service_image
         and .[0].Spec.Labels["com.aegisops.lab.phase"] == "67.4"
         and .[0].Spec.Labels["com.aegisops.lab.component"]
           == "shuffle-worker-image"
@@ -355,10 +360,48 @@ shuffle_worker_service_is_trial_owned() {
       ' <<<"${service_metadata}" >/dev/null
 }
 
+shuffle_worker_service_matches_attempted_claim() {
+  local before_metadata="$1"
+  local after_metadata="$2"
+
+  jq -e -s \
+    --arg service_id "${shuffle_worker_service_id}" \
+    --arg service_name "${shuffle_worker_service}" \
+    --arg service_image "${shuffle_worker_immutable_ref}" \
+    --arg trial_run_id "${trial_run_id}" '
+      .[0][0] as $before
+      | .[1][0] as $after
+      | $before.ID == $service_id
+        and $after.ID == $service_id
+        and $after.Version.Index > $before.Version.Index
+        and $after.Spec.Name == $service_name
+        and $after.Spec.TaskTemplate.ContainerSpec.Image == $service_image
+        and (
+          ($after.Spec.Labels // {})
+          == (
+            ($before.Spec.Labels // {})
+            + {
+                "com.aegisops.lab.phase": "67.4",
+                "com.aegisops.lab.component": "shuffle-worker-image",
+                "com.aegisops.lab.trial-run-id": $trial_run_id
+              }
+          )
+        )
+        and (
+          ($after.Spec | del(.Labels))
+          == ($before.Spec | del(.Labels))
+        )
+    ' \
+    <(printf '%s\n' "${before_metadata}") \
+    <(printf '%s\n' "${after_metadata}") \
+    >/dev/null
+}
+
 claim_reviewed_shuffle_worker_service() {
   local service_metadata="$1"
   local service_id
   local service_image
+  local service_version
   local owned_metadata
 
   if [[ "${shuffle_worker_owned}" == true ]]; then
@@ -373,8 +416,9 @@ claim_reviewed_shuffle_worker_service() {
     return 1
   fi
   if ! jq -e '
-    (.[0].Spec.Labels["com.aegisops.lab.trial-run-id"] // "") == ""
+    (.[0].Spec.Labels["com.aegisops.lab.phase"] // "") == ""
     and (.[0].Spec.Labels["com.aegisops.lab.component"] // "") == ""
+    and (.[0].Spec.Labels["com.aegisops.lab.trial-run-id"] // "") == ""
   ' <<<"${service_metadata}" >/dev/null; then
     echo "BLOCKED: new Shuffle worker service already carries ownership labels" >&2
     return 1
@@ -394,13 +438,32 @@ claim_reviewed_shuffle_worker_service() {
     echo "BLOCKED: Shuffle worker service is not pinned to the reviewed digest" >&2
     return 1
   fi
+  if ! service_version="$(
+    jq -er '
+      .[0].Version.Index
+      | select(type == "number" and . >= 1 and floor == .)
+    ' <<<"${service_metadata}"
+  )"; then
+    echo "BLOCKED: new Shuffle worker service has no stable service version" >&2
+    return 1
+  fi
   shuffle_worker_service_id="${service_id}"
-  if ! docker_lab service update \
-    --detach=true \
-    --label-add "com.aegisops.lab.phase=67.4" \
-    --label-add "com.aegisops.lab.component=shuffle-worker-image" \
-    --label-add "com.aegisops.lab.trial-run-id=${trial_run_id}" \
-    "${service_id}" >/dev/null; then
+  if ! python3 "${swarm_service_labeler}" \
+    --docker-context "${AEGISOPS_LAB_DOCKER_CONTEXT}" \
+    --service-id "${service_id}" \
+    --expected-version "${service_version}" \
+    --expected-name "${shuffle_worker_service}" \
+    --expected-image "${shuffle_worker_immutable_ref}" \
+    --label "com.aegisops.lab.phase=67.4" \
+    --label "com.aegisops.lab.component=shuffle-worker-image" \
+    --label "com.aegisops.lab.trial-run-id=${trial_run_id}" \
+    >/dev/null; then
+    if owned_metadata="$(
+      docker_lab service inspect "${shuffle_worker_service_id}" 2>/dev/null
+    )" && shuffle_worker_service_matches_attempted_claim \
+      "${service_metadata}" "${owned_metadata}"; then
+      shuffle_worker_owned=true
+    fi
     echo "BLOCKED: failed to label the new Shuffle worker service" >&2
     return 1
   fi

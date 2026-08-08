@@ -128,6 +128,11 @@ Before startup, the runner fails closed if a `shuffle-workers` service already
 exists. It separately inspects the service created after that preflight, binds
 its service ID immediately to the current trial with Phase, component, and
 trial-run labels, and verifies its sole running task container and image ID.
+Shuffle 2.2.1 creates a hybrid v1.40 Swarm spec containing both legacy
+service-level networks and task-level networks. The label claim therefore uses
+the selected context's verified local Unix socket to round-trip the complete
+v1.40 spec, and fails unless service ID, version, image, and every non-label
+field remain unchanged.
 If startup fails before this initial capture completes, cleanup claims the
 newly appeared service only when the preflight absence and reviewed Orborus
 image both match, then applies the same ID and ownership checks before removal.

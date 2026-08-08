@@ -53,6 +53,10 @@ and runtime image ID before and after the reviewed execution. The runner first
 proves that no `shuffle-workers` service exists, then binds the created service
 ID to the trial with ownership labels as soon as it appears; cleanup refuses to
 remove a service unless its ID, labels, and reviewed image still match.
+Because Shuffle 2.2.1 creates that service through Docker API v1.40 with both
+legacy service-level and task-level network fields, the ownership update
+round-trips the complete v1.40 spec and proves that every non-label field is
+unchanged. This avoids an implicit network migration or worker task restart.
 If startup fails before the first capture completes, cleanup may claim the new
 service only after the preflight absence and reviewed Orborus image both match.
 Component observation times separately retain the early Wazuh negative probes
