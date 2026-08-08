@@ -32,6 +32,43 @@ adapter requires an explicit reviewed delegation binding, rejects synthetic
 execution and receipt identifiers, and never persists Shuffle's
 per-execution authorization token.
 
+Phase 67.4 binds both component paths into one authority-preserving journey:
+
+`native Wazuh alert -> AegisOps admission and case -> distinct human approval -> real Shuffle execution and receipt -> AegisOps reconciliation -> redacted report -> restart proof`
+
+The combined runner requires a clean immutable repository revision and the
+`full` profile. It records digest-pinned services, all 15 reviewed journey
+steps, denied-action non-dispatch, duplicate delivery behavior, selected
+negative probes, persistence after restart, and non-destructive cleanup. The
+local raw artifact set retains a Compose digest record bound to the runner-held
+revision and Compose values at evidence-build time. The expanded render is
+verified from a mode-`0600` temporary file and deleted rather than retaining
+interpolated lab credentials. Both startups fail closed if that render changes.
+Each retained status capture includes the machine-readable state and health of
+the exact reviewed Compose service inventory. Before publication, the builder
+reruns the canonical Wazuh and Shuffle semantic validators over the retained
+component evidence instead of trusting artifact hashes alone. The snapshot also
+binds the real Shuffle worker service, running task container, reviewed digest,
+and runtime image ID before and after the reviewed execution. The runner first
+proves that no `shuffle-workers` service exists, then binds the created service
+ID to the trial with ownership labels as soon as it appears; cleanup refuses to
+remove a service unless its ID, labels, and reviewed image still match.
+If startup fails before the first capture completes, cleanup may claim the new
+service only after the preflight absence and reviewed Orborus image both match.
+Component observation times separately retain the early Wazuh negative probes
+and replay as well as the later Shuffle replay and receipt-negative probes, so
+the 15-step summary does not flatten their actual chronology. Receipt capture
+is timestamped only after the authenticated response is returned and validated.
+The operator must interactively approve a challenge bound to the prepared action
+through a macOS dialog or exact TTY response; the runner cannot complete from
+unattended input. The publishable sample omits raw logs, secret values, private
+host paths, and the full local report.
+
+The committed sample is the historical approval-blocked trial captured at
+revision `2473b66f5702a38f1d4630c990509bf812a6af7a`. It does not prove the
+behavior of the current runner or PR head. Current-revision evidence requires a
+new clean-revision trial with an independent human approver.
+
 ## Runtime Shape
 
 The default `core` scope starts PostgreSQL, applies the reviewed first-boot migrations plus current runtime migrations through `0015`, starts the AegisOps control plane, and starts the TLS reverse proxy. Later migration checksums are recorded in the same bootstrap metadata table and fail closed on checksum or recorded-schema drift, including reviewed column, constraint type, validated constraint definition, and index definitions. Before service handoff, the lab also hashes the complete final column, constraint, and index catalogs to reprove the definitions introduced by delegated migrations `0001` through `0007` after their reviewed later evolution. Wazuh and Shuffle are opt-in Compose profiles:
@@ -123,6 +160,87 @@ reconciliation record. Orborus uses the project-scoped Compose identity to join
 its Swarm overlay and deterministically recreates dynamic Shuffle worker/app
 services after an Orborus restart.
 
+After both component trials are initialized, run the complete Phase 67.4
+journey from a clean commit:
+
+```bash
+control-plane/deployment/phase-67-integration-lab/run-e2e-trial.sh
+```
+
+The command starts `full`, reuses the real Wazuh intake boundary, promotes that
+exact admitted alert, proves a denied action has no Shuffle execution, records
+a separate approved real execution after an authenticated local operator
+confirms the displayed approval challenge, reconciles its authenticated
+receipt, exports a redacted AegisOps report, restarts the lab, checks
+every scoped Wazuh admission/replay reconciliation plus the action-chain record
+persistence and exact retained record contents, and stops the lab without deleting volumes
+or evidence. The runner records each completed step in
+`step-observations.jsonl`; the evidence builder rejects missing, reordered, or
+non-chronological observations. After the interactive pause and immediately
+before approved dispatch, the runner reloads the denied request, rejection
+decision, and authoritative execution count and fails if that proof changed.
+The evidence builder binds both the rejected and approved request/decision rows
+in the redacted report to their requester, approver, payload hash, target,
+lifecycle, and parent record relationships instead of accepting an ID-only
+match.
+Synthetic receipt failure probes execute
+through the real reconciliation service inside a rollback-only transaction,
+and the runner verifies both the expected authoritative mismatch reason and
+that the successful authoritative execution is unchanged before publishing
+evidence. The snapshot ID commits to the revision,
+rendered Compose and schema digests, startup runtime digest, reviewed and live
+Shuffle workflow digests, workflow API ID, host and Colima identity, selected
+profile, and every immutable image reference. The runner captures and validates
+the live workflow again immediately before dispatch and rejects any change from
+the snapshot. The inventory includes the configured dynamic Shuffle worker
+image and the action tag's observed repository digest and runtime image ID
+because neither dynamic image is guaranteed to appear in the pre-dispatch
+Compose container enumeration. Before startup, the runner proves that no
+`shuffle-tools_1-2-0` service exists, then creates the reviewed Shuffle Tools
+Swarm service directly from the immutable digest rather than leaving Orborus to
+resolve a mutable tag. It binds the returned service ID to the current trial
+with ownership labels and removes only that ID after revalidating its labels and
+image. It verifies the service task's
+actual image ID before and after approved execution. After approval, the runner
+also rechecks that action identity and the complete repository snapshot
+immediately before dispatch.
+Startup, initial health,
+restart status, and both workflow exports
+are retained with the raw packet. Each status capture must report the exact
+control-plane image ID committed by the snapshot; a syntactically valid but
+different post-restart image is rejected. Report export is restricted to the exact
+record IDs linked to the current trial, so records in preserved volumes from
+earlier trials cannot enter the retained report. After cleanup and immediately
+before evidence construction, the runner rechecks the captured `HEAD` and the
+complete tracked and untracked worktree. The validator binds the reviewed
+limitation set to a passing verdict and binds blocked or failed limitations to
+their terminal journey step. The historical approval-blocked compatibility path
+is limited to the canonical SHA-256 of the one committed packet, so its public
+trial ID and revision cannot authorize a fabricated manifest.
+The Draft 2020-12 schema separately selects that packet's 11-image profile by
+its exact trial, snapshot, revision, and verdict identity; every other packet
+must retain the current 13-image full-profile inventory.
+Every database-capable invocation of the bind-mounted E2E journey runner uses
+the same repository-snapshot guard, including prepare, approved dispatch, and
+post-restart verification. Evidence validation accepts both ARM64 and x86_64
+host architecture spellings supported by preflight, and requires evaluation
+fields to remain null unless the publication step passed; only the exact
+fingerprinted historical packet retains its reviewed compatibility exception.
+The final validator also binds the reviewed Wazuh rule, each negative probe to
+its producing step, and the denial, human-approval, dispatch, evaluation, and
+capture timestamps into one causal sequence.
+The Wazuh intake harness is retained as a prerequisite subtrial whose trigger,
+admission, replay, and boundary-probe timestamps remain verbatim in
+`wazuh-output.txt`. Ordered steps 12 and 13 use only the later Shuffle receipt
+replay and receipt negative probes, so earlier Wazuh operations are not
+relabeled as later journey events. Publication prepares permissions and moves
+the report and raw artifact directory first; the passing manifest is moved last
+and partial publication is rolled back when that final commit cannot complete.
+The final manifest path is validated again after the move, and the separately
+published report plus the complete artifact file set are rehashed against that
+manifest. Success therefore refers to the exact published bytes rather than an
+earlier staging-path read.
+
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 
 `up.sh` will not represent a narrower scope while services from another optional profile remain running. Run `down.sh` before changing from `full` to `core`, `wazuh`, or `shuffle`, or when switching directly between the two optional scopes.
@@ -182,6 +300,9 @@ python3 -m unittest control-plane.tests.test_phase67_2_real_wazuh_intake
 bash scripts/verify-phase-67-3-real-shuffle-transport.sh
 bash scripts/test-verify-phase-67-3-real-shuffle-transport.sh
 python3 -m unittest control-plane.tests.test_phase67_3_real_shuffle_transport
+bash scripts/verify-phase-67-4-real-service-e2e.sh
+bash scripts/test-verify-phase-67-4-real-service-e2e.sh
+python3 -m unittest control-plane.tests.test_phase67_4_real_service_e2e
 ```
 
 The real-host core smoke boundary requires the selected Colima profile and
@@ -192,4 +313,6 @@ immutable image ID used by the running control-plane container, so locally
 resolved build dependencies remain attributable. The Phase 67.2 Wazuh receipt
 and manifest remain subordinate transport evidence. Only AegisOps admission
 creates authoritative alert state; the trial does not promote a case or accept
-a readiness gate. Reviewed Shuffle execution belongs to Phase 67.3.
+a readiness gate. Reviewed Shuffle execution belongs to Phase 67.3. The
+Phase 67.4 packet links those subordinate identifiers to AegisOps records but
+still does not accept GA.

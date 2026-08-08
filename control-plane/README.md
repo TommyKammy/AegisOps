@@ -22,6 +22,7 @@ Current scaffold:
 - `config/local.env.sample` defines non-secret local placeholders for PostgreSQL, OpenSearch, and n8n integration boundaries.
 - `deployment/first-boot/` contains reviewed Phase 16 bootstrap and entrypoint skeletons for the narrow first-boot control-plane, PostgreSQL, and reverse-proxy contract.
 - `deployment/phase-67-integration-lab/` contains the non-production Colima scaffold for a dedicated real-container AegisOps, Wazuh, and Shuffle trial environment.
+- `deployment/phase-67-integration-lab/run-e2e-trial.sh` binds real Wazuh intake, case promotion, human approval, real Shuffle execution, reconciliation, report export, restart, and non-destructive cleanup to one Phase 67.4 snapshot.
 
 Current persistence status:
 

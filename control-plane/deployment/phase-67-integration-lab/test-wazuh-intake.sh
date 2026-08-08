@@ -11,10 +11,19 @@ source "${LAB_DIR}/lab-common.sh"
 
 [[ "$#" -eq 0 ]] || fail "usage: $0"
 require_runtime_environment
+trial_scope="${AEGISOPS_LAB_TRIAL_SCOPE:-wazuh}"
+case "${trial_scope}" in
+  wazuh | full) ;;
+  *) fail "AEGISOPS_LAB_TRIAL_SCOPE must be wazuh or full" ;;
+esac
 require_command curl
 require_command git
 require_command jq
 require_command python3
+
+observed_now() {
+  python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))'
+}
 
 fixture="${REPO_ROOT}/control-plane/tests/fixtures/wazuh/phase53-smb-single-node-ssh-auth-failure-alert.json"
 [[ -s "${fixture}" ]] || fail "reviewed Wazuh negative-test fixture is missing"
@@ -29,17 +38,17 @@ proxy_url="https://localhost:${AEGISOPS_LAB_PROXY_PORT}/intake/wazuh"
 proxy_ca="${AEGISOPS_LAB_PROXY_CERT_DIR}/lab.crt"
 [[ -s "${proxy_ca}" ]] || fail "Phase 67 proxy CA is missing"
 
-running_services="$(compose_scope wazuh ps --services --status running)"
+running_services="$(compose_scope "${trial_scope}" ps --services --status running)"
 for required_service in control-plane proxy wazuh-manager; do
   grep -Fqx "${required_service}" <<<"${running_services}" \
-    || fail "${required_service} is not running; run ${LAB_DIR}/up.sh wazuh"
+    || fail "${required_service} is not running; run ${LAB_DIR}/up.sh ${trial_scope}"
 done
 
 check_manager_health() {
   local manager_status
 
   manager_status="$(
-    compose_scope wazuh exec -T wazuh-manager \
+    compose_scope "${trial_scope}" exec -T wazuh-manager \
       /var/ossec/bin/wazuh-control status || true
   )"
   grep -Fq "wazuh-analysisd is running" <<<"${manager_status}" \
@@ -58,7 +67,7 @@ cleanup() {
     rm -f "${evidence_staging_file}"
   fi
   if [[ -n "${replay_file}" ]]; then
-    compose_scope wazuh exec -T wazuh-manager \
+    compose_scope "${trial_scope}" exec -T wazuh-manager \
       rm -f "${replay_file}" >/dev/null 2>&1 || true
   fi
   rm -rf "${temporary_dir}"
@@ -116,7 +125,7 @@ http_status() {
 }
 
 analyst_queue_count() {
-  compose_scope wazuh exec -T control-plane \
+  compose_scope "${trial_scope}" exec -T control-plane \
     python3 main.py inspect-analyst-queue \
     | jq -er '
         .total_records
@@ -156,7 +165,7 @@ runtime_tree_digest() {
   local root="$2"
   local manifest="$3"
 
-  compose_scope wazuh exec -T "${service}" \
+  compose_scope "${trial_scope}" exec -T "${service}" \
     python3 -c '
 from pathlib import Path
 import hashlib
@@ -191,7 +200,7 @@ runtime_file_digest() {
   local service="$1"
   local path="$2"
 
-  compose_scope wazuh exec -T "${service}" \
+  compose_scope "${trial_scope}" exec -T "${service}" \
     python3 -c '
 from pathlib import Path
 import hashlib
@@ -309,7 +318,7 @@ capture_artifact_digests() {
       "wazuh-manager-config=${runtime_manager_config}"
   )"
   [[ "${runtime_artifact_digest}" == "${worktree_artifact_digest}" ]] \
-    || fail "running Phase 67 artifacts do not match the worktree; run ${LAB_DIR}/up.sh wazuh"
+    || fail "running Phase 67 artifacts do not match the worktree; run ${LAB_DIR}/up.sh ${trial_scope}"
 }
 
 repository_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
@@ -436,7 +445,7 @@ set -e
 [[ "${http_probe_rc}" -eq 0 && "${http_probe_status}" == "400" ]] \
   || fail "plain HTTP did not receive the HTTPS listener rejection"
 
-compose_scope wazuh exec -T wazuh-manager python3 - <<'PY'
+compose_scope "${trial_scope}" exec -T wazuh-manager python3 - <<'PY'
 from pathlib import Path
 from urllib import error, request
 import json
@@ -473,10 +482,11 @@ PY
 negative_after_alert_count="$(analyst_queue_count)"
 [[ "${negative_after_alert_count}" == "${negative_baseline_alert_count}" ]] \
   || fail "negative boundary tests changed authoritative analyst-queue alert state"
+negative_cases_observed_at="$(observed_now)"
 
 receipt_file="/var/ossec/logs/integrations/aegisops-receipts.jsonl"
 receipt_count() {
-  compose_scope wazuh exec -T wazuh-manager \
+  compose_scope "${trial_scope}" exec -T wazuh-manager \
     sh -c '
       if [ -s "$1" ]; then
         wc -l <"$1"
@@ -490,7 +500,7 @@ initial_receipt_count="$(receipt_count)"
 [[ "${initial_receipt_count}" =~ ^[0-9]+$ ]] \
   || fail "could not determine the initial Wazuh receipt count"
 
-compose_scope wazuh exec -T wazuh-manager \
+compose_scope "${trial_scope}" exec -T wazuh-manager \
   sh -c '
     touch "$1"
     chown root:wazuh "$1"
@@ -499,13 +509,14 @@ compose_scope wazuh exec -T wazuh-manager \
 test_timestamp="$(LC_ALL=C date -u '+%b %e %H:%M:%S')"
 trial_nonce="$(python3 -c 'import secrets; print(secrets.token_hex(8))')"
 trial_username="aegisops-phase67-${trial_nonce}"
-compose_scope wazuh exec -T wazuh-manager \
+compose_scope "${trial_scope}" exec -T wazuh-manager \
   sh -c '
     printf "%s phase67-test-endpoint sshd[6702]: Failed password for invalid user %s from 192.0.2.67 port 5067 ssh2\n" "$1" "$2" >>"$3"
   ' phase67 \
   "${test_timestamp}" \
   "${trial_username}" \
   /var/ossec/logs/aegisops-phase67-ssh-test.log
+alert_triggered_at="$(observed_now)"
 
 receipt_deadline=$((SECONDS + 90))
 first_receipt=""
@@ -513,7 +524,7 @@ while ((SECONDS < receipt_deadline)); do
   current_receipt_count="$(receipt_count)"
   if ((current_receipt_count > initial_receipt_count)); then
     first_receipt="$(
-      compose_scope wazuh exec -T wazuh-manager \
+      compose_scope "${trial_scope}" exec -T wazuh-manager \
         sed -n "$((initial_receipt_count + 1))p" "${receipt_file}"
     )"
     break
@@ -528,6 +539,7 @@ jq -e '
   and .disposition == "created"
 ' <<<"${first_receipt}" >/dev/null \
   || fail "first real Wazuh delivery did not create one AegisOps alert"
+first_delivery_observed_at="$(observed_now)"
 sleep 4
 pre_replay_receipt_count="$(receipt_count)"
 [[ "${pre_replay_receipt_count//[[:space:]]/}" == "$((initial_receipt_count + 1))" ]] \
@@ -535,7 +547,7 @@ pre_replay_receipt_count="$(receipt_count)"
 
 native_alert_id="$(jq -er '.native_wazuh_alert_id' <<<"${first_receipt}")"
 replay_file="$(
-  compose_scope wazuh exec -T wazuh-manager \
+  compose_scope "${trial_scope}" exec -T wazuh-manager \
     python3 - "${native_alert_id}" "${trial_username}" <<'PY'
 from pathlib import Path
 import json
@@ -591,12 +603,12 @@ print(destination)
 PY
 )"
 
-compose_scope wazuh exec -T wazuh-manager \
+compose_scope "${trial_scope}" exec -T wazuh-manager \
   /var/ossec/integrations/custom-aegisops \
   "${replay_file}" \
   file-bound \
   https://proxy:8443/intake/wazuh >/dev/null
-compose_scope wazuh exec -T wazuh-manager rm -f "${replay_file}"
+compose_scope "${trial_scope}" exec -T wazuh-manager rm -f "${replay_file}"
 replay_file=""
 
 duplicate_receipt=""
@@ -609,7 +621,7 @@ while ((SECONDS < receipt_deadline)); do
     [[ "${current_receipt_count}" == "${duplicate_receipt_index}" ]] \
       || fail "replay produced an unexpected number of Wazuh receipts"
     duplicate_receipt="$(
-      compose_scope wazuh exec -T wazuh-manager \
+      compose_scope "${trial_scope}" exec -T wazuh-manager \
         sed -n "${duplicate_receipt_index}p" "${receipt_file}"
     )"
     break
@@ -627,9 +639,10 @@ jq -e \
     and .aegisops_alert_id == $alert_id
   ' <<<"${duplicate_receipt}" >/dev/null \
   || fail "duplicate Wazuh delivery did not deduplicate to the original alert"
+duplicate_delivery_observed_at="$(observed_now)"
 
 queue="$(
-  compose_scope wazuh exec -T control-plane \
+  compose_scope "${trial_scope}" exec -T control-plane \
     python3 main.py inspect-analyst-queue
 )"
 aegisops_alert_id="$(jq -er '.aegisops_alert_id' <<<"${first_receipt}")"
@@ -647,7 +660,7 @@ jq -e '
   || fail "admitted Wazuh alert is missing from the unpromoted analyst queue"
 
 native_metadata="$(
-  compose_scope wazuh exec -T wazuh-manager \
+  compose_scope "${trial_scope}" exec -T wazuh-manager \
     python3 - "${native_alert_id}" <<'PY'
 from pathlib import Path
 import json
@@ -668,6 +681,7 @@ for line in reversed(
             json.dumps(
                 {
                     "manager_id": alert["manager"]["name"],
+                    "agent_id": str(alert["agent"]["id"]),
                     "rule_id": str(alert["rule"]["id"]),
                     "timestamp": alert["timestamp"],
                 },
@@ -703,6 +717,7 @@ jq -n \
   --arg runtime_artifact_digest "${runtime_artifact_digest}" \
   --arg native_alert_id "${native_alert_id}" \
   --arg manager_id "$(jq -er '.manager_id' <<<"${native_metadata}")" \
+  --arg agent_id "$(jq -er '.agent_id' <<<"${native_metadata}")" \
   --arg rule_id "$(jq -er '.rule_id' <<<"${native_metadata}")" \
   --arg timestamp "$(jq -er '.timestamp' <<<"${native_metadata}")" \
   --arg aegisops_alert_id "${aegisops_alert_id}" \
@@ -722,6 +737,7 @@ jq -n \
       wazuh_manager_health: "healthy",
       native_wazuh_alert_id: $native_alert_id,
       native_wazuh_manager_id: $manager_id,
+      native_wazuh_agent_id: $agent_id,
       native_wazuh_rule_id: $rule_id,
       native_event_timestamp: $timestamp,
       aegisops_alert_id: $aegisops_alert_id,
@@ -780,4 +796,8 @@ echo "PASS native_wazuh_alert_id=${native_alert_id}"
 echo "PASS first_disposition=created"
 echo "PASS duplicate_disposition=deduplicated"
 echo "PASS analyst_queue_alert_id=${aegisops_alert_id}"
+echo "step_observation.trigger_real_wazuh_detection=${alert_triggered_at}"
+echo "step_observation.admit_wazuh_alert=${first_delivery_observed_at}"
+echo "step_observation.replay_wazuh_delivery=${duplicate_delivery_observed_at}"
+echo "step_observation.wazuh_negative_cases=${negative_cases_observed_at}"
 echo "evidence=${evidence_file}"

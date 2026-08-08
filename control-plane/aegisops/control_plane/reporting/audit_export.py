@@ -105,13 +105,38 @@ def export_audit_retention_baseline(
     record_types: tuple[Type[ControlPlaneRecord], ...],
     export_id: str,
     exported_at: datetime,
+    record_ids_by_family: Mapping[str, frozenset[str]] | None = None,
 ) -> dict[str, object]:
+    expected_families = {record_type.record_family for record_type in record_types}
+    if record_ids_by_family is not None:
+        if set(record_ids_by_family) != expected_families:
+            raise ValueError("audit export record scope must cover every record family")
+        for family, record_ids in record_ids_by_family.items():
+            if not isinstance(record_ids, frozenset) or any(
+                not isinstance(record_id, str) or record_id.strip() == ""
+                for record_id in record_ids
+            ):
+                raise ValueError(
+                    f"audit export record scope for {family} must be a frozenset of IDs"
+                )
     records_by_family: dict[str, list[dict[str, object]]] = {}
     with store.transaction(isolation_level="REPEATABLE READ"):
         for record_type in record_types:
+            records = store.list(record_type)
+            if record_ids_by_family is not None:
+                expected_ids = record_ids_by_family[record_type.record_family]
+                records = tuple(
+                    record for record in records if record.record_id in expected_ids
+                )
+                observed_ids = {record.record_id for record in records}
+                if observed_ids != expected_ids or len(records) != len(expected_ids):
+                    raise ValueError(
+                        f"audit export record scope for {record_type.record_family} "
+                        "does not match authoritative records"
+                    )
             records_by_family[record_type.record_family] = [
                 _audit_export_record_payload(record)
-                for record in store.list(record_type)
+                for record in records
             ]
 
     return {

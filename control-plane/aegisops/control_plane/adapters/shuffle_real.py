@@ -680,7 +680,7 @@ class ShuffleReceiptPollingClient:
         execution_id: str,
         idempotency_key: str,
         expected_binding: Mapping[str, object],
-        observed_at: datetime,
+        observed_at: datetime | None = None,
     ) -> Mapping[str, object]:
         execution_id = _require_real_execution_id(execution_id)
         response = self.transport.request_json(
@@ -778,12 +778,15 @@ class ShuffleReceiptPollingClient:
         status = self._normalize_status(execution.get("status"))
         if status == "success" and not self._reviewed_action_succeeded(execution):
             status = "failed"
+        receipt_observed_at = (
+            observed_at if observed_at is not None else datetime.now(timezone.utc)
+        )
         return {
             "execution_surface_type": self.execution_surface_type,
             "execution_surface_id": self.execution_surface_id,
             "execution_run_id": execution_id,
             "idempotency_key": idempotency_key,
-            "observed_at": observed_at,
+            "observed_at": receipt_observed_at,
             "status": status,
             "requested_scope": dict(expected_scope),
             "idempotency_execution_count": idempotency_matches,

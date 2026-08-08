@@ -1,0 +1,370 @@
+{
+  "artifacts": {
+    "directory_name": "phase67-e2e-20260801T135206Z-26c533b6ca31-artifacts",
+    "files": [
+      {
+        "name": "evaluation-record.json",
+        "sha256": "e68c50feba86bed738c6d4a56f5b0be58d05b848c1562156f3df866711ab4298"
+      },
+      {
+        "name": "images.json",
+        "sha256": "f53f9e5c5a3c6d9a1a6a499dc2282a7c5e1ca44d0ff1b8ebbdff038049564ce6"
+      },
+      {
+        "name": "preparation.json",
+        "sha256": "6b07e93726d6c237ef92c56524fd87f4d3fbd7d2a16cc761c089cd1df31eeb43"
+      },
+      {
+        "name": "snapshot.json",
+        "sha256": "0b7ed59d0ad79e68c62bdf3f4c71eb8d73e9c90488669acdb11eb5563a434219"
+      },
+      {
+        "name": "wazuh-manifest.json",
+        "sha256": "2e5fcea26eba8d336366276e31d1c6ca0b049ce5cd32728f493c7630bf560eb0"
+      },
+      {
+        "name": "wazuh-output.txt",
+        "sha256": "dd8f465cc91fa98b004e6867134560b24d908a0c409ebab2ffe2ece7ce215cd7"
+      }
+    ],
+    "retention": "local_mode_0600"
+  },
+  "authority_posture": "aegisops_records_remain_authoritative",
+  "captured_at": "2026-08-01T13:53:21.259015Z",
+  "cleanup": {
+    "containers_stopped": true,
+    "data_preserved": true,
+    "mode": "non_destructive"
+  },
+  "evaluation": {
+    "evaluated_at": "2026-08-01T13:53:21.259015Z",
+    "ga_accepted": false,
+    "repository_revision": "2473b66f5702a38f1d4630c990509bf812a6af7a",
+    "sha256": "e68c50feba86bed738c6d4a56f5b0be58d05b848c1562156f3df866711ab4298",
+    "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+    "trial_run_id": "phase67-e2e-20260801T135206Z-26c533b6ca31",
+    "verdict": "integration_trial_blocked"
+  },
+  "human_control": {
+    "approval_challenge_sha256": "9ea4f2c6c36896f01ea79fd34f32c7757fdbc7c53c5d6c9a1343533d318b522c",
+    "approval_confirmed_at": null,
+    "approval_method": null,
+    "approval_source": null,
+    "approver_identity": null,
+    "authenticated_approver_identity": null,
+    "denied_action_execution_count": 0,
+    "denied_dispatch_rejected": true,
+    "requester_identity": "phase67-lab-requester"
+  },
+  "idempotency": {
+    "receipt_identity_preserved": null,
+    "receipt_replay_reconciliation_id": null,
+    "shuffle_execution_count": null,
+    "wazuh_alert_identity_preserved": true,
+    "wazuh_duplicate_disposition": "deduplicated",
+    "wazuh_first_disposition": "created"
+  },
+  "identifiers": {
+    "action_execution_id": null,
+    "action_request_id": "phase67-action-83455f7f792b1cef77e8",
+    "aegisops_alert_id": "alert-b61e7903-3420-4228-ad61-08ead6047980",
+    "approval_decision_id": null,
+    "case_id": "phase67-case-83455f7f792b1cef77e8",
+    "delegation_id": null,
+    "denied_action_request_id": "phase67-denied-action-83455f7f792b1cef77e8",
+    "denied_approval_decision_id": "phase67-denied-approval-83455f7f792b1cef77e8",
+    "expected_receipt_id": null,
+    "finding_id": "finding:wazuh:rule:5710:source:agent:000:alert:1785592392.707833",
+    "native_wazuh_alert_id": "1785592392.707833",
+    "reconciliation_id": null,
+    "report_id": null,
+    "shuffle_execution_id": null,
+    "shuffle_workflow_id": null,
+    "shuffle_workflow_version": null,
+    "wazuh_agent_id": "000",
+    "wazuh_manager_id": "3b8028c34a48",
+    "wazuh_rule_id": "5710"
+  },
+  "limitations": [
+    {
+      "description": "A distinct human approval event is required before the real Shuffle action may be dispatched.",
+      "follow_up_issue": null,
+      "limitation_id": "phase67-independent-human-approval-required",
+      "owner": "AegisOps local operator",
+      "status": "blocking"
+    }
+  ],
+  "negative_cases": {
+    "failed_execution": {
+      "authority_after": null,
+      "authority_before": null,
+      "authority_delta": null,
+      "evidence_ref": null,
+      "measurement_source": null,
+      "status": null
+    },
+    "invalid_credential": {
+      "authority_after": 4,
+      "authority_before": 4,
+      "authority_delta": 0,
+      "evidence_ref": "wazuh-command:invalid_bearer_secret=403",
+      "measurement_source": "aegisops_authoritative_alert_count",
+      "status": "rejected"
+    },
+    "malformed_receipt": {
+      "authority_after": null,
+      "authority_before": null,
+      "authority_delta": null,
+      "evidence_ref": null,
+      "measurement_source": null,
+      "status": null
+    },
+    "proxy_bypass": {
+      "authority_after": 4,
+      "authority_before": 4,
+      "authority_delta": 0,
+      "evidence_ref": "wazuh-command:proxy_bypass=403",
+      "measurement_source": "aegisops_authoritative_alert_count",
+      "status": "rejected"
+    },
+    "reconciliation_mismatch": {
+      "authority_after": null,
+      "authority_before": null,
+      "authority_delta": null,
+      "evidence_ref": null,
+      "measurement_source": null,
+      "status": null
+    }
+  },
+  "report": {
+    "redacted": null,
+    "report_id": null,
+    "sha256": null,
+    "source_of_truth": null
+  },
+  "restart": {
+    "checked_identifiers": [],
+    "performed": null,
+    "records_persisted": null
+  },
+  "schema_version": "phase67.4-real-service-e2e-evidence-v2",
+  "snapshot": {
+    "colima_profile": "aegisops-phase67",
+    "compose_sha256": "9d2574c9af7f02c9c8726198db3d47a6a97b1cc47069e16190faa0b76330d27f",
+    "docker_context": "colima-aegisops-phase67",
+    "evidence_schema_sha256": "b7cba8cb5a04f7e8b410353a95a8fc32182f8688db006eadc133c53e48c494a9",
+    "host_architecture": "arm64",
+    "images": [
+      {
+        "immutable_reference": "control-plane@sha256:2d3023e46fae6a8eb9c5ee0a0ff076ff94a6ed9e7cf64e171212587d5004313c",
+        "service": "control-plane"
+      },
+      {
+        "immutable_reference": "postgres:16.4@sha256:e62fbf9d3e2b49816a32c400ed2dba83e3b361e6833e624024309c35d334b412",
+        "service": "postgres"
+      },
+      {
+        "immutable_reference": "nginx:1.27.0@sha256:98f8ec75657d21b924fe4f69b6b9bff2f6550ea48838af479d8894a852000e40",
+        "service": "proxy"
+      },
+      {
+        "immutable_reference": "frikky/shuffle@sha256:fd5391cb0af02e92be194a8c4fe67a4221d5fb26f279eaa3f00676b201bf6cb8",
+        "service": "shuffle-action-image"
+      },
+      {
+        "immutable_reference": "ghcr.io/shuffle/shuffle-backend:2.2.1@sha256:0cc1775e48b7d94b7f16d0be713aa274ced52be24ad521beaaf58c67023fd2e5",
+        "service": "shuffle-backend"
+      },
+      {
+        "immutable_reference": "ghcr.io/shuffle/shuffle-frontend:2.2.1@sha256:0561dd421382f70d15cada11a324b40762f0930522fcc1b51edcce9c87cc0f00",
+        "service": "shuffle-frontend"
+      },
+      {
+        "immutable_reference": "opensearchproject/opensearch:3.2.0@sha256:23297b8d8545e129dd58c254ed08d786dc552410ba772983ad2af31048d2f04b",
+        "service": "shuffle-opensearch"
+      },
+      {
+        "immutable_reference": "ghcr.io/shuffle/shuffle-orborus:2.2.1@sha256:3519810b3ca4fe568acefdf15ce6f2deba0ae6f0ff6b84412354d59d663dff31",
+        "service": "shuffle-orborus"
+      },
+      {
+        "immutable_reference": "wazuh/wazuh-dashboard:4.14.6@sha256:16aa978eaa6355fe3965e310ef8eaaed4df6f701dcf5885ebd0783fcd5ee6f16",
+        "service": "wazuh-dashboard"
+      },
+      {
+        "immutable_reference": "wazuh/wazuh-indexer:4.14.6@sha256:27261711c6479e2e503171918aae9a23b3fc4dcfc2d28d204e75985c1e0fb4c5",
+        "service": "wazuh-indexer"
+      },
+      {
+        "immutable_reference": "wazuh/wazuh-manager:4.14.6@sha256:4683ddc88474c79ae6171d9132adbd45fda86bdfb22ad0d8ddee167654c9e841",
+        "service": "wazuh-manager"
+      }
+    ],
+    "repository_revision": "2473b66f5702a38f1d4630c990509bf812a6af7a",
+    "runtime_artifact_sha256": "5c9b1edc822266b57c7a52612c6a45cbd97d3da897ae7bb4c3ee4b883c7035bb",
+    "shuffle_api_workflow_id": "42c15ad7-ff1f-4d50-bf6c-a1b2c3d4e5f6",
+    "shuffle_live_workflow_sha256": "19b3280e0528173b0479886b3e70c9c418781b8c039e2dc5e1675c04168b762f",
+    "shuffle_reviewed_workflow_sha256": "7e3f6f84b7aef523c981531cf16e79d434744194974b8f04144c152b8dc84c12",
+    "selected_profile": "full",
+    "snapshot_id": "phase67-snapshot-0661c0413ecdd062"
+  },
+  "source_mode": "real_services",
+  "steps": [
+    {
+      "evidence_refs": [
+        "snapshot"
+      ],
+      "name": "capture_immutable_snapshot",
+      "observed_at": "2026-08-01T13:53:01.000000Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "passed",
+      "step": 1
+    },
+    {
+      "evidence_refs": [
+        "lab-status:full"
+      ],
+      "name": "start_lab_and_record_health",
+      "observed_at": "2026-08-01T13:53:02.000000Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "passed",
+      "step": 2
+    },
+    {
+      "evidence_refs": [
+        "wazuh-manifest:native_wazuh_alert_id"
+      ],
+      "name": "trigger_real_wazuh_detection",
+      "observed_at": "2026-08-01T13:53:03.000000Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "passed",
+      "step": 3
+    },
+    {
+      "evidence_refs": [
+        "wazuh-manifest:aegisops_alert_id"
+      ],
+      "name": "admit_wazuh_alert",
+      "observed_at": "2026-08-01T13:53:04.000000Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "passed",
+      "step": 4
+    },
+    {
+      "evidence_refs": [
+        "preparation:case_id"
+      ],
+      "name": "promote_alert_to_case",
+      "observed_at": "2026-08-01T13:53:05.000000Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "passed",
+      "step": 5
+    },
+    {
+      "evidence_refs": [
+        "preparation:action_request_id"
+      ],
+      "name": "create_reviewed_action_request",
+      "observed_at": "2026-08-01T13:53:06.000000Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "passed",
+      "step": 6
+    },
+    {
+      "evidence_refs": [
+        "preparation:denied_dispatch"
+      ],
+      "name": "prove_denied_action_non_dispatch",
+      "observed_at": "2026-08-01T13:53:07.000000Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "passed",
+      "step": 7
+    },
+    {
+      "blocker": {
+        "owner": "AegisOps local operator",
+        "reason": "Independent human approval was not granted; no Shuffle dispatch occurred."
+      },
+      "evidence_refs": [
+        "preparation:approval_challenge_sha256"
+      ],
+      "name": "approve_and_dispatch_real_shuffle_action",
+      "observed_at": "2026-08-01T13:53:08.000000Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "blocked",
+      "step": 8
+    },
+    {
+      "evidence_refs": [
+        "not-run:approval-blocked"
+      ],
+      "name": "capture_authenticated_shuffle_receipt",
+      "observed_at": "2026-08-01T13:53:21.259015Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "not_run",
+      "step": 9
+    },
+    {
+      "evidence_refs": [
+        "not-run:approval-blocked"
+      ],
+      "name": "reconcile_from_aegisops_records",
+      "observed_at": "2026-08-01T13:53:21.259015Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "not_run",
+      "step": 10
+    },
+    {
+      "evidence_refs": [
+        "not-run:approval-blocked"
+      ],
+      "name": "export_redacted_aegisops_report",
+      "observed_at": "2026-08-01T13:53:21.259015Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "not_run",
+      "step": 11
+    },
+    {
+      "evidence_refs": [
+        "wazuh-manifest:duplicate_delivery"
+      ],
+      "name": "replay_deliveries_for_idempotency",
+      "observed_at": "2026-08-01T13:53:21.259015Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "not_run",
+      "step": 12
+    },
+    {
+      "evidence_refs": [
+        "wazuh-command:negative-boundaries"
+      ],
+      "name": "run_negative_cases",
+      "observed_at": "2026-08-01T13:53:21.259015Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "not_run",
+      "step": 13
+    },
+    {
+      "evidence_refs": [
+        "not-run:approval-blocked"
+      ],
+      "name": "restart_and_verify_persistence",
+      "observed_at": "2026-08-01T13:53:21.259015Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "not_run",
+      "step": 14
+    },
+    {
+      "evidence_refs": [
+        "evaluation-record:sha256"
+      ],
+      "name": "publish_prerequisite_evaluation",
+      "observed_at": "2026-08-01T13:53:21.259015Z",
+      "snapshot_id": "phase67-snapshot-0661c0413ecdd062",
+      "status": "not_run",
+      "step": 15
+    }
+  ],
+  "trial_run_id": "phase67-e2e-20260801T135206Z-26c533b6ca31",
+  "verdict": "integration_trial_blocked"
+}

@@ -92,6 +92,138 @@ project name so Orborus joins the worker overlay without a global
 `container_name`. Wait for the bounded Orborus startup window before treating a
 queued execution as stalled.
 
+## Complete Phase 67.4 E2E Trial
+
+Run this only after Wazuh substrate preparation and Shuffle bootstrap have
+completed, and only from a clean committed revision:
+
+```bash
+control-plane/deployment/phase-67-integration-lab/run-e2e-trial.sh
+```
+
+The runner uses the `full` profile and one generated trial run ID. It hashes
+the repository revision, rendered Compose model, evidence schema, runtime
+artifacts, reviewed and live Shuffle workflow digests, workflow API ID, host
+and Colima identity, selected profile, and running image identities into one
+recomputable snapshot ID before it records step 1. It
+starts `full` before capturing runtime identities; step 2 records only the
+post-snapshot health status and does not claim to be the startup event. It then
+executes the real Wazuh trial, promotes that exact admitted alert to a
+case, and prepares a reviewed harmless action. A distinct local operator must
+inspect the displayed action request, payload hash, and challenge, then confirm
+the macOS operator dialog or type the exact `APPROVE <challenge>` phrase on a
+TTY. Only that ceremony persists approval and allows dispatch to real Shuffle.
+Immediately before dispatch, the runner reloads the denied request and decision
+from PostgreSQL and recounts its executions; any lifecycle change or execution
+blocks the trial.
+Before startup, the runner fails closed if a `shuffle-tools_1-2-0` Swarm
+service already exists. It creates that service from the reviewed repository
+digest, records the returned service ID, and labels it with the current trial
+identity. The service and its running task must retain that ID, all ownership
+labels, the reviewed digest, and image ID before approval and again after
+execution; the mutable compatibility tag is not the execution reference.
+Cleanup removes only that recorded service ID after revalidating its labels and
+image, so a pre-existing or replacement service cannot be adopted or removed.
+Before startup, the runner fails closed if a `shuffle-workers` service already
+exists. It separately inspects the service created after that preflight, binds
+its service ID immediately to the current trial with Phase, component, and
+trial-run labels, and verifies its sole running task container and image ID.
+If startup fails before this initial capture completes, cleanup claims the
+newly appeared service only when the preflight absence and reviewed Orborus
+image both match, then applies the same ID and ownership checks before removal.
+After dispatch, the same owned service and worker image identity must remain in
+place and the running task container's logs must contain the current Shuffle
+execution ID. Receipt success is timestamped only after its authenticated
+response is returned and validated, then passed through AegisOps reconciliation
+instead of inferred from Shuffle state. Receipt failure probes must return the
+reviewed mismatch reason and run in a rollback-only transaction;
+the trial fails if the authoritative successful execution or record count is
+not restored exactly. The retained report uses an explicit record-ID allowlist
+for this trial's alert, case, denied and approved requests and decisions,
+execution, Wazuh admission/replay reconciliations, and action reconciliation;
+records preserved from earlier trials are excluded.
+
+After report export and delivery replay, the runner stops and starts the lab,
+checks the persisted action-chain identifiers, every Wazuh admission/replay
+reconciliation ID, the one-execution count, and exact equality between the
+post-restart authoritative records and the retained report, and
+removes the owned `shuffle-workers` service only after its service ID, all three
+ownership labels, and image match the current trial and the digest captured from
+Orborus. It waits for the service and all worker task containers to disappear
+before `cleanup.sh`; the same ordered cleanup runs on the failure trap. The
+runner retains a trial-specific raw artifact directory
+with mode `0700` and files with mode `0600`, plus the complete redacted report,
+below `${AEGISOPS_LAB_EVIDENCE_DIR}`. The manifest records every retained raw
+artifact digest and binds a generated evaluation record to the trial, snapshot,
+revision, and verdict. The retained `step-observations.jsonl` records the actual
+completion time of all 15 steps. The validator requires every completed or
+terminal step before `not_run` to be strictly chronological for passed,
+blocked, and failed manifests. The prerequisite Wazuh harness retains its own
+trigger, admission, replay, and negative-boundary timestamps verbatim in
+`wazuh-output.txt`. The manifest binds the Wazuh replay time between admission
+and case promotion and the Wazuh negative-boundary time between snapshotted
+health and native detection. It separately binds the later Shuffle receipt
+replay and receipt-negative times to ordered journey steps 12 and 13. The
+runner rechecks both
+`HEAD` and the complete
+tracked and untracked worktree after cleanup, immediately before building the
+publishable packet. A temporary Compose render is captured before the first
+startup, rechecked before both startups and publication, and compared by the
+builder with runner-held revision and Compose digest values that are not read
+back from staging JSON. Only `compose-config.sha256` is retained; the expanded
+render is deleted before publication so interpolated lab credentials are not
+kept as evidence. Every verdict
+recomputes its snapshot ID from all captured inputs, and each journey identifier
+must be present only when its producing step passed. `startup-status.txt`,
+`initial-status.txt`, and
+`restart-status.txt` retain the exact status captures used by the snapshot,
+health, and restart steps, including the complete Compose service state and
+health inventory. `workflow-snapshot.json` and
+`workflow-pre-dispatch.json` retain the semantically validated live exports;
+their canonical digests must match before the adapter performs its own live
+validation and dispatch. The evidence builder reruns the canonical Wazuh
+manifest validator and Shuffle workflow validator against all retained
+component artifacts before it assembles the final packet. Only a separately
+reviewed, redacted manifest may be
+copied to the tracked sample path. Do not commit the raw command output, report,
+service logs, runtime env, or host-local paths.
+
+The evidence validator fails closed on missing or reordered steps, mixed
+snapshots, placeholder or synthetic live IDs, same-actor request and approval,
+denied dispatch, inferred receipt or reconciliation success, secret exposure,
+private host paths, mutable branch references, and a verdict that exceeds the
+recorded journey. A passing trial selects
+`integration_trial_passed_with_owned_limitations`; it does not accept GA. Its
+three reviewed limitation IDs and statuses are mandatory. A current blocked or
+failed packet must additionally use the deterministic blocking limitation ID
+derived from its terminal step. The historical approval-blocked packet retains
+its separately reviewed approval limitation contract only when the complete
+canonical packet SHA-256 matches the committed compatibility fingerprint.
+Its schema-level 11-image exception is selected only by the exact historical
+trial, snapshot, revision, and blocked verdict identity; all current packets
+require the 13-image full-profile inventory.
+Every retained status capture must report the exact control-plane image ID and
+the exact reviewed Compose service inventory, including successful completion
+of the one-shot Wazuh security bootstrap and healthy running services after
+restart. The snapshot inventory includes observed runtime image IDs for both
+the digest-pinned Shuffle worker task and the Shuffle action service. After
+operator approval, the runner revalidates the live workflow and both runtime
+image identities, then checks the complete repository snapshot immediately
+before dispatch. For publication, report and raw artifacts are moved only
+after every destination is checked, and the passing manifest is moved last.
+The final manifest path is validated once more after that move. The final report
+and exact artifact file set are then rehashed from their published paths against
+the manifest before it is made read-only and success is declared. Failure before
+that validation restores the unpublished packet where possible and never leaves
+a discoverable passing manifest with missing references.
+The prepare, approved execution, and restart-verification commands all enter
+the bind-mounted journey runner through one helper that checks the captured
+repository revision and complete worktree immediately before container
+execution. The evidence contract accepts the ARM64 and x86_64 host spellings
+supported by preflight. A blocked or failed packet must leave every evaluation
+field null when the publication step did not pass, apart from the exact
+fingerprinted historical compatibility packet.
+
 ## Inspect
 
 ```bash
@@ -156,5 +288,6 @@ That command applies the same ownership proof before deleting only volumes attac
   failed evidence and do not mark the action reconciled or rerun dispatch
   manually.
 - Shuffle amd64 execution unavailable: preserve the profile settings and use the exact `colima stop` plus `colima start --vm-type vz --vz-rosetta ... --activate=false` command printed by `preflight.sh --scope shuffle`. This host-level change interrupts every workload in that Colima profile, so the lab reports it as a blocker and never applies it automatically. Do not remove the explicit `linux/amd64` platform.
+- Phase 67.4 E2E failure: preserve the hidden staging directory printed by the runner, collect bounded `status.sh full --write-evidence` and `logs.sh` output, and record the exact failed step and owner. Do not convert partial component success into a passed E2E verdict.
 
 When a blocker remains, save the relevant scoped preflight, `status.sh ... --write-evidence`, and a bounded `logs.sh` snapshot before changing the lab configuration.

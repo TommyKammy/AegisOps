@@ -5,6 +5,7 @@ set -euo pipefail
 LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lab-common.sh
 source "${LAB_DIR}/lab-common.sh"
+require_command jq
 
 scope="full"
 scope_selected=false
@@ -37,6 +38,16 @@ case "${scope}" in
 esac
 
 status_output="$(compose_scope "${scope}" ps --all)"
+status_inventory="$(
+  compose_scope "${scope}" ps --all --format json |
+    jq -cs '
+      if length == 1 and (.[0] | type) == "array" then .[0]
+      elif all(.[]; type == "object") then .
+      else error("Compose ps JSON must be an array or object stream")
+      end
+      | sort_by(.Service)
+    '
+)"
 printf '%s\n' "${status_output}"
 
 if [[ "${write_evidence}" == true ]]; then
@@ -59,6 +70,7 @@ if [[ "${write_evidence}" == true ]]; then
   write_evidence_header "${evidence_file}"
   printf 'control_plane_container_image_id=%s\n' \
     "${control_plane_container_image_id}" >>"${evidence_file}"
+  printf 'compose_ps_json=%s\n' "${status_inventory}" >>"${evidence_file}"
   printf '%s\n' "${status_output}" >>"${evidence_file}"
   chmod 600 "${evidence_file}"
   printf 'evidence=%s\n' "${evidence_file}"

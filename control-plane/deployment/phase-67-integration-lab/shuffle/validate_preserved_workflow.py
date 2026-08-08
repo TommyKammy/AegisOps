@@ -20,6 +20,17 @@ def fail(message: str) -> NoReturn:
     raise ValueError(message)
 
 
+def validate_preserved_workflow(
+    expected: object,
+    observed: object,
+    workflow_id: str,
+) -> None:
+    normalized_workflow_id = str(UUID(workflow_id))
+    if not isinstance(expected, dict) or not isinstance(observed, dict):
+        fail("workflow definitions must be JSON objects")
+    validate_reviewed_workflow(expected, observed, normalized_workflow_id)
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         fail(
@@ -27,13 +38,9 @@ def main() -> int:
             "<reviewed-template> <runtime-workflow-id>"
         )
     template_path = pathlib.Path(sys.argv[1])
-    workflow_id = str(UUID(sys.argv[2]))
     expected = json.loads(template_path.read_text(encoding="utf-8"))
     observed = json.load(sys.stdin)
-    if not isinstance(expected, dict) or not isinstance(observed, dict):
-        fail("workflow definitions must be JSON objects")
-
-    validate_reviewed_workflow(expected, observed, workflow_id)
+    validate_preserved_workflow(expected, observed, sys.argv[2])
     print("PASS: preserved Shuffle workflow matches reviewed execution semantics")
     return 0
 
