@@ -156,6 +156,15 @@ duplicate_doc_text() {
     "${target}/docs/phase-66-closeout-evaluation.md"
 }
 
+add_verdict_text() {
+  local target="$1"
+  local text="$2"
+
+  TEXT="${text}" perl -0pi -e \
+    's/^## Verdict\n/## Verdict\n$ENV{TEXT}\n/m' \
+    "${target}/docs/phase-66-closeout-evaluation.md"
+}
+
 valid_repo="${workdir}/valid"
 copy_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
@@ -245,21 +254,74 @@ remove_doc_text "${missing_handoff_repo}" \
 assert_fails_with "${missing_handoff_repo}" "Missing Phase 67 handoff boundary"
 
 phase67_is_ga_repo="$(new_fixture "phase67-is-ga")"
-printf '%s\n' "Phase 67 is GA." \
-  >>"${phase67_is_ga_repo}/docs/phase-66-closeout-evaluation.md"
+add_verdict_text "${phase67_is_ga_repo}" "Phase 67 is GA."
 assert_fails_with "${phase67_is_ga_repo}" \
   "Phase 67 cannot accept or materialize GA"
 
+phase67_remains_ga_repo="$(new_fixture "phase67-remains-ga")"
+add_verdict_text "${phase67_remains_ga_repo}" "Phase 67 remains GA"
+assert_fails_with "${phase67_remains_ga_repo}" \
+  "Phase 67 cannot accept or materialize GA"
+
+phase67_becomes_ga_table_repo="$(new_fixture "phase67-becomes-ga-table")"
+add_verdict_text "${phase67_becomes_ga_table_repo}" \
+  "| Phase 67 | becomes | the GA gate |"
+assert_fails_with "${phase67_becomes_ga_table_repo}" \
+  "Phase 67 cannot accept or materialize GA"
+
+phase67_colon_mapping_repo="$(new_fixture "phase67-colon-mapping")"
+add_verdict_text "${phase67_colon_mapping_repo}" \
+  "Phase 67: becomes the GA gate."
+assert_fails_with "${phase67_colon_mapping_repo}" \
+  "Phase 67 cannot accept or materialize GA"
+
+phase67_stays_ga_repo="$(new_fixture "phase67-stays-ga")"
+add_verdict_text "${phase67_stays_ga_repo}" "Phase 67 stays the GA gate!"
+assert_fails_with "${phase67_stays_ga_repo}" \
+  "Phase 67 cannot accept or materialize GA"
+
+phase67_equals_ga_repo="$(new_fixture "phase67-equals-ga")"
+add_verdict_text "${phase67_equals_ga_repo}" "Phase 67 equals GA"
+assert_fails_with "${phase67_equals_ga_repo}" \
+  "Phase 67 cannot accept or materialize GA"
+
 phase67_accepts_ga_repo="$(new_fixture "phase67-accepts-ga")"
-printf '%s\n' "Phase 67 accepts the GA gate." \
-  >>"${phase67_accepts_ga_repo}/docs/phase-66-closeout-evaluation.md"
+add_verdict_text "${phase67_accepts_ga_repo}" \
+  "Phase 67 accepts the GA gate."
 assert_fails_with "${phase67_accepts_ga_repo}" \
   "Phase 67 cannot accept or materialize GA"
 
 phase67_materializes_ga_repo="$(new_fixture "phase67-materializes-ga")"
-printf '%s\n' "Phase 67 materializes GA." \
-  >>"${phase67_materializes_ga_repo}/docs/phase-66-closeout-evaluation.md"
+add_verdict_text "${phase67_materializes_ga_repo}" "Phase 67 materializes GA."
 assert_fails_with "${phase67_materializes_ga_repo}" \
+  "Phase 67 cannot accept or materialize GA"
+
+phase67_negated_mappings_repo="$(new_fixture "phase67-negated-mappings")"
+add_verdict_text "${phase67_negated_mappings_repo}" \
+  $'Phase 67 is not GA.\nThis closeout does not claim Phase 67 remains GA.\nWe do not claim Phase 67 stays GA.\nPhase 67 must not remain GA.\nPhase 67 cannot become GA.\nThis policy can not establish that Phase 67 is GA.\nThese are not claims: Phase 67 equals GA.\nThe verifier must reject Phase 67 becomes GA.\nForbidden wording: Phase 67 stays the GA gate.\nNon-claims: Phase 67 remains GA.\n| Phase 67 equals the GA gate | false |'
+assert_passes "${phase67_negated_mappings_repo}"
+
+phase67_ga_qualifiers_repo="$(new_fixture "phase67-ga-qualifiers")"
+add_verdict_text "${phase67_ga_qualifiers_repo}" \
+  $'Phase 67 is GA-prerequisite validation.\nPhase 67 becomes the GA readiness boundary.\nPhase 67 remains GA evidence.\nPhase 67 stays GA criteria.\nPhase 67 equals the GA precondition.'
+assert_passes "${phase67_ga_qualifiers_repo}"
+
+phase67_unrelated_negation_repo="$(new_fixture "phase67-unrelated-negation")"
+add_verdict_text "${phase67_unrelated_negation_repo}" \
+  "Phase 67 is GA, but this does not claim production readiness."
+assert_fails_with "${phase67_unrelated_negation_repo}" \
+  "Phase 67 cannot accept or materialize GA"
+
+phase67_negation_before_positive_repo="$(new_fixture "phase67-negation-before-positive")"
+add_verdict_text "${phase67_negation_before_positive_repo}" \
+  "This does not claim production readiness, but Phase 67 remains GA."
+assert_fails_with "${phase67_negation_before_positive_repo}" \
+  "Phase 67 cannot accept or materialize GA"
+
+phase67_unrelated_colon_negation_repo="$(new_fixture "phase67-unrelated-colon-negation")"
+add_verdict_text "${phase67_unrelated_colon_negation_repo}" \
+  "This release is not a drill: Phase 67 is GA."
+assert_fails_with "${phase67_unrelated_colon_negation_repo}" \
   "Phase 67 cannot accept or materialize GA"
 
 missing_recorded_result_repo="$(new_fixture "missing-recorded-result")"

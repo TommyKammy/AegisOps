@@ -5,7 +5,7 @@
 - **Owners**: AegisOps maintainers
 - **Related Baseline**: `docs/adr/0011-phase-51-1-replacement-boundary.md`, `docs/deployment/pilot-readiness-checklist.md`
 - **Related Issues**: #1041, #1042, #1044
-- **Amended by**: `docs/adr/0020-phase-67-ga-prerequisite-boundary.md`, #1414, #1418
+- **Proposed amendment**: `docs/adr/0020-phase-67-ga-prerequisite-boundary.md`, #1414, #1418
 
 This contract defines the evidence required before AegisOps may advance from the current pilot foundation toward commercial replacement readiness. It changes documentation and verification only. It does not implement installer, Wazuh profile, Shuffle profile, AI, supportability, packaging, release-candidate, or general-availability workflows.
 

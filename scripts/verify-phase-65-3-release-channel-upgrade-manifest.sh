@@ -673,10 +673,18 @@ scan_forbidden_text() {
 
   if ! printf '%s' "${normalized_text}" | perl -0ne '
     for my $sentence (split /(?<=[.?!;])\s*/, $_) {
-      $sentence =~ s/(?:does not|do not|must not|cannot|can not|is not|are not|must reject|forbidden|non-claims|false|manual or unsupported|phase 66 remains rc).*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
-      if ($sentence =~ /\bphase[ -]+67[ -]+remains[ -]+ga\b/) {
-        exit 1;
+      my $ga_sentence = $sentence;
+      $ga_sentence =~ tr/|/ /;
+      while ($ga_sentence =~ /\bphase[[:space:]-]+67(?:[[:space:]]*:[[:space:]]*|[[:space:]-]+)(?:is|becomes?|remains?|stays?|equals?|accepts?|materializes?)[[:space:]-]+(?:the[[:space:]-]+)?ga\b(?![[:space:]-]+gate[[:space:]-]+(?:prerequisites?|readiness|validation|evidence|boundary|criteria|preconditions?)\b)(?![[:space:]-]+(?:prerequisites?|readiness|validation|evidence|boundary|criteria|preconditions?)\b)(?:[[:space:]-]+gate\b)?/ig) {
+        my $prefix = substr($ga_sentence, 0, $-[0]);
+        my $suffix = substr($ga_sentence, $+[0]);
+        my $negated_label = $prefix =~ /(?:(?:does not claim)|(?:not claims?)|(?:(?:forbidden|rejected|false|invalid|prohibited)\s+(?:wording|claims?|statement|mapping|assertion)))[^:]*:\s*$/i;
+        $prefix =~ s/^.*(?:[.?!;:]|\b(?:and|but|yet|however|though|although)\b)\s*//is;
+        my $negated_before = $prefix =~ /(?:does not|do not|must not|cannot|can not|is not|are not|must reject|rejects?|rejected|forbidden|non-claims|false)[^.!?;:]*$/i;
+        my $negated_after = $suffix =~ /^\s*["`\x27)]*\s*(?:(?:is|are|as)\s+)?(?:a\s+)?(?:forbidden|rejected|false|invalid|prohibited)\b/i;
+        exit 1 unless $negated_label || $negated_before || $negated_after;
       }
+      $sentence =~ s/(?:does not|do not|must not|cannot|can not|is not|are not|must reject|forbidden|non-claims|false|manual or unsupported|phase 66 remains rc).*?(?:\band\b|\bbut\b|\byet\b|\bhowever\b|\bthough\b|\balthough\b|;|$)//ig;
       if ($sentence =~ /(?:pilot|beta|(?:phase[ -]+66[ -]+)?rc|(?:phase[ -]+67[ -]+)?ga)[ -]+(?:readiness|pass|proof|gate acceptance|gates?)[^.?!;]*(?:proven|complete|satisfied|accepted|passed|ready|claimed|approved)\b/) {
         exit 1;
       }

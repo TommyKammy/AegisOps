@@ -1,10 +1,10 @@
 # ADR 0020: Phase 67 GA-Prerequisite Boundary
 
-- **Status**: Accepted
+- **Status**: Proposed
 - **Date**: 2026-08-12
 - **Owners**: AegisOps maintainers
 - **Related Issues**: #1414, #1418
-- **Supersedes**: Positive statements that equate Phase 67 completion with GA acceptance
+- **Supersedes**: N/A
 
 ## Context
 
@@ -18,7 +18,12 @@ successful lab component trial appear capable of accepting GA even though the
 required real-user, production-operability, supportability, and limitation
 evidence does not exist.
 
+If approved, this proposal would replace positive statements that equate Phase
+67 completion with GA acceptance with the boundary below.
+
 ## Decision
+
+If approved, this proposal would establish the following decision.
 
 Phase 66 remains the bounded RC evidence phase.
 
@@ -55,3 +60,10 @@ a subordinate Wazuh or Shuffle result cannot convert it into GA acceptance.
 - This decision does not accept the GA gate.
 - This decision does not prove production readiness or customer success.
 - This decision does not weaken the Phase 51.3 GA evidence requirements.
+
+## Approval
+
+- **Proposed By**: Codex for PR #1424
+- **Reviewed By**: Pending
+- **Approved By**: Pending
+- **Approval Date**: Pending

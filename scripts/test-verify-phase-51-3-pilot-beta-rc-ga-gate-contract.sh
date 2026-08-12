@@ -16,10 +16,12 @@ fail_stderr="${workdir}/fail.err"
 create_valid_repo() {
   local target="$1"
 
-  mkdir -p "${target}/docs"
+  mkdir -p "${target}/docs/adr"
   printf '%s\n' "# AegisOps" "See [Phase 51.3 gate contract](docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md)." >"${target}/README.md"
   cp "${repo_root}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" \
     "${target}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+  cp "${repo_root}/docs/adr/0020-phase-67-ga-prerequisite-boundary.md" \
+    "${target}/docs/adr/0020-phase-67-ga-prerequisite-boundary.md"
 }
 
 assert_passes() {
@@ -65,6 +67,23 @@ replace_text_in_contract() {
     "${target}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
 }
 
+remove_text_from_adr() {
+  local target="$1"
+  local text="$2"
+
+  perl -0pi -e "s#\\Q${text}\\E##" \
+    "${target}/docs/adr/0020-phase-67-ga-prerequisite-boundary.md"
+}
+
+replace_text_in_adr() {
+  local target="$1"
+  local old_text="$2"
+  local new_text="$3"
+
+  perl -0pi -e "s#\\Q${old_text}\\E#${new_text}#" \
+    "${target}/docs/adr/0020-phase-67-ga-prerequisite-boundary.md"
+}
+
 insert_after_heading() {
   local target="$1"
   local heading="$2"
@@ -85,6 +104,63 @@ insert_after_heading() {
 valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
+
+missing_adr_repo="${workdir}/missing-adr"
+create_valid_repo "${missing_adr_repo}"
+rm "${missing_adr_repo}/docs/adr/0020-phase-67-ga-prerequisite-boundary.md"
+assert_fails_with \
+  "${missing_adr_repo}" \
+  "Missing proposed Phase 67 GA-prerequisite ADR"
+
+accepted_adr_repo="${workdir}/accepted-adr-without-approval"
+create_valid_repo "${accepted_adr_repo}"
+replace_text_in_adr \
+  "${accepted_adr_repo}" \
+  "- **Status**: Proposed" \
+  "- **Status**: Accepted"
+assert_fails_with \
+  "${accepted_adr_repo}" \
+  "Missing proposed ADR 0020 line: - **Status**: Proposed"
+
+duplicate_adr_status_repo="${workdir}/duplicate-adr-status"
+create_valid_repo "${duplicate_adr_status_repo}"
+printf '%s\n' '- **Status**: Accepted' \
+  >>"${duplicate_adr_status_repo}/docs/adr/0020-phase-67-ga-prerequisite-boundary.md"
+assert_fails_with \
+  "${duplicate_adr_status_repo}" \
+  "Expected exactly one proposed ADR 0020 Status field; found 2"
+
+duplicate_adr_approval_repo="${workdir}/duplicate-adr-approval"
+create_valid_repo "${duplicate_adr_approval_repo}"
+printf '%s\n' '- **Approved By**: Example Maintainer' \
+  >>"${duplicate_adr_approval_repo}/docs/adr/0020-phase-67-ga-prerequisite-boundary.md"
+assert_fails_with \
+  "${duplicate_adr_approval_repo}" \
+  "Expected exactly one proposed ADR 0020 Approved By field; found 2"
+
+drifted_adr_decision_repo="${workdir}/drifted-adr-decision"
+create_valid_repo "${drifted_adr_decision_repo}"
+replace_text_in_adr \
+  "${drifted_adr_decision_repo}" \
+  "Phase 67 performs bounded GA-prerequisite validation." \
+  "Phase 67 remains GA."
+assert_fails_with \
+  "${drifted_adr_decision_repo}" \
+  "Missing proposed ADR 0020 decision: Phase 67 performs bounded GA-prerequisite validation."
+
+for approval_line in \
+  "- **Proposed By**: Codex for PR #1424" \
+  "- **Reviewed By**: Pending" \
+  "- **Approved By**: Pending" \
+  "- **Approval Date**: Pending"; do
+  approval_slug="$(printf '%s' "${approval_line}" | tr '[:upper:] ' '[:lower:]-' | tr -cd '[:alnum:]-')"
+  missing_approval_repo="${workdir}/missing-${approval_slug}"
+  create_valid_repo "${missing_approval_repo}"
+  remove_text_from_adr "${missing_approval_repo}" "${approval_line}"
+  assert_fails_with \
+    "${missing_approval_repo}" \
+    "Missing proposed ADR 0020 line: ${approval_line}"
+done
 
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
@@ -144,19 +220,59 @@ assert_fails_with \
   "${missing_phase_66_repo}" \
   "Missing Phase 51.3 gate contract statement: Phase 66 is RC. Phase 67 performs bounded GA-prerequisite validation and does not accept GA."
 
-phase67_ga_overclaim_repo="${workdir}/phase67-ga-overclaim"
-create_valid_repo "${phase67_ga_overclaim_repo}"
-insert_after_heading "${phase67_ga_overclaim_repo}" "## 7. GA Gate" "Phase 67 is GA."
-assert_fails_with \
-  "${phase67_ga_overclaim_repo}" \
-  "Forbidden Phase 51.3 gate contract claim: Phase 67 is GA."
+direct_phase67_ga_claims=(
+  "Phase 67 is GA"
+  "Phase 67 is GA."
+  "Phase 67 remains GA."
+  "Phase 67 becomes GA"
+  "Phase 67 stays GA!"
+  "Phase 67 equals GA"
+  "Phase 67 stays the GA gate"
+  "Phase-67 equals the GA"
+  "Phase 67: becomes the GA gate."
+  "Phase 67 is GA-gate."
+  "Phase 67 accepts GA."
+  "Phase 67 materializes the GA gate."
+  "| Direct mapping | Phase 67 is GA |"
+  "| Phase 67 | becomes | the GA gate |"
+  "This does not claim GA, but Phase 67 is GA."
+  "This release is not a drill: Phase 67 remains GA."
+)
+
+direct_claim_index=0
+for direct_claim in "${direct_phase67_ga_claims[@]}"; do
+  direct_claim_index=$((direct_claim_index + 1))
+  direct_claim_repo="${workdir}/phase67-direct-ga-claim-${direct_claim_index}"
+  create_valid_repo "${direct_claim_repo}"
+  insert_after_heading "${direct_claim_repo}" "## 7. GA Gate" "${direct_claim}"
+  assert_fails_with \
+    "${direct_claim_repo}" \
+    "Forbidden Phase 51.3 gate contract direct GA claim: ${direct_claim}"
+done
+
+negated_phase67_ga_claim_repo="${workdir}/negated-phase67-ga-claims"
+create_valid_repo "${negated_phase67_ga_claim_repo}"
+printf '%s\n' \
+  'Phase 67 is not GA.' \
+  'Phase 67 does not become GA.' \
+  'Phase 67 is GA-prerequisite validation only.' \
+  'Phase 67 remains GA-prerequisite validation only.' \
+  'Phase 67 is GA prerequisite validation only.' \
+  'Phase 67 becomes the GA readiness boundary.' \
+  'Phase 67 remains GA evidence only.' \
+  'The verifier rejects the claim "Phase 67 is GA".' \
+  '"Phase 67 is GA" is forbidden.' \
+  'Forbidden wording: Phase 67 is GA.' \
+  'These are not claims: Phase 67 remains GA.' \
+  >>"${negated_phase67_ga_claim_repo}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+assert_passes "${negated_phase67_ga_claim_repo}"
 
 phase67_completion_overclaim_repo="${workdir}/phase67-completion-overclaim"
 create_valid_repo "${phase67_completion_overclaim_repo}"
 insert_after_heading "${phase67_completion_overclaim_repo}" "## 7. GA Gate" "Completing Phase 67 accepts GA."
 assert_fails_with \
   "${phase67_completion_overclaim_repo}" \
-  "Forbidden Phase 51.3 gate contract claim: Completing Phase 67 accepts GA."
+  "Forbidden Phase 51.3 gate contract direct GA claim: Completing Phase 67 accepts GA."
 
 authority_drift_repo="${workdir}/authority-drift"
 create_valid_repo "${authority_drift_repo}"

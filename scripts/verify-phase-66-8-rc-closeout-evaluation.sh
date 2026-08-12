@@ -273,21 +273,6 @@ for phrase in required_non_claims:
     if phrase not in explicit_non_claims:
         fail(f"Missing Phase 66 explicit non-claim: {phrase}")
 
-phase67_ga_overclaims = (
-    re.compile(r"(?i)\bphase\s+67\s+is\s+GA\b"),
-    re.compile(
-        r"(?i)\bphase\s+67\s+(?:accepts?|materializes?)\s+"
-        r"(?:the\s+)?GA(?:\s+gate)?\b"
-    ),
-)
-for pattern in phase67_ga_overclaims:
-    if pattern.search(doc_raw):
-        fail(
-            "Forbidden Phase 66 closeout evaluation: "
-            "Phase 67 cannot accept or materialize GA"
-        )
-
-
 def rendered_text(value: str, *, remove_comments: bool = True) -> str:
     if remove_comments:
         value = visible_markdown(value)
@@ -303,6 +288,115 @@ def rendered_text(value: str, *, remove_comments: bool = True) -> str:
 security_source = re.sub(r"<!--(.*?)-->", r"\1", doc_raw, flags=re.DOTALL)
 rendered = rendered_text(security_source, remove_comments=False)
 normalized = re.sub(r"[ \t]+", " ", rendered)
+
+phase67_direct_ga_mapping = re.compile(
+    r"\bphase\s+67(?:\s*:\s*|\s+)"
+    r"(?:is|becomes?|remains?|stays?|equals?)\s+"
+    r"(?:the\s+)?GA(?:\s+gate)?\b",
+    flags=re.IGNORECASE,
+)
+phase67_ga_action = re.compile(
+    r"\bphase\s+67(?:\s*:\s*|\s+)(?:accepts?|materializes?)\s+"
+    r"(?:the\s+)?GA(?:\s+gate)?\b",
+    flags=re.IGNORECASE,
+)
+phase67_negated_prefix = re.compile(
+    r"\b(?:"
+    r"(?:does|do|must|can)\s+not|cannot|"
+    r"(?:is|are)\s+not|must\s+reject|forbidden|false|"
+    r"non[-\s]+claims?"
+    r")\b",
+    flags=re.IGNORECASE,
+)
+phase67_negated_heading = re.compile(
+    r"\b(?:forbidden(?:\s+claims?)?|(?:explicit\s+)?non[-\s]+claims?)\b",
+    flags=re.IGNORECASE,
+)
+phase67_negated_suffix = re.compile(
+    r"^\s*[\"'`”’)]*\s*(?:(?:is|are|as)\s+)?(?:a\s+)?"
+    r"(?:forbidden|rejected|false|invalid|prohibited)\b",
+    flags=re.IGNORECASE,
+)
+phase67_ga_qualifier = re.compile(
+    r"^(?:(?:\s*[-/]\s*)|\s+)"
+    r"(?:prerequisites?|readiness|validation|evidence|boundary|criteria|"
+    r"preconditions?)\b",
+    flags=re.IGNORECASE,
+)
+
+
+def normalized_phase67_scan_text(value: str) -> str:
+    value = value.replace("|", " ")
+    value = re.sub(r"^\s*(?:[-+]|\d+[.)])\s+", "", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def phase67_match_is_negated(
+    statement: str, match: re.Match[str], heading_scope: str
+) -> bool:
+    if phase67_negated_heading.search(heading_scope):
+        return True
+
+    prefix = statement[: match.start()]
+    prefix_clauses = re.split(
+        r"[.!?;]|\b(?:and|but|yet|however|though|although)\b",
+        prefix,
+        flags=re.IGNORECASE,
+    )
+    nearest_clause = prefix_clauses[-1]
+    colon_clauses = nearest_clause.rsplit(":", maxsplit=1)
+    local_prefix = colon_clauses[-1]
+    if phase67_negated_prefix.search(local_prefix):
+        return True
+
+    # A colon commonly introduces the forbidden/non-claim example itself.
+    # Only propagate a negation from before it when the prefix names that
+    # semantic scope; unrelated prose such as "not a drill:" must not mask GA.
+    if len(colon_clauses) == 2 and re.search(
+        r"\b(?:claim|claims|wording|statement|mapping|assertion)\b",
+        colon_clauses[0],
+        flags=re.IGNORECASE,
+    ):
+        if phase67_negated_prefix.search(colon_clauses[0]) or re.search(
+            r"\b(?:forbidden|rejected|false|invalid|prohibited)\b",
+            colon_clauses[0],
+            flags=re.IGNORECASE,
+        ):
+            return True
+
+    return bool(phase67_negated_suffix.match(statement[match.end() :]))
+
+
+phase67_heading_scopes: dict[int, str] = {}
+for source_line in rendered_text(doc).splitlines():
+    heading_match = re.match(r"^\s*(#{1,6})\s+(.+?)\s*$", source_line)
+    if heading_match:
+        heading_level = len(heading_match.group(1))
+        phase67_heading_scopes = {
+            level: heading
+            for level, heading in phase67_heading_scopes.items()
+            if level < heading_level
+        }
+        phase67_heading_scopes[heading_level] = normalized_phase67_scan_text(
+            heading_match.group(2)
+        )
+
+    statement = normalized_phase67_scan_text(source_line)
+    if not statement:
+        continue
+    heading_scope = " ".join(
+        phase67_heading_scopes[level] for level in sorted(phase67_heading_scopes)
+    )
+    for pattern in (phase67_direct_ga_mapping, phase67_ga_action):
+        for match in pattern.finditer(statement):
+            if phase67_match_is_negated(statement, match, heading_scope):
+                continue
+            if phase67_ga_qualifier.match(statement[match.end() :]):
+                continue
+            fail(
+                "Forbidden Phase 66 closeout evaluation: "
+                "Phase 67 cannot accept or materialize GA"
+            )
 
 secret_patterns = (
     re.compile(

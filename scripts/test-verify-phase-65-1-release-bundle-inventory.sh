@@ -57,6 +57,7 @@ create_valid_repo_template() {
 
   mkdir -p "${valid_template}"
   copy_repo_path "README.md"
+  copy_repo_path "docs/adr/0020-phase-67-ga-prerequisite-boundary.md"
   copy_repo_path "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
   copy_repo_path "docs/phase-51-5-competitive-gap-matrix.md"
   copy_repo_path "docs/phase-51-6-authority-boundary-negative-test-policy.md"

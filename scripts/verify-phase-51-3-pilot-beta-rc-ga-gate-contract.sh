@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 doc_path="${repo_root}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+adr_path="${repo_root}/docs/adr/0020-phase-67-ga-prerequisite-boundary.md"
 readme_path="${repo_root}/README.md"
 
 required_headings=(
@@ -24,7 +25,7 @@ required_phrases=(
   "- **Status**: Accepted"
   "- **Date**: 2026-04-30"
   "- **Related Issues**: #1041, #1042, #1044"
-  '- **Amended by**: `docs/adr/0020-phase-67-ga-prerequisite-boundary.md`, #1414, #1418'
+  '- **Proposed amendment**: `docs/adr/0020-phase-67-ga-prerequisite-boundary.md`, #1414, #1418'
   "The only approved readiness gate names for the Phase 51 replacement-readiness roadmap are:"
   "| Pilot | Single-customer or tightly controlled design-partner validation of the governed operating experience. | Pre-commercial and pre-GA. |"
   "| Beta | Multi-operator or expanded design-partner validation with repeatable evidence capture and named limitation owners. | Still pre-RC and pre-GA. |"
@@ -71,7 +72,6 @@ required_phrases=(
 forbidden_lines=(
   "Phase 66 is GA"
   "Phase 66 is GA."
-  "Phase 67 is GA."
   "Completing Phase 67 accepts GA."
   "RC and GA are interchangeable"
   "RC and GA are interchangeable."
@@ -87,10 +87,66 @@ forbidden_lines=(
   "tickets are authoritative for gate acceptance."
 )
 
+required_adr_lines=(
+  "# ADR 0020: Phase 67 GA-Prerequisite Boundary"
+  "- **Status**: Proposed"
+  "- **Supersedes**: N/A"
+  "## Decision"
+  "## Approval"
+  "- **Proposed By**: Codex for PR #1424"
+  "- **Reviewed By**: Pending"
+  "- **Approved By**: Pending"
+  "- **Approval Date**: Pending"
+)
+
+required_adr_decisions=(
+  "If approved, this proposal would replace positive statements that equate Phase 67 completion with GA acceptance with the boundary below."
+  "Phase 67 performs bounded GA-prerequisite validation."
+  "it does not accept GA, authorize production rollout, or establish customer success."
+  "GA acceptance is a separate gate decision."
+  "A human approver who is independent of evidence production must make the decision."
+)
+
 if [[ ! -f "${doc_path}" ]]; then
   echo "Missing Phase 51.3 pilot beta RC GA gate contract: ${doc_path}" >&2
   exit 1
 fi
+
+if [[ ! -f "${adr_path}" ]]; then
+  echo "Missing proposed Phase 67 GA-prerequisite ADR: ${adr_path}" >&2
+  exit 1
+fi
+
+for line in "${required_adr_lines[@]}"; do
+  if ! grep -Fxq -- "${line}" "${adr_path}"; then
+    echo "Missing proposed ADR 0020 line: ${line}" >&2
+    exit 1
+  fi
+done
+
+adr_singleton_fields=(
+  "Status"
+  "Supersedes"
+  "Proposed By"
+  "Reviewed By"
+  "Approved By"
+  "Approval Date"
+)
+for field in "${adr_singleton_fields[@]}"; do
+  field_count="$(grep -Ec "^- \*\*${field}\*\*:" "${adr_path}" || true)"
+  if [[ "${field_count}" != "1" ]]; then
+    echo "Expected exactly one proposed ADR 0020 ${field} field; found ${field_count}" >&2
+    exit 1
+  fi
+done
+
+adr_normalized="$(awk '{$1=$1; printf "%s ", $0}' "${adr_path}")"
+for decision in "${required_adr_decisions[@]}"; do
+  if ! grep -Fq -- "${decision}" <<<"${adr_normalized}"; then
+    echo "Missing proposed ADR 0020 decision: ${decision}" >&2
+    exit 1
+  fi
+done
 
 for heading in "${required_headings[@]}"; do
   if ! grep -Fxq -- "${heading}" "${doc_path}"; then
@@ -116,6 +172,52 @@ contains_forbidden_outside_forbidden_section() {
     END { exit(found ? 0 : 1) }
   ' "${doc_path}"
 }
+
+find_direct_phase67_ga_claim() {
+  awk '
+    /^## 8\. Forbidden Claims$/ { in_forbidden_claims = 1; next }
+    /^## / && in_forbidden_claims { in_forbidden_claims = 0 }
+    in_forbidden_claims { next }
+    {
+      original = $0
+      remaining = tolower($0)
+      gsub(/\|/, " ", remaining)
+      direct = "phase[[:space:]-]+67([[:space:]]*:[[:space:]]*|[[:space:]-]+)(is|remains|becomes|stays|equals|accepts|materializes)[[:space:]-]+(the[[:space:]-]+)?ga([[:space:]-]+gate)?([^[:alnum:]_-]|$)"
+
+      while (match(remaining, direct)) {
+        prefix = substr(remaining, 1, RSTART - 1)
+        suffix = substr(remaining, RSTART + RLENGTH)
+
+        # Qualified GA-prerequisite/evidence language describes a bounded phase,
+        # not a direct GA mapping.  The direct claim itself remains forbidden.
+        if (suffix ~ /^(prerequisite|prerequisites|readiness|validation|evidence|boundary|criteria|precondition|preconditions)([^[:alnum:]_-]|$)/) {
+          remaining = substr(remaining, RSTART + RLENGTH)
+          continue
+        }
+
+        sentence_prefix = prefix
+        negated_label = sentence_prefix ~ /((does[[:space:]]+not[[:space:]]+claim)|(not[[:space:]]+claims?)|((forbidden|rejected|false|invalid|prohibited)[[:space:]]+(wording|claims?|statement|mapping|assertion)))[^:]*:[[:space:]]*$/
+        sub(/^.*[.!?;:][[:space:]]*/, "", sentence_prefix)
+        sub(/^.*[[:space:]](and|but|yet|however|though|although)[[:space:]]+/, "", sentence_prefix)
+        negated_before = negated_label || sentence_prefix ~ /(reject(s|ed|ing)?|forbid(s|den|ding)?|den(y|ies|ied|ying)|not[[:space:]]+(claim|true|valid)|must[[:space:]]+not|do(es)?[[:space:]]+not|may[[:space:]]+not|cannot|can.t|neither|false[[:space:]]+that)[^.!?]*$/
+        negated_after = suffix ~ /^[^[:alnum:]]*(is[[:space:]]+|as[[:space:]]+)?(a[[:space:]]+)?(forbidden|rejected|false|invalid|prohibited)([^[:alnum:]_-]|$)/
+
+        if (!negated_before && !negated_after) {
+          print original
+          exit
+        }
+
+        remaining = substr(remaining, RSTART + RLENGTH)
+      }
+    }
+  ' "${doc_path}"
+}
+
+direct_phase67_ga_claim="$(find_direct_phase67_ga_claim)"
+if [[ -n "${direct_phase67_ga_claim}" ]]; then
+  echo "Forbidden Phase 51.3 gate contract direct GA claim: ${direct_phase67_ga_claim}" >&2
+  exit 1
+fi
 
 for line in "${forbidden_lines[@]}"; do
   if contains_forbidden_outside_forbidden_section "${line}"; then

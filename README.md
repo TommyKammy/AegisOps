@@ -18,7 +18,7 @@ Canonical cross-phase boundary reference:
 
 - `docs/non-goals-and-expansion-guardrails.md`
 - `docs/adr/0011-phase-51-1-replacement-boundary.md` defines the Phase 51.1 SMB SecOps replacement boundary: AegisOps replaces the operating experience above Wazuh and Shuffle, not their internals or every SIEM/SOAR capability.
-- `docs/adr/0020-phase-67-ga-prerequisite-boundary.md` defines Phase 67 as bounded GA-prerequisite validation and keeps GA acceptance as a separate evidence-backed decision.
+- `docs/adr/0020-phase-67-ga-prerequisite-boundary.md` proposes defining Phase 67 as bounded GA-prerequisite validation while keeping GA acceptance as a separate evidence-backed decision.
 - [Phase 51.3 pilot beta RC GA gate contract](docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md) defines the Pilot, Beta, RC, and GA evidence gates for replacement-readiness materialization.
 - [Phase 51.4 SMB personas and jobs-to-be-done matrix](docs/phase-51-4-smb-personas-jobs-to-be-done.md) defines the internal IT manager, part-time security operator, approver/escalation owner, platform admin, and bounded external support collaborator personas for later replacement-roadmap work.
 - [Phase 51.5 competitive gap matrix](docs/phase-51-5-competitive-gap-matrix.md) compares the replacement operating-experience target against standalone Wazuh, standalone Shuffle, manual SOC/ticket workflow, and common SMB SIEM/SOAR expectations.
