@@ -30,12 +30,13 @@ required_phrases=(
   "AegisOps current state is pre-GA and must not be described as already closing Beta, RC, or GA gaps."
   "Beta target gaps must remain explicitly open until later phases produce evidence."
   "RC target gaps must remain explicitly open until Phase 66 evidence exists."
-  "GA target gaps must remain explicitly open until Phase 67 real-user or design-partner evidence exists."
+  "Phase 67 produces bounded, non-production GA-prerequisite evidence only; its completion does not accept GA."
+  "GA target gaps must remain explicitly open after Phase 67 prerequisite validation until a separate GA gate accepts current-revision real-user or design-partner evidence, production-operability evidence, and independent human approval."
   "| P0 | Guided setup and deployment path | Current state is not a self-service replacement because install, profile selection, and first-use onboarding still need a reviewed guided path. | Phase 52 setup and guided onboarding, Phase 53 install profile |"
   "| P0 | Wazuh signal admission from replacement profile | Current state does not yet prove the replacement operating experience for Wazuh-backed SMB signal intake across the intended profile. | Phase 54 Wazuh signal intake |"
   "| P0 | Daily operator queue and handoff ergonomics | Current state does not yet prove the daily replacement workflow for part-time SMB operators. | Phase 55 daily operator queue |"
   "| P0 | Approval, delegated execution, and reconciliation operating path | Current state has reviewed foundations, but the replacement target still needs end-to-end approval ergonomics, Shuffle delegation evidence, and reconciliation closure. | Phase 56 approval ergonomics, Phase 59 delegated execution, Phase 60 reconciliation |"
-  "| P0 | Restore, support, limitations, RC, and GA evidence chain | Current state cannot claim replacement readiness until restore, support bundle, known limitation ownership, RC evidence, and GA evidence are complete. | Phase 61 restore dry-run, separately reviewed support-bundle slice before Phase 66 RC gate, Phase 64 limitation ownership, Phase 66 RC evidence packet, Phase 67 GA launch evidence |"
+  "| P0 | Restore, support, limitations, RC, and GA evidence chain | Current state cannot claim replacement readiness until restore, support bundle, known limitation ownership, RC evidence, and GA evidence are complete. | Phase 61 restore dry-run, separately reviewed support-bundle slice before Phase 66 RC gate, Phase 64 limitation ownership, Phase 66 RC evidence packet, Phase 67 bounded GA-prerequisite evidence, separately accepted GA evidence |"
   "| P1 | Advisory AI trace, reporting, admin custody, and upgrade plan | Current state does not yet provide the replacement-grade advisory trace, leadership reporting, admin secret custody, or upgrade evidence expected by SMB buyers. | Phase 57 AI advisory trace, Phase 58 admin and secret custody, Phase 62 report export, Phase 65 upgrade plan |"
   "| P1 | Enterprise SIEM/SOAR parity | Deferred: broad enterprise SIEM/SOAR parity, broad source coverage, 24x7 SOC services, HA/multi-tenant enterprise operations, and every vendor integration remain outside the Phase 52-67 SMB replacement target unless a later roadmap explicitly accepts them. | Explicitly deferred beyond Phase 67 |"
   'Run `bash scripts/verify-phase-51-5-competitive-gap-matrix.sh`.'
@@ -59,6 +60,8 @@ forbidden_lines=(
   "Tickets are authoritative for AegisOps records."
   "AI is authoritative for AegisOps records."
   "Phase 63 support bundle"
+  "Phase 67 GA launch evidence."
+  "GA target gaps must remain explicitly open until Phase 67 real-user or design-partner evidence exists."
 )
 
 authority_verb_pattern="(is|are|becomes|become|remains|may[[:space:]]+be|can[[:space:]]+be|serves[[:space:]]+as|acts[[:space:]]+as)"

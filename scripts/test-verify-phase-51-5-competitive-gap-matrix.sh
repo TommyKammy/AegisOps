@@ -189,6 +189,22 @@ assert_fails_with \
   "${future_gap_claim_repo}" \
   "Missing Phase 51.5 competitive gap matrix statement: AegisOps current state is pre-GA"
 
+old_phase67_ga_launch_mapping_repo="${workdir}/old-phase67-ga-launch-mapping"
+create_valid_repo "${old_phase67_ga_launch_mapping_repo}"
+printf '%s\n' "Phase 67 GA launch evidence." \
+  >>"${old_phase67_ga_launch_mapping_repo}/docs/phase-51-5-competitive-gap-matrix.md"
+assert_fails_with \
+  "${old_phase67_ga_launch_mapping_repo}" \
+  "Forbidden Phase 51.5 competitive gap matrix claim: Phase 67 GA launch evidence."
+
+old_phase67_ga_gate_mapping_repo="${workdir}/old-phase67-ga-gate-mapping"
+create_valid_repo "${old_phase67_ga_gate_mapping_repo}"
+printf '%s\n' "GA target gaps must remain explicitly open until Phase 67 real-user or design-partner evidence exists." \
+  >>"${old_phase67_ga_gate_mapping_repo}/docs/phase-51-5-competitive-gap-matrix.md"
+assert_fails_with \
+  "${old_phase67_ga_gate_mapping_repo}" \
+  "Forbidden Phase 51.5 competitive gap matrix claim: GA target gaps must remain explicitly open until Phase 67 real-user or design-partner evidence exists."
+
 stale_support_bundle_mapping_repo="${workdir}/stale-support-bundle-mapping"
 create_valid_repo "${stale_support_bundle_mapping_repo}"
 printf '%s\n' "Phase 63 support bundle" \

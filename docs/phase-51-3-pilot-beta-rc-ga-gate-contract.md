@@ -5,6 +5,7 @@
 - **Owners**: AegisOps maintainers
 - **Related Baseline**: `docs/adr/0011-phase-51-1-replacement-boundary.md`, `docs/deployment/pilot-readiness-checklist.md`
 - **Related Issues**: #1041, #1042, #1044
+- **Amended by**: `docs/adr/0020-phase-67-ga-prerequisite-boundary.md`, #1414, #1418
 
 This contract defines the evidence required before AegisOps may advance from the current pilot foundation toward commercial replacement readiness. It changes documentation and verification only. It does not implement installer, Wazuh profile, Shuffle profile, AI, supportability, packaging, release-candidate, or general-availability workflows.
 
@@ -17,9 +18,11 @@ The only approved readiness gate names for the Phase 51 replacement-readiness ro
 | Pilot | Single-customer or tightly controlled design-partner validation of the governed operating experience. | Pre-commercial and pre-GA. |
 | Beta | Multi-operator or expanded design-partner validation with repeatable evidence capture and named limitation owners. | Still pre-RC and pre-GA. |
 | RC | Replacement candidate readiness for the intended SMB operating scope, pending final GA evidence and launch decisions. | Phase 66 is RC. |
-| GA | General availability replacement readiness supported by real-user or design-partner evidence, supportability, and known limitation ownership. | Phase 67 is GA. |
+| GA | General availability replacement readiness supported by real-user or design-partner evidence, supportability, and known limitation ownership. | Separate acceptance after Phase 67 prerequisite validation. |
 
-Phase 66 is RC. Phase 67 is GA.
+Phase 66 is RC. Phase 67 performs bounded GA-prerequisite validation and does not accept GA.
+
+GA acceptance requires a separately scoped gate decision backed by current-revision launch-scope evidence and independent human approval after Phase 67 prerequisite evidence is complete.
 
 Phase 51.7 materialization guard can use the gate names `Pilot`, `Beta`, `RC`, and `GA` from this contract when it validates later roadmap or issue materialization.
 
@@ -95,9 +98,11 @@ GA gate is documented with required real-user or design-partner evidence.
 
 GA replacement readiness requires all RC evidence plus real-user or design-partner evidence that the reviewed operating experience worked across the intended launch scope, including install or upgrade, Wazuh signal admission, Shuffle delegated execution, AI advisory trace review, report export, restore dry-run, upgrade plan rehearsal, support bundle generation, and accepted limitations ownership.
 
-GA evidence must include the real-user or design-partner record reference, reviewed environment class, operator or design-partner owner, date, gate record identifier, accepted limitations, support owner, upgrade owner, and follow-up decision.
+GA evidence must include the real-user or design-partner record reference, reviewed environment class, operator or design-partner owner, date, gate record identifier, accepted limitations, support owner, upgrade owner, an independent human approver who did not produce the evidence packet, and follow-up decision.
 
-Phase 67 is GA and must not be materialized until the GA gate evidence exists.
+Phase 67 may materialize bounded prerequisite work while evidence is incomplete, but every missing GA requirement must remain an owned blocker and no Phase 67 verdict may accept GA.
+
+GA acceptance is a separate gate decision and must not be materialized as accepted until the required GA evidence exists.
 
 GA must reject broad GA overclaim before real-user or design-partner evidence exists.
 
@@ -114,6 +119,8 @@ Forbidden claims:
 - AegisOps is GA because AI produced recommendations.
 - AegisOps is GA because tickets were closed.
 - Phase 66 is GA.
+- Phase 67 is GA.
+- Completing Phase 67 accepts GA.
 - RC and GA are interchangeable.
 - GA can be claimed without real-user or design-partner evidence.
 - Wazuh, Shuffle, AI, tickets, evidence systems, dashboards, demo data, browser state, UI cache, downstream receipts, or operator-facing summaries are authoritative for gate acceptance.
@@ -126,10 +133,11 @@ Run `bash scripts/test-verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh`.
 
 Run `node <codex-supervisor-root>/dist/index.js issue-lint 1044 --config <supervisor-config-path>`.
 
-The verifier must fail when the Pilot, Beta, RC, or GA gate is missing; when Phase 66 is not identified as RC; when Phase 67 is not identified as GA; when RC and GA are not distinguished; when GA is claimed without real-user or design-partner evidence; or when Wazuh, Shuffle, AI, tickets, evidence systems, dashboards, demo data, browser state, UI cache, downstream receipts, or operator-facing summaries are promoted into authority.
+The verifier must fail when the Pilot, Beta, RC, or GA gate is missing; when Phase 66 is not identified as RC; when Phase 67 is not identified as bounded GA-prerequisite validation; when Phase 67 is promoted to GA acceptance; when RC and GA are not distinguished; when GA is claimed without current-revision real-user or design-partner evidence and independent human approval; or when Wazuh, Shuffle, AI, tickets, evidence systems, dashboards, demo data, browser state, UI cache, downstream receipts, or operator-facing summaries are promoted into authority.
 
 ## 10. Non-Goals
 
 - No installer, Wazuh profile, Shuffle profile, AI, supportability, packaging, release-candidate, or general-availability workflow is implemented by this contract.
 - No runtime behavior, release status, customer contract, SLA, support plan, or commercial launch status changes.
+- No Phase 67 integration-trial verdict accepts GA or production readiness.
 - No external substrate, assistant, ticket, evidence system, dashboard, demo data, browser state, UI cache, downstream receipt, or operator-facing summary becomes authoritative workflow truth.

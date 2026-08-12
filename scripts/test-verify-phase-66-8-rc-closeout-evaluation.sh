@@ -236,13 +236,31 @@ assert_fails_with "${missing_issue_lint_repo}" \
 
 missing_limitation_repo="$(new_fixture "missing-limitation")"
 remove_doc_text "${missing_limitation_repo}" \
-  "Phase 66 does not collect real beta or design-partner evidence, prove real design-partner success, accept a Phase 67 GA gate, collect production launch evidence, approve production rollout, or establish self-service commercial readiness."
+  "Phase 66 does not collect real beta or design-partner evidence, prove real design-partner success, use Phase 67 to accept or materialize GA, collect production launch evidence, approve production rollout, or establish self-service commercial readiness."
 assert_fails_with "${missing_limitation_repo}" "Missing Phase 66 accepted limitation"
 
 missing_handoff_repo="$(new_fixture "missing-handoff")"
 remove_doc_text "${missing_handoff_repo}" \
-  "Phase 67 must prove GA gates independently under \`docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md\`, using repo-owned evidence and explicit maintainer review."
+  "Phase 67 must collect bounded GA-prerequisite evidence independently under \`docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md\`, using repo-owned evidence and explicit maintainer review; it cannot accept or materialize GA. Any later GA acceptance requires a separately scoped gate bound to current-revision evidence and independent human approval."
 assert_fails_with "${missing_handoff_repo}" "Missing Phase 67 handoff boundary"
+
+phase67_is_ga_repo="$(new_fixture "phase67-is-ga")"
+printf '%s\n' "Phase 67 is GA." \
+  >>"${phase67_is_ga_repo}/docs/phase-66-closeout-evaluation.md"
+assert_fails_with "${phase67_is_ga_repo}" \
+  "Phase 67 cannot accept or materialize GA"
+
+phase67_accepts_ga_repo="$(new_fixture "phase67-accepts-ga")"
+printf '%s\n' "Phase 67 accepts the GA gate." \
+  >>"${phase67_accepts_ga_repo}/docs/phase-66-closeout-evaluation.md"
+assert_fails_with "${phase67_accepts_ga_repo}" \
+  "Phase 67 cannot accept or materialize GA"
+
+phase67_materializes_ga_repo="$(new_fixture "phase67-materializes-ga")"
+printf '%s\n' "Phase 67 materializes GA." \
+  >>"${phase67_materializes_ga_repo}/docs/phase-66-closeout-evaluation.md"
+assert_fails_with "${phase67_materializes_ga_repo}" \
+  "Phase 67 cannot accept or materialize GA"
 
 missing_recorded_result_repo="$(new_fixture "missing-recorded-result")"
 remove_doc_text "${missing_recorded_result_repo}" \

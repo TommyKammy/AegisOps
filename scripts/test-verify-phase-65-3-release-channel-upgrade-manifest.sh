@@ -588,6 +588,11 @@ create_valid_repo "${direct_ga_ready_repo}"
 printf '%s\n' "Phase 67 GA is ready." >>"${direct_ga_ready_repo}/docs/release/phase-65-beta-release-notes.md"
 assert_fails_with "${direct_ga_ready_repo}" "inferred RC/GA readiness claim"
 
+phase67_remains_ga_repo="${workdir}/phase-67-remains-ga"
+create_valid_repo "${phase67_remains_ga_repo}"
+printf '%s\n' "Phase 67 remains GA." >>"${phase67_remains_ga_repo}/docs/release/phase-65-beta-release-notes.md"
+assert_fails_with "${phase67_remains_ga_repo}" "inferred RC/GA readiness claim"
+
 beta_claim_repo="${workdir}/beta-claim"
 create_valid_repo "${beta_claim_repo}"
 printf '%s\n' "Upgrade manifest proves Beta gate acceptance." >>"${beta_claim_repo}/docs/deployment/release/phase-65-3-upgrade-manifest.yaml"

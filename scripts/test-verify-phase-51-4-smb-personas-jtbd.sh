@@ -108,7 +108,7 @@ missing_authority_limits_repo="${workdir}/missing-support-authority-limits"
 create_valid_repo "${missing_authority_limits_repo}"
 remove_text_from_doc \
   "${missing_authority_limits_repo}" \
-  "| Bounded External Support Collaborator | Help diagnose platform or product issues without becoming an operator, approver, administrator, or source of truth. | Review redacted support bundles, ask clarifying questions, suggest documented remediation steps, and identify product defects or known limitations for the customer-owned team to accept or reject. | Fear receiving private production data, being expected to provide 24x7 coverage, being blamed for customer decisions, or accidentally becoming an authority path through informal advice. | Needs redacted bundles, explicit customer owner, limitation owner, reproduction steps, environment class, retained evidence references, and a written boundary for what support may not do. | May provide advisory diagnosis from redacted evidence and documented product knowledge only. Must not access customer-private production systems directly, approve actions, execute actions, mutate AegisOps records, operate Wazuh or Shuffle, close cases, or make AI, tickets, or support notes authoritative. | Phase 63 support bundle, Phase 64 known limitations ownership, Phase 66 RC supportability evidence, Phase 67 GA support-readiness evidence. |"
+  "| Bounded External Support Collaborator | Help diagnose platform or product issues without becoming an operator, approver, administrator, or source of truth. | Review redacted support bundles, ask clarifying questions, suggest documented remediation steps, and identify product defects or known limitations for the customer-owned team to accept or reject. | Fear receiving private production data, being expected to provide 24x7 coverage, being blamed for customer decisions, or accidentally becoming an authority path through informal advice. | Needs redacted bundles, explicit customer owner, limitation owner, reproduction steps, environment class, retained evidence references, and a written boundary for what support may not do. | May provide advisory diagnosis from redacted evidence and documented product knowledge only. Must not access customer-private production systems directly, approve actions, execute actions, mutate AegisOps records, operate Wazuh or Shuffle, close cases, or make AI, tickets, or support notes authoritative. | Phase 63 support bundle, Phase 64 known limitations ownership, Phase 66 RC supportability evidence, Phase 67 bounded GA-prerequisite evidence, and separately accepted GA support-readiness evidence. |"
 assert_fails_with \
   "${missing_authority_limits_repo}" \
   "Missing Phase 51.4 personas statement: | Bounded External Support Collaborator |"
@@ -160,6 +160,22 @@ printf '%s\n' "AegisOps uses a 24x7 staffed soc as the default model." \
 assert_fails_with \
   "${staffing_case_drift_repo}" \
   "Forbidden Phase 51.4 personas authority or staffing claim matched: 24x7[[:space:]-]+staffed[[:space:]-]+soc[[:space:]]+(is|as|becomes|become|remains)[^.]*default"
+
+old_phase67_ga_launch_mapping_repo="${workdir}/old-phase67-ga-launch-mapping"
+create_valid_repo "${old_phase67_ga_launch_mapping_repo}"
+printf '%s\n' "Phase 67 GA launch evidence." \
+  >>"${old_phase67_ga_launch_mapping_repo}/docs/phase-51-4-smb-personas-jobs-to-be-done.md"
+assert_fails_with \
+  "${old_phase67_ga_launch_mapping_repo}" \
+  "Forbidden Phase 51.4 personas authority or staffing claim: Phase 67 GA launch evidence."
+
+old_phase67_ga_support_mapping_repo="${workdir}/old-phase67-ga-support-mapping"
+create_valid_repo "${old_phase67_ga_support_mapping_repo}"
+printf '%s\n' "Phase 67 GA support-readiness evidence." \
+  >>"${old_phase67_ga_support_mapping_repo}/docs/phase-51-4-smb-personas-jobs-to-be-done.md"
+assert_fails_with \
+  "${old_phase67_ga_support_mapping_repo}" \
+  "Forbidden Phase 51.4 personas authority or staffing claim: Phase 67 GA support-readiness evidence."
 
 workstation_path_repo="${workdir}/workstation-local-path"
 create_valid_repo "${workstation_path_repo}"

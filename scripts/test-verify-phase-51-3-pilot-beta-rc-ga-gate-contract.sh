@@ -107,11 +107,11 @@ modified_required_statement_repo="${workdir}/modified-required-statement"
 create_valid_repo "${modified_required_statement_repo}"
 replace_text_in_contract \
   "${modified_required_statement_repo}" \
-  "Phase 66 is RC. Phase 67 is GA." \
-  "Phase 66 is RC. Phase 67 is GA. Draft claim."
+  "Phase 66 is RC. Phase 67 performs bounded GA-prerequisite validation and does not accept GA." \
+  "Phase 66 is RC. Phase 67 prerequisite validation is still under review."
 assert_fails_with \
   "${modified_required_statement_repo}" \
-  "Missing Phase 51.3 gate contract statement: Phase 66 is RC. Phase 67 is GA."
+  "Missing Phase 51.3 gate contract statement: Phase 66 is RC. Phase 67 performs bounded GA-prerequisite validation and does not accept GA."
 
 missing_rc_ga_repo="${workdir}/missing-rc-ga-distinction"
 create_valid_repo "${missing_rc_ga_repo}"
@@ -129,12 +129,34 @@ assert_fails_with \
   "${missing_design_partner_repo}" \
   "Missing Phase 51.3 gate contract statement: GA must reject broad GA overclaim before real-user or design-partner evidence exists."
 
+missing_independent_approval_repo="${workdir}/missing-independent-approval"
+create_valid_repo "${missing_independent_approval_repo}"
+remove_text_from_contract "${missing_independent_approval_repo}" \
+  "GA acceptance requires a separately scoped gate decision backed by current-revision launch-scope evidence and independent human approval after Phase 67 prerequisite evidence is complete."
+assert_fails_with \
+  "${missing_independent_approval_repo}" \
+  "Missing Phase 51.3 gate contract statement: GA acceptance requires a separately scoped gate decision backed by current-revision launch-scope evidence and independent human approval"
+
 missing_phase_66_repo="${workdir}/missing-phase-66-rc"
 create_valid_repo "${missing_phase_66_repo}"
-remove_text_from_contract "${missing_phase_66_repo}" "Phase 66 is RC. Phase 67 is GA."
+remove_text_from_contract "${missing_phase_66_repo}" "Phase 66 is RC. Phase 67 performs bounded GA-prerequisite validation and does not accept GA."
 assert_fails_with \
   "${missing_phase_66_repo}" \
-  "Missing Phase 51.3 gate contract statement: Phase 66 is RC. Phase 67 is GA."
+  "Missing Phase 51.3 gate contract statement: Phase 66 is RC. Phase 67 performs bounded GA-prerequisite validation and does not accept GA."
+
+phase67_ga_overclaim_repo="${workdir}/phase67-ga-overclaim"
+create_valid_repo "${phase67_ga_overclaim_repo}"
+insert_after_heading "${phase67_ga_overclaim_repo}" "## 7. GA Gate" "Phase 67 is GA."
+assert_fails_with \
+  "${phase67_ga_overclaim_repo}" \
+  "Forbidden Phase 51.3 gate contract claim: Phase 67 is GA."
+
+phase67_completion_overclaim_repo="${workdir}/phase67-completion-overclaim"
+create_valid_repo "${phase67_completion_overclaim_repo}"
+insert_after_heading "${phase67_completion_overclaim_repo}" "## 7. GA Gate" "Completing Phase 67 accepts GA."
+assert_fails_with \
+  "${phase67_completion_overclaim_repo}" \
+  "Forbidden Phase 51.3 gate contract claim: Completing Phase 67 accepts GA."
 
 authority_drift_repo="${workdir}/authority-drift"
 create_valid_repo "${authority_drift_repo}"

@@ -18,6 +18,7 @@ Canonical cross-phase boundary reference:
 
 - `docs/non-goals-and-expansion-guardrails.md`
 - `docs/adr/0011-phase-51-1-replacement-boundary.md` defines the Phase 51.1 SMB SecOps replacement boundary: AegisOps replaces the operating experience above Wazuh and Shuffle, not their internals or every SIEM/SOAR capability.
+- `docs/adr/0020-phase-67-ga-prerequisite-boundary.md` defines Phase 67 as bounded GA-prerequisite validation and keeps GA acceptance as a separate evidence-backed decision.
 - [Phase 51.3 pilot beta RC GA gate contract](docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md) defines the Pilot, Beta, RC, and GA evidence gates for replacement-readiness materialization.
 - [Phase 51.4 SMB personas and jobs-to-be-done matrix](docs/phase-51-4-smb-personas-jobs-to-be-done.md) defines the internal IT manager, part-time security operator, approver/escalation owner, platform admin, and bounded external support collaborator personas for later replacement-roadmap work.
 - [Phase 51.5 competitive gap matrix](docs/phase-51-5-competitive-gap-matrix.md) compares the replacement operating-experience target against standalone Wazuh, standalone Shuffle, manual SOC/ticket workflow, and common SMB SIEM/SOAR expectations.
@@ -104,7 +105,7 @@ Replacement means the operating experience and authoritative record chain for da
 
 The Phase 51 replacement boundary is defined by `docs/adr/0011-phase-51-1-replacement-boundary.md`.
 
-The Phase 51.3 Pilot, Beta, RC, and GA gate contract is defined by the [Phase 51.3 pilot beta RC GA gate contract](docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md); Phase 66 is RC and Phase 67 is GA.
+The Phase 51.3 Pilot, Beta, RC, and GA gate contract is defined by the [Phase 51.3 pilot beta RC GA gate contract](docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md); Phase 66 is RC, Phase 67 performs bounded GA-prerequisite validation, and GA acceptance remains a separate evidence-backed decision.
 
 The Phase 51.4 SMB personas and jobs-to-be-done matrix is defined by the [Phase 51.4 SMB personas and jobs-to-be-done matrix](docs/phase-51-4-smb-personas-jobs-to-be-done.md).
 

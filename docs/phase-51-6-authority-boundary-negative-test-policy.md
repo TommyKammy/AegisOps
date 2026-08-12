@@ -53,7 +53,7 @@ Expected citation examples:
 - Phase 59 delegated execution must cite this policy for Shuffle workflow-success shortcut rejection and AegisOps receipt linkage.
 - Phase 60 reconciliation must cite this policy for downstream receipt shortcut rejection and durable reconciliation linkage.
 - Phase 62 report export and Phase 63 support bundle work must cite this policy when derived reports, exports, bundles, or external evidence systems are present.
-- Phase 66 RC and Phase 67 GA evidence packets must cite this policy when gate evidence includes browser state, UI cache, downstream receipts, demo data, tickets, Wazuh, Shuffle, AI, endpoint evidence, network evidence, or external evidence-system context.
+- Phase 66 RC, Phase 67 GA-prerequisite, and later GA-acceptance evidence packets must cite this policy when gate evidence includes browser state, UI cache, downstream receipts, demo data, tickets, Wazuh, Shuffle, AI, endpoint evidence, network evidence, or external evidence-system context.
 
 ## 5. Forbidden Shortcuts
 

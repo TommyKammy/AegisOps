@@ -85,7 +85,7 @@ The verifier must reject:
 - verifier-as-readiness-truth claim; and
 - issue-lint-as-readiness-truth claim.
 
-The offline install bundle contract preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct, Phase 66 remains RC, and Phase 67 remains GA.
+The offline install bundle contract preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct; Phase 66 remains RC, Phase 67 performs bounded GA-prerequisite validation, and GA acceptance remains separate.
 
 Bundle files, manifest entries, install output, smoke output, verifier output, issue-lint output, docs, release notes, operator-facing summaries, and downstream receipts cannot satisfy Beta gates, RC gates, GA gates, workflow truth, release truth, gate truth, limitation truth, or readiness truth by themselves.
 
