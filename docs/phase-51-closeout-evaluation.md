@@ -17,7 +17,7 @@ Phase 52 is the next materialization target after repo-owned graph and preflight
 | --- | --- | --- |
 | #1042 | Phase 51.1 replacement boundary ADR | Closed. `docs/adr/0011-phase-51-1-replacement-boundary.md` is accepted and cited from README. |
 | #1043 | Phase 51.2 README product positioning | Closed. README states current pre-GA status, replacement target, forbidden overclaims, and authority boundary. |
-| #1044 | Phase 51.3 Pilot, Beta, RC, and GA gate contract | Closed. `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` defines evidence gates and keeps Phase 66 as RC; proposed ADR 0020 would clarify that Phase 67 performs bounded GA-prerequisite validation while GA acceptance remains separate. |
+| #1044 | Phase 51.3 Pilot, Beta, RC, and GA gate contract | Closed. `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` defines evidence gates and keeps Phase 66 as RC and Phase 67 as GA. |
 | #1045 | Phase 51.4 SMB personas and jobs-to-be-done | Closed. `docs/phase-51-4-smb-personas-jobs-to-be-done.md` defines SMB personas without granting authority to support, AI, Wazuh, Shuffle, or tickets. |
 | #1046 | Phase 51.5 competitive gap matrix | Closed. `docs/phase-51-5-competitive-gap-matrix.md` maps P0/P1 gaps to Phase 52-67 or explicit deferral. |
 | #1047 | Phase 51.6 authority-boundary negative-test policy | Closed. `docs/phase-51-6-authority-boundary-negative-test-policy.md` covers AI, Wazuh, Shuffle, tickets, evidence, browser state, UI cache, downstream receipts, and demo data. |

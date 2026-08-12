@@ -101,7 +101,7 @@ evidence reference for every required artifact class;
 verifier output reference;
 explicit exclusion review reference;
 issue or change record that approved the bundle for beta/design-partner packaging review.
-The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct; Phase 66 remains RC, Phase 67 performs bounded GA-prerequisite validation, and GA acceptance remains separate.
+The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct, and Phase 66 remains RC while Phase 67 remains GA.
 The inventory preserves Phase 64 limitation ownership: known limitation records, mitigation posture, handoff notes, verifier output, issue-lint output, UI text, readiness projections, and AI summaries remain subordinate planning evidence only.
 AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth.
 Wazuh, Shuffle, AI, tickets, reports, support notes, dashboards, exports, browser state, UI cache, downstream receipts, release notes, bundle files, verifier output, issue-lint output, and operator-facing summaries cannot satisfy RC gates, GA gates, workflow truth, limitation truth, release truth, or readiness truth by themselves.
@@ -152,7 +152,7 @@ done
 evidence_section_text="$(markdown_section_text "${absolute_doc_path}" "## 3. Evidence and Authority Boundaries")"
 
 required_evidence_phrases=(
-  "The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct; Phase 66 remains RC, Phase 67 performs bounded GA-prerequisite validation, and GA acceptance remains separate."
+  "The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct, and Phase 66 remains RC while Phase 67 remains GA."
   "The inventory preserves Phase 64 limitation ownership: known limitation records, mitigation posture, handoff notes, verifier output, issue-lint output, UI text, readiness projections, and AI summaries remain subordinate planning evidence only."
   "AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth."
   "Wazuh, Shuffle, AI, tickets, reports, support notes, dashboards, exports, browser state, UI cache, downstream receipts, release notes, bundle files, verifier output, issue-lint output, and operator-facing summaries cannot satisfy RC gates, GA gates, workflow truth, limitation truth, release truth, or readiness truth by themselves."

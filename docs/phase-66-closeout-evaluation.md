@@ -1,6 +1,6 @@
 # Phase 66 RC Closeout Evaluation
 
-- **Status**: Accepted at the bounded Phase 66 release-candidate evidence boundary; Phase 67 prerequisite validation, GA acceptance, production rollout, self-service commercial readiness, and broad SIEM/SOAR parity remain unproven.
+- **Status**: Accepted at the bounded Phase 66 release-candidate evidence boundary; Phase 67 GA, production rollout, self-service commercial readiness, and broad SIEM/SOAR parity remain unproven.
 - **Date**: 2026-07-24 Asia/Tokyo closeout date
 - **Owner**: AegisOps maintainers
 - **Related Issues**: #1397, #1398, #1399, #1400, #1401, #1402, #1403, #1404, #1405
@@ -100,7 +100,7 @@ Issue-lint output is planning and metadata evidence only. It does not become wor
 
 ## Accepted Limitations
 
-Phase 66 does not collect real beta or design-partner evidence, prove real design-partner success, use Phase 67 to accept or materialize GA, collect production launch evidence, approve production rollout, or establish self-service commercial readiness.
+Phase 66 does not collect real beta or design-partner evidence, prove real design-partner success, accept a Phase 67 GA gate, collect production launch evidence, approve production rollout, or establish self-service commercial readiness.
 
 Phase 66 does not provide broad enterprise SIEM/SOAR parity, commercial billing, entitlement enforcement, a customer portal, HA/SLA proof, MSSP operations, compliance certification, production support operations, or new runtime feature breadth.
 
@@ -108,14 +108,14 @@ Phase 66 does not promote Wazuh signals, Shuffle receipts, AI output, reports, s
 
 ## Phase 67 Handoff
 
-Phase 67 may consume Phase 66 as subordinate GA-prerequisite planning input for the clean-host journey, Wazuh signal evidence, Shuffle execution evidence, AI triage evidence, report export evidence, supportability evidence, authority-boundary observations, verifier coverage, issue-lint coverage, and accepted limitations.
+Phase 67 may consume Phase 66 as subordinate GA-planning input for the clean-host journey, Wazuh signal evidence, Shuffle execution evidence, AI triage evidence, report export evidence, supportability evidence, authority-boundary observations, verifier coverage, issue-lint coverage, and accepted limitations.
 
-Phase 67 must collect bounded GA-prerequisite evidence independently under `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`, using repo-owned evidence and explicit maintainer review; it cannot accept or materialize GA. Any later GA acceptance requires a separately scoped gate bound to current-revision evidence and independent human approval.
+Phase 67 must prove GA gates independently under `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`, using repo-owned evidence and explicit maintainer review.
 
 Phase 67 must not infer GA gate acceptance from Phase 66 issue closure, proof-file presence, owner assignment, timestamps, reports, receipts, traces, support bundles, negative observations, verifier success, issue-lint success, or this closeout verdict.
 
 ## Explicit Non-Claims
 
-This closeout does not claim Phase 67 prerequisite completion, GA readiness, a passed GA gate, real design-partner success, production rollout readiness, self-service commercial readiness, broad enterprise SIEM/SOAR parity, commercial replacement readiness beyond the bounded RC evidence verdict, autonomous remediation, production support readiness, customer portal readiness, HA/SLA readiness, MSSP readiness, or compliance certification.
+This closeout does not claim Phase 67 GA readiness, a passed GA gate, real design-partner success, production rollout readiness, self-service commercial readiness, broad enterprise SIEM/SOAR parity, commercial replacement readiness beyond the bounded RC evidence verdict, autonomous remediation, production support readiness, customer portal readiness, HA/SLA readiness, MSSP readiness, or compliance certification.
 
 The Phase 66 verdict does not authorize release, deployment, case closure, action execution, reconciliation, limitation resolution, or gate acceptance. Those decisions remain in the authoritative AegisOps record chain and require the responsible human owner.

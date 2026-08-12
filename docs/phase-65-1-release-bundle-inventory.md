@@ -47,7 +47,7 @@ Required artifact classes are inventory obligations only. Artifact presence does
 
 ## 3. Evidence and Authority Boundaries
 
-The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct; Phase 66 remains RC, Phase 67 performs bounded GA-prerequisite validation, and GA acceptance remains separate.
+The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct, and Phase 66 remains RC while Phase 67 remains GA.
 
 The inventory preserves Phase 64 limitation ownership: known limitation records, mitigation posture, handoff notes, verifier output, issue-lint output, UI text, readiness projections, and AI summaries remain subordinate planning evidence only.
 

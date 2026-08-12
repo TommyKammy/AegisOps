@@ -866,10 +866,10 @@ require_file "${runbook_path}" "runbook"
 
 baseline_contract_terms=(
   "${phase65_inventory_path}|The inventory identifier is \`phase-65-release-bundle-inventory-v1\`.|Phase 65.1 inventory identifier"
-  "${phase65_inventory_path}|The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct; Phase 66 remains RC, Phase 67 performs bounded GA-prerequisite validation, and GA acceptance remains separate.|Phase 65.1 gate boundary carry-forward"
+  "${phase65_inventory_path}|The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct, and Phase 66 remains RC while Phase 67 remains GA.|Phase 65.1 gate boundary carry-forward"
   "${phase51_gate_path}|# Phase 51.3 Pilot, Beta, RC, and GA Gate Contract|Phase 51.3 gate contract heading"
   "${phase51_gate_path}|Phase 66 is RC and must not be described as GA.|Phase 51.3 RC boundary"
-  "${phase51_gate_path}|GA acceptance is a separate gate decision and must not be materialized as accepted until the required GA evidence exists.|Phase 51.3 GA boundary"
+  "${phase51_gate_path}|Phase 67 is GA and must not be materialized until the GA gate evidence exists.|Phase 51.3 GA boundary"
   "${first_user_stack_path}|# Phase 52.9 First-User Stack Overview|first-user stack heading"
   "${first_user_stack_path}|First-user docs are operator guidance only.|first-user operator guidance boundary"
   "${host_preflight_path}|# Phase 52.6 Host Preflight Contract|host preflight heading"
@@ -936,7 +936,7 @@ inferred RC pass;
 inferred GA pass;
 verifier-as-readiness-truth claim; and
 issue-lint-as-readiness-truth claim.
-The offline install bundle contract preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct; Phase 66 remains RC, Phase 67 performs bounded GA-prerequisite validation, and GA acceptance remains separate.
+The offline install bundle contract preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct, Phase 66 remains RC, and Phase 67 remains GA.
 Bundle files, manifest entries, install output, smoke output, verifier output, issue-lint output, docs, release notes, operator-facing summaries, and downstream receipts cannot satisfy Beta gates, RC gates, GA gates, workflow truth, release truth, gate truth, limitation truth, or readiness truth by themselves.
 bash scripts/verify-phase-65-2-offline-install-bundle-contract.sh
 bash scripts/verify-phase-65-2-offline-install-bundle-contract.sh --bundle-dir <release-bundle-dir>
@@ -1140,10 +1140,10 @@ if [[ -n "${bundle_dir}" ]]; then
   require_bundle_doc_phrase "${bundle_dir}" "docs/phase-65-2-offline-install-bundle-contract.md" "The contract identifier is \`phase-65-offline-install-bundle-contract-v1\`." "Phase 65.2 contract identifier"
   require_bundle_doc_phrase "${bundle_dir}" "docs/phase-65-2-offline-install-bundle-contract.md" "This contract does not claim Phase 66 RC readiness, Phase 67 GA readiness, Beta gate acceptance, RC gate acceptance, GA gate acceptance, self-service commercial readiness, commercial replacement readiness, production entitlement enforcement, hosted update service readiness, release-channel readiness, production installer completeness, SBOM completeness, checksum completeness, signing completeness, licensing approval, migration readiness, support readiness, or design-partner evidence completeness." "Phase 65.2 non-claim boundary"
   require_bundle_doc_phrase "${bundle_dir}" "docs/phase-65-1-release-bundle-inventory.md" "The inventory identifier is \`phase-65-release-bundle-inventory-v1\`." "Phase 65.1 inventory identifier"
-  require_bundle_doc_phrase "${bundle_dir}" "docs/phase-65-1-release-bundle-inventory.md" "The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct; Phase 66 remains RC, Phase 67 performs bounded GA-prerequisite validation, and GA acceptance remains separate." "Phase 65.1 gate boundary carry-forward"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/phase-65-1-release-bundle-inventory.md" "The inventory preserves the Phase 51.3 gate boundary: Pilot, Beta, RC, and GA evidence must remain distinct, and Phase 66 remains RC while Phase 67 remains GA." "Phase 65.1 gate boundary carry-forward"
   require_bundle_doc_phrase "${bundle_dir}" "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "# Phase 51.3 Pilot, Beta, RC, and GA Gate Contract" "Phase 51.3 gate contract heading"
   require_bundle_doc_phrase "${bundle_dir}" "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "Phase 66 is RC and must not be described as GA." "Phase 51.3 RC boundary"
-  require_bundle_doc_phrase "${bundle_dir}" "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "GA acceptance is a separate gate decision and must not be materialized as accepted until the required GA evidence exists." "Phase 51.3 GA boundary"
+  require_bundle_doc_phrase "${bundle_dir}" "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "Phase 67 is GA and must not be materialized until the GA gate evidence exists." "Phase 51.3 GA boundary"
   require_bundle_doc_phrase "${bundle_dir}" "docs/deployment/first-user-stack.md" "# Phase 52.9 First-User Stack Overview" "first-user stack heading"
   require_bundle_doc_phrase "${bundle_dir}" "docs/deployment/first-user-stack.md" "First-user docs are operator guidance only." "first-user operator guidance boundary"
   require_bundle_doc_phrase "${bundle_dir}" "docs/deployment/host-preflight-contract.md" "# Phase 52.6 Host Preflight Contract" "host preflight heading"

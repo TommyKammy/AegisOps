@@ -72,7 +72,7 @@ The proof must reject missing or partial evidence packets, mixed revisions, stal
 
 Phase 66.6 records one repository-scoped supportability proof contract and focused verifier. It does not conduct a destructive restore, execute a live upgrade or rollback, operate a production support service, commit to a production SLA or 24x7 response model, create a customer portal, perform a real design-partner support review, retain production secrets, or complete the Phase 66 RC authority-boundary proof pack and closeout.
 
-Later Phase 66 issues must still prove the RC authority-boundary proof pack and closeout evidence independently. Phase 67 must collect bounded GA-prerequisite evidence independently, but it cannot accept or materialize GA. Any later GA acceptance requires a separately scoped gate bound to current-revision evidence and independent human approval.
+Later Phase 66 issues must still prove the RC authority-boundary proof pack and closeout evidence independently. Phase 67 must still evaluate GA readiness using its own accepted gate evidence.
 
 ## 6. Verification
 

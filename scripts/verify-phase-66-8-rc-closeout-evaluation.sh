@@ -122,7 +122,7 @@ for phrase in readme_phrases:
 
 required_phrases = (
     "# Phase 66 RC Closeout Evaluation",
-    "**Status**: Accepted at the bounded Phase 66 release-candidate evidence boundary; Phase 67 prerequisite validation, GA acceptance, production rollout, self-service commercial readiness, and broad SIEM/SOAR parity remain unproven.",
+    "**Status**: Accepted at the bounded Phase 66 release-candidate evidence boundary; Phase 67 GA, production rollout, self-service commercial readiness, and broad SIEM/SOAR parity remain unproven.",
     "**Related Issues**: #1397, #1398, #1399, #1400, #1401, #1402, #1403, #1404, #1405",
     "Phase 66 RC Replacement Readiness is accepted for the repository-owned, bounded release-candidate evidence chain",
     "The accepted verdict is an RC evidence verdict only.",
@@ -246,7 +246,7 @@ for issue_number in range(1397, 1406):
 
 accepted_limitations = section_text("## Accepted Limitations", "## Phase 67 Handoff")
 required_limitations = (
-    "Phase 66 does not collect real beta or design-partner evidence, prove real design-partner success, use Phase 67 to accept or materialize GA, collect production launch evidence, approve production rollout, or establish self-service commercial readiness.",
+    "Phase 66 does not collect real beta or design-partner evidence, prove real design-partner success, accept a Phase 67 GA gate, collect production launch evidence, approve production rollout, or establish self-service commercial readiness.",
     "Phase 66 does not provide broad enterprise SIEM/SOAR parity, commercial billing, entitlement enforcement, a customer portal, HA/SLA proof, MSSP operations, compliance certification, production support operations, or new runtime feature breadth.",
     "Phase 66 does not promote Wazuh signals, Shuffle receipts, AI output, reports, support bundles, tickets, optional evidence, UI cache, demo data, release artifacts, verifier output, issue-lint output, or closeout wording into AegisOps workflow, release, gate, limitation, closeout, RC, GA, or commercial replacement truth.",
 )
@@ -256,8 +256,8 @@ for phrase in required_limitations:
 
 phase67_handoff = section_text("## Phase 67 Handoff", "## Explicit Non-Claims")
 required_handoff = (
-    "Phase 67 may consume Phase 66 as subordinate GA-prerequisite planning input for the clean-host journey, Wazuh signal evidence, Shuffle execution evidence, AI triage evidence, report export evidence, supportability evidence, authority-boundary observations, verifier coverage, issue-lint coverage, and accepted limitations.",
-    "Phase 67 must collect bounded GA-prerequisite evidence independently under `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`, using repo-owned evidence and explicit maintainer review; it cannot accept or materialize GA. Any later GA acceptance requires a separately scoped gate bound to current-revision evidence and independent human approval.",
+    "Phase 67 may consume Phase 66 as subordinate GA-planning input for the clean-host journey, Wazuh signal evidence, Shuffle execution evidence, AI triage evidence, report export evidence, supportability evidence, authority-boundary observations, verifier coverage, issue-lint coverage, and accepted limitations.",
+    "Phase 67 must prove GA gates independently under `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`, using repo-owned evidence and explicit maintainer review.",
     "Phase 67 must not infer GA gate acceptance from Phase 66 issue closure, proof-file presence, owner assignment, timestamps, reports, receipts, traces, support bundles, negative observations, verifier success, issue-lint success, or this closeout verdict.",
 )
 for phrase in required_handoff:
@@ -266,12 +266,13 @@ for phrase in required_handoff:
 
 explicit_non_claims = section_text("## Explicit Non-Claims", None)
 required_non_claims = (
-    "This closeout does not claim Phase 67 prerequisite completion, GA readiness, a passed GA gate, real design-partner success, production rollout readiness, self-service commercial readiness, broad enterprise SIEM/SOAR parity, commercial replacement readiness beyond the bounded RC evidence verdict, autonomous remediation, production support readiness, customer portal readiness, HA/SLA readiness, MSSP readiness, or compliance certification.",
+    "This closeout does not claim Phase 67 GA readiness, a passed GA gate, real design-partner success, production rollout readiness, self-service commercial readiness, broad enterprise SIEM/SOAR parity, commercial replacement readiness beyond the bounded RC evidence verdict, autonomous remediation, production support readiness, customer portal readiness, HA/SLA readiness, MSSP readiness, or compliance certification.",
     "The Phase 66 verdict does not authorize release, deployment, case closure, action execution, reconciliation, limitation resolution, or gate acceptance. Those decisions remain in the authoritative AegisOps record chain and require the responsible human owner.",
 )
 for phrase in required_non_claims:
     if phrase not in explicit_non_claims:
         fail(f"Missing Phase 66 explicit non-claim: {phrase}")
+
 
 def rendered_text(value: str, *, remove_comments: bool = True) -> str:
     if remove_comments:
@@ -288,115 +289,6 @@ def rendered_text(value: str, *, remove_comments: bool = True) -> str:
 security_source = re.sub(r"<!--(.*?)-->", r"\1", doc_raw, flags=re.DOTALL)
 rendered = rendered_text(security_source, remove_comments=False)
 normalized = re.sub(r"[ \t]+", " ", rendered)
-
-phase67_direct_ga_mapping = re.compile(
-    r"\bphase\s+67(?:\s*:\s*|\s+)"
-    r"(?:is|becomes?|remains?|stays?|equals?)\s+"
-    r"(?:the\s+)?GA(?:\s+gate)?\b",
-    flags=re.IGNORECASE,
-)
-phase67_ga_action = re.compile(
-    r"\bphase\s+67(?:\s*:\s*|\s+)(?:accepts?|materializes?)\s+"
-    r"(?:the\s+)?GA(?:\s+gate)?\b",
-    flags=re.IGNORECASE,
-)
-phase67_negated_prefix = re.compile(
-    r"\b(?:"
-    r"(?:does|do|must|can)\s+not|cannot|"
-    r"(?:is|are)\s+not|must\s+reject|forbidden|false|"
-    r"non[-\s]+claims?"
-    r")\b",
-    flags=re.IGNORECASE,
-)
-phase67_negated_heading = re.compile(
-    r"\b(?:forbidden(?:\s+claims?)?|(?:explicit\s+)?non[-\s]+claims?)\b",
-    flags=re.IGNORECASE,
-)
-phase67_negated_suffix = re.compile(
-    r"^\s*[\"'`”’)]*\s*(?:(?:is|are|as)\s+)?(?:a\s+)?"
-    r"(?:forbidden|rejected|false|invalid|prohibited)\b",
-    flags=re.IGNORECASE,
-)
-phase67_ga_qualifier = re.compile(
-    r"^(?:(?:\s*[-/]\s*)|\s+)"
-    r"(?:prerequisites?|readiness|validation|evidence|boundary|criteria|"
-    r"preconditions?)\b",
-    flags=re.IGNORECASE,
-)
-
-
-def normalized_phase67_scan_text(value: str) -> str:
-    value = value.replace("|", " ")
-    value = re.sub(r"^\s*(?:[-+]|\d+[.)])\s+", "", value)
-    return re.sub(r"\s+", " ", value).strip()
-
-
-def phase67_match_is_negated(
-    statement: str, match: re.Match[str], heading_scope: str
-) -> bool:
-    if phase67_negated_heading.search(heading_scope):
-        return True
-
-    prefix = statement[: match.start()]
-    prefix_clauses = re.split(
-        r"[.!?;]|\b(?:and|but|yet|however|though|although)\b",
-        prefix,
-        flags=re.IGNORECASE,
-    )
-    nearest_clause = prefix_clauses[-1]
-    colon_clauses = nearest_clause.rsplit(":", maxsplit=1)
-    local_prefix = colon_clauses[-1]
-    if phase67_negated_prefix.search(local_prefix):
-        return True
-
-    # A colon commonly introduces the forbidden/non-claim example itself.
-    # Only propagate a negation from before it when the prefix names that
-    # semantic scope; unrelated prose such as "not a drill:" must not mask GA.
-    if len(colon_clauses) == 2 and re.search(
-        r"\b(?:claim|claims|wording|statement|mapping|assertion)\b",
-        colon_clauses[0],
-        flags=re.IGNORECASE,
-    ):
-        if phase67_negated_prefix.search(colon_clauses[0]) or re.search(
-            r"\b(?:forbidden|rejected|false|invalid|prohibited)\b",
-            colon_clauses[0],
-            flags=re.IGNORECASE,
-        ):
-            return True
-
-    return bool(phase67_negated_suffix.match(statement[match.end() :]))
-
-
-phase67_heading_scopes: dict[int, str] = {}
-for source_line in rendered_text(doc).splitlines():
-    heading_match = re.match(r"^\s*(#{1,6})\s+(.+?)\s*$", source_line)
-    if heading_match:
-        heading_level = len(heading_match.group(1))
-        phase67_heading_scopes = {
-            level: heading
-            for level, heading in phase67_heading_scopes.items()
-            if level < heading_level
-        }
-        phase67_heading_scopes[heading_level] = normalized_phase67_scan_text(
-            heading_match.group(2)
-        )
-
-    statement = normalized_phase67_scan_text(source_line)
-    if not statement:
-        continue
-    heading_scope = " ".join(
-        phase67_heading_scopes[level] for level in sorted(phase67_heading_scopes)
-    )
-    for pattern in (phase67_direct_ga_mapping, phase67_ga_action):
-        for match in pattern.finditer(statement):
-            if phase67_match_is_negated(statement, match, heading_scope):
-                continue
-            if phase67_ga_qualifier.match(statement[match.end() :]):
-                continue
-            fail(
-                "Forbidden Phase 66 closeout evaluation: "
-                "Phase 67 cannot accept or materialize GA"
-            )
 
 secret_patterns = (
     re.compile(
