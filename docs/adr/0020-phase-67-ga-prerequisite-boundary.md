@@ -15,9 +15,10 @@
 ## 1. Context
 
 The accepted Phase 51.3 gate contract currently maps Phase 67 directly to GA.
-It also requires real-user or design-partner evidence, supportability, known
-limitation ownership, and a human gate decision before that GA mapping may be
-materialized.
+It requires real-user or design-partner evidence, supportability, known
+limitation ownership, named owners, and a recorded follow-up decision before
+that GA mapping may be materialized. It does not require an independent human
+approver for GA acceptance.
 
 The implemented Phase 67 Epic has a narrower boundary. It describes a bounded,
 single-host, non-production real-integration trial and explicitly excludes GA
@@ -28,9 +29,12 @@ accepted GA gate.
 
 The accepted Phase 51.3 contract remains the current baseline while this ADR is
 Proposed. What remains undecided is whether Phase 67 should be renamed and
-governed as GA-prerequisite validation, with GA acceptance moved to a separate
-gate decision. Deferring that decision leaves the roadmap label and the actual
-trial boundary in conflict and makes GA overclaim difficult to audit.
+governed as GA-prerequisite validation, whether GA acceptance should move to a
+separate gate decision, and whether that gate should introduce a human approver
+independent of evidence production. That independent-human-approval requirement
+would be a new release-governance control proposed by this ADR. Deferring these
+decisions leaves the roadmap label and the actual trial boundary in conflict
+and makes GA overclaim difficult to audit.
 
 ## 2. Proposed Decision
 
@@ -59,7 +63,7 @@ before a separate implementation pull request applies the decision.
 
 - prevent bounded lab evidence from being overstated as GA acceptance,
 - keep gate decisions revision-bound and auditable,
-- preserve human authority over release and production-readiness decisions,
+- introduce human accountability and separation of duties for GA acceptance,
 - make missing real-user, operability, support, upgrade, and limitation evidence
   explicit,
 - align roadmap terminology with the Phase 67 trial that actually exists, and
@@ -76,9 +80,9 @@ completion as evidence that the GA gate itself was accepted.
 ### Option B: Make Phase 67 prerequisite validation and separate GA acceptance
 
 This is the proposed option. It aligns the phase boundary with the bounded trial
-and makes the missing launch-scope evidence and human decision explicit. It also
-requires an approved baseline change and a separate, reviewed implementation
-pull request.
+and makes the missing launch-scope evidence and proposed independent-human
+decision explicit. It also requires an approved baseline change and a separate,
+reviewed implementation pull request.
 
 ### Option C: Interpret Phase 67 case by case without changing the baseline
 
@@ -92,7 +96,10 @@ Option B best matches the evidence the repository can currently produce while
 retaining an explicit path to GA. Option A can make bounded component success
 appear equivalent to launch acceptance. Option C moves the decision into
 informal interpretation and cannot provide a stable contract for reviewers or
-automation.
+automation. Requiring a human GA approver who did not produce the evidence would
+introduce separation of duties between evidence production and release
+acceptance, making the accountable decision and its inputs independently
+reviewable.
 
 ## 6. Consequences
 
@@ -140,11 +147,14 @@ ADR records approval.
 ## 8. Security Impact
 
 This proposal changes no privileges, secret handling, network exposure, or
-runtime attack surface. If approved, it would preserve the independent human
-approval boundary and prevent subordinate systems, CI, issue state, or generated
-evidence from gaining release authority. The intended security benefit is
-stronger auditability of who accepted GA and which evidence revision supported
-the decision.
+runtime attack surface. If approved, it would introduce an independent human
+approval boundary specifically for GA acceptance. That is a new
+release-governance policy, distinct from the accepted baseline's human-approval
+requirements for controlled write or destructive action execution. It would
+also prevent subordinate systems, CI, issue state, or generated evidence from
+gaining release authority. The intended security benefit is stronger
+auditability of who accepted GA and which evidence revision supported the
+decision.
 
 ## 9. Rollback / Exit Strategy
 
@@ -162,7 +172,9 @@ Review of this proposal must confirm:
 
 - consistency with the accepted Phase 51.3 gate contract and ADR 0011,
 - explicit separation of prerequisite evidence from GA acceptance,
-- current-revision evidence and independent-human-approval requirements,
+- current-revision evidence requirements,
+- identification and justification of independent human GA approval as a new
+  release-governance control,
 - complete approval metadata when the status changes, and
 - no claim that this proposal itself accepts GA or production readiness.
 
