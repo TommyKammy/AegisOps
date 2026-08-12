@@ -44,7 +44,78 @@ builder = _load_module(
     "phase67_4_evidence_builder",
     E2E_ROOT / "build_evidence.py",
 )
+swarm_labeler = _load_module(
+    "phase67_4_swarm_service_labeler",
+    E2E_ROOT / "update_swarm_service_labels.py",
+)
 SCHEMA = validator.load_json(E2E_ROOT / "evidence-manifest.schema.json")
+
+
+class _FakeDockerEngine:
+    def __init__(self, service: dict, after_update=None) -> None:
+        self.service = deepcopy(service)
+        self.after_update = after_update
+        self.api_checked = False
+        self.updated_spec: dict | None = None
+
+    def assert_api_version_supported(self) -> None:
+        self.api_checked = True
+
+    def get_service(self, service_id: str) -> dict:
+        if self.service["ID"] != service_id:
+            raise AssertionError("unexpected service ID")
+        return deepcopy(self.service)
+
+    def update_service(
+        self,
+        service_id: str,
+        version: int,
+        spec: dict,
+    ) -> None:
+        if self.service["ID"] != service_id:
+            raise AssertionError("unexpected service ID")
+        if self.service["Version"]["Index"] != version:
+            raise AssertionError("unexpected service version")
+        self.updated_spec = deepcopy(spec)
+        self.service["Spec"] = deepcopy(spec)
+        self.service["Version"]["Index"] += 1
+        if self.after_update is not None:
+            self.after_update(self.service)
+
+
+def _hybrid_network_worker_service() -> dict:
+    return {
+        "ID": "wo7au34eetl5tc0id1jzxxu9e",
+        "Version": {"Index": 2342226},
+        "Spec": {
+            "Name": "shuffle-workers",
+            "Labels": {"shuffle-existing": "retained"},
+            "TaskTemplate": {
+                "ContainerSpec": {
+                    "Image": (
+                        "ghcr.io/shuffle/shuffle-worker:2.2.1@sha256:"
+                        + "9" * 64
+                    )
+                },
+                "Networks": [{"Target": "shuffle-overlay"}],
+            },
+            "Networks": [
+                {"Target": "shuffle-overlay"},
+                {"Target": "ingress"},
+            ],
+            "EndpointSpec": {
+                "Mode": "vip",
+                "Ports": [
+                    {
+                        "Protocol": "tcp",
+                        "TargetPort": 33333,
+                        "PublishedPort": 33333,
+                        "PublishMode": "ingress",
+                    }
+                ],
+            },
+        },
+    }
 
 
 def _manifest() -> dict[str, object]:
@@ -3456,6 +3527,190 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
                     identifiers,
                 )
 
+    def test_swarm_label_claim_preserves_hybrid_network_spec(self) -> None:
+        service = _hybrid_network_worker_service()
+        api = _FakeDockerEngine(service)
+        labels = {
+            "com.aegisops.lab.phase": "67.4",
+            "com.aegisops.lab.component": "shuffle-worker-image",
+            "com.aegisops.lab.trial-run-id": "phase67-e2e-test",
+        }
+
+        result = swarm_labeler.claim_service_labels(
+            api,
+            service_id=service["ID"],
+            expected_version=service["Version"]["Index"],
+            expected_name=service["Spec"]["Name"],
+            expected_image=service["Spec"]["TaskTemplate"]["ContainerSpec"][
+                "Image"
+            ],
+            labels=labels,
+        )
+
+        self.assertTrue(api.api_checked)
+        self.assertIsNotNone(api.updated_spec)
+        assert api.updated_spec is not None
+        self.assertEqual(
+            api.updated_spec["TaskTemplate"]["Networks"],
+            service["Spec"]["TaskTemplate"]["Networks"],
+        )
+        self.assertEqual(
+            api.updated_spec["Networks"],
+            service["Spec"]["Networks"],
+        )
+        expected_spec = deepcopy(service["Spec"])
+        expected_spec["Labels"].update(labels)
+        self.assertEqual(api.updated_spec, expected_spec)
+        self.assertEqual(result["version_before"], 2342226)
+        self.assertEqual(result["version_after"], 2342227)
+
+    def test_swarm_label_claim_rejects_stale_or_preowned_service(self) -> None:
+        service = _hybrid_network_worker_service()
+        arguments = {
+            "service_id": service["ID"],
+            "expected_name": service["Spec"]["Name"],
+            "expected_image": service["Spec"]["TaskTemplate"]["ContainerSpec"][
+                "Image"
+            ],
+            "labels": {"com.aegisops.lab.phase": "67.4"},
+        }
+        with self.assertRaisesRegex(
+            swarm_labeler.SwarmLabelUpdateError,
+            "changed before ownership",
+        ):
+            swarm_labeler.claim_service_labels(
+                _FakeDockerEngine(service),
+                expected_version=service["Version"]["Index"] - 1,
+                **arguments,
+            )
+
+        service["Spec"]["Labels"]["com.aegisops.lab.phase"] = "unknown"
+        with self.assertRaisesRegex(
+            swarm_labeler.SwarmLabelUpdateError,
+            "already carries ownership labels",
+        ):
+            swarm_labeler.claim_service_labels(
+                _FakeDockerEngine(service),
+                expected_version=service["Version"]["Index"],
+                **arguments,
+            )
+
+    def test_swarm_label_claim_rejects_nonlabel_daemon_mutation(self) -> None:
+        service = _hybrid_network_worker_service()
+
+        def mutate_network(updated_service: dict) -> None:
+            updated_service["Spec"]["TaskTemplate"]["Networks"].append(
+                {"Target": "unexpected-overlay"}
+            )
+
+        with self.assertRaisesRegex(
+            swarm_labeler.SwarmLabelUpdateError,
+            "changed outside ownership labels",
+        ):
+            swarm_labeler.claim_service_labels(
+                _FakeDockerEngine(service, after_update=mutate_network),
+                service_id=service["ID"],
+                expected_version=service["Version"]["Index"],
+                expected_name=service["Spec"]["Name"],
+                expected_image=service["Spec"]["TaskTemplate"][
+                    "ContainerSpec"
+                ]["Image"],
+                labels={"com.aegisops.lab.phase": "67.4"},
+            )
+
+    def test_swarm_labeler_uses_the_v140_engine_update_endpoint(self) -> None:
+        requests: list[tuple[str, str, object, dict[str, str]]] = []
+        response_payloads = [
+            {"ApiVersion": "1.51", "MinAPIVersion": "1.24"},
+            {"ID": "wo7au34eetl5tc0id1jzxxu9e"},
+            {"Warnings": None},
+            {"Warnings": ["unexpected daemon warning"]},
+        ]
+
+        class FakeConnection:
+            def __init__(self, _socket_path: Path, _timeout: float) -> None:
+                pass
+
+            def request(
+                self,
+                method: str,
+                path: str,
+                body=None,
+                headers=None,
+            ) -> None:
+                requests.append((method, path, body, headers or {}))
+
+            def getresponse(self):
+                payload = json.dumps(response_payloads.pop(0)).encode("utf-8")
+                return SimpleNamespace(
+                    status=200,
+                    reason="OK",
+                    read=lambda _limit: payload,
+                )
+
+            def close(self) -> None:
+                pass
+
+        original_connection = swarm_labeler.UnixSocketHTTPConnection
+        swarm_labeler.UnixSocketHTTPConnection = FakeConnection
+        try:
+            api = swarm_labeler.DockerEngineAPI(Path("/unused/docker.sock"))
+            api.assert_api_version_supported()
+            self.assertEqual(
+                api.get_service("wo7au34eetl5tc0id1jzxxu9e"),
+                {"ID": "wo7au34eetl5tc0id1jzxxu9e"},
+            )
+            spec = {"Name": "shuffle-workers", "Labels": {"owner": "trial"}}
+            api.update_service("wo7au34eetl5tc0id1jzxxu9e", 42, spec)
+            with self.assertRaisesRegex(
+                swarm_labeler.SwarmLabelUpdateError,
+                "returned warnings",
+            ):
+                api.update_service("wo7au34eetl5tc0id1jzxxu9e", 43, spec)
+        finally:
+            swarm_labeler.UnixSocketHTTPConnection = original_connection
+
+        self.assertEqual(requests[0][0:2], ("GET", "/version"))
+        self.assertEqual(
+            requests[1][0:2],
+            (
+                "GET",
+                "/v1.40/services/wo7au34eetl5tc0id1jzxxu9e",
+            ),
+        )
+        self.assertEqual(
+            requests[2][0:2],
+            (
+                "POST",
+                "/v1.40/services/wo7au34eetl5tc0id1jzxxu9e/update?version=42",
+            ),
+        )
+        self.assertEqual(json.loads(requests[2][2]), spec)
+        self.assertEqual(
+            requests[2][3],
+            {"Content-Type": "application/json"},
+        )
+
+    def test_swarm_labeler_rejects_non_unix_docker_context(self) -> None:
+        context = {
+            "Name": "remote-context",
+            "Endpoints": {"docker": {"Host": "tcp://docker.example:2376"}},
+        }
+        original_run = swarm_labeler.subprocess.run
+        swarm_labeler.subprocess.run = lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps([context]),
+            stderr="",
+        )
+        try:
+            with self.assertRaisesRegex(
+                swarm_labeler.SwarmLabelUpdateError,
+                "local Unix-socket Docker context",
+            ):
+                swarm_labeler.resolve_docker_socket("remote-context")
+        finally:
+            swarm_labeler.subprocess.run = original_run
+
     def test_operator_runner_binds_full_scope_restart_and_cleanup(self) -> None:
         runner = (LAB_ROOT / "run-e2e-trial.sh").read_text(encoding="utf-8")
         compose = (LAB_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
@@ -3607,6 +3862,10 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn("claim_reviewed_shuffle_worker_service()", runner)
         self.assertIn("shuffle_worker_service_is_trial_owned()", runner)
         self.assertIn(
+            "shuffle_worker_service_matches_attempted_claim()",
+            runner,
+        )
+        self.assertIn(
             "com.aegisops.lab.trial-run-id=${trial_run_id}",
             runner,
         )
@@ -3656,7 +3915,20 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             worker_claim.index(
                 '[[ "${service_image}" != "${shuffle_worker_immutable_ref}" ]]'
             ),
-            worker_claim.index("docker_lab service update"),
+            worker_claim.index('python3 "${swarm_service_labeler}"'),
+        )
+        self.assertIn(
+            '--expected-version "${service_version}"',
+            worker_claim,
+        )
+        self.assertIn(
+            '--docker-context "${AEGISOPS_LAB_DOCKER_CONTEXT}"',
+            worker_claim,
+        )
+        self.assertNotIn("docker_lab service update", worker_claim)
+        self.assertIn(
+            "shuffle_worker_service_matches_attempted_claim",
+            worker_claim,
         )
         self.assertLess(
             worker_claim.index('shuffle_worker_service_id="${service_id}"'),

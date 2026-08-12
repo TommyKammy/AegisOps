@@ -8,6 +8,7 @@ e2e_root="${lab_root}/e2e"
 schema="${e2e_root}/evidence-manifest.schema.json"
 sample="${e2e_root}/sample-evidence.json"
 validator="${e2e_root}/validate_evidence_manifest.py"
+swarm_service_labeler="${e2e_root}/update_swarm_service_labels.py"
 evaluation="${repo_root}/docs/phase-67-prerequisite-evaluation.md"
 
 fail() {
@@ -43,6 +44,7 @@ for path in \
   "${validator}" \
   "${e2e_root}/build_evidence.py" \
   "${e2e_root}/run_real_journey.py" \
+  "${swarm_service_labeler}" \
   "${lab_root}/run-e2e-trial.sh" \
   "${evaluation}" \
   "${repo_root}/control-plane/tests/test_phase67_4_real_service_e2e.py"; do
@@ -53,6 +55,7 @@ for path in \
   "${validator}" \
   "${e2e_root}/build_evidence.py" \
   "${e2e_root}/run_real_journey.py" \
+  "${swarm_service_labeler}" \
   "${lab_root}/run-e2e-trial.sh"; do
   require_executable "${path}"
 done
@@ -314,6 +317,10 @@ require_fixed "${lab_root}/run-e2e-trial.sh" 'configured_shuffle_worker_immutabl
 require_fixed "${lab_root}/run-e2e-trial.sh" 'assert_shuffle_worker_service_absent'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'claim_reviewed_shuffle_worker_service'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_worker_service_is_trial_owned'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_worker_service_matches_attempted_claim'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'python3 "${swarm_service_labeler}"'
+require_fixed "${lab_root}/run-e2e-trial.sh" '--expected-version "${service_version}"'
+reject_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab service update'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'com.aegisops.lab.trial-run-id=${trial_run_id}'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'without current-trial ownership'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'remove_reviewed_shuffle_worker_service'
@@ -321,6 +328,12 @@ require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab service rm "${shuffle_w
 require_fixed "${lab_root}/run-e2e-trial.sh" 'initial Shuffle worker cleanup claim did not complete'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'refusing to claim an unverified Shuffle worker service during cleanup'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'label=com.docker.swarm.service.name=${shuffle_worker_service}'
+require_fixed "${swarm_service_labeler}" 'API_VERSION = "1.40"'
+require_fixed "${swarm_service_labeler}" 'docker", "context", "inspect", context'
+require_fixed "${swarm_service_labeler}" 'host.startswith("unix:///")'
+require_fixed "${swarm_service_labeler}" 'updated_nonlabel_spec != before_nonlabel_spec'
+require_fixed "${swarm_service_labeler}" 'after_nonlabel_spec != before_nonlabel_spec'
+require_fixed "${swarm_service_labeler}" 'after_labels != expected_labels'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'run_reviewed_journey'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'Shuffle action image identity changed after the trial snapshot'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'compose_scope full ps -aq'
