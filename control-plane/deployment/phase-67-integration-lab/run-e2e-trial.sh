@@ -14,6 +14,7 @@ require_command jq
 require_command openssl
 require_command python3
 require_command curl
+require_command ln
 require_runtime_environment
 [[ "${AEGISOPS_LAB_SHUFFLE_TRANSPORT_MODE:-}" == "real_http" ]] \
   || fail "real Shuffle transport is not enabled; run ${LAB_DIR}/bootstrap-shuffle.sh"
@@ -26,22 +27,23 @@ shuffle_action_service="shuffle-tools_1-2-0"
 shuffle_action_preflight_absent=false
 shuffle_action_owned=false
 shuffle_action_service_id=""
+shuffle_action_service_image=""
+shuffle_action_service_port=""
+shuffle_action_network_id=""
+shuffle_action_cleanup_candidate_id=""
+shuffle_action_cleanup_candidate_spec=""
 shuffle_worker_service="shuffle-workers"
+shuffle_worker_network="shuffle_swarm_executions"
 shuffle_worker_immutable_ref=""
 shuffle_worker_preflight_absent=false
 shuffle_worker_owned=false
 shuffle_worker_service_id=""
+shuffle_worker_cleanup_candidate_id=""
+shuffle_worker_cleanup_candidate_spec=""
 captured_shuffle_worker_image_json=""
-shuffle_action_service_port=33334
-shuffle_action_network="shuffle-executions"
 shuffle_backend_url="$(
   printf 'http://%s-shuffle-backend-1:5001' \
     "${AEGISOPS_LAB_COMPOSE_PROJECT_NAME:-aegisops-phase67-lab}"
-)"
-shuffle_action_publish_spec="$(
-  printf 'name=app-port,published=%s,target=%s,protocol=tcp,mode=ingress' \
-    "${shuffle_action_service_port}" \
-    "${shuffle_action_service_port}"
 )"
 schema="${LAB_DIR}/e2e/evidence-manifest.schema.json"
 validator="${LAB_DIR}/e2e/validate_evidence_manifest.py"
@@ -96,85 +98,255 @@ run_reviewed_lab_startup() {
   "$@"
 }
 
-assert_reviewed_shuffle_action_service() {
-  local service_metadata
-  local service_image
+shuffle_action_runtime_matches_reviewed_image() {
+  local service_id="$1"
+  local service_metadata="$2"
+  local replicas
   local task_ids
   local task_metadata
   local task_container_ids
   local container_metadata
   local pinned_image_id
 
-  [[ "${shuffle_action_owned}" == true ]] \
-    && [[ -n "${shuffle_action_service_id}" ]] \
-    || fail "Shuffle action service is not owned by the current trial"
-  service_metadata="$(
-    docker_lab service inspect "${shuffle_action_service_id}"
-  )"
-  service_image="$(
-    jq -er '.[0].Spec.TaskTemplate.ContainerSpec.Image' \
-      <<<"${service_metadata}"
-  )"
-  [[ "${service_image}" == "${shuffle_tools_immutable_ref}" ]] \
-    || fail "Shuffle action service is not pinned to the reviewed digest"
-  jq -e \
-    --arg phase "67.4" \
-    --arg component "shuffle-action-image" \
-    --arg trial_run_id "${trial_run_id}" \
-    --arg service_id "${shuffle_action_service_id}" \
-    --argjson port "${shuffle_action_service_port}" '
-      .[0] as $service
-      | $service.ID == $service_id
-      and $service.Spec.Labels["com.aegisops.lab.phase"] == $phase
-      and $service.Spec.Labels["com.aegisops.lab.component"] == $component
-      and $service.Spec.Labels["com.aegisops.lab.trial-run-id"]
-        == $trial_run_id
-      and $service.Spec.Mode.Replicated.Replicas == 1
-      and (
-        [
-          $service.Endpoint.Spec.Ports[]
-          | select(
-              .Name == "app-port"
-              and .PublishedPort == $port
-              and .TargetPort == $port
-            )
-        ]
-        | length == 1
-      )
-    ' <<<"${service_metadata}" >/dev/null \
-    || fail "Shuffle action service does not match the reviewed lab contract"
-
+  replicas="$(
+    jq -er '
+      .[0].Spec.Mode.Replicated.Replicas
+      | select(type == "number" and . >= 1 and floor == .)
+    ' <<<"${service_metadata}"
+  )" || return 1
   task_ids="$(
     docker_lab service ps \
       --filter desired-state=running \
       --quiet \
-      "${shuffle_action_service_id}"
-  )"
-  [[ "$(wc -w <<<"${task_ids}")" -eq 1 ]] \
-    || fail "Shuffle action service does not have exactly one running task"
-  task_metadata="$(docker_lab inspect "${task_ids}")"
-  jq -e '
-    length == 1 and all(.[]; .Status.State == "running")
-  ' <<<"${task_metadata}" >/dev/null \
-    || fail "Shuffle action task is not running"
+      "${service_id}" 2>/dev/null
+  )" || return 1
+  [[ "$(wc -w <<<"${task_ids}")" -eq "${replicas}" ]] || return 1
+  # shellcheck disable=SC2086
+  task_metadata="$(docker_lab inspect ${task_ids} 2>/dev/null)" || return 1
+  jq -e \
+    --arg service_id "${service_id}" \
+    --argjson replicas "${replicas}" '
+      length == $replicas
+      and all(.[];
+        .ServiceID == $service_id
+        and .DesiredState == "running"
+        and .Status.State == "running"
+        and (
+          (.Status.ContainerStatus.ContainerID // "")
+          | type == "string" and length > 0
+        )
+      )
+    ' <<<"${task_metadata}" >/dev/null || return 1
   task_container_ids="$(
-    jq -er '
-      [.[].Status.ContainerStatus.ContainerID | select(length > 0)]
-      | if length == 1 then .[]
-        else error("expected one Shuffle action task container")
-        end
-    ' <<<"${task_metadata}"
-  )"
-  container_metadata="$(docker_lab inspect "${task_container_ids}")"
+    jq -er '.[].Status.ContainerStatus.ContainerID' <<<"${task_metadata}"
+  )" || return 1
+  # shellcheck disable=SC2086
+  container_metadata="$(
+    docker_lab inspect ${task_container_ids} 2>/dev/null
+  )" || return 1
   pinned_image_id="$(
     docker_lab image inspect \
       "${shuffle_tools_immutable_ref}" \
-      --format '{{.Id}}'
-  )"
-  jq -e --arg image_id "${pinned_image_id}" '
-    length == 1 and all(.[]; .Image == $image_id)
-  ' <<<"${container_metadata}" >/dev/null \
-    || fail "Shuffle action task did not use the reviewed image ID"
+      --format '{{.Id}}' 2>/dev/null
+  )" || return 1
+  jq -e \
+    --arg image_id "${pinned_image_id}" \
+    --argjson replicas "${replicas}" '
+      length == $replicas and all(.[]; .Image == $image_id)
+    ' <<<"${container_metadata}" >/dev/null
+}
+
+derive_reviewed_shuffle_action_network_id() {
+  local worker_metadata
+  local network_ids
+  local network_id
+  local network_metadata
+
+  [[ -n "${shuffle_worker_service_id}" ]] || return 1
+  worker_metadata="$(
+    docker_lab service inspect "${shuffle_worker_service_id}" 2>/dev/null
+  )" || return 1
+  network_ids="$(
+    jq -er '
+      [.[0].Spec.Networks[]?.Target
+        | select(type == "string" and length > 0)]
+      | unique
+      | if length > 0 then .[]
+        else error("worker service has no execution-network candidates")
+        end
+    ' <<<"${worker_metadata}"
+  )" || return 1
+  # shellcheck disable=SC2086
+  network_metadata="$(docker_lab network inspect ${network_ids} 2>/dev/null)" \
+    || return 1
+  network_id="$(
+    jq -er '
+      [
+        .[]
+        | select(
+            .Name == "shuffle_swarm_executions"
+            and .Scope == "swarm"
+            and .Driver == "overlay"
+            and .Ingress == false
+            and (.Id | type == "string" and length > 0)
+          )
+        | .Id
+      ]
+      | unique
+      | if length == 1 then .[0]
+        else error("expected one reviewed worker execution network")
+        end
+    ' <<<"${network_metadata}"
+  )" || return 1
+  printf '%s\n' "${network_id}"
+}
+
+shuffle_action_unowned_service_matches_contract() {
+  local service_metadata="$1"
+  local network_id="$2"
+
+  jq -e \
+    --arg service_name "${shuffle_action_service}" \
+    --arg callback_url "${shuffle_backend_url}" \
+    --arg network_id "${network_id}" '
+      length == 1
+      and (.[0].ID | type == "string" and length > 0)
+      and .[0].Spec.Name == $service_name
+      and ((.[0].Spec.Labels // {}) | type == "object")
+      and ((.[0].Spec.Labels // {})
+        | has("com.aegisops.lab.phase") | not)
+      and ((.[0].Spec.Labels // {})
+        | has("com.aegisops.lab.component") | not)
+      and ((.[0].Spec.Labels // {})
+        | has("com.aegisops.lab.trial-run-id") | not)
+      and (
+        .[0].Spec.TaskTemplate.ContainerSpec.Image
+        | type == "string" and length > 0 and (test("\\s") | not)
+      )
+      and (
+        [.[0].Spec.TaskTemplate.ContainerSpec.Env[]?
+          | select(startswith("CALLBACK_URL="))] as $callbacks
+        | ($callbacks | length) == 1
+          and $callbacks[0] == ("CALLBACK_URL=" + $callback_url)
+      )
+      and (
+        [.[0].Spec.Networks[]?.Target] | unique
+      ) == [$network_id]
+      and ((.[0].Spec.EndpointSpec.Ports // []) as $ports
+        | ($ports | length) == 1
+        and $ports[0].Name == "app-port"
+        and $ports[0].Protocol == "tcp"
+        and $ports[0].PublishMode == "ingress"
+        and ($ports[0].PublishedPort
+          | type == "number" and . > 0 and floor == .)
+        and ($ports[0].TargetPort
+          | type == "number" and . > 0 and floor == .))
+    ' <<<"${service_metadata}" >/dev/null
+}
+
+shuffle_action_service_observation_is_stable() {
+  local before_metadata="$1"
+  local after_metadata="$2"
+
+  jq -e -s '
+    .[0][0] as $before
+    | .[1][0] as $after
+    | $before.ID == $after.ID
+      and $before.Version.Index == $after.Version.Index
+      and (($before.Spec | del(.Labels)) == ($after.Spec | del(.Labels)))
+  ' \
+    <(printf '%s\n' "${before_metadata}") \
+    <(printf '%s\n' "${after_metadata}") \
+    >/dev/null
+}
+
+shuffle_action_service_matches_attempted_claim() {
+  local before_metadata="$1"
+  local after_metadata="$2"
+
+  jq -e -s \
+    --arg service_id "${shuffle_action_service_id}" \
+    --arg trial_run_id "${trial_run_id}" '
+      .[0][0] as $before
+      | .[1][0] as $after
+      | $before.ID == $service_id
+        and $after.ID == $service_id
+        and $after.Version.Index > $before.Version.Index
+        and (
+          ($after.Spec.Labels // {})
+          == (
+            ($before.Spec.Labels // {})
+            + {
+                "com.aegisops.lab.phase": "67.4",
+                "com.aegisops.lab.component": "shuffle-action-image",
+                "com.aegisops.lab.trial-run-id": $trial_run_id
+              }
+          )
+        )
+        and (($after.Spec | del(.Labels)) == ($before.Spec | del(.Labels)))
+    ' \
+    <(printf '%s\n' "${before_metadata}") \
+    <(printf '%s\n' "${after_metadata}") \
+    >/dev/null
+}
+
+assert_reviewed_shuffle_action_service() {
+  local service_metadata
+  local named_metadata
+
+  [[ "${shuffle_action_owned}" == true ]] \
+    && [[ -n "${shuffle_action_service_id}" ]] \
+    && [[ -n "${shuffle_action_service_image}" ]] \
+    && [[ -n "${shuffle_action_service_port}" ]] \
+    && [[ -n "${shuffle_action_network_id}" ]] \
+    || fail "Shuffle action service is not owned by the current trial"
+  service_metadata="$(
+    docker_lab service inspect "${shuffle_action_service_id}" 2>/dev/null
+  )" || fail "owned Shuffle action service disappeared"
+  named_metadata="$(
+    docker_lab service inspect "${shuffle_action_service}" 2>/dev/null
+  )" || fail "Shuffle action service name no longer resolves to the owned service"
+  jq -e \
+    --arg service_id "${shuffle_action_service_id}" \
+    --arg service_name "${shuffle_action_service}" \
+    --arg service_image "${shuffle_action_service_image}" \
+    --arg trial_run_id "${trial_run_id}" \
+    --arg callback_url "${shuffle_backend_url}" \
+    --arg network_id "${shuffle_action_network_id}" \
+    --argjson port "${shuffle_action_service_port}" '
+      length == 1
+      and .[0].ID == $service_id
+      and .[0].Spec.Name == $service_name
+      and .[0].Spec.TaskTemplate.ContainerSpec.Image == $service_image
+      and .[0].Spec.Labels["com.aegisops.lab.phase"] == "67.4"
+      and .[0].Spec.Labels["com.aegisops.lab.component"]
+        == "shuffle-action-image"
+      and .[0].Spec.Labels["com.aegisops.lab.trial-run-id"] == $trial_run_id
+      and (
+        [.[0].Spec.TaskTemplate.ContainerSpec.Env[]?
+          | select(startswith("CALLBACK_URL="))] as $callbacks
+        | ($callbacks | length) == 1
+          and $callbacks[0] == ("CALLBACK_URL=" + $callback_url)
+      )
+      and ([.[0].Spec.Networks[]?.Target] | unique) == [$network_id]
+      and ((.[0].Spec.EndpointSpec.Ports // []) as $ports
+        | ($ports | length) == 1
+        and $ports[0].Name == "app-port"
+        and $ports[0].Protocol == "tcp"
+        and $ports[0].PublishMode == "ingress"
+        and $ports[0].PublishedPort == $port
+        and ($ports[0].TargetPort
+          | type == "number" and . > 0 and floor == .))
+    ' <<<"${service_metadata}" >/dev/null \
+    || fail "Shuffle action service does not match the reviewed lab contract"
+  jq -e \
+    --arg service_id "${shuffle_action_service_id}" '
+      length == 1 and .[0].ID == $service_id
+    ' <<<"${named_metadata}" >/dev/null \
+    || fail "Shuffle action service name now resolves to a replacement service"
+  shuffle_action_runtime_matches_reviewed_image \
+    "${shuffle_action_service_id}" "${service_metadata}" \
+    || fail "Shuffle action tasks did not retain the reviewed image ID"
 }
 
 assert_shuffle_action_service_absent() {
@@ -191,107 +363,245 @@ assert_shuffle_action_service_absent() {
 
 ensure_reviewed_shuffle_action_service() {
   local attempt
+  local candidate_id=""
+  local current_metadata=""
+  local previous_metadata=""
+  local owned_metadata
+  local service_version
+  local stable=false
 
   assert_repository_snapshot
   [[ "${shuffle_action_preflight_absent}" == true ]] \
     || fail "Shuffle action service absence was not established before startup"
-  for attempt in {1..60}; do
-    if docker_lab network inspect "${shuffle_action_network}" >/dev/null 2>&1; then
-      break
-    fi
-    sleep 1
-  done
-  docker_lab network inspect "${shuffle_action_network}" >/dev/null 2>&1 \
-    || fail "Shuffle execution network was not initialized"
-
-  ! docker_lab service inspect "${shuffle_action_service}" >/dev/null 2>&1 \
-    || fail "Shuffle action service appeared after the preflight absence check"
-
-  shuffle_action_service_id="$(docker_lab service create \
-    --detach=true \
-    --quiet \
-    --name "${shuffle_action_service}" \
-    --label com.aegisops.lab.phase=67.4 \
-    --label com.aegisops.lab.component=shuffle-action-image \
-    --label "com.aegisops.lab.trial-run-id=${trial_run_id}" \
-    --network "${shuffle_action_network}" \
-    --publish "${shuffle_action_publish_spec}" \
-    --replicas 1 \
-    --restart-condition any \
-    --log-driver json-file \
-    --log-opt max-size=10m \
-    --env "SHUFFLE_APP_EXPOSED_PORT=${shuffle_action_service_port}" \
-    --env SHUFFLE_SWARM_CONFIG=run \
-    --env SHUFFLE_LOGS_DISABLED=true \
-    --env "CALLBACK_URL=${shuffle_backend_url}" \
-    --env "BASE_URL=${shuffle_backend_url}" \
-    --env DOCKER_API_VERSION=1.40 \
-    --env SHUFFLE_APP_SDK_TIMEOUT=300 \
-    --env TZ=Europe/Amsterdam \
-    "${shuffle_tools_immutable_ref}")"
-  [[ -n "${shuffle_action_service_id}" ]] \
-    || fail "Shuffle action service creation did not return a service ID"
-  shuffle_action_owned=true
-
   for attempt in {1..120}; do
-    if [[ "$(
-      docker_lab service ps \
-        --filter desired-state=running \
-        --format '{{.CurrentState}}' \
-        "${shuffle_action_service_id}" 2>/dev/null \
-        | sed -n '/^Running /p' \
-        | wc -l \
-        | tr -d ' '
-    )" -eq 1 ]]; then
+    if shuffle_action_network_id="$(
+      derive_reviewed_shuffle_action_network_id
+    )"; then
       break
     fi
     sleep 1
   done
+  [[ -n "${shuffle_action_network_id}" ]] \
+    || fail "Shuffle worker execution network did not stabilize"
+  for attempt in {1..120}; do
+    if ! current_metadata="$(
+      docker_lab service inspect "${shuffle_action_service}" 2>/dev/null
+    )"; then
+      if [[ -n "${candidate_id}" ]]; then
+        fail "Shuffle action service disappeared before ownership was claimed"
+      fi
+      sleep 1
+      continue
+    fi
+    if ! shuffle_action_unowned_service_matches_contract \
+      "${current_metadata}" "${shuffle_action_network_id}"; then
+      fail "new Shuffle action service does not match the Orborus contract"
+    fi
+    shuffle_action_service_id="$(jq -er '.[0].ID' <<<"${current_metadata}")"
+    if [[ -z "${candidate_id}" ]]; then
+      candidate_id="${shuffle_action_service_id}"
+    elif [[ "${shuffle_action_service_id}" != "${candidate_id}" ]]; then
+      fail "Shuffle action service was replaced before ownership was claimed"
+    fi
+    if ! shuffle_action_runtime_matches_reviewed_image \
+      "${shuffle_action_service_id}" "${current_metadata}"; then
+      sleep 1
+      continue
+    fi
+    if [[ -n "${previous_metadata}" ]] \
+      && shuffle_action_service_observation_is_stable \
+        "${previous_metadata}" "${current_metadata}"; then
+      stable=true
+      break
+    fi
+    previous_metadata="${current_metadata}"
+    sleep 1
+  done
+  [[ "${stable}" == true ]] \
+    || fail "Shuffle action service did not reach a stable unowned state"
+  shuffle_action_service_image="$(
+    jq -er '.[0].Spec.TaskTemplate.ContainerSpec.Image' \
+      <<<"${current_metadata}"
+  )"
+  shuffle_action_service_port="$(
+    jq -er '
+      [.[0].Spec.EndpointSpec.Ports[]? | select(.Name == "app-port")]
+      | if length == 1 then .[0].PublishedPort
+        else error("expected one app-port")
+        end
+    ' <<<"${current_metadata}"
+  )"
+  service_version="$(jq -er '.[0].Version.Index' <<<"${current_metadata}")"
+  if ! python3 "${swarm_service_labeler}" \
+    --docker-context "${AEGISOPS_LAB_DOCKER_CONTEXT}" \
+    --service-id "${shuffle_action_service_id}" \
+    --expected-version "${service_version}" \
+    --expected-name "${shuffle_action_service}" \
+    --expected-image "${shuffle_action_service_image}" \
+    --allow-observed-image-reference-after-runtime-id-verification \
+    --label "com.aegisops.lab.phase=67.4" \
+    --label "com.aegisops.lab.component=shuffle-action-image" \
+    --label "com.aegisops.lab.trial-run-id=${trial_run_id}" \
+    >/dev/null; then
+    if owned_metadata="$(
+      docker_lab service inspect "${shuffle_action_service_id}" 2>/dev/null
+    )" && shuffle_action_service_matches_attempted_claim \
+      "${current_metadata}" "${owned_metadata}" \
+      && shuffle_action_runtime_matches_reviewed_image \
+        "${shuffle_action_service_id}" "${owned_metadata}"; then
+      shuffle_action_owned=true
+      assert_reviewed_shuffle_action_service
+      return
+    fi
+    fail "failed to claim the Orborus-created Shuffle action service"
+  fi
+  shuffle_action_owned=true
   assert_reviewed_shuffle_action_service
 }
 
-remove_reviewed_shuffle_action_service() {
+wait_for_exact_swarm_service_removal() {
+  local service_id="$1"
   local attempt
-  local owned_service_id
-  local service_metadata
+  local task_container_ids
 
-  [[ "${shuffle_action_owned}" == true ]] \
-    && [[ -n "${shuffle_action_service_id}" ]] \
-    || return
-  owned_service_id="${shuffle_action_service_id}"
-  if ! service_metadata="$(
-    docker_lab service inspect "${owned_service_id}" 2>/dev/null
-  )"; then
-    return
-  fi
-  jq -e \
-    --arg service_id "${owned_service_id}" \
-    --arg trial_run_id "${trial_run_id}" \
-    --arg image "${shuffle_tools_immutable_ref}" '
-    .[0].ID == $service_id
-    and .[0].Spec.Labels["com.aegisops.lab.phase"] == "67.4"
-    and .[0].Spec.Labels["com.aegisops.lab.component"]
-      == "shuffle-action-image"
-    and .[0].Spec.Labels["com.aegisops.lab.trial-run-id"] == $trial_run_id
-    and .[0].Spec.TaskTemplate.ContainerSpec.Image == $image
-  ' <<<"${service_metadata}" >/dev/null \
-    || fail "refusing to remove an unowned Shuffle action service"
-  docker_lab service rm "${owned_service_id}" >/dev/null
   for attempt in {1..60}; do
-    if [[ -z "$(
+    if docker_lab service inspect "${service_id}" >/dev/null 2>&1; then
+      sleep 1
+      continue
+    fi
+    if ! task_container_ids="$(
       docker_lab ps \
         --all \
         --quiet \
-        --filter \
-          "label=com.docker.swarm.service.id=${owned_service_id}"
-    )" ]]; then
-      shuffle_action_owned=false
-      shuffle_action_service_id=""
-      return
+        --filter "label=com.docker.swarm.service.id=${service_id}"
+    )"; then
+      sleep 1
+      continue
     fi
+    [[ -z "${task_container_ids}" ]] && return
     sleep 1
   done
-  fail "Shuffle action service tasks did not stop during cleanup"
+  echo "BLOCKED: Swarm service ${service_id} tasks did not stop during cleanup" >&2
+  return 1
+}
+
+capture_reviewed_shuffle_action_cleanup_candidate() {
+  local candidate_id
+  local current_spec
+  local network_id="${shuffle_action_network_id}"
+  local service_image
+  local service_metadata
+
+  [[ "${shuffle_action_preflight_absent}" == true ]] || return
+  if [[ -n "${shuffle_action_service_id}" ]]; then
+    candidate_id="${shuffle_action_service_id}"
+    service_metadata="$(
+      docker_lab service inspect "${candidate_id}" 2>/dev/null
+    )" || return
+  else
+    service_metadata="$(
+      docker_lab service inspect "${shuffle_action_service}" 2>/dev/null
+    )" || return
+    candidate_id="$(jq -er '.[0].ID' <<<"${service_metadata}")" || return 1
+  fi
+  [[ "${candidate_id}" =~ ^[a-z0-9]{12,64}$ ]] || return 1
+  jq -e \
+    --arg service_id "${candidate_id}" \
+    --arg service_name "${shuffle_action_service}" '
+      length == 1
+      and .[0].ID == $service_id
+      and .[0].Spec.Name == $service_name
+    ' <<<"${service_metadata}" >/dev/null || return 1
+  if [[ -z "${network_id}" ]]; then
+    network_id="$(derive_reviewed_shuffle_action_network_id)" || return 1
+  fi
+  if [[ "${shuffle_action_owned}" == true ]]; then
+    jq -e \
+      --arg service_id "${candidate_id}" \
+      --arg service_image "${shuffle_action_service_image}" \
+      --arg trial_run_id "${trial_run_id}" '
+        .[0].ID == $service_id
+        and .[0].Spec.TaskTemplate.ContainerSpec.Image == $service_image
+        and .[0].Spec.Labels["com.aegisops.lab.phase"] == "67.4"
+        and .[0].Spec.Labels["com.aegisops.lab.component"]
+          == "shuffle-action-image"
+        and .[0].Spec.Labels["com.aegisops.lab.trial-run-id"]
+          == $trial_run_id
+      ' <<<"${service_metadata}" >/dev/null || return 1
+    shuffle_action_runtime_matches_reviewed_image \
+      "${candidate_id}" "${service_metadata}" || return 1
+  else
+    shuffle_action_unowned_service_matches_contract \
+      "${service_metadata}" "${network_id}" || return 1
+    service_image="$(
+      jq -er '.[0].Spec.TaskTemplate.ContainerSpec.Image' \
+        <<<"${service_metadata}"
+    )" || return 1
+    [[ "${service_image}" == "${shuffle_tools_image}" ]] || return 1
+  fi
+  current_spec="$(jq -cS '.[0].Spec' <<<"${service_metadata}")" || return 1
+  shuffle_action_service_id="${candidate_id}"
+  shuffle_action_network_id="${network_id}"
+  shuffle_action_cleanup_candidate_id="${candidate_id}"
+  shuffle_action_cleanup_candidate_spec="${current_spec}"
+}
+
+remove_reviewed_shuffle_action_service() {
+  local current_spec
+  local named_metadata
+  local service_metadata
+
+  [[ -n "${shuffle_action_cleanup_candidate_id}" ]] || return
+  service_metadata="$(
+    docker_lab service inspect \
+      "${shuffle_action_cleanup_candidate_id}" 2>/dev/null
+  )" || {
+    if ! wait_for_exact_swarm_service_removal \
+      "${shuffle_action_cleanup_candidate_id}"; then
+      return 1
+    fi
+    if named_metadata="$(
+      docker_lab service inspect "${shuffle_action_service}" 2>/dev/null
+    )"; then
+      echo "BLOCKED: a replacement Shuffle action service appeared during cleanup" >&2
+      return 1
+    fi
+    shuffle_action_cleanup_candidate_id=""
+    shuffle_action_cleanup_candidate_spec=""
+    return
+  }
+  current_spec="$(jq -cS '.[0].Spec' <<<"${service_metadata}")" || return 1
+  [[ "${current_spec}" == "${shuffle_action_cleanup_candidate_spec}" ]] \
+    || {
+      echo "BLOCKED: refusing to remove a changed Shuffle action service" >&2
+      return 1
+    }
+  jq -e \
+    --arg service_id "${shuffle_action_cleanup_candidate_id}" \
+    --arg service_name "${shuffle_action_service}" '
+      length == 1
+      and .[0].ID == $service_id
+      and .[0].Spec.Name == $service_name
+    ' <<<"${service_metadata}" >/dev/null || {
+      echo "BLOCKED: refusing to remove a replaced Shuffle action service" >&2
+      return 1
+    }
+  docker_lab service rm "${shuffle_action_cleanup_candidate_id}" >/dev/null
+  wait_for_exact_swarm_service_removal \
+    "${shuffle_action_cleanup_candidate_id}"
+  if named_metadata="$(
+    docker_lab service inspect "${shuffle_action_service}" 2>/dev/null
+  )"; then
+    echo "BLOCKED: a replacement Shuffle action service appeared during cleanup" >&2
+    return 1
+  fi
+  shuffle_action_owned=false
+  shuffle_action_service_id=""
+  shuffle_action_service_image=""
+  shuffle_action_service_port=""
+  shuffle_action_network_id=""
+  shuffle_action_cleanup_candidate_id=""
+  shuffle_action_cleanup_candidate_spec=""
 }
 
 configured_shuffle_worker_immutable_ref() {
@@ -397,11 +707,194 @@ shuffle_worker_service_matches_attempted_claim() {
     >/dev/null
 }
 
+resolve_reviewed_shuffle_worker_network_id() {
+  local service_id="$1"
+  local attempt
+  local network_id
+  local network_metadata
+  local service_metadata
+
+  for attempt in {1..120}; do
+    if ! service_metadata="$(
+      docker_lab service inspect "${service_id}" 2>/dev/null
+    )"; then
+      echo "BLOCKED: Shuffle worker service ID disappeared before network stabilization" >&2
+      return 1
+    fi
+    if ! shuffle_worker_service_is_unowned_candidate \
+      "${service_metadata}" "${service_id}"; then
+      echo "BLOCKED: Shuffle worker service identity or ownership changed before network stabilization" >&2
+      return 1
+    fi
+    if ! network_id="$(
+      jq -er '
+        (.[0].Spec.TaskTemplate.Networks // []) as $networks
+        | if (($networks | type) != "array") then
+            error("worker task networks are not an array")
+          elif ($networks | length) == 0 then "pending"
+          elif (
+            ($networks | length) == 1
+            and (($networks[0] | type) == "object")
+            and (
+              $networks[0].Target
+              | type == "string" and test("^[a-z0-9]{12,64}$")
+            )
+          ) then $networks[0].Target
+          else error("expected one worker task network target")
+        end
+      ' <<<"${service_metadata}" 2>/dev/null
+    )"; then
+      echo "BLOCKED: Shuffle worker task network specification is invalid" >&2
+      return 1
+    fi
+    if [[ "${network_id}" == "pending" ]]; then
+      sleep 1
+      continue
+    fi
+    if ! network_metadata="$(
+      docker_lab network inspect "${network_id}" 2>/dev/null
+    )" || ! jq -e \
+      --arg network_id "${network_id}" \
+      --arg network_name "${shuffle_worker_network}" '
+        length == 1
+        and .[0].Id == $network_id
+        and .[0].Name == $network_name
+        and .[0].Scope == "swarm"
+        and .[0].Driver == "overlay"
+      ' <<<"${network_metadata}" >/dev/null; then
+      echo "BLOCKED: Shuffle worker task network is not the expected Swarm overlay" >&2
+      return 1
+    fi
+    printf '%s\n' "${network_id}"
+    return
+  done
+  echo "BLOCKED: Shuffle worker overlay network was not created" >&2
+  return 1
+}
+
+shuffle_worker_service_is_unowned_candidate() {
+  local service_metadata="$1"
+  local service_id="$2"
+
+  jq -e \
+    --arg service_id "${service_id}" \
+    --arg service_name "${shuffle_worker_service}" \
+    --arg service_image "${shuffle_worker_immutable_ref}" '
+      length == 1
+      and .[0].ID == $service_id
+      and ($service_id | test("^[a-z0-9]{12,64}$"))
+      and (
+        .[0].Version.Index
+        | type == "number" and . >= 1 and floor == .
+      )
+      and .[0].Spec.Name == $service_name
+      and .[0].Spec.TaskTemplate.ContainerSpec.Image == $service_image
+      and (
+        (.[0].Spec.Labels // {}) as $labels
+        | ($labels | type == "object") and ($labels | length) == 0
+      )
+    ' <<<"${service_metadata}" >/dev/null
+}
+
+wait_for_stable_reviewed_shuffle_worker_service() {
+  local service_id="$1"
+  local expected_network_id="$2"
+  local required_nonlabel_spec="${3:-}"
+  local attempt
+  local current_nonlabel_spec
+  local current_version
+  local network_metadata
+  local network_state
+  local previous_nonlabel_spec=""
+  local previous_version=""
+  local service_metadata
+
+  for attempt in {1..120}; do
+    if ! network_metadata="$(
+      docker_lab network inspect "${expected_network_id}" 2>/dev/null
+    )" || ! jq -e \
+      --arg network_id "${expected_network_id}" \
+      --arg network_name "${shuffle_worker_network}" '
+        length == 1
+        and .[0].Id == $network_id
+        and .[0].Name == $network_name
+        and .[0].Scope == "swarm"
+        and .[0].Driver == "overlay"
+      ' <<<"${network_metadata}" >/dev/null; then
+      echo "BLOCKED: Shuffle worker overlay network identity changed before ownership" >&2
+      return 1
+    fi
+    if ! service_metadata="$(
+      docker_lab service inspect "${service_id}" 2>/dev/null
+    )"; then
+      echo "BLOCKED: Shuffle worker service ID disappeared before ownership" >&2
+      return 1
+    fi
+    if ! shuffle_worker_service_is_unowned_candidate \
+      "${service_metadata}" "${service_id}"; then
+      echo "BLOCKED: Shuffle worker service identity or ownership changed before claim" >&2
+      return 1
+    fi
+    if ! network_state="$(
+      jq -er --arg network_id "${expected_network_id}" '
+        (.[0].Spec.TaskTemplate.Networks // []) as $networks
+        | if (($networks | type) != "array") then "invalid"
+          elif ($networks | length) == 0 then "pending"
+          elif (
+            ($networks | length) == 1
+            and (($networks[0] | type) == "object")
+            and $networks[0].Target == $network_id
+          ) then "ready"
+          else "invalid"
+          end
+      ' <<<"${service_metadata}" 2>/dev/null
+    )"; then
+      echo "BLOCKED: cannot inspect Shuffle worker task networks" >&2
+      return 1
+    fi
+    if [[ "${network_state}" == "pending" ]]; then
+      previous_version=""
+      previous_nonlabel_spec=""
+      sleep 1
+      continue
+    fi
+    if [[ "${network_state}" != "ready" ]]; then
+      echo "BLOCKED: Shuffle worker task networks do not match the expected overlay" >&2
+      return 1
+    fi
+    current_version="$(jq -er '.[0].Version.Index' <<<"${service_metadata}")"
+    current_nonlabel_spec="$(
+      jq -cS '.[0].Spec | del(.Labels)' <<<"${service_metadata}"
+    )"
+    if [[ -n "${required_nonlabel_spec}" ]] \
+      && [[ "${current_nonlabel_spec}" != "${required_nonlabel_spec}" ]]; then
+      echo "BLOCKED: Shuffle worker non-label specification changed before retry" >&2
+      return 1
+    fi
+    if [[ "${current_version}" == "${previous_version}" ]] \
+      && [[ "${current_nonlabel_spec}" == "${previous_nonlabel_spec}" ]]; then
+      printf '%s\n' "${service_metadata}"
+      return
+    fi
+    previous_version="${current_version}"
+    previous_nonlabel_spec="${current_nonlabel_spec}"
+    sleep 1
+  done
+  echo "BLOCKED: Shuffle worker service did not reach a stable network specification" >&2
+  return 1
+}
+
 claim_reviewed_shuffle_worker_service() {
   local service_metadata="$1"
+  local claim_attempt
+  local claim_rc
+  local expected_network_id
+  local owned_nonlabel_spec
+  local retry_version
   local service_id
   local service_image
   local service_version
+  local stable_nonlabel_spec
   local owned_metadata
 
   if [[ "${shuffle_worker_owned}" == true ]]; then
@@ -427,6 +920,12 @@ claim_reviewed_shuffle_worker_service() {
     echo "BLOCKED: new Shuffle worker service has no stable service ID" >&2
     return 1
   fi
+  if [[ -n "${shuffle_worker_service_id}" ]] \
+    && [[ "${shuffle_worker_service_id}" != "${service_id}" ]]; then
+    echo "BLOCKED: Shuffle worker service ID was replaced before ownership" >&2
+    return 1
+  fi
+  shuffle_worker_service_id="${service_id}"
   if ! service_image="$(
     jq -er '.[0].Spec.TaskTemplate.ContainerSpec.Image' \
       <<<"${service_metadata}"
@@ -447,26 +946,65 @@ claim_reviewed_shuffle_worker_service() {
     echo "BLOCKED: new Shuffle worker service has no stable service version" >&2
     return 1
   fi
-  shuffle_worker_service_id="${service_id}"
-  if ! python3 "${swarm_service_labeler}" \
-    --docker-context "${AEGISOPS_LAB_DOCKER_CONTEXT}" \
-    --service-id "${service_id}" \
-    --expected-version "${service_version}" \
-    --expected-name "${shuffle_worker_service}" \
-    --expected-image "${shuffle_worker_immutable_ref}" \
-    --label "com.aegisops.lab.phase=67.4" \
-    --label "com.aegisops.lab.component=shuffle-worker-image" \
-    --label "com.aegisops.lab.trial-run-id=${trial_run_id}" \
-    >/dev/null; then
+  if ! expected_network_id="$(
+    resolve_reviewed_shuffle_worker_network_id "${service_id}"
+  )"; then
+    return 1
+  fi
+  if ! service_metadata="$(
+    wait_for_stable_reviewed_shuffle_worker_service \
+      "${service_id}" "${expected_network_id}"
+  )"; then
+    return 1
+  fi
+  stable_nonlabel_spec="$(
+    jq -cS '.[0].Spec | del(.Labels)' <<<"${service_metadata}"
+  )"
+
+  for claim_attempt in 1 2; do
+    service_version="$(jq -er '.[0].Version.Index' <<<"${service_metadata}")"
+    if python3 "${swarm_service_labeler}" \
+      --docker-context "${AEGISOPS_LAB_DOCKER_CONTEXT}" \
+      --service-id "${service_id}" \
+      --expected-version "${service_version}" \
+      --expected-name "${shuffle_worker_service}" \
+      --expected-image "${shuffle_worker_immutable_ref}" \
+      --label "com.aegisops.lab.phase=67.4" \
+      --label "com.aegisops.lab.component=shuffle-worker-image" \
+      --label "com.aegisops.lab.trial-run-id=${trial_run_id}" \
+      >/dev/null 2>&1; then
+      claim_rc=0
+      break
+    else
+      claim_rc=$?
+    fi
     if owned_metadata="$(
       docker_lab service inspect "${shuffle_worker_service_id}" 2>/dev/null
     )" && shuffle_worker_service_matches_attempted_claim \
       "${service_metadata}" "${owned_metadata}"; then
       shuffle_worker_owned=true
+      echo "BLOCKED: Shuffle worker ownership helper failed after applying labels" >&2
+      return 1
     fi
-    echo "BLOCKED: failed to label the new Shuffle worker service" >&2
-    return 1
-  fi
+    if [[ "${claim_attempt}" -ge 2 ]]; then
+      echo "BLOCKED: failed to label the new Shuffle worker service (exit ${claim_rc})" >&2
+      return 1
+    fi
+    if ! service_metadata="$(
+      wait_for_stable_reviewed_shuffle_worker_service \
+        "${service_id}" \
+        "${expected_network_id}" \
+        "${stable_nonlabel_spec}"
+    )"; then
+      echo "BLOCKED: refusing to retry an unstable Shuffle worker ownership claim" >&2
+      return 1
+    fi
+    retry_version="$(jq -er '.[0].Version.Index' <<<"${service_metadata}")"
+    if [[ "${retry_version}" -le "${service_version}" ]]; then
+      echo "BLOCKED: refusing to retry a Shuffle worker claim without a newer stable version" >&2
+      return 1
+    fi
+  done
   shuffle_worker_owned=true
   if ! owned_metadata="$(
     docker_lab service inspect "${shuffle_worker_service_id}"
@@ -478,78 +1016,113 @@ claim_reviewed_shuffle_worker_service() {
     echo "BLOCKED: Shuffle worker service did not retain trial ownership labels" >&2
     return 1
   fi
+  owned_nonlabel_spec="$(
+    jq -cS '.[0].Spec | del(.Labels)' <<<"${owned_metadata}"
+  )"
+  if [[ "${owned_nonlabel_spec}" != "${stable_nonlabel_spec}" ]]; then
+    echo "BLOCKED: Shuffle worker service changed outside ownership labels" >&2
+    return 1
+  fi
+}
+
+capture_reviewed_shuffle_worker_cleanup_candidate() {
+  local candidate_id
+  local current_spec
+  local service_metadata
+
+  [[ "${shuffle_worker_preflight_absent}" == true ]] || return
+  if [[ -z "${shuffle_worker_immutable_ref}" ]]; then
+    shuffle_worker_immutable_ref="$(
+      configured_shuffle_worker_immutable_ref
+    )" || return 1
+  fi
+  if [[ -n "${shuffle_worker_service_id}" ]]; then
+    candidate_id="${shuffle_worker_service_id}"
+    service_metadata="$(
+      docker_lab service inspect "${candidate_id}" 2>/dev/null
+    )" || return
+  else
+    service_metadata="$(
+      docker_lab service inspect "${shuffle_worker_service}" 2>/dev/null
+    )" || return
+    candidate_id="$(jq -er '.[0].ID' <<<"${service_metadata}")" || return 1
+  fi
+  [[ "${candidate_id}" =~ ^[a-z0-9]{12,64}$ ]] || return 1
+  if [[ "${shuffle_worker_owned}" == true ]]; then
+    shuffle_worker_service_is_trial_owned "${service_metadata}" || return 1
+  else
+    shuffle_worker_service_is_unowned_candidate \
+      "${service_metadata}" "${candidate_id}" || return 1
+  fi
+  current_spec="$(jq -cS '.[0].Spec' <<<"${service_metadata}")" || return 1
+  shuffle_worker_service_id="${candidate_id}"
+  shuffle_worker_cleanup_candidate_id="${candidate_id}"
+  shuffle_worker_cleanup_candidate_spec="${current_spec}"
+}
+
+capture_reviewed_shuffle_cleanup_candidates() {
+  local rc=0
+
+  capture_reviewed_shuffle_worker_cleanup_candidate || rc=1
+  capture_reviewed_shuffle_action_cleanup_candidate || rc=1
+  return "${rc}"
 }
 
 remove_reviewed_shuffle_worker_service() {
-  local attempt
-  local expected_image
+  local current_spec
+  local named_metadata
   local service_metadata
-  local service_image
-  local service_removed
-  local task_container_ids
 
-  if ! service_metadata="$(
+  [[ -n "${shuffle_worker_cleanup_candidate_id}" ]] || return
+  service_metadata="$(
+    docker_lab service inspect \
+      "${shuffle_worker_cleanup_candidate_id}" 2>/dev/null
+  )" || {
+    if ! wait_for_exact_swarm_service_removal \
+      "${shuffle_worker_cleanup_candidate_id}"; then
+      return 1
+    fi
+    if named_metadata="$(
+      docker_lab service inspect "${shuffle_worker_service}" 2>/dev/null
+    )"; then
+      echo "BLOCKED: a replacement Shuffle worker service appeared during cleanup" >&2
+      return 1
+    fi
+    shuffle_worker_cleanup_candidate_id=""
+    shuffle_worker_cleanup_candidate_spec=""
+    return
+  }
+  current_spec="$(jq -cS '.[0].Spec' <<<"${service_metadata}")" || return 1
+  [[ "${current_spec}" == "${shuffle_worker_cleanup_candidate_spec}" ]] \
+    || {
+      echo "BLOCKED: refusing to remove a changed Shuffle worker service" >&2
+      return 1
+    }
+  if [[ "${shuffle_worker_owned}" == true ]]; then
+    shuffle_worker_service_is_trial_owned "${service_metadata}" || {
+      echo "BLOCKED: refusing to remove a worker without trial ownership" >&2
+      return 1
+    }
+  else
+    shuffle_worker_service_is_unowned_candidate \
+      "${service_metadata}" "${shuffle_worker_cleanup_candidate_id}" || {
+        echo "BLOCKED: refusing to remove an unverified worker candidate" >&2
+        return 1
+      }
+  fi
+  docker_lab service rm "${shuffle_worker_cleanup_candidate_id}" >/dev/null
+  wait_for_exact_swarm_service_removal \
+    "${shuffle_worker_cleanup_candidate_id}"
+  if named_metadata="$(
     docker_lab service inspect "${shuffle_worker_service}" 2>/dev/null
   )"; then
-    return
-  fi
-  if ! expected_image="$(configured_shuffle_worker_immutable_ref)"; then
-    echo "BLOCKED: refusing to remove a Shuffle worker service without owned Orborus image evidence" >&2
+    echo "BLOCKED: a replacement Shuffle worker service appeared during cleanup" >&2
     return 1
   fi
-  if ! shuffle_worker_service_is_trial_owned "${service_metadata}"; then
-    if [[ "${shuffle_worker_owned}" == true ]] \
-      || [[ "${shuffle_worker_preflight_absent}" != true ]]; then
-      echo "BLOCKED: refusing to remove a Shuffle worker service without current-trial ownership" >&2
-      return 1
-    fi
-    shuffle_worker_immutable_ref="${expected_image}"
-    if ! claim_reviewed_shuffle_worker_service "${service_metadata}"; then
-      echo "BLOCKED: initial Shuffle worker cleanup claim did not complete" >&2
-    fi
-    if [[ -z "${shuffle_worker_service_id}" ]] \
-      || ! service_metadata="$(
-        docker_lab service inspect "${shuffle_worker_service_id}" 2>/dev/null
-      )" \
-      || ! shuffle_worker_service_is_trial_owned "${service_metadata}"; then
-      echo "BLOCKED: refusing to claim an unverified Shuffle worker service during cleanup" >&2
-      return 1
-    fi
-    shuffle_worker_owned=true
-  fi
-  service_image="$(
-    jq -er '.[0].Spec.TaskTemplate.ContainerSpec.Image' \
-      <<<"${service_metadata}"
-  )"
-  if [[ "${service_image}" != "${expected_image}" ]]; then
-    echo "BLOCKED: refusing to remove a Shuffle worker service with an unreviewed image" >&2
-    return 1
-  fi
-
-  docker_lab service rm "${shuffle_worker_service_id}" >/dev/null
-  for attempt in {1..60}; do
-    service_removed=false
-    if ! docker_lab service inspect \
-      "${shuffle_worker_service_id}" >/dev/null 2>&1; then
-      service_removed=true
-    fi
-    if ! task_container_ids="$(
-      docker_lab ps \
-        --all \
-        --quiet \
-        --filter \
-          "label=com.docker.swarm.service.name=${shuffle_worker_service}"
-    )"; then
-      sleep 1
-      continue
-    fi
-    if [[ "${service_removed}" == true && -z "${task_container_ids}" ]]; then
-      return
-    fi
-    sleep 1
-  done
-  echo "BLOCKED: Shuffle worker service tasks did not stop during cleanup" >&2
-  return 1
+  shuffle_worker_owned=false
+  shuffle_worker_service_id=""
+  shuffle_worker_cleanup_candidate_id=""
+  shuffle_worker_cleanup_candidate_spec=""
 }
 
 [[ -f "${evaluation}" ]] \
@@ -582,10 +1155,11 @@ evidence_output="${staging_dir}/evidence.json"
 final_evidence="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}.json"
 final_report="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}-report.json"
 final_artifacts="${AEGISOPS_LAB_EVIDENCE_DIR}/${trial_run_id}-artifacts"
+publication_manifest_candidate="${AEGISOPS_LAB_EVIDENCE_DIR}/.${trial_run_id}.manifest-candidate"
 cleaned=false
 publication_report_published=false
 publication_artifacts_published=false
-publication_manifest_moved=false
+publication_manifest_staged=false
 publication_manifest_published=false
 
 observed_now() {
@@ -736,24 +1310,52 @@ capture_reviewed_shuffle_worker_image() {
   )"
   shuffle_worker_service_is_trial_owned "${service_metadata}" \
     || fail "Shuffle worker service is not owned by the current trial"
-  task_ids="$(
-    docker_lab service ps \
-      --filter desired-state=running \
-      --quiet \
-      "${shuffle_worker_service}"
-  )"
-  [[ "$(wc -w <<<"${task_ids}")" -eq 1 ]] \
-    || fail "Shuffle worker service does not have exactly one running task"
-  # shellcheck disable=SC2086
-  task_metadata="$(docker_lab inspect ${task_ids})"
-  task_container_id="$(
-    jq -er '
-      [.[].Status.ContainerStatus.ContainerID | select(length > 0)]
-      | if length == 1 then .[]
-        else error("expected one Shuffle worker task container")
-        end
-    ' <<<"${task_metadata}"
-  )"
+  task_ids=""
+  task_metadata=""
+  task_container_id=""
+  for attempt in {1..120}; do
+    if ! task_ids="$(
+      docker_lab service ps \
+        --filter desired-state=running \
+        --quiet \
+        "${shuffle_worker_service_id}" 2>/dev/null
+    )"; then
+      sleep 1
+      continue
+    fi
+    if [[ "$(wc -w <<<"${task_ids}")" -ne 1 ]]; then
+      sleep 1
+      continue
+    fi
+    if ! task_metadata="$(docker_lab inspect "${task_ids}" 2>/dev/null)"; then
+      sleep 1
+      continue
+    fi
+    if task_container_id="$(
+      jq -er \
+        --arg task_id "${task_ids}" \
+        --arg service_id "${shuffle_worker_service_id}" '
+          if (
+            length == 1
+            and .[0].ID == $task_id
+            and .[0].ServiceID == $service_id
+            and .[0].DesiredState == "running"
+            and .[0].Status.State == "running"
+            and (
+              (.[0].Status.ContainerStatus.ContainerID // "")
+              | type == "string" and length > 0
+            )
+          ) then .[0].Status.ContainerStatus.ContainerID
+          else error("Shuffle worker task is not ready")
+          end
+        ' <<<"${task_metadata}" 2>/dev/null
+    )"; then
+      break
+    fi
+    sleep 1
+  done
+  [[ -n "${task_container_id}" ]] \
+    || fail "Shuffle worker service did not reach exactly one running task with a container ID"
   container_metadata="$(docker_lab inspect "${task_container_id}")"
   reviewed_image_id="$(
     docker_lab image inspect \
@@ -795,21 +1397,22 @@ capture_reviewed_shuffle_worker_image() {
 
 cleanup_on_exit() {
   local rc=$?
+  local cleanup_failed=false
   rm -f "${compose_render_output}" >/dev/null 2>&1 || true
-  remove_reviewed_shuffle_worker_service >/dev/null 2>&1 || true
-  remove_reviewed_shuffle_action_service >/dev/null 2>&1 || true
   if [[ "${cleaned}" != true ]]; then
-    "${LAB_DIR}/cleanup.sh" >/dev/null 2>&1 || true
+    capture_reviewed_shuffle_cleanup_candidates >/dev/null 2>&1 \
+      || cleanup_failed=true
+    "${LAB_DIR}/cleanup.sh" >/dev/null 2>&1 || cleanup_failed=true
+    remove_reviewed_shuffle_action_service >/dev/null 2>&1 \
+      || cleanup_failed=true
+    remove_reviewed_shuffle_worker_service >/dev/null 2>&1 \
+      || cleanup_failed=true
+  fi
+  if [[ "${cleanup_failed}" == true && "${rc}" -eq 0 ]]; then
+    rc=1
   fi
   if [[ "${rc}" -ne 0 ]]; then
     if [[ "${publication_manifest_published}" != true ]]; then
-      if [[ "${publication_manifest_moved}" == true ]] \
-        && [[ -f "${final_evidence}" ]] \
-        && [[ -d "${final_artifacts}" ]] \
-        && [[ ! -e "${final_artifacts}/evidence.json" ]]; then
-        mv "${final_evidence}" \
-          "${final_artifacts}/evidence.json" >/dev/null 2>&1 || true
-      fi
       if [[ "${publication_artifacts_published}" == true ]] \
         && [[ -d "${final_artifacts}" ]] \
         && [[ ! -e "${staging_dir}" ]]; then
@@ -819,6 +1422,18 @@ cleanup_on_exit() {
         && [[ -f "${final_report}" ]] \
         && [[ -d "${staging_dir}" ]]; then
         mv "${final_report}" "${report_output}" >/dev/null 2>&1 || true
+      fi
+      if [[ "${publication_manifest_staged}" == true ]] \
+        && [[ -f "${publication_manifest_candidate}" ]]; then
+        if [[ -d "${staging_dir}" ]] && [[ ! -e "${evidence_output}" ]]; then
+          mv "${publication_manifest_candidate}" \
+            "${evidence_output}" >/dev/null 2>&1 \
+            || rm -f "${publication_manifest_candidate}" \
+              >/dev/null 2>&1 \
+            || true
+        else
+          rm -f "${publication_manifest_candidate}" >/dev/null 2>&1 || true
+        fi
       fi
     fi
     echo "BLOCKED: Phase 67.4 real-service E2E trial failed; no passing manifest was published" >&2
@@ -1095,11 +1710,20 @@ Path(sys.argv[2]).write_text(
 )
 PY
 
-run_reviewed_lab_command remove_reviewed_shuffle_action_service
+run_reviewed_lab_command capture_reviewed_shuffle_cleanup_candidates
 run_reviewed_lab_command "${LAB_DIR}/down.sh"
+run_reviewed_lab_command remove_reviewed_shuffle_action_service
+run_reviewed_lab_command remove_reviewed_shuffle_worker_service
+run_reviewed_lab_command assert_shuffle_action_service_absent
+run_reviewed_lab_command assert_shuffle_worker_service_absent
 restart_up_output="$(run_reviewed_lab_startup "${LAB_DIR}/up.sh" full)"
 printf '%s\n' "${restart_up_output}"
 retain_status_evidence "${restart_up_output}" "${restart_status_output}"
+capture_reviewed_shuffle_worker_image >/dev/null
+restart_shuffle_worker_image="${captured_shuffle_worker_image_json}"
+[[ "${restart_shuffle_worker_image}" == "${shuffle_worker_image}" ]] \
+  || fail "Shuffle worker service changed during restart verification"
+run_reviewed_lab_command ensure_reviewed_shuffle_action_service
 jq -cn \
   --slurpfile journey "${journey_output}" \
   --slurpfile report "${report_output}" '
@@ -1141,8 +1765,10 @@ jq -n \
   ' >"${evaluation_record_output}"
 record_step 15 "record_prerequisite_evaluation" "${evaluated_at}"
 
-run_reviewed_lab_command remove_reviewed_shuffle_worker_service
+run_reviewed_lab_command capture_reviewed_shuffle_cleanup_candidates
 run_reviewed_lab_command "${LAB_DIR}/cleanup.sh"
+run_reviewed_lab_command remove_reviewed_shuffle_action_service
+run_reviewed_lab_command remove_reviewed_shuffle_worker_service
 cleaned=true
 assert_repository_snapshot
 assert_compose_snapshot
@@ -1176,27 +1802,37 @@ assert_repository_snapshot
 python3 "${validator}" "${schema}" "${evidence_output}"
 assert_repository_snapshot
 
-for destination in "${final_evidence}" "${final_report}" "${final_artifacts}"; do
+for destination in \
+  "${final_evidence}" \
+  "${final_report}" \
+  "${final_artifacts}" \
+  "${publication_manifest_candidate}"; do
   [[ ! -e "${destination}" && ! -L "${destination}" ]] \
     || fail "publication destination already exists: ${destination}"
 done
 chmod 700 "${staging_dir}"
 find "${staging_dir}" -type f -exec chmod 600 {} +
+mv "${evidence_output}" "${publication_manifest_candidate}"
+publication_manifest_staged=true
 mv "${report_output}" "${final_report}"
 publication_report_published=true
 mv "${staging_dir}" "${final_artifacts}"
 publication_artifacts_published=true
-mv "${final_artifacts}/evidence.json" "${final_evidence}"
-publication_manifest_moved=true
 assert_repository_snapshot
 python3 "${validator}" \
   --published \
   "${schema}" \
-  "${final_evidence}" \
+  "${publication_manifest_candidate}" \
   "${final_report}" \
   "${final_artifacts}"
-chmod 400 "${final_evidence}"
+chmod 400 "${publication_manifest_candidate}"
+assert_repository_snapshot
+[[ ! -e "${final_evidence}" && ! -L "${final_evidence}" ]] \
+  || fail "publication destination appeared during validation: ${final_evidence}"
+ln "${publication_manifest_candidate}" "${final_evidence}"
 publication_manifest_published=true
+rm -f "${publication_manifest_candidate}" >/dev/null 2>&1 || true
+publication_manifest_staged=false
 trap - EXIT
 
 echo "PASS: Phase 67.4 real-service E2E trial completed"

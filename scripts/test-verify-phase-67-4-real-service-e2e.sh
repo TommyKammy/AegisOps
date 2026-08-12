@@ -6,6 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 schema="${repo_root}/control-plane/deployment/phase-67-integration-lab/e2e/evidence-manifest.schema.json"
 sample="${repo_root}/control-plane/deployment/phase-67-integration-lab/e2e/sample-evidence.json"
 validator="${repo_root}/control-plane/deployment/phase-67-integration-lab/e2e/validate_evidence_manifest.py"
+source_verifier="${repo_root}/scripts/verify-phase-67-4-real-service-e2e.sh"
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
 
@@ -71,6 +72,90 @@ assert_schema_fails_with() {
     }
 }
 
+source_fixture="${workdir}/source-verifier-fixture"
+source_fixture_lab="${source_fixture}/control-plane/deployment/phase-67-integration-lab"
+source_fixture_runner="${source_fixture_lab}/run-e2e-trial.sh"
+
+prepare_source_fixture() {
+  mkdir -p \
+    "${source_fixture}/control-plane/deployment" \
+    "${source_fixture_lab}"
+  ln -s "${repo_root}/README.md" "${source_fixture}/README.md"
+  ln -s "${repo_root}/docs" "${source_fixture}/docs"
+  ln -s \
+    "${repo_root}/control-plane/aegisops" \
+    "${source_fixture}/control-plane/aegisops"
+  ln -s \
+    "${repo_root}/control-plane/tests" \
+    "${source_fixture}/control-plane/tests"
+  for entry in e2e shuffle README.md RUNBOOK.md test-wazuh-intake.sh; do
+    ln -s \
+      "${repo_root}/control-plane/deployment/phase-67-integration-lab/${entry}" \
+      "${source_fixture_lab}/${entry}"
+  done
+}
+
+reset_source_fixture_runner() {
+  cp \
+    "${repo_root}/control-plane/deployment/phase-67-integration-lab/run-e2e-trial.sh" \
+    "${source_fixture_runner}"
+  chmod +x "${source_fixture_runner}"
+}
+
+replace_source_once() {
+  local old="$1"
+  local new="$2"
+  local path="$3"
+  python3 - "${old}" "${new}" "${path}" <<'PY'
+from pathlib import Path
+import sys
+
+old, new, raw_path = sys.argv[1:]
+path = Path(raw_path)
+source = path.read_text(encoding="utf-8")
+if source.count(old) != 1:
+    raise SystemExit(f"expected exactly one source match, found {source.count(old)}")
+path.write_text(source.replace(old, new, 1), encoding="utf-8")
+PY
+}
+
+replace_source_all() {
+  local old="$1"
+  local new="$2"
+  local path="$3"
+  python3 - "${old}" "${new}" "${path}" <<'PY'
+from pathlib import Path
+import sys
+
+old, new, raw_path = sys.argv[1:]
+path = Path(raw_path)
+source = path.read_text(encoding="utf-8")
+if old not in source:
+    raise SystemExit("source mutation target is missing")
+path.write_text(source.replace(old, new), encoding="utf-8")
+PY
+}
+
+assert_source_verifier_fails() {
+  local name="$1"
+  local expected="$2"
+  shift 2
+  reset_source_fixture_runner
+  "$@" "${source_fixture_runner}"
+  if AEGISOPS_REPO_ROOT_OVERRIDE="${source_fixture}" \
+    bash "${source_verifier}" \
+    >"${workdir}/${name}.out" 2>"${workdir}/${name}.err"; then
+    echo "self-test expected source verifier rejection for ${name}" >&2
+    exit 1
+  fi
+  grep -Fq -- "${expected}" "${workdir}/${name}.err" \
+    || {
+      cat "${workdir}/${name}.err" >&2
+      echo "self-test ${name} missed expected diagnostic: ${expected}" >&2
+      exit 1
+    }
+}
+
 python3 "${validator}" "${schema}" "${sample}"
 assert_schema_fails_with \
   reordered-current-journey \
@@ -96,6 +181,72 @@ assert_schema_fails_with \
   passed-ga-accepted \
   'schema profile, journey, and passed-verdict selection drifted' \
   '(.allOf[] | select(.if.properties.verdict.const == "integration_trial_passed_with_owned_limitations") | .then.properties.evaluation.properties.ga_accepted.const) = true'
+
+prepare_source_fixture
+
+assert_source_verifier_fails \
+  reintroduced-manual-action-service \
+  'contains forbidden text: docker_lab service create' \
+  replace_source_once \
+  'shuffle_action_service="shuffle-tools_1-2-0"' \
+  $'shuffle_action_service="shuffle-tools_1-2-0"\n# forbidden historical lifecycle: docker_lab service create'
+
+assert_source_verifier_fails \
+  reintroduced-fixed-action-port \
+  'contains forbidden text: shuffle_action_service_port=33334' \
+  replace_source_all \
+  'shuffle_action_service_port=""' \
+  'shuffle_action_service_port=33334'
+
+assert_source_verifier_fails \
+  removed-action-runtime-id-guard \
+  'missing required text: shuffle_action_runtime_matches_reviewed_image' \
+  replace_source_all \
+  'shuffle_action_runtime_matches_reviewed_image' \
+  'shuffle_action_runtime_check_removed'
+
+assert_source_verifier_fails \
+  removed-action-stability-guard \
+  'missing required text: shuffle_action_service_observation_is_stable' \
+  replace_source_all \
+  'shuffle_action_service_observation_is_stable' \
+  'shuffle_action_service_stability_check_removed'
+
+assert_source_verifier_fails \
+  removed-stop-before-remove-guard \
+  'exit cleanup must stop Orborus before exact-ID removal' \
+  replace_source_once \
+  $'    "${LAB_DIR}/cleanup.sh" >/dev/null 2>&1 || cleanup_failed=true\n    remove_reviewed_shuffle_action_service >/dev/null 2>&1 \\\n      || cleanup_failed=true' \
+  $'    remove_reviewed_shuffle_action_service >/dev/null 2>&1 \\\n      || cleanup_failed=true\n    "${LAB_DIR}/cleanup.sh" >/dev/null 2>&1 || cleanup_failed=true'
+
+assert_source_verifier_fails \
+  removed-restart-worker-cleanup \
+  'restart must stop, remove exact IDs, start, and re-claim in order' \
+  replace_source_once \
+  $'run_reviewed_lab_command remove_reviewed_shuffle_action_service\nrun_reviewed_lab_command remove_reviewed_shuffle_worker_service\nrun_reviewed_lab_command assert_shuffle_action_service_absent' \
+  $'run_reviewed_lab_command remove_reviewed_shuffle_action_service\n# worker cleanup guard removed\nrun_reviewed_lab_command assert_shuffle_action_service_absent'
+
+assert_source_verifier_fails \
+  published-manifest-before-validation \
+  'manifest must be validated before its atomic publication' \
+  replace_source_once \
+  'mv "${evidence_output}" "${publication_manifest_candidate}"' \
+  $'mv "${evidence_output}" "${publication_manifest_candidate}"\nln "${publication_manifest_candidate}" "${final_evidence}" # forbidden early commit'
+
+assert_source_verifier_fails \
+  duplicate-callback-accepted \
+  'missing required text: select(startswith("CALLBACK_URL="))' \
+  replace_source_all \
+  'select(startswith("CALLBACK_URL="))' \
+  'select(. == ("CALLBACK_URL=" + $callback_url))'
+
+assert_source_verifier_fails \
+  wrong-callback-accepted \
+  'missing required text: $callbacks[0] == ("CALLBACK_URL=" + $callback_url)' \
+  replace_source_all \
+  '$callbacks[0] == ("CALLBACK_URL=" + $callback_url)' \
+  '($callbacks[0] | startswith("CALLBACK_URL="))'
+
 runtime_images="${workdir}/runtime-images.json"
 jq '
   .snapshot.images

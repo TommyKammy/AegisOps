@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import hashlib
 import importlib.util
+from io import StringIO
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -3564,6 +3567,129 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertEqual(result["version_before"], 2342226)
         self.assertEqual(result["version_after"], 2342227)
 
+    @staticmethod
+    def _swarm_labeler_arguments(
+        expected_image: str,
+        *,
+        allow_observed_image: bool = False,
+    ) -> list[str]:
+        arguments = [
+            "--docker-context",
+            "colima",
+            "--service-id",
+            "wo7au34eetl5tc0id1jzxxu9e",
+            "--expected-version",
+            "2342226",
+            "--expected-name",
+            "shuffle-tools_1-2-0",
+            "--expected-image",
+            expected_image,
+            "--label",
+            "com.aegisops.lab.phase=67.4",
+        ]
+        if allow_observed_image:
+            arguments.append(
+                "--allow-observed-image-reference-after-runtime-id-verification"
+            )
+        return arguments
+
+    def test_swarm_labeler_rejects_tag_only_image_without_runtime_id_flag(
+        self,
+    ) -> None:
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as raised:
+            swarm_labeler.parse_args(
+                self._swarm_labeler_arguments("frikky/shuffle:app_sdk")
+            )
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("digest-pinned image reference", stderr.getvalue())
+
+    def test_swarm_labeler_accepts_exact_tag_only_image_with_runtime_id_flag(
+        self,
+    ) -> None:
+        observed_image = "frikky/shuffle:app_sdk"
+        args = swarm_labeler.parse_args(
+            self._swarm_labeler_arguments(
+                observed_image,
+                allow_observed_image=True,
+            )
+        )
+        service = _hybrid_network_worker_service()
+        service["Spec"]["Name"] = args.expected_name
+        service["Spec"]["TaskTemplate"]["ContainerSpec"][
+            "Image"
+        ] = observed_image
+        api = _FakeDockerEngine(service)
+
+        swarm_labeler.claim_service_labels(
+            api,
+            service_id=args.service_id,
+            expected_version=args.expected_version,
+            expected_name=args.expected_name,
+            expected_image=args.expected_image,
+            labels=dict(args.label),
+        )
+
+        self.assertTrue(
+            args.allow_observed_image_reference_after_runtime_id_verification
+        )
+        self.assertIsNotNone(api.updated_spec)
+        assert api.updated_spec is not None
+        self.assertEqual(
+            api.updated_spec["TaskTemplate"]["ContainerSpec"]["Image"],
+            observed_image,
+        )
+
+    def test_swarm_labeler_rejects_empty_or_whitespace_observed_image(
+        self,
+    ) -> None:
+        for invalid_image in ("", " ", "frikky/shuffle:app sdk"):
+            with self.subTest(expected_image=invalid_image):
+                stderr = StringIO()
+                with redirect_stderr(stderr), self.assertRaises(
+                    SystemExit
+                ) as raised:
+                    swarm_labeler.parse_args(
+                        self._swarm_labeler_arguments(
+                            invalid_image,
+                            allow_observed_image=True,
+                        )
+                    )
+
+                self.assertEqual(raised.exception.code, 2)
+                self.assertIn(
+                    "observed image reference",
+                    stderr.getvalue(),
+                )
+
+    def test_swarm_labeler_still_enforces_exact_observed_image(self) -> None:
+        observed_image = "frikky/shuffle:app_sdk"
+        args = swarm_labeler.parse_args(
+            self._swarm_labeler_arguments(
+                observed_image,
+                allow_observed_image=True,
+            )
+        )
+        service = _hybrid_network_worker_service()
+        service["Spec"]["Name"] = args.expected_name
+        service["Spec"]["TaskTemplate"]["ContainerSpec"][
+            "Image"
+        ] = "frikky/shuffle:app_sdk-replaced"
+        api = _FakeDockerEngine(service)
+
+        with self.assertRaises(swarm_labeler.SwarmLabelUpdateError):
+            swarm_labeler.claim_service_labels(
+                api,
+                service_id=args.service_id,
+                expected_version=args.expected_version,
+                expected_name=args.expected_name,
+                expected_image=args.expected_image,
+                labels=dict(args.label),
+            )
+
+        self.assertIsNone(api.updated_spec)
+
     def test_swarm_label_claim_rejects_stale_or_preowned_service(self) -> None:
         service = _hybrid_network_worker_service()
         arguments = {
@@ -3809,24 +3935,35 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn("capture_reviewed_shuffle_worker_image()", runner)
         self.assertIn("ensure_reviewed_shuffle_action_service()", runner)
         self.assertIn("assert_reviewed_shuffle_action_service()", runner)
-        self.assertIn('--name "${shuffle_action_service}"', runner)
         self.assertIn('"${shuffle_tools_immutable_ref}"', runner)
-        service_create = runner.index("docker_lab service create")
-        service_create_end = runner.index(
-            '"${shuffle_tools_immutable_ref}"',
-            service_create,
+        self.assertNotIn("docker_lab service create", runner)
+        action_ensure_start = runner.index(
+            "ensure_reviewed_shuffle_action_service()"
         )
-        service_create_block = runner[service_create:service_create_end + 40]
-        self.assertIn('"${shuffle_tools_immutable_ref}"', service_create_block)
-        self.assertNotIn('"${shuffle_tools_image}"', service_create_block)
-        self.assertIn("--quiet", service_create_block)
+        action_ensure_end = runner.index(
+            "remove_reviewed_shuffle_action_service()",
+            action_ensure_start,
+        )
+        action_ensure = runner[action_ensure_start:action_ensure_end]
+        self.assertIn(
+            'docker_lab service inspect "${shuffle_action_service}"',
+            action_ensure,
+        )
+        self.assertIn(
+            "shuffle_action_service_observation_is_stable",
+            action_ensure,
+        )
+        self.assertIn(
+            "shuffle_action_runtime_matches_reviewed_image",
+            action_ensure,
+        )
+        self.assertIn(
+            "--allow-observed-image-reference-after-runtime-id-verification",
+            action_ensure,
+        )
         self.assertIn(
             'com.aegisops.lab.trial-run-id=${trial_run_id}',
-            service_create_block,
-        )
-        self.assertIn(
-            'shuffle_action_service_id="$(docker_lab service create',
-            runner,
+            action_ensure,
         )
         self.assertIn(".Image == $image_id", runner)
         self.assertIn(
@@ -3905,7 +4042,86 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             worker_capture.index("claim_reviewed_shuffle_worker_service"),
             worker_capture.index('service_image="$('),
         )
+        worker_readiness_start = worker_capture.index('task_ids=""')
+        worker_readiness_end = worker_capture.index(
+            'container_metadata="$(',
+            worker_readiness_start,
+        )
+        worker_readiness = worker_capture[
+            worker_readiness_start:worker_readiness_end
+        ]
+        self.assertIn("for attempt in {1..120}; do", worker_readiness)
+        self.assertIn(
+            '"${shuffle_worker_service_id}" 2>/dev/null',
+            worker_readiness,
+        )
+        self.assertNotIn(
+            '"${shuffle_worker_service}"',
+            worker_readiness,
+        )
+        self.assertIn('.[0].ServiceID == $service_id', worker_readiness)
+        self.assertIn('.[0].DesiredState == "running"', worker_readiness)
+        self.assertIn('.[0].Status.State == "running"', worker_readiness)
+        self.assertIn(
+            '(.[0].Status.ContainerStatus.ContainerID // "")',
+            worker_readiness,
+        )
+        self.assertIn(
+            "Shuffle worker service did not reach exactly one running task "
+            "with a container ID",
+            worker_readiness,
+        )
+        self.assertLess(
+            worker_readiness.index('docker_lab service ps \\'),
+            worker_readiness.index('docker_lab inspect "${task_ids}"'),
+        )
+        self.assertLess(
+            worker_readiness.index('.Status.State == "running"'),
+            worker_readiness.index(
+                "Shuffle worker service did not reach exactly one running task"
+            ),
+        )
         claim_start = runner.index("claim_reviewed_shuffle_worker_service()")
+        stabilization_start = runner.index(
+            "resolve_reviewed_shuffle_worker_network_id()"
+        )
+        worker_stabilization = runner[stabilization_start:claim_start]
+        self.assertIn(
+            'shuffle_worker_network="shuffle_swarm_executions"',
+            runner,
+        )
+        self.assertIn(
+            '.[0].Spec.TaskTemplate.Networks',
+            worker_stabilization,
+        )
+        self.assertIn(
+            'docker_lab network inspect "${network_id}"',
+            worker_stabilization,
+        )
+        self.assertIn(
+            '--arg network_name "${shuffle_worker_network}"',
+            worker_stabilization,
+        )
+        self.assertIn(
+            'shuffle_worker_service_is_unowned_candidate',
+            worker_stabilization,
+        )
+        self.assertIn(
+            '"${current_version}" == "${previous_version}"',
+            worker_stabilization,
+        )
+        self.assertIn(
+            '"${current_nonlabel_spec}" == "${previous_nonlabel_spec}"',
+            worker_stabilization,
+        )
+        self.assertIn(
+            '[[ "${network_state}" == "pending" ]]',
+            worker_stabilization,
+        )
+        self.assertIn(
+            "Shuffle worker service did not reach a stable network specification",
+            worker_stabilization,
+        )
         claim_end = runner.index(
             "remove_reviewed_shuffle_worker_service()",
             claim_start,
@@ -3930,11 +4146,27 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "shuffle_worker_service_matches_attempted_claim",
             worker_claim,
         )
+        self.assertIn("for claim_attempt in 1 2; do", worker_claim)
+        self.assertIn(
+            '"${stable_nonlabel_spec}"',
+            worker_claim,
+        )
+        self.assertIn(
+            '[[ "${retry_version}" -le "${service_version}" ]]',
+            worker_claim,
+        )
+        self.assertIn(
+            "refusing to retry a Shuffle worker claim without a newer stable version",
+            worker_claim,
+        )
         self.assertLess(
             worker_claim.index('shuffle_worker_service_id="${service_id}"'),
             worker_claim.index('owned_metadata="$('),
         )
         self.assertIn("remove_reviewed_shuffle_worker_service()", runner)
+        capture_action_start = runner.index(
+            "capture_reviewed_shuffle_action_cleanup_candidate()"
+        )
         remove_action_start = runner.index(
             "remove_reviewed_shuffle_action_service()"
         )
@@ -3942,90 +4174,151 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             "configured_shuffle_worker_immutable_ref()",
             remove_action_start,
         )
+        capture_action = runner[capture_action_start:remove_action_start]
         remove_action = runner[remove_action_start:remove_action_end]
-        self.assertLess(
-            remove_action.index('[[ "${shuffle_action_owned}" == true ]]'),
-            remove_action.index(
-                'docker_lab service inspect "${owned_service_id}"'
-            ),
-        )
-        self.assertLess(
-            remove_action.index(
-                'com.aegisops.lab.trial-run-id"] == $trial_run_id'
-            ),
-            remove_action.index('docker_lab service rm "${owned_service_id}"'),
-        )
-        self.assertLess(
-            remove_action.index(
-                ".Spec.TaskTemplate.ContainerSpec.Image == $image"
-            ),
-            remove_action.index('docker_lab service rm "${owned_service_id}"'),
+        self.assertIn(
+            'shuffle_action_cleanup_candidate_id="${candidate_id}"',
+            capture_action,
         )
         self.assertIn(
-            'label=com.docker.swarm.service.id=${owned_service_id}',
+            'shuffle_action_cleanup_candidate_spec="${current_spec}"',
+            capture_action,
+        )
+        self.assertIn(
+            '[[ "${service_image}" == "${shuffle_tools_image}" ]]',
+            capture_action,
+        )
+        self.assertLess(
+            remove_action.index(
+                '[[ "${current_spec}" == '
+                '"${shuffle_action_cleanup_candidate_spec}" ]]'
+            ),
+            remove_action.index(
+                'docker_lab service rm '
+                '"${shuffle_action_cleanup_candidate_id}"'
+            ),
+        )
+        self.assertIn(
+            '--arg service_image "${shuffle_action_service_image}"',
+            runner,
+        )
+        self.assertIn(
+            "Shuffle action service name now resolves to a replacement service",
+            runner,
+        )
+        self.assertIn(
+            'wait_for_exact_swarm_service_removal',
             remove_action,
         )
-        remove_start = runner.index("remove_reviewed_shuffle_worker_service()")
+        capture_worker_start = runner.index(
+            "capture_reviewed_shuffle_worker_cleanup_candidate()"
+        )
+        remove_start = runner.index(
+            "remove_reviewed_shuffle_worker_service()",
+            capture_worker_start,
+        )
         remove_end = runner.index(
             '[[ -f "${evaluation}" ]]',
             remove_start,
         )
+        capture_worker = runner[capture_worker_start:remove_start]
         remove_worker = runner[remove_start:remove_end]
-        self.assertLess(
-            remove_worker.index("shuffle_worker_service_is_trial_owned"),
-            remove_worker.index('docker_lab service rm "${shuffle_worker_service_id}"'),
+        self.assertIn(
+            'shuffle_worker_cleanup_candidate_id="${candidate_id}"',
+            capture_worker,
+        )
+        self.assertIn(
+            'shuffle_worker_cleanup_candidate_spec="${current_spec}"',
+            capture_worker,
         )
         self.assertLess(
             remove_worker.index(
-                '[[ "${shuffle_worker_preflight_absent}" != true ]]'
+                '[[ "${current_spec}" == '
+                '"${shuffle_worker_cleanup_candidate_spec}" ]]'
             ),
-            remove_worker.index("claim_reviewed_shuffle_worker_service"),
-        )
-        self.assertLess(
-            remove_worker.index('shuffle_worker_immutable_ref="${expected_image}"'),
-            remove_worker.index("claim_reviewed_shuffle_worker_service"),
+            remove_worker.index(
+                'docker_lab service rm '
+                '"${shuffle_worker_cleanup_candidate_id}"'
+            ),
         )
         self.assertIn(
-            "refusing to claim an unverified Shuffle worker service during cleanup",
+            'shuffle_worker_service_is_unowned_candidate',
+            remove_worker,
+        )
+        self.assertNotIn(
+            "claim_reviewed_shuffle_worker_service",
             remove_worker,
         )
         self.assertIn(
-            '[[ "${service_image}" != "${expected_image}" ]]',
-            runner,
+            "refusing to remove an unverified worker candidate",
+            remove_worker,
         )
         self.assertIn(
-            'docker_lab service rm "${shuffle_worker_service_id}"',
+            'label=com.docker.swarm.service.id=${service_id}',
             runner,
         )
-        self.assertIn(
+        self.assertNotIn(
             'label=com.docker.swarm.service.name=${shuffle_worker_service}',
-            runner,
+            remove_worker,
         )
         exit_cleanup_start = runner.index("cleanup_on_exit()")
         exit_cleanup_end = runner.index("trap cleanup_on_exit EXIT")
         exit_cleanup = runner[exit_cleanup_start:exit_cleanup_end]
         self.assertLess(
-            exit_cleanup.index("remove_reviewed_shuffle_worker_service"),
+            exit_cleanup.index("capture_reviewed_shuffle_cleanup_candidates"),
             exit_cleanup.index('"${LAB_DIR}/cleanup.sh"'),
         )
+        self.assertLess(
+            exit_cleanup.index('"${LAB_DIR}/cleanup.sh"'),
+            exit_cleanup.index("remove_reviewed_shuffle_action_service"),
+        )
+        self.assertLess(
+            exit_cleanup.index("remove_reviewed_shuffle_action_service"),
+            exit_cleanup.index("remove_reviewed_shuffle_worker_service"),
+        )
+        restart_down = runner.index(
+            'run_reviewed_lab_command "${LAB_DIR}/down.sh"'
+        )
+        restart_remove_action = runner.index(
+            "run_reviewed_lab_command remove_reviewed_shuffle_action_service",
+            restart_down,
+        )
+        restart_remove_worker = runner.index(
+            "run_reviewed_lab_command remove_reviewed_shuffle_worker_service",
+            restart_remove_action,
+        )
+        restart_up = runner.index(
+            'restart_up_output="$(run_reviewed_lab_startup',
+            restart_remove_worker,
+        )
+        restart_reclaim_worker = runner.index(
+            "capture_reviewed_shuffle_worker_image >/dev/null",
+            restart_up,
+        )
+        restart_reclaim_action = runner.index(
+            "run_reviewed_lab_command ensure_reviewed_shuffle_action_service",
+            restart_reclaim_worker,
+        )
+        self.assertLess(restart_down, restart_remove_action)
+        self.assertLess(restart_remove_action, restart_remove_worker)
+        self.assertLess(restart_remove_worker, restart_up)
+        self.assertLess(restart_up, restart_reclaim_worker)
+        self.assertLess(restart_reclaim_worker, restart_reclaim_action)
         normal_worker_cleanup = runner.rindex(
             "run_reviewed_lab_command remove_reviewed_shuffle_worker_service"
         )
         normal_compose_cleanup = runner.rindex(
             'run_reviewed_lab_command "${LAB_DIR}/cleanup.sh"'
         )
-        self.assertLess(normal_worker_cleanup, normal_compose_cleanup)
+        normal_action_cleanup = runner.rindex(
+            "run_reviewed_lab_command remove_reviewed_shuffle_action_service"
+        )
+        self.assertLess(normal_compose_cleanup, normal_action_cleanup)
+        self.assertLess(normal_action_cleanup, normal_worker_cleanup)
         self.assertIn('final_artifacts=', runner)
-        self.assertLess(
-            runner.index('mv "${report_output}" "${final_report}"'),
-            runner.index('mv "${final_artifacts}/evidence.json" "${final_evidence}"'),
-        )
-        self.assertLess(
-            runner.index('mv "${staging_dir}" "${final_artifacts}"'),
-            runner.index('mv "${final_artifacts}/evidence.json" "${final_evidence}"'),
-        )
         self.assertIn('publication_manifest_published=false', runner)
-        self.assertIn('publication_manifest_moved=false', runner)
+        self.assertIn('publication_manifest_staged=false', runner)
+        self.assertIn('publication_manifest_candidate=', runner)
         self.assertIn('no passing manifest was published', runner)
         self.assertIn('startup_status_output=', runner)
         self.assertIn('initial_status_output=', runner)
@@ -4163,25 +4456,39 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertLess(evidence_build, post_build_snapshot_check)
         self.assertLess(post_build_snapshot_check, evidence_validation)
         self.assertLess(evidence_validation, post_validation_snapshot_check)
-        final_manifest_move = runner.index(
-            'mv "${final_artifacts}/evidence.json" "${final_evidence}"'
+        manifest_candidate_move = runner.index(
+            'mv "${evidence_output}" "${publication_manifest_candidate}"'
         )
         final_manifest_validation = runner.index(
             "--published",
-            final_manifest_move,
+            manifest_candidate_move,
         )
-        self.assertLess(final_manifest_move, final_manifest_validation)
-        publication_complete = runner.index(
-            "publication_manifest_published=true",
+        final_manifest_commit = runner.index(
+            'ln "${publication_manifest_candidate}" "${final_evidence}"',
             final_manifest_validation,
         )
+        self.assertLess(
+            runner.index('mv "${report_output}" "${final_report}"'),
+            final_manifest_validation,
+        )
+        self.assertLess(
+            runner.index('mv "${staging_dir}" "${final_artifacts}"'),
+            final_manifest_validation,
+        )
+        self.assertLess(manifest_candidate_move, final_manifest_validation)
+        self.assertLess(final_manifest_validation, final_manifest_commit)
+        publication_complete = runner.index(
+            "publication_manifest_published=true",
+            final_manifest_commit,
+        )
         validation_block = runner[
-            final_manifest_validation:publication_complete
+            final_manifest_validation:final_manifest_commit
         ]
+        self.assertIn('"${publication_manifest_candidate}"', validation_block)
         self.assertIn('"${final_report}"', validation_block)
         self.assertIn('"${final_artifacts}"', validation_block)
         self.assertLess(
-            final_manifest_validation,
+            final_manifest_commit,
             publication_complete,
         )
         self.assertIn("status --porcelain=v1 --untracked-files=all", runner)
@@ -4238,6 +4545,192 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertLess(revalidation, dispatch)
         compose = (LAB_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
         self.assertIn("./e2e:/opt/aegisops/phase67-e2e:ro", compose)
+
+
+    def test_worker_claim_retries_only_a_newer_stable_unowned_version(
+        self,
+    ) -> None:
+        runner = (LAB_ROOT / "run-e2e-trial.sh").read_text(encoding="utf-8")
+        functions_start = runner.index(
+            "shuffle_worker_service_is_trial_owned()"
+        )
+        functions_end = runner.index(
+            "remove_reviewed_shuffle_worker_service()",
+            functions_start,
+        )
+        worker_functions = runner[functions_start:functions_end]
+        service_id = "worker12345678"
+        network_id = "network12345678"
+        image = "ghcr.io/shuffle/shuffle-worker:2.2.1@sha256:" + "9" * 64
+        trial_run_id = "phase67-e2e-test-0123456789ab"
+
+        def service_metadata(
+            version: int,
+            *,
+            owned: bool = False,
+            replicas: int = 1,
+        ) -> str:
+            labels = (
+                {
+                    "com.aegisops.lab.phase": "67.4",
+                    "com.aegisops.lab.component": "shuffle-worker-image",
+                    "com.aegisops.lab.trial-run-id": trial_run_id,
+                }
+                if owned
+                else {}
+            )
+            return json.dumps(
+                [
+                    {
+                        "ID": service_id,
+                        "Version": {"Index": version},
+                        "Spec": {
+                            "Name": "shuffle-workers",
+                            "Labels": labels,
+                            "Mode": {"Replicated": {"Replicas": replicas}},
+                            "Networks": [
+                                {"Target": "shuffle_swarm_executions"}
+                            ],
+                            "TaskTemplate": {
+                                "ContainerSpec": {"Image": image},
+                                "Networks": [{"Target": network_id}],
+                            },
+                        },
+                    }
+                ],
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+
+        network_metadata = json.dumps(
+            [
+                {
+                    "Id": network_id,
+                    "Name": "shuffle_swarm_executions",
+                    "Scope": "swarm",
+                    "Driver": "overlay",
+                }
+            ],
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        harness = f"""
+set -uo pipefail
+{worker_functions}
+shuffle_worker_service=shuffle-workers
+shuffle_worker_network=shuffle_swarm_executions
+shuffle_worker_immutable_ref="${{REVIEWED_IMAGE}}"
+shuffle_worker_preflight_absent=true
+shuffle_worker_owned=false
+shuffle_worker_service_id=""
+trial_run_id="${{TRIAL_RUN_ID}}"
+AEGISOPS_LAB_DOCKER_CONTEXT=test-context
+swarm_service_labeler=/unused/update_swarm_service_labels.py
+sleep() {{ :; }}
+docker_lab() {{
+  if [[ "$1" == network && "$2" == inspect ]]; then
+    printf '%s\n' "${{NETWORK_METADATA}}"
+    return
+  fi
+  if [[ "$1" == service && "$2" == inspect ]]; then
+    case "$(<"${{MODE_FILE}}")" in
+      initial) printf '%s\n' "${{STABLE_SERVICE}}" ;;
+      conflict) printf '%s\n' "${{CONFLICT_SERVICE}}" ;;
+      owned) printf '%s\n' "${{OWNED_SERVICE}}" ;;
+      *) return 1 ;;
+    esac
+    return
+  fi
+  return 1
+}}
+python3() {{
+  local calls
+  calls="$(<"${{CALLS_FILE}}")"
+  calls=$((calls + 1))
+  printf '%s\n' "${{calls}}" >"${{CALLS_FILE}}"
+  if [[ "${{calls}}" -eq 1 ]]; then
+    printf '%s\n' conflict >"${{MODE_FILE}}"
+    return 1
+  fi
+  printf '%s\n' owned >"${{MODE_FILE}}"
+  return 0
+}}
+claim_reviewed_shuffle_worker_service "${{INITIAL_SERVICE}}"
+rc=$?
+printf 'rc=%s owned=%s helper_calls=%s\n' \
+  "${{rc}}" "${{shuffle_worker_owned}}" "$(<"${{CALLS_FILE}}")"
+exit "${{rc}}"
+"""
+
+        def run_claim(
+            conflict_version: int,
+            *,
+            conflict_replicas: int = 1,
+            conflict_owned: bool = False,
+        ) -> subprocess.CompletedProcess[str]:
+            with TemporaryDirectory() as directory:
+                mode_file = Path(directory) / "mode"
+                calls_file = Path(directory) / "calls"
+                mode_file.write_text("initial\n", encoding="utf-8")
+                calls_file.write_text("0\n", encoding="utf-8")
+                return subprocess.run(
+                    ["bash", "-c", harness],
+                    cwd=REPO_ROOT,
+                    env={
+                        **os.environ,
+                        "MODE_FILE": str(mode_file),
+                        "CALLS_FILE": str(calls_file),
+                        "REVIEWED_IMAGE": image,
+                        "TRIAL_RUN_ID": trial_run_id,
+                        "NETWORK_METADATA": network_metadata,
+                        "INITIAL_SERVICE": service_metadata(41),
+                        "STABLE_SERVICE": service_metadata(42),
+                        "CONFLICT_SERVICE": service_metadata(
+                            conflict_version,
+                            owned=conflict_owned,
+                            replicas=conflict_replicas,
+                        ),
+                        "OWNED_SERVICE": service_metadata(
+                            max(conflict_version, 42) + 1,
+                            owned=True,
+                        ),
+                    },
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+
+        successful_retry = run_claim(43)
+        self.assertEqual(successful_retry.returncode, 0, successful_retry.stderr)
+        self.assertIn(
+            "rc=0 owned=true helper_calls=2",
+            successful_retry.stdout,
+        )
+
+        unchanged_version = run_claim(42)
+        self.assertNotEqual(unchanged_version.returncode, 0)
+        self.assertIn(
+            "without a newer stable version",
+            unchanged_version.stderr,
+        )
+        self.assertIn("helper_calls=1", unchanged_version.stdout)
+
+        changed_spec = run_claim(43, conflict_replicas=2)
+        self.assertNotEqual(changed_spec.returncode, 0)
+        self.assertIn(
+            "non-label specification changed before retry",
+            changed_spec.stderr,
+        )
+        self.assertIn("helper_calls=1", changed_spec.stdout)
+
+        preowned = run_claim(43, conflict_owned=True)
+        self.assertNotEqual(preowned.returncode, 0)
+        self.assertIn(
+            "ownership helper failed after applying labels",
+            preowned.stderr,
+        )
+        self.assertIn("helper_calls=1", preowned.stdout)
 
 
 if __name__ == "__main__":
