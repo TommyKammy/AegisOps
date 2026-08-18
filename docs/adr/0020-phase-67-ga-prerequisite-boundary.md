@@ -3,7 +3,7 @@
 - **Status**: Proposed
 - **Date**: 2026-08-12
 - **Owners**: AegisOps maintainers
-- **Related Baseline**: `docs/requirements-baseline.md`, `docs/auth-baseline.md`, `docs/retention-evidence-and-replay-readiness-baseline.md`, `docs/smb-footprint-and-deployment-profile-baseline.md`, `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`, `docs/phase-66-6-rc-supportability-proof.md`, `docs/phase-66-7-rc-authority-boundary-proof-pack.md`
+- **Related Baseline**: `docs/requirements-baseline.md`, `docs/auth-baseline.md`, `docs/retention-evidence-and-replay-readiness-baseline.md`, `docs/smb-footprint-and-deployment-profile-baseline.md`, `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`, `docs/phase-58-5-upgrade-rollback-plan-contract.md`, `docs/phase-65-3-release-channel-upgrade-manifest-contract.md`, `docs/phase-66-6-rc-supportability-proof.md`, `docs/phase-66-7-rc-authority-boundary-proof-pack.md`
 - **Product**: AegisOps
 - **Related Issues**: #1414, #1418
 - **Related ADRs**: `docs/adr/0011-phase-51-1-replacement-boundary.md`
@@ -118,13 +118,21 @@ If approved, this ADR would establish the following decision:
   additionally records the evidence revision and immutable evidence index.
 - The gate record must contain an attributable, immutable human GA decision
   event, not merely an assigned approver identity. The event records an explicit
-  outcome, decision timestamp, and justification or attestation, and binds the
-  approver identity and authority record to the gate identifier, intended launch
-  scope, evidence revision, and immutable input-evidence index. The completed
-  decision event receives its own immutable AegisOps record identity or version
-  as part of its atomic creation; it is not an input to the index that it binds.
-  Only an explicit `accepted` outcome satisfies GA. A missing, pending,
-  rejected, expired, superseded, or mismatched decision blocks acceptance.
+  outcome and justification or attestation and binds the approver identity and
+  authority record to the stable canonical gate-definition identity,
+  per-decision gate-record identifier, canonical intended launch-scope identity,
+  evidence revision, and immutable input-evidence index. Its AegisOps-recorded
+  `decision_at` and audit sequence must be assigned by the same authoritative
+  transaction, fence, or total-order boundary that atomically creates the event;
+  they cannot be caller-supplied, backdated, or future-dated relative to that
+  commit. The completed decision event receives its own immutable AegisOps
+  record identity or version as part of that atomic creation; it is not an input
+  to the index that it binds. If the boundary cannot assign authoritative time
+  and sequence at commit, or a future decision time is requested, the attempt
+  remains pending and must re-resolve every decision input and mutable-state head
+  at a later atomic attempt. Only an explicit `accepted` outcome satisfies GA. A
+  missing, pending, rejected, expired, superseded, or mismatched decision blocks
+  acceptance.
 - The immutable decision event is historical evidence, not current GA status by
   itself. AegisOps must maintain a GA-decision aggregate keyed by that immutable
   decision identity, with an append-only, non-forking lifecycle-transition chain
@@ -136,6 +144,30 @@ If approved, this ADR would establish the following decision:
   `effective_at`, attributable actor and authority reference, current lifecycle
   policy-head identity, rationale, and a successor decision identity when it
   supersedes the decision.
+- AegisOps must also maintain one authoritative GA-scope aggregate keyed by the
+  immutable canonical tuple of an AegisOps-owned stable GA gate-definition
+  identity and an AegisOps-owned canonical intended launch-scope identity. A
+  per-decision gate-record identifier, decision or evidence identifier, evidence
+  revision, attempt identifier, caller-minted scope identifier, or alias is not
+  part of that key. Canonical resolution of both identities must be bound inside
+  the same compare-and-append boundary; missing, ambiguous, or conflicting
+  resolution leaves the attempt pending. The aggregate's append-only,
+  non-forking current head must bind sequence and predecessor, the selected
+  decision identity and effective state, and the authoritative audit high-water
+  mark. Atomic creation of an `accepted` decision must compare the expected
+  scope-head predecessor and commit the decision event, its initial per-decision
+  head, the decision-time cohort, and the resulting scope head in one
+  transaction, fence, or total order. Replacing a current accepted decision must
+  also append its authorized superseding transition inside that boundary. A
+  concurrent or stale-predecessor attempt cannot commit `accepted`; it remains
+  pending and must repeat the complete gate-input and human-authority evaluation.
+  At most one decision for the canonical gate and launch scope may be current
+  and `accepted`; pending, rejected, superseded, and other historical aggregates
+  remain retained evidence. Every later transition that changes the selected
+  decision's effective status or successor must advance the scope head inside
+  the same authorized transition boundary; a missing or mismatched advance makes
+  current status `unavailable` rather than leaving an older acceptance
+  selectable.
 - GA-decision lifecycle-policy records and, when used,
   no-automatic-expiry-policy records must each form an append-only, non-forking
   aggregate with an authoritative current-state head. Each head must bind the
@@ -168,15 +200,18 @@ If approved, this ADR would establish the following decision:
 - Every authoritative evaluation that decides whether the gate currently
   permits a GA claim, and every API, UI, or generated release-status projection
   that presents such a current claim, must at its own AegisOps-recorded
-  `evaluated_at` resolve one snapshot-consistent aggregate containing the
-  decision event, complete transition chain, current head, and authoritative
-  audit high-water mark through `evaluated_at`, plus the current lifecycle and
-  applicable no-automatic-expiry policy heads. Only a current `accepted` and
-  unexpired decision head governed by current valid policy heads passes. A
-  missing, pending, rejected, expired, canceled, superseded, forked, gapped,
-  mismatched, not resolved through `evaluated_at`, or later-invalidated state or
-  policy fails closed. The current-status evaluation and projection must share a
-  snapshot, fencing boundary, or authoritative total order.
+  `evaluated_at` start from the canonical gate-and-launch-scope head and resolve
+  one snapshot-consistent selected decision aggregate containing its event,
+  complete transition chain, current head, and authoritative audit high-water
+  mark through `evaluated_at`, plus the current lifecycle and applicable
+  no-automatic-expiry policy heads. The scope head and selected decision identity
+  must match, and only a unique current `accepted` and unexpired decision head
+  governed by current valid policy heads passes. A missing, multiple-current,
+  pending, rejected, expired, canceled, superseded, forked, gapped, mismatched,
+  stale-predecessor, not resolved through `evaluated_at`, or later-invalidated
+  scope, decision, or policy state fails closed. The current-status evaluation
+  and projection must share a snapshot, fencing boundary, or authoritative total
+  order.
 - If an authoritative decision or policy head or audit high-water mark cannot be
   resolved, the evaluation must return an explicit non-accepted `unavailable`
   result and every current-status projection must preserve it; cached accepted
@@ -191,8 +226,9 @@ If approved, this ADR would establish the following decision:
   `evaluated_at` as historical evidence only and must not present that event as
   current GA status.
   A historical accepted event or earlier snapshot cannot substitute for a
-  current evaluation, and a superseded event can be evaluated only through its
-  separately identified successor.
+  current evaluation, an arbitrary favorable non-head aggregate cannot be
+  selected, and a superseded event can be evaluated only through its separately
+  identified successor.
 - The human GA approver is eligible only when the gate record references an
   AegisOps-owned, auditable role-assignment or explicit-delegation record that
   binds the attributable identity to GA release authority for the recorded
@@ -261,8 +297,10 @@ revision. The manifest must directly index:
 - controlled component-interruption, application-aware clean-target restore of
   an integrity-passed backup from that routine path, and recovery evidence with
   declared recovery targets,
-- exact-version upgrade and rollback rehearsal evidence with post-operation
-  smoke and authoritative-record-chain checks,
+- the current immutable supported-upgrade-path exact set and exact-version
+  upgrade and rollback rehearsal evidence for every compatible path claimed by
+  the launch scope, with post-operation smoke and authoritative-record-chain
+  checks,
 - monitoring, diagnostic, support-bundle, and redaction evidence, and
 - a current immutable, snapshot-consistent inventory of the authoritative
   AegisOps `known_limitation_ownership` record set, or an Accepted successor,
@@ -294,6 +332,21 @@ interval boundaries and cutoff inclusion, due-slot generation, any allowed
 lateness or grace, review deadline, and configuration-change trigger and
 ordering; an implementation or operator cannot invent a boundary or grace that
 closes a gap.
+
+Each cadence version must also bind the immutable governing Accepted deployment
+profile and parameter identities effective for the same subinterval and emit a
+machine-verifiable no-weaker comparison. Across that subinterval, every
+profile-required backup slot, review, and configuration-change trigger must map
+to a schedule obligation with no later final deadline, including grace, and no
+narrower protected-state, integrity, custody, retention, or review obligation.
+Grace is permitted only up to a maximum explicitly authorized by the governing
+profile. Missing, ambiguous, incomparable, omitted, later, less-frequent, or
+otherwise weaker obligations block GA; generic schedule approval cannot waive
+the profile. Any weakening requires an immutable separately Accepted ADR, or a
+requirements-baseline revision approved through that ADR process, that identifies
+the exact deviation, deployment class and launch scope, effective interval, and
+replacement profile identity. Such a deviation cannot apply retroactively,
+excuse an earlier miss, or widen the launch scope.
 
 The evidence must include a snapshot-consistent inventory of the authoritative
 backup-attempt, reviewed-configuration-change, and accountable-review records
@@ -342,6 +395,53 @@ configuration; generic environment equivalence is insufficient. These records
 remain subordinate operability evidence and do not establish a public recovery
 objective, infinite history, or an enterprise scheduling requirement.
 
+For every deployment class, the current launch-operability requirements head
+must bind a complete, ordered, immutable `supported_upgrade_path` exact set for
+the intended launch scope. Each claimed compatible direct path must have its own
+immutable path identity and bind the exact source and gate-target release,
+bundle, artifact, and configuration identities; release channel, deployment
+profile, and class; compatibility posture; migration or schema identity;
+required preflight and post-operation checks; backup and rollback mechanism; and
+exact rollback target and immutable required rollback-evidence schema and
+success-criteria identities. The set must record its count and approval
+provenance. Phase 65.3 packaging manifests may supply subordinate structure and
+input, but cannot establish the supported set or confer GA authority.
+
+Each claimed compatible sequence must bind one immutable sequence identity and
+an ordered list of immutable hop identities in the pre-run requirements set.
+Every hop definition must bind its exact source and target releases, artifacts,
+configurations, migration or schema identity, required success-criteria and
+evidence-schema identities, and required rollback checkpoint and exact target.
+The first source and final target must equal the sequence endpoints, and the
+final target must equal the gate target.
+
+The post-run manifest and immutable decision input index must bind each hop's
+observed input and resulting state, configuration, and schema digests and its
+produced upgrade, checkpoint, and rollback outcome evidence identities. They
+must prove that every prior target and observed output exactly match the next
+source and observed input and that every required checkpoint and rollback target
+succeeded across one continuous environment and state lineage. A separately
+Accepted sequence-equivalence rule may substitute only when it binds the exact
+predecessor output and successor input identities and does not weaken path,
+class, state, or configuration coverage. Skipped, reordered, independently
+executed, reset, reinstalled, state-discontinuous, or wrong-rollback-target hops
+cannot satisfy a sequence.
+
+The manifest's claimed compatible path identifiers must exactly equal that
+supported set and map to successful exact-version upgrade and rollback
+executions bound to the same path-specific pre-run target, continuous run
+lineage, class, environment, gate revision, and predeclared criteria. Missing,
+extra, floating, arbitrary, stale, superseded, incompatible, mismatched, failed,
+partial, or unexecuted claimed paths block GA.
+The post-run manifest and immutable decision input index, not the pre-run
+requirements head, must bind the produced upgrade and rollback outcome evidence
+identities.
+Incompatible or unsupported cases remain explicit owned limitations and need
+not be executed, and no unclaimed historical version pair or Cartesian product
+is required. This evidence does not establish silent or automatic upgrade,
+automatic rollback, zero-downtime behavior, a public SLA, or a fleet-wide
+upgrade capability.
+
 The limitation snapshot must bind the gate identifier and intended launch scope,
 its as-of audit or transaction boundary, the scope and applicability predicate,
 an immutable content or state identity, the complete ordered record-identifier
@@ -381,6 +481,19 @@ caller-supplied timestamp, Git author or committer date, or assertion created
 only in post-run output does not prove predeclaration. A plan, dry run,
 service-health result, CI result, or verifier result cannot by itself satisfy an
 executed evidence reference.
+
+Before any upgrade or rollback `started_at`, its immutable target record must
+also bind the current supported-upgrade-path exact-set identity and the selected
+path identity; for a sequence, it must bind the immutable ordered hop list. The
+target must bind the gate revision, deployment class and environment, exact
+source and gate target, migration or schema identity, success-criteria and
+evidence-schema identities, and exact rollback checkpoint and target. Every
+claimed path requires its own target and continuous run lineage, and every hop
+in a sequence must bind that same gate-revision target and lineage. A run, hop,
+or result cannot be assigned after execution, rebound to another path, imported
+from another revision, or reused across paths even when their endpoint versions
+match. Produced outcome identities remain post-run evidence and are not part of
+this pre-run target.
 
 For every deployment class, the gate must resolve before target declaration an
 immutable, independently accepted `launch_operability_requirements` record. It
@@ -473,19 +586,22 @@ mismatched review blocks acceptance.
 
 ### Decision-Time Mutable-State Cohort
 
-GA-decision lifecycle and applicable no-automatic-expiry policy state,
-environment-profile and equivalence state, launch-operability requirements,
-routine-backup schedule, path, attempt, change, custody, and retention state,
-support and upgrade ownership, the authoritative limitation registry and
-dispositions, and release-authority root and chain state form one decision-time
-mutable-state cohort. Each family must expose an AegisOps-owned current-state
-head or immutable snapshot bound to the gate identifier, intended launch scope,
-evidence revision, effective status or interval, predecessor and current
-lifecycle identities, review identity and time, and authoritative audit
-high-water mark. The decision event must bind one immutable cohort identity and
-the current policy-head identities; the specialized backup exact-set,
-limitation exact-set, policy-governance, and release-authority-chain requirements
-remain additive.
+GA-scope selection predecessor state, GA-decision lifecycle and applicable
+no-automatic-expiry policy state, environment-profile and equivalence state,
+launch-operability requirements and its supported-upgrade-path exact set,
+routine-backup profile or deviation, schedule, path, attempt, change, custody,
+and retention state, support and upgrade ownership, the authoritative
+limitation registry and dispositions, and release-authority root and chain state
+form one decision-time mutable-state cohort. Each family must expose an
+AegisOps-owned current-state head or immutable snapshot bound to the stable
+canonical gate-definition and intended launch-scope identities, the per-decision
+gate-record identity where applicable, evidence revision, effective status or
+interval, predecessor and current lifecycle identities, review identity and
+time, and authoritative audit high-water mark. The decision event must bind one
+immutable cohort identity, the expected scope-head predecessor, and the current
+policy-head identities; the resulting scope head binds the decision identity.
+The specialized backup and upgrade-path exact sets, limitation exact set,
+policy-governance, and release-authority-chain requirements remain additive.
 
 Each support and upgrade ownership head must identify the attributable current
 owner, covered class and support or upgrade scope, assignment provenance,
@@ -497,7 +613,9 @@ replacement head and independent review enter a new decision attempt.
 
 An `accepted` event may be created only when every cohort head and the event
 share one serialization, fencing, or authoritative total-order boundary through
-atomic creation. That boundary must prove that no in-scope create, update,
+atomic creation. That boundary assigns `decision_at` and its audit sequence at
+commit, so the decision cutoff and the mutation order are the same authoritative
+boundary. It must prove that no in-scope create, update,
 reassignment, removal, expiry, revocation, or supersession effective at or
 before `decision_at` was omitted. Any change requires re-resolving the affected
 head, renewing its independent review, rebuilding the cohort, and retrying the
@@ -511,34 +629,39 @@ separately Accepted GA lifecycle policy and an authorized transition.
 ### GA Evidence Freshness
 
 All age and ordering checks use the immutable GA decision event's
-AegisOps-recorded `decision_at`; a caller-supplied decision time cannot establish
-freshness. For every target-bound execution, independent records must prove
+boundary-assigned `decision_at` and audit sequence. That timestamp is the
+authoritative atomic-commit time and cannot be caller-supplied, backdated, or
+future-dated. For every target-bound execution, independent records must prove
 `target_declared_at < started_at <= completed_at <= owner_review_at <= decision_at`.
 Every other reviewed evidence record must prove
 `observed_at <= owner_review_at <= decision_at`. These orderings require
 AegisOps append-only audit sequencing or an equivalent independently timestamped
-attestation. The decision timestamp must not be more than five minutes in the
-future when verified.
+attestation. Any source contract's clock-skew tolerance applies only while
+verifying its subordinate observation or review evidence; it cannot move
+`decision_at`, permit evidence after the decision, or replace commit-time cohort
+reconciliation.
 
 The following maximum ages are measured backward from `decision_at`. A maximum
 age never overrides a revision mismatch; the required action applies after
 either expiry or a mismatch:
 
-| Evidence family                                                                                                                                                          | Maximum age                                                                                                                                                                                                                                        | Required action after expiry or revision mismatch                                                                                                                                                                    |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Inherited Phase 66 RC evidence set: Phase 66.7 packet plus Phase 66.8 closeout result or authoritative RC-gate result                                                    | Packet regeneration and independent closeout or gate-result evaluation and focused revalidation must complete within 24 hours.                                                                                                                     | Regenerate the packet and independently re-evaluate and revalidate the closeout or authoritative gate result at the gate evidence revision; every native observation, review, and decision rule must pass.           |
-| Real-user or design-partner GA journey records                                                                                                                           | Each required journey completion and owner review must be no more than 720 hours old.                                                                                                                                                              | Repeat each affected journey family for every mapped deployment class at the gate evidence revision with its predeclared criteria, or re-establish an allowed journey-coverage rule; review alone cannot refresh it. |
-| Routine cadence-driven backup stream                                                                                                                                     | One current gap-free window must end at `decision_at`, span at least one full Accepted profile review interval, reconcile every due item and attempt continuously through the cutoff, and keep the latest success and review inside their cadence. | Re-establish a new complete current gap-free window at the gate evidence revision for each affected class; an older-window splice, one-off backup, verifier rerun, or owner reattestation cannot refresh the stream. |
-| Capacity, component-interruption and recovery, clean-target restore, exact-version upgrade and rollback, and any claimed HA, disaster-recovery, or fleet-scale execution | Each execution completion and owner review must be no more than 720 hours old.                                                                                                                                                                     | Rerun each affected family for every bound deployment class at the gate evidence revision; a verifier rerun or owner reattestation alone cannot refresh it.                                                          |
-| Monitoring, diagnostic, support-bundle, and redaction execution                                                                                                          | Each execution completion and owner review must be no more than 24 hours old.                                                                                                                                                                      | Regenerate the artifacts and rerun the affected checks at the gate evidence revision for every bound deployment class.                                                                                               |
-| GA lifecycle and applicable no-automatic-expiry policy current heads                                                                                                     | Their current-head snapshots must be no more than 24 hours old and be resolved inside each decision or transition commit cohort; the original accepted approval may be older.                                                                      | Re-resolve every applicable current head and rebuild the cohort. A mismatch, revocation, expiry, or supersession blocks the decision or transition; an older Accepted policy cannot authorize it.                    |
-| Launch-operability requirements current head                                                                                                                             | Its current-head snapshot must be no more than 24 hours old at target declaration and be resolved again inside the decision-time cohort; the original accepted approval may be older.                                                              | Re-resolve the current head. Any mismatch or lifecycle change requires a new target and rerun; an older accepted requirements version cannot refresh or rebind the execution.                                        |
-| Environment equivalence, support and upgrade ownership, limitation disposition, and release-authority state                                                              | An immutable state snapshot and accountable review must be no more than 24 hours old, and every authority link must be effective and unrevoked at `decision_at`.                                                                                   | Re-resolve the authoritative state as an immutable gate-revision snapshot and renew its accountable review or disposition; copying the prior snapshot cannot refresh it.                                             |
+| Evidence family                                                                                                                                                          | Maximum age                                                                                                                                                                                                                                                  | Required action after expiry or revision mismatch                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inherited Phase 66 RC evidence set: Phase 66.7 packet plus Phase 66.8 closeout result or authoritative RC-gate result                                                    | Packet regeneration and independent closeout or gate-result evaluation and focused revalidation must complete within 24 hours.                                                                                                                               | Regenerate the packet and independently re-evaluate and revalidate the closeout or authoritative gate result at the gate evidence revision; every native observation, review, and decision rule must pass.                            |
+| Real-user or design-partner GA journey records                                                                                                                           | Each required journey completion and owner review must be no more than 720 hours old.                                                                                                                                                                        | Repeat each affected journey family for every mapped deployment class at the gate evidence revision with its predeclared criteria, or re-establish an allowed journey-coverage rule; review alone cannot refresh it.                  |
+| Routine cadence-driven backup stream                                                                                                                                     | One current gap-free window must end at `decision_at`, span at least one full Accepted profile review interval, reconcile every no-weaker due item and attempt continuously through the cutoff, and keep the latest success and review inside their cadence. | Re-establish a new complete current gap-free window at the gate evidence revision for each affected class; an older-window splice, weaker schedule, one-off backup, verifier rerun, or owner reattestation cannot refresh the stream. |
+| Capacity, component-interruption and recovery, clean-target restore, exact-version upgrade and rollback, and any claimed HA, disaster-recovery, or fleet-scale execution | Each execution completion and owner review must be no more than 720 hours old.                                                                                                                                                                               | Rerun each affected family for every bound deployment class and every affected claimed compatible upgrade path at the gate evidence revision; a verifier rerun or owner reattestation alone cannot refresh it.                        |
+| Monitoring, diagnostic, support-bundle, and redaction execution                                                                                                          | Each execution completion and owner review must be no more than 24 hours old.                                                                                                                                                                                | Regenerate the artifacts and rerun the affected checks at the gate evidence revision for every bound deployment class.                                                                                                                |
+| GA lifecycle and applicable no-automatic-expiry policy current heads                                                                                                     | Their current-head snapshots must be no more than 24 hours old and be resolved inside each decision or transition commit cohort; the original accepted approval may be older.                                                                                | Re-resolve every applicable current head and rebuild the cohort. A mismatch, revocation, expiry, or supersession blocks the decision or transition; an older Accepted policy cannot authorize it.                                     |
+| Launch-operability requirements and supported-upgrade-path current head                                                                                                  | Its current-head snapshot and bound upgrade-path exact set must be no more than 24 hours old at target declaration and be resolved again inside the decision-time cohort; the original accepted approval may be older.                                       | Re-resolve the current head and exact set. Any requirement, path, compatibility, migration, or rollback mismatch or lifecycle change requires a new target and affected reruns; older versions cannot rebind execution.               |
+| Environment equivalence, support and upgrade ownership, limitation disposition, and release-authority state                                                              | An immutable state snapshot and accountable review must be no more than 24 hours old, and every authority link must be effective and unrevoked at `decision_at`.                                                                                             | Re-resolve the authoritative state as an immutable gate-revision snapshot and renew its accountable review or disposition; copying the prior snapshot cannot refresh it.                                                              |
 
-A material version, topology, configuration, route, environment, GA lifecycle
-or expiry-policy head, accepted profile or equivalence criterion,
-launch-operability requirements head, target, owner, limitation, or authority
-change invalidates the affected evidence even inside its maximum-age window.
+A material version, topology, configuration, route, environment, GA-scope head,
+GA lifecycle or expiry-policy head, accepted profile, backup cadence or
+deviation, equivalence criterion, launch-operability requirements or
+supported-upgrade-path head, compatibility, migration, rollback target, owner,
+limitation, or authority change invalidates the affected evidence even inside
+its maximum-age window.
 
 The decision-time cohort maximum ages do not replace its serialization boundary
 through atomic decision creation. Authoritative current-status evaluations and
@@ -629,7 +752,13 @@ historical events. Requiring a compliant routine backup stream prevents a
 one-off restore source from standing in for daily operability, while the shared
 decision-time mutable-state cohort applies the same commit-boundary rule to
 policy, environment, requirements, backup, ownership, limitation, and authority
-changes.
+changes. Assigning `decision_at` inside that boundary and serializing accepted
+selection through one canonical gate-and-launch-scope head prevent future-dated
+or concurrent favorable decisions from escaping the same reconciliation.
+Comparing every backup schedule to its governing profile prevents approval of a
+weaker cadence by indirection, and binding every claimed supported upgrade path
+to its exact compatibility record and successful rehearsal prevents an
+arbitrary version pair from standing in for launch-scope coverage.
 
 ## 6. Consequences
 
@@ -671,32 +800,37 @@ If approved and implemented:
 This proposal-only pull request changes no runtime, configuration, schema,
 deployment, credential, privilege, or persistent state. If this ADR is
 Accepted, implementation will add authoritative GA-decision, lifecycle,
-release-authority, evidence-index, launch-requirements, limitation-snapshot, and
+gate-and-launch-scope selection, release-authority, evidence-index,
+launch-requirements, supported-upgrade-path, limitation-snapshot, and
 operability-manifest schemas; backend authorization and current-status read and
 write paths; persistent migrations; and atomic or fenced audit ordering. It must
 not widen the existing action-approver or platform-administration roles.
 
 If approved, a separate implementation pull request would update the affected
 Phase 51 gate, persona, competitive-gap, authority-boundary, and closeout
-documents; Phase 65 packaging and upgrade contracts; Phase 66 supportability and
-closeout documents; README positioning; and their focused verifier and
-adversarial self-test pairs. That implementation must not be merged before this
-ADR records approval.
+documents; Phase 58 upgrade and rollback plans; Phase 65 packaging and upgrade
+contracts; Phase 66 supportability and closeout documents; README positioning;
+and their focused verifier and adversarial self-test pairs. That implementation
+must not be merged before this ADR records approval.
 
 That implementation must also define structured schemas and focused verifier
 and adversarial-test pairs for the per-class GA journey-family index and
 predeclared success criteria, immutable evidence index, complete inherited RC
-set, explicit human decision event and lifecycle aggregate, release-authority
-chain and decision-time serialization boundary, independently accepted
-launch-operability requirements, and per-deployment-class GA operability
-manifest with a routine-backup stream and Accepted environment-criteria
+set, explicit human decision event and lifecycle aggregate, canonical
+gate-and-launch-scope aggregate and compare-and-append selection head,
+release-authority chain and decision-time serialization boundary, independently
+accepted launch-operability requirements and supported-upgrade-path exact set,
+and per-deployment-class GA operability manifest with a routine-backup stream,
+no-weaker profile-cadence comparator, and Accepted environment-criteria
 comparator. It must enforce direct gate-revision execution,
-current-requirements-bound pre-run target identity and comparison, bound
-owner-review outcomes, authoritative limitation-registry snapshot and exact-set
-reconciliation, current support and upgrade ownership heads, and the shared
-mutable-state cohort through the atomic decision boundary, immutable launch-scope
-authority references, freshness, current-head re-evaluation, and
-retained-evidence secret hygiene without storing forbidden source values.
+current-requirements-bound pre-run target identity and comparison, path-bound
+pre-run upgrade selection and one-path run lineage, upgrade and rollback
+outcomes, bound owner-review outcomes, authoritative limitation-registry
+snapshot and exact-set reconciliation, current support and upgrade ownership
+heads, and the shared mutable-state cohort through the atomic decision boundary,
+immutable launch-scope authority references, freshness, current-head
+re-evaluation, and retained-evidence secret hygiene without storing forbidden
+source values.
 
 The later implementation must also encode the separately Accepted GA-decision
 lifecycle and no-automatic-expiry policy current-head schemas, transition policy
@@ -708,17 +842,32 @@ decision expiry, rejection, cancellation, supersession, transition-chain forks
 or gaps, presentation of an older accepted event or policy, attempted migration
 or in-place rebinding of an existing decision to a replacement policy head, and
 a replacement accepted aggregate that reuses rather than completely re-evaluates
-current gate inputs and human authority.
+current gate inputs and human authority. It must also reject a caller-supplied,
+backdated, or future-dated `decision_at`, mutation before a requested future
+decision time, concurrent accepted creation or replacement for the same
+canonical gate and scope, key-splitting through per-decision gate-record,
+evidence, attempt, caller-minted scope, or alias identifiers, ambiguous canonical
+identity resolution, stale scope-head predecessors, and selection of a favorable
+non-head decision aggregate.
 
 The later implementation must test historical or discontinuous backup windows,
 missing, omitted, failed, pending, in-progress, abandoned, unknown,
 deadline-incomplete, late-completing, or late-reviewed scheduled backup attempts,
 including pre-slot, duplicate cross-slot, and late-evidence rebinding attempts;
-unregistered configuration changes; integrity or custody failures; one-off
-restore sources; missed profile-cadence reviews; producer-declared environment
-equivalence; weakening environment deviations; historical launch-requirements
-heads; and backup, environment, requirements, or owner changes between snapshot
-and decision commit.
+unregistered configuration changes; sparse due slots, shifted boundaries,
+oversized grace, delayed review, post-change configuration backup, weaker state
+or custody coverage, or an unapproved, scope-, interval-, or profile-mismatched,
+or retroactive profile deviation; integrity or custody failures; one-off restore
+sources; missed profile-cadence reviews;
+producer-declared environment equivalence; weakening environment deviations;
+historical launch-requirements heads; missing, extra, floating, incompatible,
+failed, or mismatched supported upgrade paths; missing, skipped, reordered,
+disconnected, independently executed, reset, reinstalled, state-discontinuous,
+hop-target-mismatched, or wrong-rollback-target sequence hops; same-endpoint
+path swaps with different migration or rollback definitions, cross-path run
+reuse, post-hoc sequence assignment, or older-revision hop import; and backup,
+environment, requirements, upgrade-path, or owner changes between snapshot and
+decision commit.
 
 ## 8. Security Impact
 
@@ -744,21 +893,24 @@ rollback because it does not alter the accepted baseline.
 After approval and implementation, rollback or supersession is triggered if the
 separate-gate model cannot preserve every required Phase 51.3 GA record field,
 cannot bind each GA decision to an immutable evidence revision and content,
-cannot resolve an authorized release-authority chain, or cannot prevent Phase 67
-prerequisite evidence from conferring GA acceptance. A later accepted ADR or
-requirements-baseline change that assigns GA acceptance to a different phase or
-authority is also a trigger.
+cannot serialize one authoritative current accepted decision per canonical gate
+and launch scope, cannot resolve an authorized release-authority chain, or cannot
+prevent Phase 67 prerequisite evidence from conferring GA acceptance. A later
+accepted ADR or requirements-baseline change that assigns GA acceptance to a
+different phase or authority is also a trigger.
 
 When a post-implementation trigger above applies, replacing this decision
 requires a new ADR that records why the boundary is changing and supersedes ADR 0020. The related implementation changes would then be reverted or migrated in
 a separate pull request.
 
 The proposal-only change has no runtime or data rollback. After implementation,
-immutable decision events, authority and evidence snapshots, lifecycle
-transitions, and audit high-water records are irreversible historical evidence.
-Rollback must stop new GA decisions and current-status publication, append a
-policy-authorized invalidating or superseding transition where applicable, and
-retain or schema-migrate those records; it must not delete or rewrite them.
+immutable decision events, scope-selection and lifecycle transitions, authority,
+upgrade-path, cadence, and evidence snapshots, and audit high-water records are
+irreversible historical evidence. Rollback must stop new GA decisions and
+current-status publication, append a policy-authorized invalidating or
+superseding transition and advance the canonical scope head where applicable,
+and retain or schema-migrate those records; it must not delete, rewrite, or
+rebind them.
 
 ## 10. Validation
 
@@ -780,13 +932,17 @@ Review of this proposal must confirm:
   state rather than a mutable label, path, URL, or bare identifier,
 - an explicit immutable human decision event with attributable outcome, time,
   justification, gate, launch-scope, revision, evidence, and authority bindings,
-  plus a non-forking lifecycle aggregate, explicit expiry posture, and
-  snapshot-consistent current-head evaluation for every authoritative
+  with `decision_at` assigned at atomic commit rather than supplied or
+  future-dated, plus a non-forking per-decision lifecycle aggregate, one
+  canonical non-forking gate-and-launch-scope selection head keyed only by stable
+  AegisOps-owned gate-definition and launch-scope identities, at most one current
+  accepted decision for that key, explicit expiry posture, and
+  snapshot-consistent scope-first current-head evaluation for every authoritative
   current-status decision or projection, explicit fail-closed `unavailable`
   behavior, historical-only static references, current effective lifecycle and
   no-automatic-expiry policy heads governed outside themselves, only separately
   Accepted and authority-validated lifecycle transitions, and no accepted-state
-  resurrection,
+  resurrection or favorable non-head selection,
 - proof that the approver held effective, unrevoked GA release authority for the
   recorded launch scope, remained distinct from every evidence producer, and
   inherited that authority through a non-cyclic, non-self-issued,
@@ -800,27 +956,42 @@ Review of this proposal must confirm:
   accepted launch-operability requirements and machine-comparable no-weaker
   target validation, default applicability and separately Accepted narrowing
   exemptions, accepted non-self-review bound to each immutable evidence identity,
-  the fixed family-specific freshness and invalidation rules, retained-data
-  hygiene, and testable HA, scale, and disaster-recovery dispositions,
+  a complete current supported-upgrade-path exact set with every claimed
+  compatible direct or sequence path bound to successful exact-source,
+  gate-target, migration, and predeclared rollback-schema and success-criteria
+  identities through a distinct pre-run path target and continuous gate-revision
+  run lineage that cannot be reassigned or reused, including predeclared ordered
+  sequence-hop and checkpoint definitions, plus separately produced immutable
+  per-hop input and output digests and upgrade, rollback, checkpoint, and
+  post-operation outcome evidence, the fixed family-specific freshness and
+  invalidation rules, retained-data hygiene, and testable HA, scale, and
+  disaster-recovery dispositions,
 - a complete cadence-driven PostgreSQL-aware and configuration-backup stream for
   every deployment class, with authoritative schedule, attempt, and
   configuration-change exact-set reconciliation across a current gap-free window
-  ending at `decision_at`, integrity, separate custody and retention,
-  profile-cadence review, and clean-target restore bound to a backup from that
-  stream rather than a historical splice, one-off, or manually prepared source,
+  ending at `decision_at`, machine-verifiable comparison proving that every
+  schedule, deadline, grace, review, change trigger, state set, and custody
+  obligation is no weaker than its governing Accepted profile, integrity,
+  separate custody and retention, profile-cadence review, and clean-target
+  restore bound to a backup from that stream rather than a historical splice,
+  one-off, or manually prepared source,
 - machine-verifiable environment comparison against current immutable Accepted
   profile criteria, with producer dispositions unable to waive missing,
   incomparable, out-of-tolerance, or weakening dimensions,
-- a current non-forking launch-requirements head at target declaration and
-  decision, with any lifecycle change requiring a new target and execution,
+- a current non-forking launch-requirements head and complete
+  supported-upgrade-path exact set at target declaration and decision, with any
+  lifecycle, compatibility, migration, or rollback change requiring a new target
+  and affected execution,
 - an immutable authoritative limitation-registry snapshot, exact reconciliation
   of every in-scope non-closed and newly surfaced limitation, and independently
   reviewed evidence when no blocking limitation is known, with transaction or
   audit high-water-mark reconciliation through the atomic decision boundary,
-- one immutable decision-time mutable-state cohort covering lifecycle and expiry
-  policy, environment, requirements, backup, support and upgrade ownership,
-  limitations, and release authority, with every current head reconciled through
-  atomic decision creation and policy or owner change failing closed,
+- one immutable decision-time mutable-state cohort covering the expected
+  canonical scope-head predecessor, lifecycle and expiry policy, environment,
+  requirements and supported upgrade paths, backup profile, deviation, cadence,
+  support and upgrade ownership, limitations, and release authority, with every
+  current head reconciled through atomic decision creation and concurrent scope,
+  policy, path, cadence, or owner change failing closed,
 - an immutable separately Accepted scope-authority reference for every claimed
   HA, multi-site disaster-recovery, or fleet-scale capability, with exercise
   success prohibited from authorizing or widening launch scope,
@@ -828,9 +999,11 @@ Review of this proposal must confirm:
 - no claim that this proposal itself accepts GA or production readiness.
 
 After approval, the implementation pull request must run the affected canonical
-verifiers and adversarial self-tests. Claim scanners must compare rendered
-Markdown text rather than raw delimiters and cover plain text, emphasis, code
-spans, links, and table cells, while retaining negative and prerequisite-only
+verifiers and adversarial self-tests, including the Phase 58.5 upgrade and
+rollback verifier and self-test and the Phase 65.3 release-channel and upgrade
+manifest verifier and self-test. Claim scanners must compare rendered Markdown
+text rather than raw delimiters and cover plain text, emphasis, code spans,
+links, and table cells, while retaining negative and prerequisite-only
 statements. The repository-wide phase-contract verifier and shell-test gates and
 `git diff --check` must also pass.
 
