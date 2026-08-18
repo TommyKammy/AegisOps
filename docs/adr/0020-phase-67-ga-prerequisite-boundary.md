@@ -48,8 +48,13 @@ If approved, this ADR would establish the following decision:
 - GA acceptance is a separate gate decision. It requires all RC evidence plus
   revision-bound real-user or design-partner evidence across the intended
   launch scope, production-operability evidence, support and upgrade ownership,
-  explicit disposition of every blocking limitation, and a human approver who
-  is independent of evidence production.
+  and explicit disposition of every blocking limitation.
+- The GA gate record preserves the accepted Phase 51.3 metadata: the real-user
+  or design-partner record reference, reviewed environment class, operator or
+  design-partner owner, evidence date, gate record identifier, accepted
+  limitations, support owner, upgrade owner, and follow-up decision. It
+  additionally records the evidence revision and a human approver who is
+  independent of evidence production.
 - A result such as `integration_trial_passed_with_owned_limitations` remains
   prerequisite evidence only. Issue closure, pull-request merge, CI success,
   external-service health, or a subordinate Wazuh or Shuffle result cannot
@@ -109,9 +114,9 @@ If approved and implemented:
 
 - Phase 67 results remain bounded and non-production,
 - missing GA evidence remains visible as owned prerequisite blockers,
-- a later GA decision names its evidence revision, environment, operator,
-  support owner, upgrade owner, accepted limitations, independent approver, and
-  decision, and
+- a later GA decision preserves every accepted Phase 51.3 GA evidence metadata
+  field and additionally names its evidence revision and independent approver,
+  and
 - documentation and verifiers reject claims that Phase 67 itself accepts GA.
 
 ### Negative Consequences
@@ -161,6 +166,13 @@ decision.
 Before approval, the proposal can be marked Rejected with no implementation
 rollback because it does not alter the accepted baseline.
 
+After approval and implementation, rollback or supersession is triggered if the
+separate-gate model cannot preserve every required Phase 51.3 GA record field,
+cannot bind each GA decision to an auditable evidence revision, or cannot
+prevent Phase 67 prerequisite evidence from conferring GA acceptance. A later
+accepted ADR or requirements-baseline change that assigns GA acceptance to a
+different phase or authority is also a trigger.
+
 After approval and implementation, replacing this decision requires a new ADR
 that records why the boundary is changing and supersedes ADR 0020. The related
 implementation changes would then be reverted or migrated in a separate pull
@@ -172,6 +184,7 @@ Review of this proposal must confirm:
 
 - consistency with the accepted Phase 51.3 gate contract and ADR 0011,
 - explicit separation of prerequisite evidence from GA acceptance,
+- preservation of every accepted Phase 51.3 GA evidence metadata field,
 - current-revision evidence requirements,
 - identification and justification of independent human GA approval as a new
   release-governance control,
