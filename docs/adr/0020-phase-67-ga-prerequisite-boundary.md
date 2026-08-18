@@ -63,6 +63,15 @@ If approved, this ADR would establish the following decision:
   If the inherited packet names another revision, it must be regenerated and
   revalidated at the gate revision. Combining it with current-revision GA
   evidence is mixed-snapshot evidence and blocks acceptance.
+- Every real-user or design-partner journey and every operability execution must
+  run directly against the release artifacts and configuration mapped to the
+  gate evidence revision. An execution from another revision cannot be rebound
+  by a verifier rerun, artifact check, owner reattestation,
+  environment-equivalence review, or generic revalidation, even while it remains
+  inside its freshness window. It must be re-executed with new target, execution,
+  and review records. Revalidation is permitted only for non-execution state or
+  reference evidence whose accepted source contract expressly defines that path
+  and which is resolved as an immutable snapshot at the gate revision.
 - The complete inherited RC packet and every additional GA evidence reference
   must carry an immutable content identity. Repository-owned artifacts must bind
   to their exact Git object or content digest; authoritative AegisOps records
@@ -132,8 +141,37 @@ revision. The manifest must directly index:
 - exact-version upgrade and rollback rehearsal evidence with post-operation
   smoke and authoritative-record-chain checks,
 - monitoring, diagnostic, support-bundle, and redaction evidence, and
-- every operability limitation with its impact, owner, disposition, decision
-  date, and follow-up date.
+- a current immutable, snapshot-consistent inventory of the authoritative
+  AegisOps `known_limitation_ownership` record set, or an Accepted successor,
+  plus reconciliation of every operability limitation with its impact, owner,
+  disposition, decision date, and follow-up date.
+
+The limitation snapshot must bind the gate identifier and intended launch scope,
+its as-of audit or transaction boundary, the scope and applicability predicate,
+an immutable content or state identity, the complete ordered record-identifier
+set, and its count. The manifest limitation identifiers must exactly equal every
+in-scope, non-closed record in that snapshot. Every limitation surfaced by an
+indexed journey, execution, failed path, owner review, or environment-difference
+disposition must be registered in and reconcile to the same snapshot before the
+decision. A missing, extra, unregistered, scope-ambiguous, mismatched, or
+post-snapshot item blocks acceptance.
+
+When that reconciled snapshot contains no blocking record, the manifest must
+carry an attributable independent result
+`reviewed-no-known-blocking-limitation` bound to the gate identifier, intended
+launch scope, evidence revision, immutable snapshot identity, and its own
+`reviewed_at`. The immutable decision input index must bind that review identity,
+and chronology must prove `snapshot_as_of <= reviewed_at <= decision_at`.
+
+At decision time, either the snapshot transaction or read boundary must remain
+held through atomic decision creation, or authoritative registry audit or
+high-water-mark reconciliation must prove that no in-scope create, update, or
+lifecycle transition occurred from `snapshot_as_of` through `decision_at`. Any
+such change requires a new snapshot, exact-set reconciliation, and independent
+review before a decision. An empty list, omitted review, or caller assertion is
+`not-reviewed` and blocks acceptance. This completeness claim is limited to the
+declared launch scope and authoritative record family; it does not claim
+knowledge of unknown limitations outside those bounds.
 
 Each indexed execution record must name its run identifier, deployment-class
 identifier, immutable environment-record reference, execution start and
@@ -167,12 +205,12 @@ production access is neither required nor accepted as a substitute for
 production-like evidence.
 
 The operability packet passes only when every mandatory exercise exists, is
-non-placeholder, is bound to the gate evidence revision directly or through a
-revalidation result that is itself produced at and bound to that revision, meets
-its target declared before execution, preserves AegisOps record-chain and
-authority invariants, retains failed-path and clean-state evidence, and leaves
-no unresolved blocking operability limitation. Missing, mixed-revision, stale,
-post-hoc-targeted, failed, or subordinate-authority evidence blocks GA.
+non-placeholder, was executed at and is bound directly to the gate evidence
+revision, meets its target declared before execution, preserves AegisOps
+record-chain and authority invariants, retains failed-path and clean-state
+evidence, and leaves no unresolved blocking operability limitation. Missing,
+mixed-revision, stale, post-hoc-targeted, failed, or subordinate-authority
+evidence blocks GA.
 
 Every owner or accountable review in the GA packet must bind an attributable
 reviewer who is distinct from the evidence producer and owner to the exact
@@ -193,15 +231,17 @@ AegisOps append-only audit sequencing or an equivalent independently timestamped
 attestation. The decision timestamp must not be more than five minutes in the
 future when verified.
 
-The following maximum ages are measured backward from `decision_at`:
+The following maximum ages are measured backward from `decision_at`. A maximum
+age never overrides a revision mismatch; the required action applies after
+either expiry or a mismatch:
 
-| Evidence family                                                                                                                                                          | Maximum age                                                                                                                                                      | Required action after expiry                                                                                                                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Inherited Phase 66.7 RC packet                                                                                                                                           | Its regeneration and focused revalidation must complete within 24 hours.                                                                                         | Regenerate and revalidate the whole packet at the gate evidence revision; its native observation, review, and decision freshness rules must pass.                                                          |
-| Real-user or design-partner GA journey records                                                                                                                           | Each required journey completion and owner review must be no more than 720 hours old.                                                                            | Repeat each expired journey family with attributable real-user or design-partner use at the gate evidence revision and reviewed environment class; a desk review or owner reattestation cannot refresh it. |
-| Capacity, component-interruption and recovery, clean-target restore, exact-version upgrade and rollback, and any claimed HA, disaster-recovery, or fleet-scale execution | Each execution completion and owner review must be no more than 720 hours old.                                                                                   | Rerun each expired family for every bound deployment class at the gate evidence revision; a verifier rerun or owner reattestation alone cannot refresh it.                                                 |
-| Monitoring, diagnostic, support-bundle, and redaction execution                                                                                                          | Each execution completion and owner review must be no more than 24 hours old.                                                                                    | Regenerate the artifacts and rerun the affected checks for every bound deployment class.                                                                                                                   |
-| Environment equivalence, support and upgrade ownership, limitation disposition, and release-authority state                                                              | An immutable state snapshot and accountable review must be no more than 24 hours old, and every authority link must be effective and unrevoked at `decision_at`. | Re-resolve the authoritative state and renew its accountable review or disposition; copying the prior snapshot cannot refresh it.                                                                          |
+| Evidence family                                                                                                                                                          | Maximum age                                                                                                                                                      | Required action after expiry or revision mismatch                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inherited Phase 66.7 RC packet                                                                                                                                           | Its regeneration and focused revalidation must complete within 24 hours.                                                                                         | Regenerate and revalidate the whole packet at the gate evidence revision; its native observation, review, and decision freshness rules must pass.                                                           |
+| Real-user or design-partner GA journey records                                                                                                                           | Each required journey completion and owner review must be no more than 720 hours old.                                                                            | Repeat each affected journey family with attributable real-user or design-partner use at the gate evidence revision and reviewed environment class; a desk review or owner reattestation cannot refresh it. |
+| Capacity, component-interruption and recovery, clean-target restore, exact-version upgrade and rollback, and any claimed HA, disaster-recovery, or fleet-scale execution | Each execution completion and owner review must be no more than 720 hours old.                                                                                   | Rerun each affected family for every bound deployment class at the gate evidence revision; a verifier rerun or owner reattestation alone cannot refresh it.                                                 |
+| Monitoring, diagnostic, support-bundle, and redaction execution                                                                                                          | Each execution completion and owner review must be no more than 24 hours old.                                                                                    | Regenerate the artifacts and rerun the affected checks at the gate evidence revision for every bound deployment class.                                                                                      |
+| Environment equivalence, support and upgrade ownership, limitation disposition, and release-authority state                                                              | An immutable state snapshot and accountable review must be no more than 24 hours old, and every authority link must be effective and unrevoked at `decision_at`. | Re-resolve the authoritative state as an immutable gate-revision snapshot and renew its accountable review or disposition; copying the prior snapshot cannot refresh it.                                    |
 
 A material version, topology, configuration, route, environment, target, owner,
 limitation, or authority change invalidates the affected evidence even inside
@@ -210,12 +250,19 @@ its maximum-age window.
 Capacity within the declared supported envelope, controlled recovery of
 required in-scope components, application-aware restore, and upgrade and
 rollback rehearsal are mandatory. Multi-node HA or failover, multi-site
-disaster recovery, and fleet-scale exercises are mandatory only when the
-intended launch scope claims those capabilities. Otherwise they may be recorded
-only as explicitly unsupported launch capabilities with customer or operator
-impact, owner, decision date, and follow-up date. Failed or merely unimplemented
-exercises cannot be labeled not applicable, and GA claims must remain inside the
-resulting launch boundary.
+disaster recovery, or fleet-scale capability may enter the intended launch scope
+only when the gate resolves an immutable reference to a separately Accepted ADR,
+or to a requirements-baseline revision approved through that ADR process, that
+explicitly authorizes the capability and its bounded supported scope. A
+successful exercise is evidence for an already authorized capability; it cannot
+authorize or widen launch scope.
+
+For each such authorized capability claimed by the intended launch scope, the
+corresponding exercise is mandatory. Without its scope-authority reference, the
+capability remains explicitly unsupported even if an exercise succeeds, with
+customer or operator impact, owner, decision date, and follow-up date recorded.
+A failed or merely unimplemented exercise cannot be labeled not applicable, and
+GA claims must remain inside the resulting authorized launch boundary.
 
 This proposal does not change the accepted baseline or its verifiers. If this
 ADR is approved, the status and real approval metadata must be updated together
@@ -271,7 +318,8 @@ with the reviewed monthly restore and maintenance cadence, while the 24-hour
 packet, diagnostic, and decision-state window retains the stricter Phase 66.6
 and 66.7 precedent for rapidly changing evidence. Fixed windows and explicit
 expiry actions prevent each implementation from choosing its own definition of
-stale evidence.
+stale evidence. Requiring an accepted scope-authority reference also keeps
+successful technical exercises from silently expanding the product boundary.
 
 ## 6. Consequences
 
@@ -322,8 +370,11 @@ That implementation must also define structured schemas and focused verifier
 and adversarial-test pairs for the GA journey-family index, immutable evidence
 index, explicit human decision event, inherited-evidence revalidation,
 release-authority chain, and per-deployment-class GA operability manifest. It
-must enforce pre-run target identity, bound owner-review outcomes, freshness,
-and retained-evidence secret hygiene without storing forbidden source values.
+must enforce direct gate-revision execution, pre-run target identity, bound
+owner-review outcomes, authoritative limitation-registry snapshot and exact-set
+reconciliation through the atomic decision boundary, immutable launch-scope
+authority references, freshness, and retained-evidence secret hygiene without
+storing forbidden source values.
 
 ## 8. Security Impact
 
@@ -368,7 +419,8 @@ Review of this proposal must confirm:
   field,
 - one-revision binding across the inherited RC packet and every additional GA
   evidence item, including fail-closed mixed-snapshot rejection and
-  revalidation,
+  revalidation, direct gate-revision execution, and rejection of cross-revision
+  execution rebinding,
 - resolution of every GA reference to immutable content or authoritative-record
   state rather than a mutable label, path, URL, or bare identifier,
 - an explicit immutable human decision event with attributable outcome, time,
@@ -383,6 +435,13 @@ Review of this proposal must confirm:
   non-self-review bound to each immutable evidence identity, the fixed
   family-specific freshness and invalidation rules, retained-data hygiene, and
   testable HA, scale, and disaster-recovery dispositions,
+- an immutable authoritative limitation-registry snapshot, exact reconciliation
+  of every in-scope non-closed and newly surfaced limitation, and independently
+  reviewed evidence when no blocking limitation is known, with transaction or
+  audit high-water-mark reconciliation through the atomic decision boundary,
+- an immutable separately Accepted scope-authority reference for every claimed
+  HA, multi-site disaster-recovery, or fleet-scale capability, with exercise
+  success prohibited from authorizing or widening launch scope,
 - complete approval metadata when the status changes, and
 - no claim that this proposal itself accepts GA or production readiness.
 
