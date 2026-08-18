@@ -208,8 +208,8 @@ If approved, this ADR would establish the following decision:
   design-partner owner, evidence date, gate record identifier, accepted
   limitations, support owner, upgrade owner, and follow-up decision. It
   additionally records the evidence revision, immutable evidence index,
-  claimed-participant qualification-record identities, and producer-closure
-  identity.
+  claimed-participant qualification-record identities, support-ownership and
+  upgrade-ownership coverage-closure identities, and producer-closure identity.
 - The gate record must contain an attributable, immutable human GA decision
   event, not merely an assigned approver identity. The event records an explicit
   outcome and justification or attestation and binds the approver identity and
@@ -396,11 +396,12 @@ If approved, this ADR would establish the following decision:
   `launch_scope_definition` head and deployment-class set, every claimed
   participant qualification-lifecycle head and its governing
   qualification-source policy head, every claimed capability
-  scope-authority head,
-  the exact support-ownership and upgrade-ownership heads bound by the selected
-  decision, the exact authoritative limitation-registry current head bound by
-  the selected decision, and one AegisOps-owned evidence-retention and
-  resolvability head. The
+  scope-authority head, every decision-bound credential-lifecycle aggregate and
+  its current head,
+  the exact support-ownership and upgrade-ownership coverage closures and heads
+  bound by the selected decision, the exact authoritative limitation-registry
+  current head bound by the selected decision, and one AegisOps-owned
+  evidence-retention and resolvability head. The
   identity-resolution head must match the exact decision-bound head and
   atomically re-canonicalize that complete set through `evaluated_at`. A missing,
   extra, or substituted subject, unavailable head, ambiguous or conflicting
@@ -408,9 +409,11 @@ If approved, this ADR would establish the following decision:
   relevant set or head change returns `unavailable`. Recovery of the same exact
   head permits a new evaluation, but a replacement cannot be rebound to the
   decision; restoring an accepted claim requires a new aggregate and complete
-  evaluation. Each ownership head must still match the decision-bound identity, scope, and
-  covered class and remain current, effective, unrevoked, non-retired, and
-  independently reviewed through `evaluated_at`. A missing or temporarily
+  evaluation. Each ownership closure must still map the complete authoritative
+  deployment-class set exactly once for its family to the decision-bound selected
+  heads. Each selected head must match its decision-bound identity, ownership
+  family, scope, and covered class set and remain current, effective, unrevoked,
+  non-retired, and independently reviewed through `evaluated_at`. A missing or temporarily
   unreadable unchanged head returns `unavailable` until that exact head can be
   resolved again. Removal, expiry, retirement, reassignment, supersession,
   scope change, or replacement-head mismatch also returns `unavailable`; a
@@ -428,7 +431,8 @@ If approved, this ADR would establish the following decision:
   member's effective review and disposition posture at `evaluated_at` from its
   bound currentness rule, cadence or due date, accepted-risk and follow-up state,
   and next invalidation boundary. An overdue, expired, or effectively blocking
-  posture returns `unavailable` even when the head identity has not changed. A
+  posture or a missing, duplicate, or mismatched decision-bound review-follow-up
+  mapping returns `unavailable` even when the head identity has not changed. A
   temporarily unreadable
   unchanged head returns `unavailable` until it resolves again. An in-scope
   create, update, reopen, close, deletion, severity, disposition, owner, scope,
@@ -447,7 +451,15 @@ If approved, this ADR would establish the following decision:
   authority valid; a normal relationship end after `completed_at` or a
   future-only policy successor therefore does not invalidate the historical
   journey. A different participant, qualification, source, or policy-authority
-  aggregate cannot be rebound to the old decision. The retention head
+  aggregate cannot be rebound to the old decision. Each credential-lifecycle
+  aggregate must resolve its complete non-forking successor chain and current
+  head through `evaluated_at`, preserve the bound family-definition set and
+  governing obligations, and prove every due or triggered event completed on
+  time with accepted review, no weaker ownership, scope, or custody, and closed
+  break-glass state. A routine successful successor may pass, but an unavailable,
+  missing, forked, gapped, omitted, overdue, failed, open, unreviewed, weaker, or
+  replacement aggregate returns `unavailable`; a replacement or definition
+  change requires a new decision rather than rebinding. The retention head
   must bind the complete ordered
   decision-input evidence-identifier set and count, producer-closure record and
   complete producer set and entry counts, content or record identities,
@@ -862,7 +874,12 @@ non-closed record identity together with each authoritative content, lifecycle,
 severity, ownership, disposition, current review state, review cadence or due
 date, accepted-risk and follow-up identity. It must also bind the Accepted
 currentness and disposition-rule identity and the deterministically derived next
-invalidation boundary for every member. The limitation snapshot must
+invalidation boundary for every member. The head and snapshot must bind the
+complete ordered decision-bound GA review follow-up obligation set, count, and
+digest and the exact source-review, evidence, and limitation-record mapping for
+every obligation. An open non-blocking obligation passes only before its bound
+`due_at`; an unresolved obligation at or after that boundary is effectively
+blocking even if the head identity has not changed. The limitation snapshot must
 bind that exact current-head identity, the gate identifier and intended launch scope,
 its as-of audit or transaction boundary, the scope and applicability predicate,
 an immutable content or state identity, the complete ordered record-identifier
@@ -1059,21 +1076,55 @@ access scope, delivery, custody, cadence, and triggers. A policy change cannot
 reset the coverage start, retroactively excuse a miss, or hide an earlier event;
 the common zero-delta reconciliation must bridge the cutoff to `decision_at`.
 
-The current launch-operability requirements head and manifest must bind a
-complete, ordered immutable credential-family exact set and count derived from
-the Accepted launch scope, authentication baseline, and deployment profile. Each
-family entry must identify its accountable owner, bounded consumers and scope,
-delivery and custody references, governing current Accepted rotation policy and
-cadence, scheduled, emergency, ownership-change, and scope-change triggers, the
-complete ordered event set, count, and outcomes of every rotation whose trigger
-or effective time falls in the coverage window, whose lifecycle, deadline, or
-grace overlaps it, or that remains open at `evidence_cutoff_at`, the next due
-boundary, and the authoritative as-of audit high-water mark. When the governing
-criteria require primary and backup or two-person custody, the attributable
-custodian identities must be distinct. The manifest must reconcile an
-AegisOps-owned current lifecycle and custody head for every family; a raw
-credential, secret, certificate key, or authorization value must never enter the
-evidence index.
+The current launch-operability requirements head must bind a complete, ordered
+immutable credential-family definition exact set and count derived from the
+Accepted launch scope, authentication baseline, and deployment profile. Each
+definition identifies the canonical family, required owner-assignment, bounded
+consumer and scope, delivery and custody predicates, Accepted policy, cadence,
+and scheduled, emergency, ownership-change, and scope-change trigger
+obligations, required event and result schema, and no-weaker comparison rules.
+It must not bind observed rotation or break-glass event identities, counts,
+outcomes, current assignment identities, or audit high-water marks.
+
+The manifest and AegisOps-owned current credential-lifecycle snapshot must
+reconcile exactly to that immutable family-definition set. Each current family
+entry must bind its attributable owner, bounded consumers and scope, delivery
+and custody references, governing current Accepted policy and cadence heads,
+the complete ordered event set, count, and outcomes of every rotation whose
+trigger or effective time falls in the coverage window, whose lifecycle,
+deadline, or grace overlaps it, or that remains open at `evidence_cutoff_at`,
+the next due boundary, and the authoritative as-of audit high-water mark. When
+the governing criteria require primary and backup or two-person custody, the
+attributable custodian identities must be distinct. A raw credential, secret,
+certificate key, or authorization value must never enter the evidence index.
+An event after target declaration and at or before `evidence_cutoff_at` updates
+this snapshot without changing the requirements head or invalidating an
+otherwise matching target. An event after the cutoff is an operational delta
+that aborts the decision attempt and requires a new cutoff, snapshot, and
+independent review; it does not require a new target or rerun while the family
+definition, policy, cadence, and trigger obligations remain unchanged. A change
+to any such governing obligation still invalidates the target and affected
+execution under the requirements-head rule.
+
+For each canonical launch scope and deployment class, the current credential
+snapshot must belong to one AegisOps-owned append-only, non-forking
+credential-lifecycle aggregate with a stable identity. The decision binds that
+aggregate identity, the immutable family-definition set, the Accepted
+currentness and transition-rule identity, and its cutoff head and audit
+high-water mark. Every authoritative `evaluated_at` must resolve the same
+aggregate's complete successor chain and current head through that instant. A
+successor may preserve current acceptance only when the bound family-definition
+set and governing obligations remain unchanged, every due or triggered event is
+complete, on time, reviewed and accepted, owner, consumer scope and custody
+remain no weaker, and every break-glass use is closed with its required
+return-to-normal evidence. An unavailable, missing, forked, gapped, omitted,
+overdue, failed, open, unreviewed, weaker, or replacement aggregate or a changed
+family definition or governing obligation returns `unavailable`. A routine
+successful successor does not require a new GA decision. A replacement
+aggregate cannot be rebound and requires a new decision with complete gate-input
+and human-authority evaluation; matching targets and executions that remain
+within their freshness windows may be reused. A family-definition or governing-
+obligation change requires a new target, affected rerun, and decision.
 
 The snapshot must also reconcile the ordered break-glass event set and count for
 every event triggered in the window, overlapping it, or still open at
@@ -1109,7 +1160,20 @@ Every review used as an independent GA acceptance review must bind an
 attributable reviewer who is distinct from the evidence producer and owner to
 the exact immutable evidence identity reviewed, and record `accepted` or
 `accepted-with-follow-up`. The latter is allowed only for a non-blocking
-follow-up with impact, owner, and due date. Routine source reviews may use the
+follow-up with impact, owner, and due date. Every such GA review must bind an
+immutable follow-up obligation identity, the source review and reviewed-evidence
+identities, gate, launch scope, deployment class and family, impact, owner,
+`due_at`, and initial non-blocking disposition. That obligation must reconcile
+exactly once to an in-scope non-closed member of the authoritative
+`known_limitation_ownership` current head, or an Accepted successor record
+family, and the decision must prove `decision_at < due_at`. A record may carry a
+complete ordered obligation set rather than requiring one physical record per
+obligation, but missing, duplicate, ticket-only, prose-only, owner-label-only, or
+review, evidence, scope, class, family, owner, due-date, or disposition-mismatched
+mapping does not count. A plain `accepted` review creates no obligation. Every
+GA review must finish before the limitation snapshot and its independent review
+are finalized; a later follow-up requires a new snapshot, exact reconciliation,
+and review before the decision attempt can continue. Routine source reviews may use the
 accountable operator only when the governing Accepted profile permits it; they
 remain in the exact set and cannot substitute for the required independent
 aggregate or GA review. A missing or rejected independent review, a purported
@@ -1124,15 +1188,18 @@ lifecycle and expiry-policy state; journey-participant qualification lifecycle
 and qualification-source policy, environment-profile, criteria, equivalence,
 and coverage-rule review state;
 launch-operability requirements with its
-required-component exact set, applicability matrix, and supported-upgrade-path
-exact set; routine-backup profile or deviation, schedule, path, attempt,
+required-component, applicability-matrix, supported-upgrade-path, and immutable
+credential-family-definition exact sets; routine-backup profile or deviation,
+schedule, path, attempt,
 material-configuration surface and independent history, reviewed-change
 registry reconciliation, custody, retention, evidence-cutoff, and reviewed
 exact-set state; routine
 operator-health schedule, cutoff, review, finding, and follow-up state;
-credential-family, lifecycle, rotation, custody, cutoff, and break-glass state;
-support and upgrade ownership; the authoritative limitation-registry current
-head and dispositions; every claimed capability-scope-authority head; the
+current credential policy lifecycle, assignment, rotation, custody, event,
+cutoff, and break-glass state;
+support and upgrade ownership heads and coverage closures; the authoritative
+limitation-registry current head and dispositions; every claimed
+capability-scope-authority head; the
 evidence-retention and resolvability head; the source-authoritative
 decision-scoped identity-resolution head used for producer and approver
 canonicalization; and
@@ -1157,17 +1224,36 @@ its commit identity and sequence, and the advanced canonical scope head; it
 cannot change the mode or cutoff of the existing decision.
 The specialized launch-scope class and pair closures, journey qualification and
 chronology, backup and upgrade-path exact sets, required-component and
-applicability-matrix reconciliation, limitation exact set and current-head
-requirements, policy governance, evidence durability, capability-scope
-authority, and release-authority-chain requirements remain additive.
+applicability-matrix reconciliation, limitation exact set and review-follow-up
+current-head requirements, immutable credential definitions and mutable
+event-stream separation, ownership coverage closures, policy governance,
+evidence durability, capability-scope authority, and release-authority-chain
+requirements remain additive.
 
 Each support and upgrade ownership head must identify the attributable current
-owner, covered class and support or upgrade scope, assignment provenance,
-effective interval, immutable head identity, and audit sequence, and must be
-effective, unrevoked, non-retired, and independently reviewed. A plan, bundle,
-ticket, or owner label is subordinate evidence and cannot establish current
-ownership. A missing, removed, expired, or superseded owner blocks GA until a
-replacement head and independent review enter a new decision attempt.
+owner, ownership family, covered class set and support or upgrade scope,
+assignment provenance, effective interval, immutable head identity, and audit
+sequence, and must be effective, unrevoked, non-retired, and independently
+reviewed. A class-specific head must name its exact class. A family-specific
+scope-wide head must bind the canonical launch-scope identity and exact
+deployment-class set identity, count, and digest. A plan, bundle, ticket, or
+owner label is subordinate evidence and cannot establish current ownership. A
+missing, removed, expired, or superseded owner blocks GA until a replacement
+head and independent review enter a new decision attempt.
+
+At decision time, AegisOps must derive separate immutable support-ownership and
+upgrade-ownership coverage closures from the authoritative deployment-class
+set. Each `(ownership family, deployment class)` cell must map to exactly one
+selected current head. A class-specific head may satisfy only its named class;
+one scope-wide head may satisfy every cell for its family only when its exact
+class-set binding matches. A scope-wide selection cannot overlap a selected
+class-specific head. Each closure binds the complete cell set, count, and
+digest, the unique selected-head set, count, and digest, and the exact mapping.
+Missing, duplicate, overlapping, extra, wrong-family, wrong-class, wrong-scope,
+alias-split, stale, revoked, retired, superseded, or unreviewed coverage blocks
+GA. The same accountable person or team may cover multiple classes or both
+families, and the number of selected heads need not equal the class count, but
+support and upgrade coverage must each be complete.
 
 An `accepted` event may be created only when every cohort head and the event
 share one serialization, fencing, or authoritative total-order boundary through
@@ -1212,24 +1298,24 @@ The following maximum ages are measured backward from `decision_at`. A maximum
 age never overrides a revision mismatch; the required action applies after
 either expiry or a mismatch:
 
-| Evidence family                                                                                                                                                          | Maximum age                                                                                                                                                                                                                                                                                                             | Required action after expiry or revision mismatch                                                                                                                                                                                                                                                                                                                                                             |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Inherited Phase 66 RC evidence set: Phase 66.7 packet plus Phase 66.8 closeout result or authoritative RC-gate result                                                    | Packet regeneration and independent closeout or gate-result evaluation and focused revalidation must complete within 24 hours.                                                                                                                                                                                          | Regenerate the packet and independently re-evaluate and revalidate the closeout or authoritative gate result at the gate evidence revision; every native observation, review, and decision rule must pass.                                                                                                                                                                                                    |
-| Real-user or design-partner GA journey records                                                                                                                           | Each required journey completion and owner review must be no more than 720 hours old; each claimed participant's qualification record must have been accepted before start and effective throughout execution.                                                                                                          | Repeat each affected journey family for every mapped deployment class at the gate evidence revision with a pre-run declaration envelope and valid participant qualification, or predeclare and independently accept a new journey-coverage rule before its source journey; review, owner relabeling, or post-run qualification cannot refresh it.                                                             |
-| Routine cadence-driven backup stream                                                                                                                                     | One reviewed gap-free window must end at `evidence_cutoff_at`, span at least one full Accepted profile review interval, and reconcile every due or overlapping item and attempt; zero-delta commit reconciliation must bridge the cutoff to `decision_at`, where the latest success and review remain inside cadence.   | Re-establish and independently review a new complete cutoff window at the gate evidence revision for each affected class; any record or newly due obligation before commit forces a new cutoff. An older-window splice, weaker schedule, one-off backup, verifier rerun, or reattestation cannot refresh the stream.                                                                                          |
-| Routine operator-health and platform-hygiene stream                                                                                                                      | One reviewed gap-free window must end at `evidence_cutoff_at`, span the longest applicable Accepted profile review interval, and reconcile every due or overlapping review, finding, escalation, and follow-up; zero-delta commit reconciliation must bridge it to `decision_at`.                                       | Re-establish and independently review the complete cutoff window and resolve every due slot and carried-open finding for the affected class; any delta before commit requires a new cutoff. One fresh diagnostic, verifier rerun, or reattestation cannot refresh a missed interval.                                                                                                                          |
-| Capacity, component-interruption and recovery, clean-target restore, exact-version upgrade and rollback, and any claimed HA, disaster-recovery, or fleet-scale execution | Each execution completion and owner review must be no more than 720 hours old.                                                                                                                                                                                                                                          | Rerun each affected family for every bound deployment class and every affected claimed compatible upgrade path at the gate evidence revision; a verifier rerun or owner reattestation alone cannot refresh it.                                                                                                                                                                                                |
-| Monitoring, diagnostic, support-bundle, and redaction execution                                                                                                          | Each execution completion and owner review must be no more than 24 hours old.                                                                                                                                                                                                                                           | Regenerate the artifacts and rerun the affected checks at the gate evidence revision for every bound deployment class.                                                                                                                                                                                                                                                                                        |
-| GA lifecycle and expiry-policy current heads                                                                                                                             | Their current-head snapshots must be no more than 24 hours old and be resolved inside each decision or transition commit cohort; the original accepted approval may be older.                                                                                                                                           | Re-resolve every applicable current head and rebuild the cohort. A mismatch, revocation, expiry, or supersession blocks the decision or transition; an older Accepted policy cannot authorize it.                                                                                                                                                                                                             |
-| Launch-scope and launch-operability current heads                                                                                                                        | The scope-definition and requirements current-head snapshots and bound class, pair, and child exact sets must be no more than 24 hours old at target declaration and be resolved again inside the decision-time cohort; the original accepted approvals may be older.                                                   | Re-resolve the scope-definition head, exact class and pair closures, requirements heads, and child sets. A missing, extra, duplicate, scope, class, requirement, component, matrix, path, compatibility, migration, rollback, or lifecycle mismatch requires new declarations, targets, and affected reruns; older versions cannot rebind execution.                                                          |
-| Credential lifecycle, rotation, custody, and break-glass state                                                                                                           | A reviewed gap-free policy-versioned window must end at `evidence_cutoff_at`; current family-set and custody heads must be no more than 24 hours old, and zero-delta reconciliation must bridge the cutoff to `decision_at`. Rotations remain due under Accepted cadence or triggers rather than a universal GA window. | Re-resolve the complete policy lifecycle, every family and overlapping or open event exact set, and independently review a new cutoff. A policy reset, current-state refresh, or new version cannot excuse a missed event, and a delta before commit forces another review.                                                                                                                                   |
-| Journey and operability environment criteria and release-authority state                                                                                                 | An immutable state snapshot and accountable review must be no more than 24 hours old, and every authority link must be effective and unrevoked at `decision_at`.                                                                                                                                                        | Re-resolve the authoritative state as an immutable gate-revision snapshot and renew its accountable review; copying the prior snapshot cannot refresh it.                                                                                                                                                                                                                                                     |
-| Journey qualification lifecycle and source-policy heads                                                                                                                  | Each qualification must cover its journey interval at `decision_at`; the same decision-bound qualification and policy aggregates and their complete current lifecycles must resolve without cached age at every authoritative `evaluated_at`.                                                                           | Return `unavailable` for an unavailable, missing, forked, gapped, authority-mismatched, self-issued, or retroactively invalidated interval until new journey evidence and a new decision exist. Recovery or a valid same-aggregate successor is allowed only when it preserves the executed interval; a normal post-completion relationship end or future-only policy successor does not expire the evidence. |
-| Authoritative limitation-registry current head                                                                                                                           | The decision-bound snapshot and review must be no more than 24 hours old at `decision_at`, and the exact head plus time-derived review and disposition posture must be re-resolved without cached age at every authoritative `evaluated_at`.                                                                            | A temporary read failure returns `unavailable` until the same valid head resolves. An in-scope record or head change, or an unchanged head crossing its cadence, due-date, or next-invalidation boundary into an overdue, expired, or blocking posture, requires a new decision and complete evaluation; cached or replacement state cannot be rebound.                                                       |
-| Producer and approver identity-resolution current head                                                                                                                   | The exact decision-scoped head must be resolved inside the decision cohort and without cached age at every authoritative `evaluated_at`; the underlying source subjects and historical approval may be older.                                                                                                           | A temporary read failure returns `unavailable` until the same head resolves. Relevant subject, mapping, alias, conflict, or head change, including newly discovered approver-producer equivalence, requires a new decision and complete evaluation; it cannot be rebound in place.                                                                                                                            |
-| Support and upgrade ownership current heads                                                                                                                              | Each exact decision-bound head must be no more than 24 hours old at `decision_at` and must be re-resolved without cached age at every authoritative `evaluated_at`.                                                                                                                                                     | A temporary read failure returns `unavailable` until the same head resolves. Removal, expiry, retirement, reassignment, supersession, scope change, or replacement-head mismatch requires a new decision and complete evaluation; it cannot be rebound or refreshed in place.                                                                                                                                 |
-| Claimed HA, disaster-recovery, or fleet-scale capability-scope-authority heads                                                                                           | Each current head must be resolved at target declaration, inside the decision-time cohort, and again for current-status evaluation; the underlying approval may be older.                                                                                                                                               | A missing, narrowed, expired, revoked, superseded, or mismatched head invalidates the target and current claim; restoration requires a new decision, not rebinding.                                                                                                                                                                                                                                           |
-| Evidence-retention, resolvability, and retention-compatibility current heads plus immutable decision-input closure                                                       | No cached age is accepted. All current heads and exact evidence must resolve at `decision_at` and every authoritative `evaluated_at`; a no-automatic-expiry decision must retain its compatible current-lifetime or pre-cutoff invalidation posture.                                                                    | Return `unavailable` until the exact reviewed evidence, current rule head, and posture are verified. A historical rule, hash, URL, cache, partial set, post-deletion substitute, or unapproved unbounded-retention assertion cannot refresh or replace them.                                                                                                                                                  |
+| Evidence family                                                                                                                                                          | Maximum age                                                                                                                                                                                                                                                                                                                                                                                                                                         | Required action after expiry or revision mismatch                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inherited Phase 66 RC evidence set: Phase 66.7 packet plus Phase 66.8 closeout result or authoritative RC-gate result                                                    | Packet regeneration and independent closeout or gate-result evaluation and focused revalidation must complete within 24 hours.                                                                                                                                                                                                                                                                                                                      | Regenerate the packet and independently re-evaluate and revalidate the closeout or authoritative gate result at the gate evidence revision; every native observation, review, and decision rule must pass.                                                                                                                                                                                                                                                                |
+| Real-user or design-partner GA journey records                                                                                                                           | Each required journey completion and owner review must be no more than 720 hours old; each claimed participant's qualification record must have been accepted before start and effective throughout execution.                                                                                                                                                                                                                                      | Repeat each affected journey family for every mapped deployment class at the gate evidence revision with a pre-run declaration envelope and valid participant qualification, or predeclare and independently accept a new journey-coverage rule before its source journey; review, owner relabeling, or post-run qualification cannot refresh it.                                                                                                                         |
+| Routine cadence-driven backup stream                                                                                                                                     | One reviewed gap-free window must end at `evidence_cutoff_at`, span at least one full Accepted profile review interval, and reconcile every due or overlapping item and attempt; zero-delta commit reconciliation must bridge the cutoff to `decision_at`, where the latest success and review remain inside cadence.                                                                                                                               | Re-establish and independently review a new complete cutoff window at the gate evidence revision for each affected class; any record or newly due obligation before commit forces a new cutoff. An older-window splice, weaker schedule, one-off backup, verifier rerun, or reattestation cannot refresh the stream.                                                                                                                                                      |
+| Routine operator-health and platform-hygiene stream                                                                                                                      | One reviewed gap-free window must end at `evidence_cutoff_at`, span the longest applicable Accepted profile review interval, and reconcile every due or overlapping review, finding, escalation, and follow-up; zero-delta commit reconciliation must bridge it to `decision_at`.                                                                                                                                                                   | Re-establish and independently review the complete cutoff window and resolve every due slot and carried-open finding for the affected class; any delta before commit requires a new cutoff. One fresh diagnostic, verifier rerun, or reattestation cannot refresh a missed interval.                                                                                                                                                                                      |
+| Capacity, component-interruption and recovery, clean-target restore, exact-version upgrade and rollback, and any claimed HA, disaster-recovery, or fleet-scale execution | Each execution completion and owner review must be no more than 720 hours old.                                                                                                                                                                                                                                                                                                                                                                      | Rerun each affected family for every bound deployment class and every affected claimed compatible upgrade path at the gate evidence revision; a verifier rerun or owner reattestation alone cannot refresh it.                                                                                                                                                                                                                                                            |
+| Monitoring, diagnostic, support-bundle, and redaction execution                                                                                                          | Each execution completion and owner review must be no more than 24 hours old.                                                                                                                                                                                                                                                                                                                                                                       | Regenerate the artifacts and rerun the affected checks at the gate evidence revision for every bound deployment class.                                                                                                                                                                                                                                                                                                                                                    |
+| GA lifecycle and expiry-policy current heads                                                                                                                             | Their current-head snapshots must be no more than 24 hours old and be resolved inside each decision or transition commit cohort; the original accepted approval may be older.                                                                                                                                                                                                                                                                       | Re-resolve every applicable current head and rebuild the cohort. A mismatch, revocation, expiry, or supersession blocks the decision or transition; an older Accepted policy cannot authorize it.                                                                                                                                                                                                                                                                         |
+| Launch-scope and launch-operability current heads                                                                                                                        | The scope-definition and requirements current-head snapshots and bound class, pair, and child exact sets must be no more than 24 hours old at target declaration and be resolved again inside the decision-time cohort; the original accepted approvals may be older.                                                                                                                                                                               | Re-resolve the scope-definition head, exact class and pair closures, requirements heads, and child sets. A missing, extra, duplicate, scope, class, requirement, component, matrix, path, compatibility, migration, rollback, or lifecycle mismatch requires new declarations, targets, and affected reruns; older versions cannot rebind execution.                                                                                                                      |
+| Credential lifecycle, rotation, custody, and break-glass state                                                                                                           | A reviewed gap-free policy-versioned window must end at `evidence_cutoff_at`; the immutable requirements family-definition set and current manifest family set must match, current assignment and custody heads must be no more than 24 hours old, and zero-delta reconciliation must bridge the cutoff to `decision_at`. The same stable lifecycle aggregate and complete successor chain must resolve without cached age at every `evaluated_at`. | Re-resolve the complete policy lifecycle and every event exact set. A post-target event updates only the current snapshot; a post-cutoff delta forces a new snapshot and review. A later routine successful successor may support current status, but missing, forked, gapped, omitted, overdue, failed, open, unreviewed, weaker, or replacement state returns `unavailable`; only a definition or governing-obligation change requires a new target and affected rerun. |
+| Journey and operability environment criteria and release-authority state                                                                                                 | An immutable state snapshot and accountable review must be no more than 24 hours old, and every authority link must be effective and unrevoked at `decision_at`.                                                                                                                                                                                                                                                                                    | Re-resolve the authoritative state as an immutable gate-revision snapshot and renew its accountable review; copying the prior snapshot cannot refresh it.                                                                                                                                                                                                                                                                                                                 |
+| Journey qualification lifecycle and source-policy heads                                                                                                                  | Each qualification must cover its journey interval at `decision_at`; the same decision-bound qualification and policy aggregates and their complete current lifecycles must resolve without cached age at every authoritative `evaluated_at`.                                                                                                                                                                                                       | Return `unavailable` for an unavailable, missing, forked, gapped, authority-mismatched, self-issued, or retroactively invalidated interval until new journey evidence and a new decision exist. Recovery or a valid same-aggregate successor is allowed only when it preserves the executed interval; a normal post-completion relationship end or future-only policy successor does not expire the evidence.                                                             |
+| Authoritative limitation-registry current head                                                                                                                           | The decision-bound snapshot and review must be no more than 24 hours old at `decision_at`; every GA review follow-up must map exactly once into it with `decision_at < due_at`; and the exact head plus time-derived review and disposition posture must be re-resolved without cached age at every authoritative `evaluated_at`.                                                                                                                   | A temporary read failure returns `unavailable` until the same valid head resolves. A missing or mismatched review obligation, in-scope record or head change, or an unchanged head crossing its cadence, due-date, or next-invalidation boundary into an overdue, expired, or blocking posture requires a new decision and complete evaluation; cached or replacement state cannot be rebound.                                                                            |
+| Producer and approver identity-resolution current head                                                                                                                   | The exact decision-scoped head must be resolved inside the decision cohort and without cached age at every authoritative `evaluated_at`; the underlying source subjects and historical approval may be older.                                                                                                                                                                                                                                       | A temporary read failure returns `unavailable` until the same head resolves. Relevant subject, mapping, alias, conflict, or head change, including newly discovered approver-producer equivalence, requires a new decision and complete evaluation; it cannot be rebound in place.                                                                                                                                                                                        |
+| Support and upgrade ownership coverage closures and current heads                                                                                                        | Each family closure must cover every authoritative deployment class exactly once at `decision_at`; every selected head must be no more than 24 hours old and the closure and heads must be re-resolved without cached age at every authoritative `evaluated_at`.                                                                                                                                                                                    | A temporary read failure returns `unavailable` until the same complete mapping resolves. Missing, duplicate, overlapping, extra, wrong-family, class, or scope coverage, or removal, expiry, retirement, reassignment, supersession, review, or replacement-head mismatch requires a new decision and complete evaluation; it cannot be rebound in place.                                                                                                                 |
+| Claimed HA, disaster-recovery, or fleet-scale capability-scope-authority heads                                                                                           | Each current head must be resolved at target declaration, inside the decision-time cohort, and again for current-status evaluation; the underlying approval may be older.                                                                                                                                                                                                                                                                           | A missing, narrowed, expired, revoked, superseded, or mismatched head invalidates the target and current claim; restoration requires a new decision, not rebinding.                                                                                                                                                                                                                                                                                                       |
+| Evidence-retention, resolvability, and retention-compatibility current heads plus immutable decision-input closure                                                       | No cached age is accepted. All current heads and exact evidence must resolve at `decision_at` and every authoritative `evaluated_at`; a no-automatic-expiry decision must retain its compatible current-lifetime or pre-cutoff invalidation posture.                                                                                                                                                                                                | Return `unavailable` until the exact reviewed evidence, current rule head, and posture are verified. A historical rule, hash, URL, cache, partial set, post-deletion substitute, or unapproved unbounded-retention assertion cannot refresh or replace them.                                                                                                                                                                                                              |
 
 A material version, topology, configuration, route, environment, journey rule,
 criterion, participant qualification or qualification-source policy, GA-scope
@@ -1246,16 +1332,24 @@ disposition, or
 release-authority change invalidates the affected evidence even inside its
 maximum-age window.
 
+For credential evidence, an observed rotation, break-glass, assignment,
+custody, or event-lifecycle delta invalidates the current snapshot, cutoff, and
+review but does not by itself invalidate an otherwise matching pre-run target or
+execution. A change to the immutable credential-family definition or governing
+policy, cadence, trigger obligation, or required result schema is a requirements
+change and does invalidate the affected target and execution.
+
 The decision-time cohort maximum ages do not replace its serialization boundary
 through atomic decision creation. Authoritative current-status evaluations and
 projections also have no cache-based grace period: each must re-resolve the
 canonical scope and selected-decision heads, lifecycle and expiry-policy heads,
 the exact decision-bound launch-scope-definition and limitation-registry heads,
 participant qualification-lifecycle and governing source-policy heads,
-claimed-capability heads, the exact decision-scoped identity-resolution head and
+claimed-capability heads, each decision-bound credential-lifecycle aggregate
+and current head, the exact decision-scoped identity-resolution head and
 producer closure, exact decision-bound support and upgrade ownership heads,
-immutable input closure, evidence-retention head, and their audit high-water
-marks at its own `evaluated_at`.
+their coverage closures, immutable input closure, evidence-retention head, and
+their audit high-water marks at its own `evaluated_at`.
 
 Capacity within the declared supported envelope, controlled recovery of
 required in-scope components, application-aware restore, and upgrade and
@@ -1375,8 +1469,12 @@ family and operability pair from one authoritative launch-scope class set
 prevents a supplied subset from defining its own completeness. Re-resolving the
 exact launch-scope and limitation-registry heads for every current projection
 prevents later class or limitation changes from being hidden behind the
-decision-time snapshot. A reviewed evidence cutoff plus commit-time zero-delta
-check
+decision-time snapshot. Complete ownership closures prevent an uncovered class
+from inheriting an unrelated owner label, and mapping review follow-ups into the
+same limitation currentness rules prevents an overdue promise from remaining
+silently non-blocking. Separating immutable credential obligations from observed
+events preserves target validity while the reviewed cutoff still captures every
+routine event. A reviewed evidence cutoff plus commit-time zero-delta check
 keeps those streams current without holding a transaction open for human review.
 Current capability-authority and evidence-resolvability heads prevent superseded
 scope or deleted proof from continuing to support a current claim, while the
@@ -1433,6 +1531,7 @@ expiry-policy, launch-requirements, required-component,
 applicability-matrix,
 supported-upgrade-path, credential-lifecycle, capability-scope-authority,
 material-configuration-history, support and upgrade ownership-head,
+ownership-coverage-closure,
 limitation-registry current-head and snapshot, evidence-retention, and
 operability-manifest schemas;
 backend authorization and current-status read and write paths; persistent
@@ -1469,24 +1568,29 @@ environment criteria, a complete Accepted-profile-derived material-configuration
 surface and independent transition history reconciled exactly to the
 reviewed-change registry, reviewed evidence-cutoff snapshots, detached
 aggregate review attestations with strict audit-sequence ordering, and
-commit-time operational zero-delta reconciliation, plus credential
-policy-lifecycle, rotation, custody, and break-glass snapshots. It must enforce direct
+commit-time operational zero-delta reconciliation, plus immutable credential
+family-definition obligations separated from current policy-lifecycle,
+assignment, rotation, custody, event, and break-glass snapshots in stable
+non-forking lifecycle aggregates with Accepted currentness rules. It must enforce direct
 gate-revision execution,
 current-requirements-bound pre-run target identity and comparison, distinct
 path-target and per-hop execution-target records, one-path run lineage, reviewed
 rollback-backup custody, upgrade and rollback outcomes, bound owner-review
 outcomes, authoritative limitation-registry current head, snapshot, exact-set,
 bound currentness rule and next invalidation boundary, and
-every-`evaluated_at` time-derived posture reconciliation, one-to-one producer
+every-`evaluated_at` time-derived posture reconciliation, including exact
+GA-review follow-up obligation and source-review mapping, one-to-one producer
 attribution for every immutable input and
 the complete producer-union independence check, current support and upgrade
-ownership heads, claimed-capability
+ownership heads and per-family deployment-class coverage closures,
+claimed-capability
 scope-authority heads, and the shared mutable-state cohort through the atomic
 decision boundary, freshness, scope-first current-head re-evaluation including
 the exact decision-bound launch-scope-definition and limitation-registry heads,
 participant qualification-lifecycle and source-policy heads, the exact
-decision-scoped producer and approver identity-resolution head, and
-exact decision-bound support and upgrade ownership heads at every
+decision-bound credential-lifecycle aggregates and their current successor
+heads, the exact decision-scoped producer and approver identity-resolution head, and
+exact decision-bound support and upgrade ownership closures and heads at every
 `evaluated_at`, and retained-evidence secret hygiene without storing forbidden
 source values.
 
@@ -1541,10 +1645,21 @@ close, delete, reclassify, or redispose an in-scope limitation; and remove,
 expire, retire, reassign, supersede, or narrow each decision-bound support and
 upgrade ownership head between acceptance and `evaluated_at`. They must reject
 stale class or limitation sets, count or digest mismatches, forked or gapped
-heads, cached historical heads, and in-place replacement binding. They must also
+heads, cached historical heads, and in-place replacement binding. Ownership
+coverage tests must reject a missing class in either family, duplicate,
+overlapping, extra, wrong-family, wrong-class, wrong-scope, alias-split, stale,
+retired, revoked, superseded, or unreviewed mapping and must accept both complete
+class-specific mappings and one exact family-specific scope-wide head without
+requiring distinct owners. They must also
 cross a limitation review-cadence, due-date, or deterministic invalidation
 boundary without changing the head and reject the resulting overdue, expired,
-or blocking posture. A temporary read outage must return `unavailable`, while
+or blocking posture. Review-follow-up tests must reject a missing, duplicate,
+ticket-only, wrong-review, evidence, scope, class, family, owner, due-date, or
+disposition mapping, a follow-up already due at `decision_at`, a follow-up added
+after the finalized snapshot, and late completion or in-place rebinding. They
+must accept a plain `accepted` review with no obligation and a mapped open
+non-blocking obligation before its due boundary, then return `unavailable` at
+that boundary when it remains unresolved. A temporary read outage must return `unavailable`, while
 recovery of each exact unchanged and still-valid head may permit a new
 evaluation; a changed or time-invalid head requires a new decision.
 An out-of-scope limitation mutation and an inactive historical scope-class pair
@@ -1641,14 +1756,29 @@ protected-state coverage; missing due rotation, hidden trigger, one-person or
 otherwise weaker-than-profile custody, weaker cadence, missing primary or backup
 custodian, stale custody, or break-glass use without return-to-normal closeout;
 credential-policy replacement that resets coverage or hides a boundary-crossing
-or carried-open event; withdrawn or narrowed
+or carried-open event. Credential temporal tests must reject an observed event
+identity, outcome, or high-water mark embedded in the immutable requirements
+head and must keep the requirements head and matching target valid when a
+rotation or break-glass event occurs after target declaration and is captured by
+the current snapshot at or before the cutoff. They must reject an omitted event,
+require a new snapshot and review for a post-cutoff delta without rerunning an
+otherwise matching target, and invalidate the target when a family definition,
+policy, cadence, trigger obligation, or required result schema changes. They
+must also accept a post-decision routine rotation as a continuous same-aggregate
+successor only when it is complete, on time, accepted, and no weaker. At a later
+`evaluated_at`, a missing, forked, gapped, omitted, overdue, failed, open,
+unreviewed, weaker, or replacement aggregate and an unclosed break-glass event
+must return `unavailable`; a family-definition or governing-obligation change
+must require a new target and decision rather than rebinding. They
+must also reject withdrawn or narrowed
 capability authority; and missing, deleted, unreadable, corrupt, partial, or
 archive-unavailable decision evidence. Snapshot-to-commit tests must mutate each
 backup, health, environment, participant-qualification lifecycle,
 qualification-source policy, launch-scope-definition, requirements, component,
 matrix, upgrade-path,
-credential, capability-authority, evidence-retention, ownership, limitation, and
-release-authority head and prove that no accepted decision is written. The
+credential-definition, credential-state, capability-authority,
+evidence-retention, ownership-coverage, ownership-head, limitation, and
+release-authority state and prove that no accepted decision is written. The
 qualification cases must include correction or revocation, source-policy change
 or expiry, and issuer-authority revocation or scope change after snapshot but
 before commit.
@@ -1804,20 +1934,25 @@ Review of this proposal must confirm:
   journey evidence, and a new decision rather than cached acceptance or
   replacement rebinding,
 - atomic re-resolution at every `evaluated_at` of the exact support-ownership
-  and upgrade-ownership heads bound by the selected decision, with unchanged
-  head recovery after temporary unavailability permitted but any removal,
-  expiry, retirement, reassignment, supersession, scope change, or
-  replacement-head mismatch requiring `unavailable` and a new decision rather
-  than cached acceptance or in-place rebinding,
+  and upgrade-ownership coverage closures and selected heads bound by the
+  decision, with each family covering the authoritative deployment-class set
+  exactly once through class-specific or an exact scope-wide head, unchanged
+  complete mapping recovery after temporary unavailability permitted, but any
+  missing, duplicate, overlap, extra, wrong-family, class, scope, alias,
+  removal, expiry, retirement, reassignment, supersession, review, or
+  replacement mismatch requiring `unavailable` and a new decision rather than
+  cached acceptance or in-place rebinding,
 - atomic re-resolution at every `evaluated_at` of the exact authoritative
   limitation-registry current head bound by the decision, including scope and
   applicability predicate, complete in-scope non-closed set, count, every
   authoritative state and disposition identity, and audit high-water mark, with
   each member's currentness rule, review cadence or due date, accepted risk,
-  follow-up state, and next invalidation boundary evaluated at that instant;
+  follow-up state, next invalidation boundary, and exact decision-bound GA review
+  follow-up obligation set and source mapping evaluated at that instant;
   unchanged-head recovery after temporary unavailability is permitted only
-  while the time-derived posture remains valid, but any overdue, expired, or
-  blocking posture or in-scope create, update, reopen, close, delete, severity,
+  while every mapping and time-derived posture remains valid, but any missing,
+  duplicate, mismatched, overdue, expired, or blocking follow-up posture or
+  in-scope create, update, reopen, close, delete, severity,
   owner, disposition, scope, lifecycle, fork, gap, set, or head change requires
   `unavailable` and a new decision rather than cached acceptance or
   replacement-head rebinding, while an out-of-scope mutation remains isolated,
@@ -1877,14 +2012,19 @@ Review of this proposal must confirm:
   current immutable Accepted profile criteria, with producer dispositions and
   class labels unable to waive missing, incomparable, out-of-tolerance, or
   weakening dimensions,
-- a complete credential-family exact set with current owner, bounded consumer
-  scope, delivery and custody proven no weaker than current Accepted
-  authentication and profile criteria for every effective policy subinterval,
-  distinct custodians where required, a non-forking Accepted rotation-policy
-  lifecycle that cannot reset coverage, every due, boundary-crossing, or open
-  rotation outcome through the reviewed cutoff and commit bridge, next due
-  boundary, and exact break-glass set, bounded use, and return-to-normal closeout,
-  without retaining raw secret values,
+- a complete immutable credential-family definition exact set in the
+  requirements head, containing only governing owner, consumer, scope,
+  delivery, custody, policy, cadence, trigger, event-schema, and no-weaker
+  obligations, plus an exactly reconciled current manifest snapshot with actual
+  owner and custody heads, a non-forking Accepted policy lifecycle that cannot
+  reset coverage, every due, boundary-crossing, or open rotation outcome through
+  the reviewed cutoff and commit bridge, next due boundary, and exact
+  break-glass set, bounded use, and return-to-normal closeout, without retaining
+  raw secret values or invalidating targets for ordinary observed events, plus
+  every-`evaluated_at` resolution of the same stable aggregate's complete
+  successor chain, allowing only complete on-time accepted and no-weaker routine
+  successors while failing closed on unavailable, missing, forked, gapped,
+  omitted, overdue, failed, open, unreviewed, weaker, or replacement state,
 - a current non-forking launch-scope-definition head with a canonical
   deployment-class exact set and deterministic scope-class pair closure, plus
   current launch-requirements heads and complete required-component,
@@ -1903,8 +2043,9 @@ Review of this proposal must confirm:
   lifecycle and expiry policy, journey qualification and environment state,
   operability environment state, requirements child sets, backup and health
   cadence, material-configuration surface, independent history and
-  reviewed-change reconciliation, credential lifecycle and custody, support and
-  upgrade ownership, limitations, claimed-capability authority, evidence
+  reviewed-change reconciliation, immutable credential definitions and separate
+  current lifecycle, event, and custody state, support and upgrade ownership
+  heads and coverage closures, limitations, claimed-capability authority, evidence
   retention and compatibility, source-authoritative identity resolution, and
   release authority, with every current head reconciled
   through atomic decision creation
@@ -1952,6 +2093,10 @@ statements. The repository-wide phase-contract verifier and shell-test gates and
 - This proposal does not place every catalog profile, environment instance,
   host, tenant, customer, or historical scope-class pair into the declared
   launch scope.
+- This proposal does not require a different support or upgrade owner for every
+  class or family, separate support and upgrade teams, external support, 24x7
+  staffing, or per-host, tenant, or customer ownership; one accountable person
+  or team may cover multiple cells when each family closure remains complete.
 - This proposal does not mandate a CMDB, host-write monitoring agent, or vendor
   configuration service and does not retain raw configuration or secret values.
 - This proposal does not create a producer role, require enterprise-wide
