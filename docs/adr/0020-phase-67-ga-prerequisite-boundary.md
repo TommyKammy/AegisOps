@@ -3,7 +3,7 @@
 - **Status**: Proposed
 - **Date**: 2026-08-12
 - **Owners**: AegisOps maintainers
-- **Related Baseline**: `docs/requirements-baseline.md`, `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`
+- **Related Baseline**: `docs/requirements-baseline.md`, `docs/auth-baseline.md`, `docs/retention-evidence-and-replay-readiness-baseline.md`, `docs/smb-footprint-and-deployment-profile-baseline.md`, `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`, `docs/phase-66-6-rc-supportability-proof.md`, `docs/phase-66-7-rc-authority-boundary-proof-pack.md`
 - **Product**: AegisOps
 - **Related Issues**: #1414, #1418
 - **Related ADRs**: `docs/adr/0011-phase-51-1-replacement-boundary.md`
@@ -18,7 +18,8 @@ The accepted Phase 51.3 gate contract currently maps Phase 67 directly to GA.
 It requires real-user or design-partner evidence, supportability, known
 limitation ownership, named owners, and a recorded follow-up decision before
 that GA mapping may be materialized. It does not require an independent human
-approver for GA acceptance.
+approver for GA acceptance, define a GA release-authority root, or establish the
+additional immutable-reference and decision-event controls proposed here.
 
 The implemented Phase 67 Epic has a narrower boundary. It describes a bounded,
 single-host, non-production real-integration trial and explicitly excludes GA
@@ -30,11 +31,12 @@ accepted GA gate.
 The accepted Phase 51.3 contract remains the current baseline while this ADR is
 Proposed. What remains undecided is whether Phase 67 should be renamed and
 governed as GA-prerequisite validation, whether GA acceptance should move to a
-separate gate decision, and whether that gate should introduce a human approver
-independent of evidence production. That independent-human-approval requirement
-would be a new release-governance control proposed by this ADR. Deferring these
-decisions leaves the roadmap label and the actual trial boundary in conflict
-and makes GA overclaim difficult to audit.
+separate gate decision, and whether that gate should introduce an authorized
+human decision independent of evidence production. The authority root,
+authority-chain validation, immutable evidence binding, and explicit GA decision
+event would be new release-governance controls proposed by this ADR. Deferring
+these decisions leaves the roadmap label and the actual trial boundary in
+conflict and makes GA overclaim difficult to audit.
 
 ## 2. Proposed Decision
 
@@ -49,17 +51,42 @@ If approved, this ADR would establish the following decision:
   RC proof packet plus real-user or design-partner evidence across the intended
   launch scope, production-operability evidence, support and upgrade ownership,
   and explicit disposition of every blocking limitation.
+- The real-user or design-partner evidence must demonstrate attributable use of
+  every accepted Phase 51.3 GA journey family across that scope: install or
+  upgrade, Wazuh signal admission, Shuffle delegated execution, AI advisory
+  trace review, report export, restore dry-run, upgrade-plan rehearsal,
+  support-bundle generation, and accepted limitations ownership. Inherited RC
+  or lab evidence and generic operability evidence cannot substitute for an
+  attributable real-user or design-partner exercise of any family.
 - The Phase 66.7 packet's `repository_revision` and every additional GA evidence
   item must bind to the one immutable evidence revision recorded by the GA gate.
   If the inherited packet names another revision, it must be regenerated and
   revalidated at the gate revision. Combining it with current-revision GA
   evidence is mixed-snapshot evidence and blocks acceptance.
+- The complete inherited RC packet and every additional GA evidence reference
+  must carry an immutable content identity. Repository-owned artifacts must bind
+  to their exact Git object or content digest; authoritative AegisOps records
+  must bind to an equivalent tamper-evident record version or snapshot identity.
+  This applies to real-user or design-partner journey records, the operability
+  manifest and its environment, target, and execution records, ownership and
+  limitation records, and release-authority records and chain snapshots. The
+  gate must resolve and verify each input identity when the decision is made. A
+  mutable label, path, URL, or record identifier without immutable snapshot
+  binding blocks acceptance.
 - The GA gate record preserves the accepted Phase 51.3 metadata: the real-user
   or design-partner record reference, reviewed environment class, operator or
   design-partner owner, evidence date, gate record identifier, accepted
   limitations, support owner, upgrade owner, and follow-up decision. It
-  additionally records the evidence revision and a human approver who is
-  independent of evidence production.
+  additionally records the evidence revision and immutable evidence index.
+- The gate record must contain an attributable, immutable human GA decision
+  event, not merely an assigned approver identity. The event records an explicit
+  outcome, decision timestamp, and justification or attestation, and binds the
+  approver identity and authority record to the gate identifier, intended launch
+  scope, evidence revision, and immutable input-evidence index. The completed
+  decision event receives its own immutable AegisOps record identity or version
+  as part of its atomic creation; it is not an input to the index that it binds.
+  Only an explicit `accepted` outcome satisfies GA. A missing, pending,
+  rejected, expired, superseded, or mismatched decision blocks acceptance.
 - The human GA approver is eligible only when the gate record references an
   AegisOps-owned, auditable role-assignment or explicit-delegation record that
   binds the attributable identity to GA release authority for the recorded
@@ -68,6 +95,23 @@ If approved, this ADR would establish the following decision:
   evidence-owner, product-owner, or release-owner label, or a human disposition
   does not confer that authority by itself. The authorized approver must remain
   distinct from every evidence producer.
+- Each role-assignment or delegation record must also name its issuer, issuance
+  time, immutable record identity, granted scope, and the accepted AegisOps
+  governance record or prior delegation that authorized the issuer to grant
+  equal-or-narrower GA release authority. At decision time the gate must resolve
+  an effective, unrevoked chain to an authority root established outside the
+  delegation chain by a separately accepted AegisOps governance decision. That
+  root decision must name the root holder and scope, be approved by an
+  attributable competent release-governance authority of the AegisOps-owning
+  organization that is distinct from the designated root, and retain immutable
+  approval provenance. It must bind that approving authority to an immutable,
+  resolvable organizational appointment, charter, or equivalent governance
+  reference that authorizes designation of the root; a title or competence
+  assertion alone does not. Repository write, merge, or administration access,
+  ADR authorship, and approval of this ADR alone do not establish or approve the
+  root. Missing links, cycles, scope widening, an issuer who equals the grantee,
+  and self-issued or otherwise unauthorized grants block acceptance. This ADR
+  does not designate that initial authority root or grant GA release authority.
 - A result such as `integration_trial_passed_with_owned_limitations` remains
   prerequisite evidence only. Issue closure, pull-request merge, CI success,
   external-service health, or a subordinate Wazuh or Shuffle result cannot
@@ -91,10 +135,17 @@ revision. The manifest must directly index:
 - every operability limitation with its impact, owner, disposition, decision
   date, and follow-up date.
 
-Each indexed execution record must name its run identifier, execution time,
-operator, target declared before execution, observed result, artifact digest,
-and owner. A plan, dry run, service-health result, CI result, or verifier result
-cannot by itself satisfy an executed evidence reference.
+Each indexed execution record must name its run identifier, deployment-class
+identifier, immutable environment-record reference, execution start and
+completion times, operator, observed result, artifact digest, owner, and owner
+review time. It must also reference an immutable target record with its content
+identity, declaration time, and AegisOps append-only audit-sequence reference or
+equivalent independently timestamped external attestation. That independent
+record must establish the target before the execution's authoritative start
+time. A caller-supplied timestamp, Git author or committer date, or assertion
+created only in post-run output does not prove predeclaration. A plan, dry run,
+service-health result, CI result, or verifier result cannot by itself satisfy an
+executed evidence reference.
 
 The exercises must run in at least one production-like environment for every
 materially distinct deployment class in the intended launch scope. Each
@@ -103,8 +154,17 @@ deployment profile and topology, release image and configuration digests,
 proxy, TLS, and secret boundary, persistent and backup-separated storage,
 resource floor, and in-scope Wazuh and Shuffle routes. Every difference from the
 declared launch class requires an owned blocking or non-blocking disposition.
-Production credentials, customer data, and direct production access are not
-required.
+For each declared class, the manifest must contain the complete mandatory
+exercise set, and an execution counts only for the class and environment record
+to which it is immutably bound.
+
+Exercises must use synthetic or reviewed-redacted inputs. Retained GA evidence
+must not contain production secrets, credentials, authorization material,
+certificate or key material, raw customer-private data, ticket-private content,
+customer identifiers, email addresses, or workstation-local paths. A redaction
+assertion does not permit retaining the forbidden value beside it. Direct
+production access is neither required nor accepted as a substitute for
+production-like evidence.
 
 The operability packet passes only when every mandatory exercise exists, is
 non-placeholder, is bound to the gate evidence revision directly or through a
@@ -113,6 +173,39 @@ its target declared before execution, preserves AegisOps record-chain and
 authority invariants, retains failed-path and clean-state evidence, and leaves
 no unresolved blocking operability limitation. Missing, mixed-revision, stale,
 post-hoc-targeted, failed, or subordinate-authority evidence blocks GA.
+
+Every owner or accountable review in the GA packet must bind an attributable
+reviewer who is distinct from the evidence producer and owner to the exact
+immutable evidence identity reviewed, and record `accepted` or
+`accepted-with-follow-up`. The latter is allowed only for a non-blocking
+follow-up with impact, owner, and due date. A missing, self-reviewed, rejected, or
+mismatched review blocks acceptance.
+
+### GA Evidence Freshness
+
+All age and ordering checks use the immutable GA decision event's
+AegisOps-recorded `decision_at`; a caller-supplied decision time cannot establish
+freshness. For every target-bound execution, independent records must prove
+`target_declared_at < started_at <= completed_at <= owner_review_at <= decision_at`.
+Every other reviewed evidence record must prove
+`observed_at <= owner_review_at <= decision_at`. These orderings require
+AegisOps append-only audit sequencing or an equivalent independently timestamped
+attestation. The decision timestamp must not be more than five minutes in the
+future when verified.
+
+The following maximum ages are measured backward from `decision_at`:
+
+| Evidence family                                                                                                                                                          | Maximum age                                                                                                                                                      | Required action after expiry                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inherited Phase 66.7 RC packet                                                                                                                                           | Its regeneration and focused revalidation must complete within 24 hours.                                                                                         | Regenerate and revalidate the whole packet at the gate evidence revision; its native observation, review, and decision freshness rules must pass.                                                          |
+| Real-user or design-partner GA journey records                                                                                                                           | Each required journey completion and owner review must be no more than 720 hours old.                                                                            | Repeat each expired journey family with attributable real-user or design-partner use at the gate evidence revision and reviewed environment class; a desk review or owner reattestation cannot refresh it. |
+| Capacity, component-interruption and recovery, clean-target restore, exact-version upgrade and rollback, and any claimed HA, disaster-recovery, or fleet-scale execution | Each execution completion and owner review must be no more than 720 hours old.                                                                                   | Rerun each expired family for every bound deployment class at the gate evidence revision; a verifier rerun or owner reattestation alone cannot refresh it.                                                 |
+| Monitoring, diagnostic, support-bundle, and redaction execution                                                                                                          | Each execution completion and owner review must be no more than 24 hours old.                                                                                    | Regenerate the artifacts and rerun the affected checks for every bound deployment class.                                                                                                                   |
+| Environment equivalence, support and upgrade ownership, limitation disposition, and release-authority state                                                              | An immutable state snapshot and accountable review must be no more than 24 hours old, and every authority link must be effective and unrevoked at `decision_at`. | Re-resolve the authoritative state and renew its accountable review or disposition; copying the prior snapshot cannot refresh it.                                                                          |
+
+A material version, topology, configuration, route, environment, target, owner,
+limitation, or authority change invalidates the affected evidence even inside
+its maximum-age window.
 
 Capacity within the declared supported envelope, controlled recovery of
 required in-scope components, application-aware restore, and upgrade and
@@ -131,11 +224,11 @@ before a separate implementation pull request applies the decision.
 ## 3. Decision Drivers
 
 - prevent bounded lab evidence from being overstated as GA acceptance,
-- keep gate decisions revision-bound and auditable,
-- introduce authorized human accountability and separation of duties for GA
-  acceptance,
-- make missing real-user, operability, support, upgrade, and limitation evidence
-  explicit,
+- keep gate decisions revision-bound, content-bound, and auditable,
+- introduce explicit authorized-human accountability, a verifiable authority
+  chain, and separation of duties for GA acceptance,
+- make incomplete real-user journey coverage, operability evidence, support,
+  upgrade, and limitation ownership explicit,
 - align roadmap terminology with the Phase 67 trial that actually exists, and
 - fail closed when documentation or automation could imply broader readiness.
 
@@ -150,7 +243,7 @@ completion as evidence that the GA gate itself was accepted.
 ### Option B: Make Phase 67 prerequisite validation and separate GA acceptance
 
 This is the proposed option. It aligns the phase boundary with the bounded trial
-and makes the missing launch-scope evidence and proposed independent-human
+and makes the missing launch-scope evidence and proposed authorized-human
 decision explicit. It also requires an approved baseline change and a separate,
 reviewed implementation pull request.
 
@@ -171,6 +264,14 @@ introduce separation of duties between evidence production and release
 acceptance, making the accountable decision and its inputs independently
 reviewable. Requiring an effective, scope-bound release-authority record also
 prevents an unrelated human or an action-approval role from accepting GA.
+Resolving every reference to immutable content and requiring an explicit
+decision event prevents a mutable artifact or assigned identity from being
+mistaken for acceptance. The 720-hour journey and heavy-exercise window aligns
+with the reviewed monthly restore and maintenance cadence, while the 24-hour
+packet, diagnostic, and decision-state window retains the stricter Phase 66.6
+and 66.7 precedent for rapidly changing evidence. Fixed windows and explicit
+expiry actions prevent each implementation from choosing its own definition of
+stale evidence.
 
 ## 6. Consequences
 
@@ -180,9 +281,9 @@ If approved and implemented:
 
 - Phase 67 results remain bounded and non-production,
 - missing GA evidence remains visible as owned prerequisite blockers,
-- a later GA decision preserves every accepted Phase 51.3 GA evidence metadata
-  field and additionally names its evidence revision and authorized, independent
-  approver, and
+- a later GA decision preserves every accepted Phase 51.3 GA journey and
+  metadata requirement and additionally binds immutable evidence identities, an
+  explicit human outcome, and a verified authority chain, and
 - documentation and verifiers reject claims that Phase 67 itself accepts GA.
 
 ### Negative Consequences
@@ -191,6 +292,8 @@ If approved and implemented:
 
 - the existing Phase 51, Phase 65, and Phase 66 contract surfaces require a
   coordinated migration,
+- every materially distinct launch class requires a fresh mandatory-operability
+  exercise set within the fixed family-specific decision windows,
 - Phase 67 completion alone cannot close the GA decision, and
 - reviewers must distinguish prerequisite evidence from release acceptance.
 
@@ -216,20 +319,25 @@ adversarial self-test pairs. That implementation must not be merged before this
 ADR records approval.
 
 That implementation must also define structured schemas and focused verifier
-and adversarial-test pairs for the GA gate record, inherited-evidence
-revalidation, release-authority record, and GA operability manifest.
+and adversarial-test pairs for the GA journey-family index, immutable evidence
+index, explicit human decision event, inherited-evidence revalidation,
+release-authority chain, and per-deployment-class GA operability manifest. It
+must enforce pre-run target identity, bound owner-review outcomes, freshness,
+and retained-evidence secret hygiene without storing forbidden source values.
 
 ## 8. Security Impact
 
-This proposal changes no privileges, secret handling, network exposure, or
-runtime attack surface. If approved, it would introduce an authorized and
-independent human approval boundary specifically for GA acceptance. That is a
-new release-governance policy, distinct from the accepted baseline's
-human-approval requirements for controlled write or destructive action
-execution. It would also prevent subordinate systems, CI, issue state, or
-generated evidence from gaining release authority. The intended security
-benefit is stronger auditability of who accepted GA and which evidence revision
-supported the decision.
+This proposal changes no runtime privileges, credentials, network exposure, or
+runtime attack surface. If approved, it would tighten release-evidence handling
+by requiring synthetic or reviewed-redacted inputs and prohibiting retained
+secret, authorization, customer-private, and workstation-local material. It
+would also introduce an authorized and independent human approval boundary
+specifically for GA acceptance. That is a new release-governance policy,
+distinct from the accepted baseline's human-approval requirements for
+controlled write or destructive action execution. This proposal neither grants
+that authority nor designates its root. The intended security benefit is to
+prevent subordinate systems, mutable evidence, unauthorized grants, or a named
+but inactive approver from conferring GA acceptance.
 
 ## 9. Rollback / Exit Strategy
 
@@ -238,10 +346,11 @@ rollback because it does not alter the accepted baseline.
 
 After approval and implementation, rollback or supersession is triggered if the
 separate-gate model cannot preserve every required Phase 51.3 GA record field,
-cannot bind each GA decision to an auditable evidence revision, or cannot
-prevent Phase 67 prerequisite evidence from conferring GA acceptance. A later
-accepted ADR or requirements-baseline change that assigns GA acceptance to a
-different phase or authority is also a trigger.
+cannot bind each GA decision to an immutable evidence revision and content,
+cannot resolve an authorized release-authority chain, or cannot prevent Phase 67
+prerequisite evidence from conferring GA acceptance. A later accepted ADR or
+requirements-baseline change that assigns GA acceptance to a different phase or
+authority is also a trigger.
 
 When a post-implementation trigger above applies, replacing this decision
 requires a new ADR that records why the boundary is changing and supersedes ADR 0020. The related implementation changes would then be reverted or migrated in
@@ -254,17 +363,26 @@ Review of this proposal must confirm:
 
 - consistency with the accepted Phase 51.3 gate contract and ADR 0011,
 - explicit separation of prerequisite evidence from GA acceptance,
-- preservation of every accepted Phase 51.3 GA evidence metadata field,
+- attributable real-user or design-partner exercise coverage for every accepted
+  Phase 51.3 GA journey family and preservation of every accepted GA metadata
+  field,
 - one-revision binding across the inherited RC packet and every additional GA
   evidence item, including fail-closed mixed-snapshot rejection and
   revalidation,
-- identification and justification of authorized, independent human GA approval
-  as a new release-governance control, including proof that the named approver
-  held effective, unrevoked GA release authority for the recorded launch scope
-  and remained distinct from every evidence producer,
-- testable artifact, production-like-environment, pass-criteria, and HA, scale,
-  and disaster-recovery disposition requirements for production-operability
-  evidence,
+- resolution of every GA reference to immutable content or authoritative-record
+  state rather than a mutable label, path, URL, or bare identifier,
+- an explicit immutable human decision event with attributable outcome, time,
+  justification, gate, launch-scope, revision, evidence, and authority bindings,
+- proof that the approver held effective, unrevoked GA release authority for the
+  recorded launch scope, remained distinct from every evidence producer, and
+  inherited that authority through a non-cyclic, non-self-issued,
+  non-scope-widening chain to a separately accepted root authorized by the
+  AegisOps-owning organization's competent release-governance authority,
+- complete mandatory exercise coverage per deployment class, immutable pre-run
+  target declaration with independently recorded chronology, accepted
+  non-self-review bound to each immutable evidence identity, the fixed
+  family-specific freshness and invalidation rules, retained-data hygiene, and
+  testable HA, scale, and disaster-recovery dispositions,
 - complete approval metadata when the status changes, and
 - no claim that this proposal itself accepts GA or production readiness.
 
@@ -282,8 +400,10 @@ statements. The repository-wide phase-contract verifier and shell-test gates and
 - This proposal does not complete issue #1418.
 - This proposal does not change the currently accepted Phase 51.3 baseline.
 - This proposal does not implement or enforce its proposed boundary.
-- This proposal does not require production credentials, customer data, or
-  direct production access to produce operability evidence.
+- This proposal does not designate an initial GA authority root or grant GA
+  release authority.
+- This proposal does not require direct production access or customer data;
+  retained evidence remains restricted by Section 2.
 - This proposal does not establish a public SLA, 24x7 support commitment,
   enterprise HA or multi-site disaster-recovery scope, fleet-scale
   certification, or multi-tenant readiness.
