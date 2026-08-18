@@ -173,10 +173,11 @@ prevent Phase 67 prerequisite evidence from conferring GA acceptance. A later
 accepted ADR or requirements-baseline change that assigns GA acceptance to a
 different phase or authority is also a trigger.
 
-After approval and implementation, replacing this decision requires a new ADR
-that records why the boundary is changing and supersedes ADR 0020. The related
-implementation changes would then be reverted or migrated in a separate pull
-request. There are no irreversible runtime or data changes in this decision.
+When a post-implementation trigger above applies, replacing this decision
+requires a new ADR that records why the boundary is changing and supersedes ADR
+0020. The related implementation changes would then be reverted or migrated in
+a separate pull request. There are no irreversible runtime or data changes in
+this decision.
 
 ## 10. Validation
 
