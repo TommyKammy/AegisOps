@@ -96,7 +96,12 @@ If approved, this ADR would establish the following decision:
   organization or engagement and launch-scope identity, the Accepted persona or
   operating responsibility, source and immutable version, issuer and acceptance
   provenance under a separately Accepted qualification-source policy, effective
-  interval, and correction or revocation lifecycle. Before the journey starts,
+  interval, and correction or revocation lifecycle. The actual attributable
+  issuer and qualification-acceptance actor must each bind a source-authority
+  identity, opaque stable source-subject identifier, principal kind, scope-valid
+  authority reference, and immutable provenance; a group, role, title, service
+  label, or caller-declared actor without an attributable principal cannot
+  substitute. Before the journey starts,
   one immutable declaration
   envelope must bind those criteria, the current Accepted deployment-profile and
   environment-criteria identities, the same immutable deployment-class and
@@ -146,20 +151,47 @@ If approved, this ADR would establish the following decision:
   does not rewrite historical evidence, but a correction or revocation that
   invalidates any part of the execution interval blocks that evidence.
   The separately Accepted qualification-source policy must define allowed
-  source authorities, issuer scope, acceptance authority, and correction and
-  revocation semantics without allowing the policy, issuer, participant, or
-  evidence producer to self-bootstrap qualification. That policy must form an
+  source authorities, issuer scope, acceptance authority, correction and
+  revocation semantics, and the exact prohibited-principal role-selection
+  predicate and completeness semantics for each qualification kind and scope,
+  without allowing the policy, issuer, participant, or evidence producer to
+  self-bootstrap qualification. That policy must form an
   AegisOps-owned append-only, non-forking lifecycle aggregate whose current head
-  binds the Accepted policy version, effective interval, status, predecessor,
-  sequence, authority provenance, and audit high-water mark. Only a current
+  binds the Accepted policy version, authoritative source family and version,
+  exact prohibited-role-selection predicate, completeness and currentness
+  semantics, effective interval, status, predecessor, sequence, authority
+  provenance, and audit high-water mark. Only a current
   `accepted`, effective, unexpired, non-revoked, non-superseded policy head may
   authorize the pre-run declaration and decision. Each qualification must
   expose an AegisOps-owned append-only, non-forking lifecycle current head, or an
   equivalent current snapshot under that policy, binding its immutable source
   version, predecessor, sequence, status, effective interval, correction and
-  revocation state, issuer authority, and audit high-water mark. The decision
-  must bind the exact ordered head set, count, and digest for every claimed
-  participant.
+  revocation state, exact issuer and qualification-acceptance actor source
+  subjects and authority provenance, issuer authority, exact governing policy
+  aggregate, head and version, and audit high-water mark. The decision must bind
+  the exact ordered head set, count, and digest for every claimed participant
+  plus one complete ordered qualification-actor-separation mapping set, count,
+  and digest. Each member must bind its exact qualification and participant,
+  issuer and acceptance-actor source subjects, the decision-bound policy head,
+  version, effective interval and prohibited-role-selection predicate, and the
+  exact prohibited source-subject set, count, digest, role mapping and immutable
+  source proof/version mechanically derived from that predicate for that
+  qualification. The qualification set and mapping members must reconcile
+  bidirectionally one-to-one; missing, extra, duplicate, substituted, or wrong-
+  policy members block acceptance. The claimed participant, every actual
+  issuer, every qualification-acceptance actor, and every subject in that
+  qualification's exact decision-bound prohibited-principal set must enter the
+  same decision-scoped identity-resolution closure. The participant must resolve
+  canonically distinct from every issuer, acceptance actor, and prohibited
+  principal mapped to that qualification; issuer and acceptance actors need not
+  be distinct from each other unless the Accepted policy says so. A group- or
+  role-label-only, ambiguous, conflicting, or alias-collapsed mapping or mutable
+  or incomplete prohibited-subject source proof also blocks acceptance. The
+  initial qualification-source
+  policy and its acceptance authority must derive from a separately Accepted
+  governance decision and immutable approval provenance outside the
+  qualification graph; neither a participant, qualification record, nor that
+  graph may bootstrap the policy or its authority.
 
 - A journey record may cover another deployment class or a non-identical
   environment only through a predeclared, immutable, independently reviewed
@@ -197,6 +229,39 @@ If approved, this ADR would establish the following decision:
   alone, closeout prose, verifier output, or issue state cannot substitute. A
   Phase 66.8 closeout result remains subordinate RC evidence and cannot accept
   GA.
+- The exact selected Phase 66.7 packet must belong to an AegisOps-owned,
+  append-only, non-forking `rc_proof_packet` evidence aggregate with an
+  authoritative current head, or an equivalent canonical lifecycle defined by
+  an Accepted successor contract. The head must bind the stable aggregate
+  identity, exact immutable packet content and version, `repository_revision`,
+  `journey_run_id`, complete packet-input closure, set, count and digest,
+  effective interval and Evidence state, predecessor and sequence, authorized
+  correction, withdrawal, revocation and supersession provenance, transition
+  authority, and audit high-water mark. Only a current usable `validated` or
+  `linked` state that is effective, unwithdrawn, unrevoked and non-superseded may
+  support GA. The selected Phase 66.8 closeout or Accepted-successor RC-gate
+  result head must bind that exact packet aggregate, decision-time packet head,
+  content version and one-revision mapping, and the GA decision must bind both
+  heads and their mapping. A stable packet or result aggregate identity may be
+  reserved beforehand, but authoritative audit ordering must prove
+  `packet_selected_head_commit_sequence < rc_result_review_and_initial_head_commit_sequence < decision_sequence`.
+  The selected packet head cannot be reviewed before its immutable content and
+  head exist, and it does not bind a future result; the dependency is one-way
+  from the later independently reviewed RC result to the already committed
+  packet head. A caller-supplied or backdated sequence, an equal or reversed
+  packet/result sequence, a result over a reserved but uncommitted future packet
+  head, or a packet materialized after its result blocks GA. At every
+  `evaluated_at`, AegisOps must resolve the
+  complete packet and selected-result chains and current heads in one snapshot.
+  Temporary unreadability may recover only when the same complete valid chains
+  resolve. A same-aggregate metadata-only successor may pass only when it
+  preserves the exact packet content, revision, input closure, selected result,
+  and lifecycle semantics. A material correction, withdrawal, revocation,
+  invalidating supersession, fork, gap, cached favorable non-head, replacement
+  aggregate, or packet-to-result mismatch returns `unavailable` and requires a
+  new packet, independent RC-result evaluation, and GA decision rather than
+  in-place rebinding. This lifecycle remains subordinate evidence and grants no
+  RC or GA authority.
 - The selected Phase 66.8 closeout or Accepted-successor RC-gate result and every
   independent GA evidence-review event explicitly required by this ADR whose
   `accepted` or `accepted-with-follow-up` outcome is used by the decision must
@@ -291,7 +356,8 @@ If approved, this ADR would establish the following decision:
   must carry an immutable content identity. Repository-owned artifacts must bind
   to their exact Git object or content digest; authoritative AegisOps records
   must bind to an equivalent tamper-evident record version or snapshot identity.
-  This applies to the independent RC closeout or authoritative RC-gate result,
+  This applies to the selected RC-proof-packet lifecycle head and the independent
+  RC closeout or authoritative RC-gate result,
   real-user or design-partner journey, qualification, and owner-review records,
   journey and operability environment-evidence lifecycle and governing source-
   policy heads, the
@@ -427,12 +493,15 @@ If approved, this ADR would establish the following decision:
   design-partner owner, evidence date, gate record identifier, accepted
   limitations, support owner, upgrade owner, and follow-up decision. It
   additionally records the evidence revision, immutable evidence index,
-  claimed-participant qualification-record identities, support-ownership and
+  claimed-participant qualification-record-head-set and complete qualification-
+  actor-separation-mapping-set identities, support-ownership and
   upgrade-ownership coverage-closure identities, decision-used journey-coverage
   rule-head-set identity, launch-scope-definition and non-empty launch-eligible-
   subset identities, deployment-profile and environment-criteria dependency-
   closure identity, journey and operability environment-evidence lifecycle-
   closure identities, environment-source-policy dependency-closure identity,
+  selected RC-proof-packet aggregate/head and packet-to-result mapping
+  identities plus packet-before-result audit-order identity,
   GA-approver-ownership coverage-closure identity,
   requirements-separation-closure-set identity, journey-run and one-time-
   execution primary-outcome-head-set identities, owner-review-head-set identity,
@@ -447,12 +516,16 @@ If approved, this ADR would establish the following decision:
   authority record to the stable canonical gate-definition identity,
   per-decision gate-record identifier, canonical intended launch-scope identity,
   evidence revision, immutable input-evidence index, journey-run and one-time-
-  execution primary-outcome-head sets, owner-review-head set, producer-
+  execution primary-outcome-head sets, owner-review-head set, claimed-
+  qualification-head set and complete qualification-actor-separation mapping
+  set, producer-
   attribution-head and attribution-policy-head sets and immutable producer-
   closure record, reviewed-at
   relationship-head set, relationship-policy dependency closure and review-
   independence closure, complete decision-used
-  review-outcome aggregate and head set, decision-used journey-coverage rule-head set,
+  review-outcome aggregate and head set, selected RC-proof-packet aggregate and
+  head plus packet-to-result mapping and packet-before-result audit order,
+  decision-used journey-coverage rule-head set,
   deployment-profile and environment-criteria dependency closure, GA-
   approver-ownership coverage closure, journey and operability environment-
   evidence lifecycle closures, environment-source-policy dependency closure,
@@ -461,7 +534,9 @@ If approved, this ADR would establish the following decision:
   the approver's source-authority identity and opaque stable source-subject
   identifier, and the complete ordered acting-approver, selected approver-
   coverage-holder, producer, independent-reviewer, reviewed-evidence-owner, and
-  credential-custodian, requirements-approval-actor, selected root-holder,
+  credential-custodian, requirements-approval-actor, qualification-participant,
+  qualification-issuer, qualification-acceptance-actor, policy-prohibited-
+  qualification-principal, selected root-holder,
   attributable root-governance-approval-actor, and assignment-or-delegation
   issuer and grantee source-subject set, count, and digest. Its
   AegisOps-recorded
@@ -496,8 +571,15 @@ If approved, this ADR would establish the following decision:
   head. That aggregate must bind the current Accepted compatibility-rule-derived
   cadence and currentness-rule identity, coverage start, deterministic immutable
   slot identities, eligibility windows, deadlines and any grace, the complete
-  decision-input set and digest, every verification attempt, result and accepted
-  review exact set and count, audit high-water mark, and next-due boundary. The
+  decision-input set and digest, every verification attempt and result, every
+  authoritative review-outcome aggregate and current-head exact set and count,
+  the bidirectional slot-to-review-outcome mapping, audit high-water mark, and
+  next-due boundary. Each satisfying review must use the `review_outcome`
+  lifecycle schema above or an equivalent inseparable child lifecycle whose
+  correction, retraction, rejection, revocation, expiry, or supersession must
+  advance the integrity-review parent head atomically. The initial head binds an
+  empty exact outcome mapping when no slot is due or open; a future review head
+  is neither fabricated nor reserved in the decision-time cohort. The
   initial aggregate identity may be reserved beforehand, but its initial head
   must be created in the same atomic decision-time cohort, bind
   `coverage_start = decision_at` using the boundary-assigned authoritative time,
@@ -506,16 +588,36 @@ If approved, this ADR would establish the following decision:
   slot anchor is invalid, and no successor may advance that anchor. Each
   satisfying verification and review must directly bind one slot and the complete
   decision-input closure, execute inside that slot's eligibility window, and
-  succeed and receive accepted review by its deadline. One result may satisfy only
-  one slot unless the exact Accepted cadence rule defines a deterministic no-
+  succeed and receive accepted review by its deadline. Stable attempt, result,
+  review, or parent-successor identities may be reserved, but authoritative time
+  and audit order must prove
+  `slot_eligibility_start <= verification_started_at <= result_completed_at < reviewed_at <= slot_review_deadline`
+  and
+  `result_completed_sequence < review_and_initial_outcome_head_commit_sequence < integrity_parent_successor_sequence <= evaluated_at_read_sequence`.
+  The initial accepted review-outcome head must bind an already committed exact
+  result, and the later integrity-parent successor must bind that exact outcome
+  head and slot mapping. A caller-supplied or backdated time, review of a future
+  or reserved-only result, equal or reversed result/review/parent sequence, or
+  review-outcome change not reflected by a later parent successor is invalid.
+  One result may satisfy only one slot unless the exact Accepted cadence rule defines a deterministic no-
   weaker reuse mapping for named slots. At every `evaluated_at`, AegisOps must
   resolve the same aggregate's complete successor chain and current head and
   reconcile every due, overlapping, or open slot even when the head identity has
-  not changed. A future slot is non-blocking. Missing, omitted, forked, gapped,
-  late, failed, unreviewed, partial, wrong-input, duplicate, cross-slot, weaker,
-  or replacement state returns `unavailable`. A later successful verification
-  cannot retroactively cure a missed deadline; current acceptance requires a new
-  complete compliant review window and new decision. A `pre-cutoff-invalidation`
+  not changed. Each selected review-outcome aggregate's complete chain and
+  current head must resolve in the same snapshot as current `accepted`,
+  effective, unexpired, unrevoked and non-superseded. A future slot is non-
+  blocking. Missing, omitted, forked,
+  gapped, late, failed, unreviewed, partial, wrong-input, duplicate, cross-slot,
+  weaker, corrected, retracted, rejected, revoked, expired, superseded, cached-
+  favorable, outcome-mismatched, or replacement state returns `unavailable`. A
+  later successful verification or replacement review cannot retroactively cure
+  a missed deadline; current acceptance requires a new complete compliant review
+  window and new decision. Temporary unreadability may recover only when the
+  same complete valid integrity and outcome chains resolve. These slot reviews
+  do not enter the independent-GA review-outcome closure or evaluated-at
+  consumed-review control merely because they satisfy integrity cadence, and
+  they acquire an independence predicate only when the governing Accepted
+  cadence rule explicitly requires one. A `pre-cutoff-invalidation`
   mode must
   bind an exact or deterministically computed `retention_cutoff_at`, its immutable
   parameter identities, the first evidence-expiry-eligibility boundary, the
@@ -700,13 +802,18 @@ If approved, this ADR would establish the following decision:
   the exact producer-currentness input union, and the historical and evaluated-
   at producer-closure records, every reviewed-at ownership and membership relationship-proof chain
   and current head, the exact relationship-policy dependency closure and every
-  selected policy chain/current head, review-independence closure, complete decision-bound review-
-  outcome aggregate and head set, and any evaluated-at consumed-review
+  selected policy chain/current head, review-independence closure, the selected
+  RC-proof-packet aggregate's complete chain and current head and exact packet-
+  to-selected-result mapping, complete decision-bound review-outcome aggregate
+  and head set, and any evaluated-at consumed-review
   control closure required below; the decision-scoped
   source-authoritative identity-resolution head for the exact decision-bound
   acting approver, selected approver-coverage holders, producers, independent
   reviewers, reviewed-evidence owners, credential custodians, requirements
-  approval actors, selected root holder, attributable root-governance approval
+  approval actors, qualification participants, qualification issuers,
+  qualification-acceptance actors, and every qualification-scoped exact
+  decision-bound policy-prohibited qualification principal,
+  selected root holder, attributable root-governance approval
   actor, and every selected assignment-or-delegation issuer and grantee's source-
   authority and opaque source-subject set, count, and digest; and,
   separately, the source-authoritative current identity-resolution head and
@@ -755,7 +862,11 @@ If approved, this ADR would establish the following decision:
   decision-bound/currently-consumed provenance, set, count and digest; their
   exact evaluated-at aggregate-to-current-head and attribution-to-policy-head
   and relationship-to-policy-head mappings; complete predecessor-chain identities; governing currentness-rule
-  heads; the two producer input partitions and union; their sets, counts, digests
+  heads; each complete per-qualification actor-separation mapping member, bound
+  policy predicate, prohibited-subject source proof and current comparison; the
+  selected RC-proof-packet chain, current head, source high-water mark, packet-
+  to-result mapping and historical packet/result audit order; the two producer input partitions and union;
+  their sets, counts, digests
   and source high-water marks; the rederived current decision-input producer
   closure and per-consumed-review producer slices; and the resulting run, review
   and independence comparisons.
@@ -776,7 +887,9 @@ If approved, this ADR would establish the following decision:
   Current-head advancement alone is not a failure. However, an unavailable or
   missing historical reference or current head; a missing, extra, or substituted
   fixed subject; ambiguous or conflicting resolution; fixed-set mapping drift or
-  alias collapse; alias-equivalent approver-producer overlap; or a per-review
+  alias collapse; alias-equivalent qualification participant overlap with that
+  qualification's issuer, acceptance actor, or policy-prohibited principal;
+  alias-equivalent approver-producer overlap; or a per-review
   reviewer overlap with that review's exact authoritative owner set or complete
   reviewed-evidence producer set returns `unavailable` and requires the
   applicable new review or decision. A no-weaker successor in the same
@@ -842,6 +955,18 @@ If approved, this ADR would establish the following decision:
   review. An accountable routine source review that the governing Accepted
   profile or currentness rule does not classify as an independent GA evidence
   review does not thereby create a `review_outcome` or control-closure member.
+
+  The selected RC-proof-packet aggregate must resolve its complete non-forking
+  chain and authoritative current head through `evaluated_at` in the same
+  snapshot as the selected RC-result chain and preserve the exact packet
+  content, repository revision, journey run, packet-input closure and packet-to-
+  result mapping plus the decision-bound strict packet-head/result-head/decision
+  audit order. Temporary unreadability returns `unavailable` until the same
+  complete valid chains resolve. A correction, withdrawal, revocation,
+  invalidating supersession, fork, gap, cached favorable non-head, replacement,
+  or mapping mismatch returns `unavailable` and requires a new packet,
+  independently accepted RC result and GA decision; metadata-only
+  same-aggregate advancement may pass only when every bound fact remains exact.
 
   Each
   decision-bound review-outcome aggregate must resolve its complete non-forking
@@ -953,16 +1078,28 @@ If approved, this ADR would establish the following decision:
   registry mutation does not alter the decision-scoped head. Each decision-bound
   qualification aggregate and governing policy aggregate must resolve its
   complete non-forking lifecycle and authoritative current head through
-  `evaluated_at` and preserve the bound source, issuer authority, scope, and
-  qualification for every journey execution interval. An unavailable, missing,
-  forked, gapped, authority-mismatched, self-issued, or retroactively corrected
-  or revoked interval returns `unavailable` and requires new journey evidence
+  `evaluated_at` and preserve the bound source, exact issuer and qualification-
+  acceptance actor subjects and authority, the exact decision-bound policy
+  version and prohibited-role predicate, per-qualification exact prohibited-
+  subject set, count, digest, role/source-proof mapping, scope, and qualification
+  for every journey execution interval. That historical mapping set must still
+  reconcile bidirectionally one-to-one with the qualification set. The current
+  identity head must re-canonicalize the exact historical participant, issuer,
+  acceptance-actor and qualification-scoped prohibited-principal sets and
+  preserve the required per-qualification separation; it must not rederive or
+  rebind the historical set from a newer policy version. An unavailable,
+  missing, extra, duplicate, wrong-policy or wrong-qualification slice, forked,
+  gapped, authority- or source-proof-mismatched, mapping-mismatched, alias-
+  collapsed, self-issued, or retroactively corrected or revoked interval or
+  applicable predicate returns `unavailable` and requires new journey evidence
   and a new decision. A later head is permitted only when it is a valid successor
-  in the same aggregate and leaves that interval and its source and issuer
-  authority valid; a normal relationship end after `completed_at` or a
-  future-only policy successor therefore does not invalidate the historical
-  journey. A different participant, qualification, source, or policy-authority
-  aggregate cannot be rebound to the old decision. Each decision-bound routine-
+  in the same aggregate and leaves that interval's prohibited-role predicate,
+  completeness semantics, historical actor mapping, canonical separation,
+  source and issuer authority unchanged; a normal relationship end after
+  `completed_at` or a future-only policy successor that does not retroactively
+  change those facts therefore does not invalidate the historical journey. A
+  different participant, qualification, source, or policy-authority aggregate
+  cannot be rebound to the old decision. Each decision-bound routine-
   backup and operator-health aggregate must resolve the same stable aggregate's
   complete non-forking successor chain and current head through `evaluated_at`.
   The evaluation must reconcile every slot, attempt, review, finding,
@@ -1032,13 +1169,23 @@ If approved, this ADR would establish the following decision:
   forking successor chain and current integrity-review head, regenerate every
   slot from the immutable decision-time coverage and first-slot anchors through
   `evaluated_at`, and exactly reconcile every due, overlapping, or open slot
-  and its verification attempts, results, and accepted reviews against the complete
-  immutable decision-input closure. A future slot is non-blocking and an on-time
+  and its verification attempts, results, and exact review-outcome aggregate/
+  current-head mappings against the complete immutable decision-input closure.
+  Every selected outcome chain and current head must resolve in the same
+  snapshot, and any equivalent child-outcome mutation must have advanced the
+  integrity-review head. The evaluation record must bind the authoritative
+  verification-result completion, review-and-initial-head commit, integrity-
+  parent successor and evaluated-at read sequence and prove the strict order
+  defined above for every satisfying slot. A future slot is non-blocking and an on-time
   successful reviewed no-weaker successor in the same aggregate may pass.
   Missing, omitted, forked, gapped, late, failed, unreviewed, partial, wrong-
-  input, duplicate, cross-slot, weaker, or replacement state returns
-  `unavailable`; a later verification cannot cure a missed deadline, and the
-  historical most-recent result cannot substitute for the due-slot exact set.
+  input, duplicate, cross-slot, weaker, corrected, retracted, rejected, revoked,
+  expired, superseded, cached-favorable, outcome-mismatched, or replacement
+  state returns `unavailable`; a later verification or review cannot cure a
+  missed deadline, and the historical most-recent result or immutable favorable
+  review bytes cannot substitute for the due-slot exact set. Temporary
+  unreadability may recover only when the same complete valid integrity and
+  outcome chains resolve.
 
 - In `pre-cutoff-invalidation` mode, an evaluation before
   `retention_invalidation_boundary_at` may pass without a completed invalidating
@@ -1074,7 +1221,9 @@ If approved, this ADR would establish the following decision:
   input index and bind the exact producer-closure record, complete canonical
   producer union, complete acting-approver, selected approver-coverage-holder,
   producer, independent-reviewer, reviewed-evidence-owner, credential-custodian,
-  requirements-approval-actor, selected root-holder, attributable root-
+  requirements-approval-actor, qualification-participant, qualification-issuer,
+  qualification-acceptance-actor, policy-prohibited-qualification-principal,
+  selected root-holder, attributable root-
   governance-approval-actor, and every selected assignment-or-delegation issuer
   and grantee source-subject set identity, count and digest, every mapping
   result, the exact selected requirements tuple-set and requirements-separation
@@ -1093,7 +1242,10 @@ If approved, this ADR would establish the following decision:
   canonical principals rather than raw record or source identifiers. Each
   requirements approval actor must likewise resolve distinct from the complete
   exact requirements-author, target-author, and exercise-producer slices for the
-  tuple it approved. Missing
+  tuple it approved. Each qualification participant must likewise resolve
+  distinct from that qualification's exact issuer, acceptance actor, and
+  decision-bound policy-prohibited principal set derived by its exact actor-
+  separation mapping member. Missing
   attribution, ambiguous or conflicting identities, alias collapse, or any input,
   attribution, closure, or mutable identity-head change leaves the attempt
   pending; recording a different owner, reviewer, root, issuer or grantee does
@@ -2196,7 +2348,14 @@ GA-scope selection predecessor state; the current launch-scope-definition head,
 deployment-class exact set, non-empty launch-eligible class subset, and expected
 scope-class pair closure; GA-decision
 lifecycle and expiry-policy state; journey-participant qualification lifecycle
-and qualification-source policy; journey-run and one-time-execution primary-
+and qualification-source policy plus the complete per-qualification actor-
+separation mapping set: exact participant, issuer and acceptance-actor subjects,
+the decision-bound policy version, applicable prohibited-role predicate, exact
+prohibited-subject set/count/digest and source-proof/role mapping, and canonical
+subject separation; the selected RC-proof-packet
+aggregate/current head, packet-to-selected-result mapping, and packet-head/
+result-review-and-initial-head authoritative sequence identities; journey-run
+and one-time-execution primary-
 outcome heads and exact closures; the separate owner-review aggregate/head
 closure; every producer-attribution aggregate/head, governing attribution-
 policy head and producer closure; every
@@ -2235,7 +2394,9 @@ evidence-retention and resolvability head and, in current-lifetime mode, the
 decision-input integrity-review aggregate and current head; the source-authoritative
 decision-scoped identity-resolution head used for producer, approver,
 selected approver-coverage-holder, independent-reviewer, reviewed-evidence-
-owner, decision-time credential-custodian, requirements-approval-actor, selected
+owner, decision-time credential-custodian, requirements-approval-actor,
+qualification-participant, qualification-issuer, qualification-acceptance-actor,
+policy-prohibited-qualification-principal, selected
 root-holder, root-governance-approval-actor, and assignment-or-delegation issuer and grantee
 canonicalization; the
 review-independence closure and complete decision-used review-outcome aggregate
@@ -2257,7 +2418,9 @@ identities, environment-source-policy dependency-closure identity and selected
 current policy-head identities, journey-run and one-time-execution primary-
 outcome-head-set identities, owner-review-head-set identity, producer-
 attribution-head-set and producer-closure identities, reviewed-at relationship-
-head-set and review-independence identities, review-outcome-closure identity,
+head-set and review-independence identities, selected RC-proof-packet aggregate/
+head, packet-to-result mapping and packet-before-result audit-order identities,
+review-outcome-closure identity,
 decision-used journey-
 coverage rule-head-set identity, GA-approver-ownership coverage-closure identity,
 requirements-separation tuple-set and closure-set identities, identity-resolution current head, and
@@ -2265,7 +2428,8 @@ its bound source snapshot; the resulting scope head binds the decision identity.
 For no-automatic-expiry, the cohort must also bind the retention compatibility
 rule head, selected mode, and current-lifetime integrity-review aggregate, head,
 authoritative decision-time coverage and first-slot anchors, cadence, due-slot
-and attempt/review exact sets, next-due boundary, or the
+and attempt/result/review-outcome aggregate/current-head exact sets and slot
+mappings, next-due boundary, or the
 deterministic cutoff, first expiry-eligibility and effective invalidation
 boundaries, required
 transition kind and authority, and deletion fence. A later
@@ -2341,7 +2505,7 @@ future-dated. For every target-bound execution, independent records must prove
 `target_declared_at < started_at <= completed_at <= owner_review_at <= decision_at`.
 For every journey, independent records must likewise prove
 `declaration_at < journey_started_at <= journey_completed_at <= journey_owner_reviewed_at <= decision_at`.
-Every other reviewed evidence record must prove
+Every other decision-bound reviewed evidence record must prove
 `observed_at <= owner_review_at <= decision_at`. These orderings require
 AegisOps append-only audit sequencing or an equivalent independently timestamped
 attestation. Any source contract's clock-skew tolerance applies only while
@@ -2376,7 +2540,9 @@ either expiry or a mismatch:
 | Release-authority root-governance and complete assignment/delegation chain                                                                                                                                                                                       | The exact decision-bound root provenance, root-governance aggregate/current head, complete authority-chain aggregate/head set, count, digest and high-water mark, and current canonical mappings of the selected root holder, root approval actor, issuers and grantees must resolve without cached age at every authoritative `evaluated_at`; external charter bytes remain version-bound provenance rather than a live database participant.                                                                                                                                                                                                                                                                                                                                                                                                                                         | Temporary unreadability returns `unavailable` until the same valid chain and mappings resolve. Missing, forked, gapped, expired, revoked, superseded, scope-widened, root, issuer, grantee or provenance-mismatched, alias-collapsed, canonical-cycle, cached, or replacement state returns `unavailable` and requires a new complete authority and identity evaluation and GA decision; durable decision-state mutation still uses its authorized lifecycle transition.                                                                                                                                                                                                                                                                                                                                                              |
 | Support and upgrade ownership coverage closures and current heads                                                                                                                                                                                                | Each family closure must cover every authoritative deployment class exactly once at `decision_at`; every selected head must be no more than 24 hours old and the closure and heads must be re-resolved without cached age at every authoritative `evaluated_at`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | A temporary read failure returns `unavailable` until the same complete mapping resolves. Missing, duplicate, overlapping, extra, wrong-family, class, or scope coverage, or removal, expiry, retirement, reassignment, supersession, review, or replacement-head mismatch requires a new decision and complete evaluation; it cannot be rebound in place.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Claimed HA, disaster-recovery, or fleet-scale capability-scope-authority heads                                                                                                                                                                                   | Each current head must be resolved at target declaration, inside the decision-time cohort, and again for current-status evaluation; the underlying approval may be older.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | A missing, narrowed, expired, revoked, superseded, or mismatched head invalidates the target and current claim; restoration requires a new decision, not rebinding.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Evidence-retention, resolvability, and retention-compatibility current heads plus immutable decision-input closure                                                                                                                                               | No cached age is accepted. All current heads and exact evidence must resolve at `decision_at` and every authoritative `evaluated_at`; current-lifetime mode must create its initial integrity-review head in the decision cohort with `coverage_start = decision_at`, derive its first slot and next due from the Accepted cadence, and resolve that aggregate's complete successor chain, every due or open slot, attempt, result and accepted review against the complete input closure, while pre-cutoff mode retains its invalidation posture.                                                                                                                                                                                                                                                                                                                                     | Return `unavailable` for a future, delayed, replaced, or reset coverage or first-slot anchor, or an omitted, late, failed, unreviewed, partial, wrong-input, duplicate, cross-slot, weaker or replacement integrity-review state, or until the exact reviewed evidence, current rule head, and posture are verified. A late verification, historical most-recent result, rule, hash, URL, cache, partial set, post-deletion substitute, or unapproved unbounded-retention assertion cannot refresh or replace them.                                                                                                                                                                                                                                                                                                                   |
+| Evidence-retention, resolvability, and retention-compatibility current heads plus immutable decision-input closure                                                                                                                                               | No cached age is accepted. All current heads and exact evidence must resolve at `decision_at` and every authoritative `evaluated_at`; current-lifetime mode must create its initial integrity-review head in the decision cohort with `coverage_start = decision_at`, derive its first slot and next due from the Accepted cadence, and resolve that aggregate's complete successor chain, every due or open slot, attempt, result and authoritative review-outcome aggregate/current head against the complete input closure, while pre-cutoff mode retains its invalidation posture. Each post-decision slot must prove result completion before the accepted review-outcome initial head, that head before the integrity-parent successor, and the parent successor by the evaluated-at read boundary.                                                                              | Return `unavailable` for a future, delayed, replaced, or reset coverage or first-slot anchor, pre-result or wrong-order review, unadvanced parent, or an omitted, late, failed, unreviewed, partial, wrong-input, duplicate, cross-slot, weaker, corrected, retracted, rejected, revoked, expired, superseded, cached-favorable, outcome-mismatched, or replacement integrity-review state, or until the exact reviewed evidence, review-outcome and current rule heads and posture are verified. A late verification or review, historical most-recent result, favorable review bytes, rule, hash, URL, cache, partial set, post-deletion substitute, or unapproved unbounded-retention assertion cannot refresh or replace them.                                                                                                    |
+| Selected Phase 66.7 RC-proof-packet evidence lifecycle and packet-to-result mapping                                                                                                                                                                              | Packet regeneration, independent closeout or gate-result evaluation and focused revalidation must complete within 24 hours. The exact selected packet aggregate/current head, packet-input closure, source high-water mark, selected-result head and packet-to-result mapping must resolve in the decision cohort and without cached age at every `evaluated_at`, with authoritative `packet selected-head commit < independent RC-result review-and-initial-head commit < GA decision` ordering.                                                                                                                                                                                                                                                                                                                                                                                      | Temporary unreadability returns `unavailable` until the same complete valid packet and result chains resolve. A review over a future or reserved-only packet head, equal/reversed/backdated packet-result order, material correction, withdrawal, revocation, invalidating supersession, fork, gap, cached favorable non-head, replacement, or packet-to-result mismatch requires a new packet, independently accepted RC result and GA decision; a metadata-only same-aggregate successor may pass only when every packet, revision, input and result binding remains exact.                                                                                                                                                                                                                                                         |
+| Qualification issuer, acceptance-actor and prohibited-principal identity and separation                                                                                                                                                                          | Every claimed qualification must bind exact attributable issuer and acceptance-actor subjects and one complete per-qualification actor-separation mapping member containing the decision-bound policy version and applicable prohibited-role predicate, exact prohibited source-subject set/count/digest and source-proof/role mapping. The decision-time and evaluated-at current identity heads must canonicalize that immutable historical exact set without cached age; a future-only policy successor may pass only when it does not retroactively change the applicable predicate, completeness semantics, or mapping.                                                                                                                                                                                                                                                           | A missing, extra, duplicate, wrong-policy or wrong-qualification slice, role- or group-label-only, ambiguous, substituted, stale, remapped or alias-collapsed actor, mutable/incomplete source proof, or participant overlap with its mapped issuer, acceptance actor or prohibited principal returns `unavailable` and requires new valid journey evidence and a new decision. Historical sets cannot be rederived from a newer policy head; issuer and acceptance actor need not be mutually distinct unless the decision-bound Accepted policy requires it.                                                                                                                                                                                                                                                                        |
 
 A material version, topology, configuration, route, selected environment-source-
 policy authority or transition-semantic change, or execution-interval
@@ -2386,7 +2552,9 @@ head, subordinate owner-review identity, head or disposition, producer-
 attribution set, causal closure, head or governing policy, reviewed-at ownership/
 membership relationship proof, head or governing ownership-source or group-
 resolution policy, journey rule,
-criterion, participant qualification or qualification-source policy, GA-scope
+criterion, participant qualification, qualification issuer/acceptance-actor
+mapping, decision-bound prohibited-role predicate, prohibited-subject source
+proof/set/count/digest or canonical separation, or qualification-source policy, GA-scope
 head, launch-scope-definition head, deployment-class membership or launch-
 eligibility posture, GA lifecycle
 or expiry-policy head,
@@ -2400,11 +2568,12 @@ requirements tuple set, separation closure set or requirements-approval-actor
 mapping,
 credential policy, scope, custody or break-glass state, claimed-capability
 scope-authority head, decision-used journey-coverage rule lifecycle,
-decision-used review-outcome lifecycle or currently consumed review-control
-closure, profile-derived
+selected RC-proof-packet lifecycle or packet-to-result mapping, decision-used
+review-outcome lifecycle or currently consumed review-control closure, profile-derived
 approver coverage, decision-bound reviewer, owner, custodian, or
 group-membership identity resolution,
-evidence-retention, resolvability or current-lifetime integrity-review state,
+evidence-retention, resolvability, current-lifetime integrity-review state or
+slot-bound review-outcome head/mapping,
 owner, limitation-registry or disposition/currentness-rule head or disposition,
 or
 release-authority root-governance or assignment/delegation-chain change invalidates the affected evidence even inside its
@@ -2443,20 +2612,27 @@ backup and operator-health stable aggregate and current successor head, every
 backup-bound independent material-configuration-history and reviewed-change-
 registry head, derived change-backup obligation closure, and restore-rehearsal
 schedule and currentness rule,
-participant qualification-lifecycle and governing source-policy heads,
+participant qualification-lifecycle and governing source-policy heads plus the
+complete per-qualification issuer/acceptance-actor, decision-bound policy-
+predicate and exact prohibited-subject source-proof/role mapping sets, counts,
+digests and canonical separation predicates, the selected RC-proof-packet chain/
+current head, packet-to-result mapping and decision-bound audit order,
 decision-used journey-coverage rule and review-outcome lifecycle heads plus any
 currently consumed successor-review control closure,
 claimed-capability heads, each decision-bound credential-lifecycle aggregate
 and current head, the exact decision-scoped historical identity-resolution head,
 the current identity-resolution head used to re-canonicalize its exact fixed
-subject set, both attribution-derived current producer partitions, and any
+subject set, including qualification issuers, acceptance actors and prohibited
+principals, both attribution-derived current producer partitions, and any
 current-successor credential-custodian set, producer and
 review-independence closures, the profile-derived
 approver-coverage closure
 and holder authority heads, the root-governance head and complete assignment and
 delegation-chain heads, exact decision-bound support and upgrade ownership heads,
 their coverage closures, immutable input closure, evidence-retention head, and
-the current-lifetime integrity-review aggregate and successor head where
+the current-lifetime integrity-review aggregate, successor head, and exact slot-
+bound review-outcome aggregate/current-head mappings and result/review/parent/
+evaluated-at audit order where
 applicable, and their audit high-water marks at its own `evaluated_at`.
 That `evaluated_at`, read sequence, fence or linearization identity, and the
 resolved-through high-water marks must be assigned and bound by the same current-
@@ -2600,7 +2776,13 @@ health and credential-lifecycle streams prevent class labels, cherry-picked
 components, meaningless metrics, or a last-minute check from standing in for
 launch operability. Binding each claimed participant to a pre-existing
 source-authoritative qualification record prevents an owner, employee, or lab
-label from standing in for real-user or design-partner use. Binding the same
+label from standing in for real-user or design-partner use. Canonicalizing the
+attributable issuer and qualification-acceptance actor against the participant
+prevents a second source alias from self-issuing that qualification without
+inventing a two-person or two-signature rule. Binding the exact policy predicate
+and prohibited-subject source proof per qualification prevents omission or
+cross-policy over-application without retroactively applying a future-only policy
+change. Binding the same
 journey environment observation and comparison through completion prevents a
 pre-start compliant snapshot from hiding a material mid-run departure. Deriving every
 family and operability pair from one authoritative launch-scope class set
@@ -2653,7 +2835,10 @@ routine event. A reviewed evidence cutoff plus commit-time zero-delta check
 keeps those streams current without holding a transaction open for human review.
 Current review-outcome, inherited-RC, root-governance, and complete authority-
 chain resolution prevents immutable but later withdrawn acceptance or authority
-from remaining a favorable current projection. Canonicalizing the exact root
+from remaining a favorable current projection. Giving the exact selected Phase
+66.7 packet its own current Evidence lifecycle also prevents a corrected or
+withdrawn packet from surviving behind an otherwise unchanged RC result.
+Canonicalizing the exact root
 holder, root approval actor, issuer and grantee principals prevents alias-based
 self-designation, self-delegation and canonical cycles without adding another
 root or signature.
@@ -2664,7 +2849,9 @@ without inventing a lifetime in this ADR. Requiring a compatible retention rule
 for the latter prevents a nominally permanent decision from depending on
 evidence scheduled to disappear. Exact current-lifetime integrity-review slots
 anchored to authoritative `decision_at` prevent a delayed first due date or one
-recent successful read from concealing a missed periodic review.
+recent successful read from concealing a missed periodic review, while resolving
+each slot's authoritative review-outcome head prevents a later retraction from
+leaving the slot falsely satisfied.
 Deferring activation until one coordinated default-branch revision aligns this
 ADR, Phase 51.3, its verifier, and authoritative consumers avoids an accepted
 but contradictory transition state while still allowing approved design work to
@@ -2731,9 +2918,12 @@ root/node producer-currentness partitions and producer closures, attribution-
 policy dependency set, reviewed-at ownership/membership relationship-proof and
 governing ownership-source/group-resolution policy lifecycles and dependency
 closure,
-real-user and design-partner qualification,
+real-user and design-partner qualification plus attributable issuer/acceptance-
+actor identity and complete per-qualification policy-prohibited-subject source-
+proof, role, set/count/digest and separation mappings,
 journey-coverage-rule, bounded decision-used review-outcome lifecycle, and
 evaluated-at consumed-review control closure, review-independence,
+selected RC-proof-packet evidence lifecycle and packet-to-result mapping,
 GA-approver-ownership coverage,
 expiry-policy, launch-requirements, required-component, applicability-matrix,
 claimed-capacity and material-environment boundary, conservative-equivalence and
@@ -2745,6 +2935,7 @@ derived configuration-backup-obligation, support and upgrade ownership-head,
 ownership-coverage-closure,
 limitation-registry current-head, disposition/currentness-policy head and
 snapshot, evidence-retention and decision-input integrity-review lifecycle, and
+slot-bound integrity review-outcome lifecycle and current-head mappings,
 operability-manifest schemas;
 backend authorization and current-status read and write paths; persistent
 migrations; and atomic or fenced audit ordering. It must not widen the existing
@@ -2775,7 +2966,12 @@ reviewer, reviewed-at and audit sequence, separate complete journey primary-run-
 outcome and owner-review aggregate/head closures with index/run/review mappings,
 participant exact set, and immutable
 source-authoritative real-user or design-partner qualification record, lifecycle
-current head, and qualification-source policy; immutable
+current head, attributable issuer and qualification-acceptance actor source
+subjects and authority provenance, decision-bound qualification-source-policy
+version and prohibited-role predicate, exact per-qualification prohibited-
+subject set/count/digest and source-proof/role mapping, complete actor-
+separation mapping-set reconciliation, and canonical participant-separation
+closure; immutable
 evidence index, per-entry producer-attribution stable aggregate/current-head
 records for every root and reachable material provenance node, governing
 attribution-source/currentness policy aggregates and heads, root-to-node and
@@ -2799,9 +2995,16 @@ review-independence closure,
 credential-custodian source-subject and canonical-human mappings for both the
 decision-bound and current successor sets, retention head, and current-lifetime
 decision-input integrity-review aggregate with its decision-time coverage and
-first-slot anchors, slots, attempts, results and reviews;
-complete inherited RC set with an authoritative selected-result review-outcome
-aggregate and current head; explicit human decision event and lifecycle
+first-slot anchors, slots, attempts, results, authoritative review-outcome
+aggregate/current-head exact set and bidirectional slot mapping, plus boundary-
+assigned result-completion, accepted-review-head and parent-successor sequence
+fields and verifier-enforced strict ordering;
+complete inherited RC set with a selected RC-proof-packet evidence aggregate/
+current head, packet-input closure and packet-to-result mapping plus an
+authoritative selected-result review-outcome aggregate and current head, with
+packet-head, result-review/head and GA-decision audit sequences proving their
+strict one-way order;
+explicit human decision event and lifecycle
 aggregate; canonical gate-and-launch-scope aggregate and compare-and-append
 selection head, plus the current launch-scope-definition head, canonical
 deployment-class exact set, non-empty profile-derived launch-eligible subset,
@@ -2885,14 +3088,20 @@ heads, backup-bound material-configuration-history and reviewed-change heads,
 derived configuration-backup obligations and restore-rehearsal schedule and
 currentness,
 participant qualification-lifecycle and source-policy heads, the exact
+per-qualification participant/issuer/acceptance-actor and decision-bound policy-
+prohibited-subject source-proof/role mapping set, counts, digests and canonical
+separation,
+the selected RC-proof-packet chain/current head and exact packet-to-result
+mapping,
 decision-bound credential-lifecycle aggregates and their current successor
 heads, the exact decision-used journey-coverage rule and review-outcome heads,
 any currently consumed successor-review control closure with its exact
 evidence-producer, owner, membership, identity-mapping, and per-review
 independence dependencies and derived expected-set equality, the exact
 decision-scoped approver, producer, independent-reviewer, owner, decision-bound
-custodian, requirements-approval-actor, root-holder, root-approval-actor, issuer
-and grantee identity-
+custodian, requirements-approval-actor, qualification-participant,
+qualification-issuer, qualification-acceptance-actor, policy-prohibited-
+qualification-principal, root-holder, root-approval-actor, issuer and grantee identity-
 resolution head, fresh canonicalization of each current fixed decision-bound
 subject set, current attribution-derived decision-input producer set, each
 currently consumed review's producer set, and current-successor custodian set with the
@@ -2930,15 +3139,29 @@ decision before the invalidation boundary while its transition is not yet
 committed, exact evidence resolves, and the deletion fence remains active; an
 early transition must instead produce the resulting non-current state. Current-
 lifetime integrity-review tests must accept a future-not-due slot and an on-time
-successful accepted review bound to the complete input closure in the same non-
-forking aggregate whose initial head was created in the decision cohort with
+successful review whose authoritative outcome aggregate/current head is
+accepted and bound one-to-one to the slot and complete input closure in the same
+non-forking aggregate whose initial head was created in the decision cohort with
 `coverage_start = decision_at` and first due slot derived from the Accepted
-cadence. They must reject a caller-supplied, future, delayed, replacement, or
+cadence. The positive case must prove boundary-assigned result completion before
+the accepted review-outcome initial head, that head before the integrity-parent
+successor, and the parent successor by the evaluated-at read boundary. They must
+reject a caller-supplied, future, delayed, replacement, or
 reset coverage start, a shifted first-slot or next-due boundary, and any omitted,
 pre-window, late, failed, unreviewed, partial, wrong-input, duplicate, cross-slot,
-weaker, forked, gapped, or replacement result. A later successful verification
-or most-recent-result update must not cure an earlier miss, and a temporary read
-outage may recover only when the same complete valid chain resolves. It
+weaker, forked, gapped, or replacement result or review mapping. A review over a
+reserved or future result, pre-result, equal, reversed or backdated result/review/
+parent sequence, or accepted review head omitted from a later parent successor
+must also fail. They must also
+correct, retract, reject, revoke, expire, supersede, fork, gap, cache, replace or
+mismatch a previously accepted slot review outcome and reject the stale
+favorable review and parent head; an inseparable child mutation that does not
+advance the parent must fail. A later successful verification, replacement
+review, or most-recent-result update must not cure an earlier miss, and a
+temporary read outage may recover only when the same complete valid integrity
+and outcome chains resolve. Positive coverage must prove that a routine slot
+review does not enter the independent-GA or consumed-review closure unless its
+Accepted cadence rule explicitly requires independence. It
 must also test authority revocation between snapshot and commit, later decision
 expiry, rejection, cancellation, supersession, transition-chain forks or gaps,
 presentation of an older accepted event or policy, attempted migration or
@@ -3049,6 +3272,22 @@ catalog change, including a future-only policy successor that preserves every
 reviewed-at source and semantic, plus temporary unreadability followed by recovery of the same
 complete relationship and policy chains; same-organization, department, or role
 membership alone must not create an owner-group conflict.
+
+RC-proof-packet lifecycle tests must correct, withdraw, revoke, supersede, fork,
+gap, replace, or serve a cached favorable non-head packet after GA acceptance
+while leaving the selected RC result unchanged, and must reject a packet-input,
+repository-revision, journey-run, content-version or packet-to-result mapping,
+set, count or digest mismatch. They must also mutate the packet head between the
+decision snapshot and commit and reject an RC result over a reserved-only or
+not-yet-committed packet head, a packet materialized after review, or an equal,
+reversed, caller-supplied or backdated packet/result/decision sequence. Positive
+coverage must bind the already committed packet head one-way into a later
+independently reviewed result and then into the later GA decision, recover after temporary
+unreadability when the same complete packet and result chains resolve and may
+accept only a metadata-only same-aggregate successor that preserves every exact
+packet, input, revision, result and lifecycle binding. A material packet change
+must require a new packet, independent RC-result evaluation and GA decision, but
+the packet lifecycle must remain subordinate and grant no RC or GA authority.
 
 Review-outcome lifecycle tests must retract, reject, revoke, expire, supersede,
 correct, fork, gap, or replace a decision-used review after acceptance,
@@ -3203,17 +3442,38 @@ and monthly Single-customer and Small-production schedules without inventing a
 stricter cadence.
 Qualification-currentness tests must retroactively correct or revoke a bound
 participant's execution interval, fork or gap the lifecycle, remove the source
-policy or issuer authority, and reject cached or in-place replacement state at
-`evaluated_at`. Positive coverage must retain validity after a temporary outage
+policy or issuer authority, omit or substitute the actual issuer or acceptance-
+actor source subject, use only a group/role/service label, collapse a participant
+alias onto either actor or another policy-prohibited principal, mismatch the
+per-qualification mapping, omit, add, duplicate, substitute, or attach to the
+wrong qualification or policy a prohibited subject or role, mutate its source
+proof, or rederive the historical subject set from a later policy version, and
+reject cached or in-place replacement state at `evaluated_at`. They must also
+abort when an actor mapping, bound prohibited-role predicate, applicable policy
+head, prohibited-subject source proof, or mapping set/count/digest changes
+between the decision snapshot and commit and return `unavailable` when a later
+current identity head exposes self-issuance, self-acceptance, or a mapped
+prohibited-principal overlap. They must reject initial source-policy or actor
+authority whose acceptance provenance derives from the participant,
+qualification record, or qualification graph. Positive coverage
+must bind canonically distinct attributable participant and actor principals
+plus the exact policy-derived per-qualification prohibited-subject closure and
+separately governed source-policy approval provenance, permit one issuer to be
+the acceptance actor when the Accepted policy allows it, keep distinct
+qualifications' policy slices isolated, and retain validity after a temporary outage
 when the same aggregates and complete valid lifecycles resolve again, a normal
 relationship end after `completed_at`, or a future-only policy successor that
-leaves the executed interval and issuer authority valid.
+leaves the executed interval's predicate and completeness semantics, exact
+historical actor mapping, canonical separation, source proof and issuer authority
+valid.
 
 Identity-currentness tests must use a later source-authoritative current head to
 merge or correct aliases after acceptance so that a fixed decision-bound
 approver resolves to a producer, an independent reviewer resolves to the reviewed
 evidence's person owner or reviewed-at owner-group member, or two decision-time
-custodians collapse to one human. They must also remove or conflict a fixed
+custodians collapse to one human, or a qualification participant resolves to its
+issuer, acceptance actor, or policy-prohibited principal. They must also remove
+or conflict a fixed
 source subject; omit, add, substitute or mis-tag a subject in the fixed,
 attribution-derived decision-input, per-consumed-review or current-successor
 partition; introduce a newly disclosed producer subject that cannot be
@@ -3439,7 +3699,11 @@ reviewed-at ownership/membership relationship-proof aggregate/head, governing
 ownership-source or group-resolution policy aggregate/head, policy-dependency
 closure or mapping,
 participant-qualification lifecycle,
-qualification-source policy, journey-coverage-rule lifecycle,
+qualification-source-policy head, applicable prohibited-role predicate,
+issuer/acceptance-actor identity, per-qualification prohibited-subject source
+proof or actor-separation mapping set/count/digest, selected RC-proof-packet
+aggregate/head or packet-to-
+result mapping, journey-coverage-rule lifecycle,
 review-outcome, review-independence or owner-membership state, launch-scope-definition,
 launch-eligible subset or profile eligibility,
 requirements, component, matrix, claimed-capacity or material-environment
@@ -3452,7 +3716,8 @@ backup obligations, restore-rehearsal schedule or currentness,
 credential-definition, credential-state or custodian-identity mapping,
 root-holder, root-approval-actor, issuer or grantee identity mapping,
 capability-authority,
-evidence-retention or current-lifetime integrity-review aggregate,
+evidence-retention, current-lifetime integrity-review aggregate or slot-bound
+review-outcome head/mapping,
 GA-approver-ownership coverage or selected-holder authority,
 support or upgrade ownership coverage, ownership-head, limitation or
 disposition/currentness-rule head, and
@@ -3541,7 +3806,8 @@ a separate pull request.
 
 The proposal-only change has no runtime or data rollback. After implementation,
 immutable decision events, scope-selection and lifecycle transitions, authority,
-root-governance and delegation, review-outcome, capability-scope, component,
+root-governance and delegation, RC-proof-packet, review-outcome, integrity-
+review-outcome, qualification-actor mapping, capability-scope, component,
 matrix, material-environment boundary, upgrade-path, credential, cadence,
 retention, and evidence snapshots and audit high-water records are irreversible
 historical evidence. Rollback must stop new GA decisions and current-status
@@ -3563,7 +3829,13 @@ Review of this proposal must confirm:
   participant exact sets, direct causal use by at least one participant whose
   source-authority and opaque source-subject identity binds to a pre-existing
   Accepted real-user or design-partner qualification effective throughout the
-  execution interval, pre-run criteria and class-environment declaration events
+  execution interval, exact attributable issuer and qualification-acceptance
+  actor source subjects, authority provenance and a complete per-qualification
+  actor-separation mapping member that binds the decision-bound policy version,
+  applicable prohibited-role predicate, exact prohibited-subject set/count/
+  digest and immutable source-proof/role mapping, canonical participant
+  separation from those mapped actors, and a non-recursive separately governed source-policy
+  bootstrap, pre-run criteria and class-environment declaration events
   proven by independent audit ordering, explicit successful outcomes and exactly
   one immutable authoritative owner-review identity and content version per
   journey bound to the run, outcome, criteria, declaration, class, environment,
@@ -3598,9 +3870,16 @@ Review of this proposal must confirm:
   Phase 66.8 closeout result or Accepted-successor authoritative RC-gate result,
   with one-revision binding across that set and every additional GA evidence
   item, fail-closed mixed-snapshot rejection, direct gate-revision execution,
-  rejection of cross-revision execution rebinding, and inclusion of the selected
-  result in the decision-used review-outcome aggregate and head closure with
-  atomic current-head re-resolution at `decision_at` and every `evaluated_at`,
+  rejection of cross-revision execution rebinding, a selected RC-proof-packet
+  evidence aggregate/current head and exact packet-to-result mapping, inclusion
+  of the selected result in the decision-used review-outcome aggregate and head
+  closure, authoritative one-way
+  `packet selected-head commit < independent result review-and-initial-head commit < GA decision`
+  audit ordering that rejects future/reserved packet review and equal, reversed
+  or backdated sequence, and atomic complete-chain/current-head re-resolution of
+  both packet and result at `decision_at` and every `evaluated_at`, with correction,
+  withdrawal, revocation, invalidating supersession, fork, gap, cached non-head,
+  replacement or mapping mismatch returning `unavailable`,
 - separate complete journey and one-time indexed-execution
   `primary_run_outcome` aggregate/head closures and a separate subordinate
   owner-review aggregate/head closure, with exact bidirectional one-to-one
@@ -3802,9 +4081,14 @@ Review of this proposal must confirm:
   integrity-review aggregate whose initial head is created in the decision
   cohort with `coverage_start = decision_at` and first slot and next due derived
   from the Accepted cadence, complete input closure, every due or open slot,
-  attempt, result and accepted review with direct slot binding, window and
-  deadline compliance, no future, delayed, replacement, or reset anchor, and no
-  late cure; or pre-retention invalidation for a no-
+  attempt, result and authoritative review-outcome aggregate/current head with
+  bidirectional direct slot binding, complete-chain resolution, window and
+  deadline compliance and authoritative
+  `result completion < accepted review-outcome initial head < integrity-parent successor <= evaluated-at read`
+  audit ordering, no future, reserved-only, pre-result, equal, reversed or
+  backdated review or unadvanced parent, no delayed, replacement, or reset anchor, no
+  stale favorable review after correction, retraction, rejection, revocation,
+  expiry or supersession, and no late cure; or pre-retention invalidation for a no-
   automatic-expiry decision; accepted evaluation before
   the invalidation boundary while the fence and evidence remain valid, missing
   or late transition evidence at or after the boundary returning `unavailable`
@@ -3815,7 +4099,10 @@ Review of this proposal must confirm:
   use of the source-authoritative current identity head to re-canonicalize both
   the complete fixed decision-bound acting-approver, selected approver-coverage-
   holder, requirements-approval-actor, producer, independent-reviewer, reviewed-
-  evidence-owner, custodian, selected root-holder, root-governance-approval-
+  evidence-owner, custodian, qualification-participant, qualification-issuer,
+  qualification-acceptance-actor, each qualification-scoped exact decision-bound
+  policy-prohibited-qualification-principal,
+  selected root-holder, root-governance-approval-
   actor, and assignment-or-delegation issuer and grantee source-subject set and
   the current credential-successor custodian set; the
   evaluation binds the current head, snapshot, high-water mark, and separate
@@ -3824,7 +4111,8 @@ Review of this proposal must confirm:
   requirements-approval-actor overlap with its exact requirements-author,
   target-author or exercise-producer slice, approver-producer overlap, reviewer-
   owner or evidence-producer conflict,
-  custodian alias collapse, root-approval-actor/root-holder or issuer/grantee
+  custodian alias collapse, qualification participant overlap with its issuer,
+  acceptance actor or policy-prohibited principal, root-approval-actor/root-holder or issuer/grantee
   alias collapse, canonical authority-chain cycle, or profile-cardinality failure requiring
   `unavailable` and a new review or decision rather than cached acceptance or
   in-place rebinding; unrelated current-head advancement and a no-weaker current-
@@ -3832,11 +4120,17 @@ Review of this proposal must confirm:
   complete and unambiguous,
 - atomic re-resolution at every `evaluated_at` of every decision-bound
   participant qualification and governing qualification-source policy aggregate,
-  including their complete current lifecycles and heads, while preserving source
-  and issuer authority and qualification over the complete journey interval;
+  including their complete current lifecycles and heads, exact attributable
+  issuer and acceptance-actor source subjects and authority provenance, per-
+  qualification policy version and prohibited-role predicate, exact prohibited-
+  subject set/count/digest and source-proof/role mappings, one-to-one mapping-set
+  reconciliation, and canonical separation from the participant, while
+  preserving source and issuer authority and qualification over the complete
+  journey interval without rederiving the historical set from a future policy;
   same-aggregate recovery or a valid successor and ordinary post-completion
   relationship end are permitted only when that interval remains valid, but an
-  unavailable, missing, forked, gapped, self-issued, authority-mismatched, or
+  unavailable, missing, forked, gapped, actor- or mapping-mismatched, alias-
+  collapsed, self-issued, authority-mismatched, or
   retroactively corrected or revoked interval requires `unavailable`, new
   journey evidence, and a new decision rather than cached acceptance or
   replacement rebinding,
@@ -4028,7 +4322,8 @@ Review of this proposal must confirm:
   canonical scope-head predecessor, launch-scope-definition, class and non-empty
   launch-eligible-subset closures,
   exact profile-and-criteria dependency closure and current-at-decision heads,
-  lifecycle and expiry policy, journey qualification and its exact environment-
+  lifecycle and expiry policy, journey qualification, exact attributable issuer/
+  acceptance-actor mapping and canonical separation, and its exact environment-
   observation, comparison, interval-proof and audit-high-water state and separate
   environment-evidence lifecycle aggregate/head closure, exact governing
   environment-source-policy dependency closure and selected current policy heads,
@@ -4044,6 +4339,7 @@ Review of this proposal must confirm:
   rehearsal schedule and currentness, immutable credential definitions and separate
   current lifecycle, event, and custody state, support and upgrade ownership
   heads and coverage closures, decision-used journey-rule lifecycles,
+  selected RC-proof-packet aggregate/head and packet-to-result mapping,
   decision-used review-outcome lifecycles and closure, separate subordinate
   owner-review lifecycles and closure, journey and one-time execution primary-
   run-outcome lifecycles and closures, exact producer-attribution aggregate/
@@ -4053,9 +4349,12 @@ Review of this proposal must confirm:
   dependency closure and review-independence state, profile-derived
   approver-ownership coverage and selected-holder authority, limitations and
   disposition/currentness policy, claimed-capability authority, evidence
-  retention and compatibility plus current-lifetime integrity-review state,
+  retention and compatibility plus current-lifetime integrity-review state and
+  exact slot-bound review-outcome aggregate/head mappings,
   source-authoritative decision-bound historical identity resolution including
-  every requirements approval actor, selected root holder, root approval actor,
+  every requirements approval actor, qualification participant, qualification
+  issuer, qualification acceptance actor, policy-prohibited qualification
+  principal, selected root holder, root approval actor,
   issuer and grantee, and
   release-authority root-governance and complete assignment/delegation chain with
   canonical distinctness and cycle predicates,
@@ -4121,6 +4420,13 @@ statements. The repository-wide phase-contract verifier and shell-test gates and
   engagement system, retain its raw records, or restrict qualifying real users
   to external personnel; it requires only the accepted, privacy-minimized,
   source-authoritative qualification boundary defined in Section 2.
+- This proposal does not require qualification issuance and acceptance to use
+  two people, two signatures, or an external person when the Accepted source
+  policy permits one canonically distinct actor to perform both; it resolves
+  only each exact claimed qualification's participant, issuer, acceptance actor
+  and decision-bound policy-derived prohibited-principal set and does not
+  synchronize an enterprise directory or apply one qualification's policy slice
+  to another.
 - This proposal does not place every catalog profile, environment instance,
   host, tenant, customer, or historical scope-class pair into the declared
   launch scope.
@@ -4170,6 +4476,14 @@ statements. The repository-wide phase-contract verifier and shell-test gates and
 - This proposal does not create periodic re-review or monitor unrelated review
   catalogs; review-outcome currentness applies only to reviews or RC results
   consumed by the decision or a current evaluation.
+- This proposal does not automatically make a periodic integrity review an
+  independent GA review or a consumed-review-control member; its authoritative
+  outcome lifecycle is slot state, and independence applies only when the
+  governing Accepted cadence rule explicitly requires it.
+- This proposal does not monitor every Phase 66 packet or repository artifact,
+  promote a proof packet into RC or GA authority, or rerun Phase 66.1-66.6 for a
+  temporary read outage or metadata-only same-packet successor; currentness is
+  limited to the exact selected packet and its exact selected-result mapping.
 - This proposal does not make a journey or one-time operability exercise
   periodic merely because its primary-run and subordinate owner-review outcomes
   have current lifecycle heads; only an invalidated primary run requires a new
