@@ -161,15 +161,15 @@ def _service_state(
     expected_image: str,
 ) -> tuple[int, dict[str, Any], dict[str, str]]:
     if service.get("ID") != expected_id:
-        raise SwarmLabelUpdateError("Shuffle worker service ID changed")
+        raise SwarmLabelUpdateError("Shuffle service ID changed")
     version = _require_mapping(service.get("Version"), "service Version").get(
         "Index"
     )
     if isinstance(version, bool) or not isinstance(version, int) or version < 1:
-        raise SwarmLabelUpdateError("Shuffle worker service version is invalid")
+        raise SwarmLabelUpdateError("Shuffle service version is invalid")
     spec = deepcopy(dict(_require_mapping(service.get("Spec"), "service Spec")))
     if spec.get("Name") != expected_name:
-        raise SwarmLabelUpdateError("Shuffle worker service name changed")
+        raise SwarmLabelUpdateError("Shuffle service name changed")
     task_template = _require_mapping(
         spec.get("TaskTemplate"),
         "service TaskTemplate",
@@ -180,14 +180,14 @@ def _service_state(
     )
     if container_spec.get("Image") != expected_image:
         raise SwarmLabelUpdateError(
-            "Shuffle worker service is not pinned to the reviewed digest"
+            "Shuffle service image does not match the expected reference"
         )
     raw_labels = spec.get("Labels", {})
     if not isinstance(raw_labels, dict) or not all(
         isinstance(key, str) and isinstance(value, str)
         for key, value in raw_labels.items()
     ):
-        raise SwarmLabelUpdateError("Shuffle worker service labels are invalid")
+        raise SwarmLabelUpdateError("Shuffle service labels are invalid")
     return version, spec, dict(raw_labels)
 
 
@@ -218,12 +218,12 @@ def claim_service_labels(
     )
     if version != expected_version:
         raise SwarmLabelUpdateError(
-            "Shuffle worker service changed before ownership could be claimed"
+            "Shuffle service changed before ownership could be claimed"
         )
     conflicting_keys = sorted(set(before_labels).intersection(labels))
     if conflicting_keys:
         raise SwarmLabelUpdateError(
-            "Shuffle worker service already carries ownership labels: "
+            "Shuffle service already carries ownership labels: "
             + ", ".join(conflicting_keys)
         )
 
@@ -249,17 +249,17 @@ def claim_service_labels(
     )
     if after_version <= version:
         raise SwarmLabelUpdateError(
-            "Shuffle worker service version did not advance after ownership update"
+            "Shuffle service version did not advance after ownership update"
         )
     if after_labels != expected_labels:
         raise SwarmLabelUpdateError(
-            "Shuffle worker service did not retain the exact ownership labels"
+            "Shuffle service did not retain the exact ownership labels"
         )
     after_nonlabel_spec = deepcopy(after_spec)
     after_nonlabel_spec.pop("Labels", None)
     if after_nonlabel_spec != before_nonlabel_spec:
         raise SwarmLabelUpdateError(
-            "Shuffle worker service changed outside ownership labels"
+            "Shuffle service changed outside ownership labels"
         )
     return {
         "service_id": service_id,
@@ -340,8 +340,10 @@ def _positive_timeout(raw: str) -> float:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Claim a Shuffle worker service without migrating its legacy "
-            "Swarm network specification."
+            "Claim a Shuffle-created service without migrating its legacy "
+            "Swarm network specification. Callers that admit an observed "
+            "tag-only image reference must independently verify the running "
+            "task's runtime image ID before and after this helper runs."
         )
     )
     parser.add_argument("--docker-context", required=True)
@@ -349,6 +351,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--expected-version", required=True, type=int)
     parser.add_argument("--expected-name", required=True)
     parser.add_argument("--expected-image", required=True)
+    parser.add_argument(
+        "--allow-observed-image-reference-after-runtime-id-verification",
+        action="store_true",
+        help=(
+            "admit the exact observed service image string when the caller "
+            "has already verified the running task image ID against a "
+            "reviewed digest and will verify it again after the update"
+        ),
+    )
     parser.add_argument(
         "--label",
         action="append",
@@ -362,8 +373,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--service-id is not a Swarm service ID")
     if args.expected_version < 1:
         parser.error("--expected-version must be positive")
-    if not IMMUTABLE_IMAGE_PATTERN.fullmatch(args.expected_image):
+    if (
+        not args.allow_observed_image_reference_after_runtime_id_verification
+        and not IMMUTABLE_IMAGE_PATTERN.fullmatch(args.expected_image)
+    ):
         parser.error("--expected-image must be a digest-pinned image reference")
+    if (
+        args.allow_observed_image_reference_after_runtime_id_verification
+        and (
+            not isinstance(args.expected_image, str)
+            or not args.expected_image
+            or any(character.isspace() for character in args.expected_image)
+        )
+    ):
+        parser.error("--expected-image must be an observed image reference")
     label_keys = [key for key, _ in args.label]
     if len(label_keys) != len(set(label_keys)):
         parser.error("--label keys must be unique")

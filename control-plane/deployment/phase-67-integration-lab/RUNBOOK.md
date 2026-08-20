@@ -117,13 +117,18 @@ Immediately before dispatch, the runner reloads the denied request and decision
 from PostgreSQL and recounts its executions; any lifecycle change or execution
 blocks the trial.
 Before startup, the runner fails closed if a `shuffle-tools_1-2-0` Swarm
-service already exists. It creates that service from the reviewed repository
-digest, records the returned service ID, and labels it with the current trial
-identity. The service and its running task must retain that ID, all ownership
-labels, the reviewed digest, and image ID before approval and again after
-execution; the mutable compatibility tag is not the execution reference.
-Cleanup removes only that recorded service ID after revalidating its labels and
-image, so a pre-existing or replacement service cannot be adopted or removed.
+service already exists. It waits for the Shuffle 2.2.1 worker to auto-create
+that service, derives the actual `shuffle_swarm_executions` overlay ID from the
+worker service, and verifies its exact callback, one dynamically allocated
+`app-port`, and running task image ID against the reviewed digest. Only after
+two identical observations of the service ID, version, and non-label spec does
+the runner claim trial ownership by round-tripping the complete v1.40 spec.
+It revalidates the runtime image ID after the claim and before cleanup. Cleanup
+captures the exact service ID and specification, stops Compose and Orborus, and
+only then removes that unchanged ID. The restart check removes both stopped
+services, re-proves their absence, and separately claims the newly auto-created
+worker and action services. Disappearance or name-to-ID replacement is rejected
+so a pre-existing or replacement service cannot be adopted or removed.
 Before startup, the runner fails closed if a `shuffle-workers` service already
 exists. It separately inspects the service created after that preflight, binds
 its service ID immediately to the current trial with Phase, component, and
@@ -133,9 +138,10 @@ service-level networks and task-level networks. The label claim therefore uses
 the selected context's verified local Unix socket to round-trip the complete
 v1.40 spec, and fails unless service ID, version, image, and every non-label
 field remain unchanged.
-If startup fails before this initial capture completes, cleanup claims the
-newly appeared service only when the preflight absence and reviewed Orborus
-image both match, then applies the same ID and ownership checks before removal.
+If startup fails before the initial ownership claim completes, cleanup records
+the newly appeared exact service ID and specification only when preflight
+absence, reviewed image, and Orborus contract match. It stops Orborus, proves
+the same ID and specification remain, and only then removes that candidate.
 After dispatch, the same owned service and worker image identity must remain in
 place and the running task container's logs must contain the current Shuffle
 execution ID. Receipt success is timestamped only after its authenticated
@@ -214,13 +220,12 @@ restart. The snapshot inventory includes observed runtime image IDs for both
 the digest-pinned Shuffle worker task and the Shuffle action service. After
 operator approval, the runner revalidates the live workflow and both runtime
 image identities, then checks the complete repository snapshot immediately
-before dispatch. For publication, report and raw artifacts are moved only
-after every destination is checked, and the passing manifest is moved last.
-The final manifest path is validated once more after that move. The final report
-and exact artifact file set are then rehashed from their published paths against
-the manifest before it is made read-only and success is declared. Failure before
-that validation restores the unpublished packet where possible and never leaves
-a discoverable passing manifest with missing references.
+before dispatch. For publication, the manifest is first staged at a hidden
+candidate path. After every destination is checked, the report and raw artifacts
+are moved and rehashed from their published paths against that candidate. Only
+after the candidate is made read-only does an atomic no-clobber link expose it
+at the canonical manifest path as the final commit point. Failure before that
+commit never leaves a discoverable passing manifest with missing references.
 The prepare, approved execution, and restart-verification commands all enter
 the bind-mounted journey runner through one helper that checks the captured
 repository revision and complete worktree immediately before container

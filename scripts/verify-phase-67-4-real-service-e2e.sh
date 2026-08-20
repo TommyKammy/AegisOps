@@ -299,10 +299,22 @@ require_fixed "${lab_root}/run-e2e-trial.sh" 'assert_reviewed_shuffle_action_ser
 require_fixed "${lab_root}/run-e2e-trial.sh" 'assert_shuffle_action_service_absent'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_action_preflight_absent=true'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_action_owned=true'
-require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_action_service_id="$(docker_lab service create'
-require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab service rm "${owned_service_id}"'
-require_fixed "${lab_root}/run-e2e-trial.sh" 'label=com.docker.swarm.service.id=${owned_service_id}'
-require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab service create'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'derive_reviewed_shuffle_action_network_id'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_swarm_executions'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_action_service_observation_is_stable'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_action_runtime_matches_reviewed_image'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'select(startswith("CALLBACK_URL="))'
+require_fixed "${lab_root}/run-e2e-trial.sh" '$callbacks[0] == ("CALLBACK_URL=" + $callback_url)'
+require_fixed "${lab_root}/run-e2e-trial.sh" '--allow-observed-image-reference-after-runtime-id-verification'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'Shuffle action service disappeared before ownership was claimed'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'Shuffle action service was replaced before ownership was claimed'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'Shuffle action service name now resolves to a replacement service'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'capture_reviewed_shuffle_action_cleanup_candidate'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_action_cleanup_candidate_spec'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab service rm "${shuffle_action_cleanup_candidate_id}"'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'label=com.docker.swarm.service.id=${service_id}'
+reject_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab service create'
+reject_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_action_service_port=33334'
 require_fixed "${lab_root}/run-e2e-trial.sh" '.Image == $image_id'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'postdispatch_shuffle_action_image'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'capture_reviewed_shuffle_worker_image'
@@ -322,12 +334,13 @@ require_fixed "${lab_root}/run-e2e-trial.sh" 'python3 "${swarm_service_labeler}"
 require_fixed "${lab_root}/run-e2e-trial.sh" '--expected-version "${service_version}"'
 reject_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab service update'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'com.aegisops.lab.trial-run-id=${trial_run_id}'
-require_fixed "${lab_root}/run-e2e-trial.sh" 'without current-trial ownership'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'remove_reviewed_shuffle_worker_service'
-require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab service rm "${shuffle_worker_service_id}"'
-require_fixed "${lab_root}/run-e2e-trial.sh" 'initial Shuffle worker cleanup claim did not complete'
-require_fixed "${lab_root}/run-e2e-trial.sh" 'refusing to claim an unverified Shuffle worker service during cleanup'
-require_fixed "${lab_root}/run-e2e-trial.sh" 'label=com.docker.swarm.service.name=${shuffle_worker_service}'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'capture_reviewed_shuffle_worker_cleanup_candidate'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'shuffle_worker_cleanup_candidate_spec'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_lab service rm "${shuffle_worker_cleanup_candidate_id}"'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'refusing to remove an unverified worker candidate'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'wait_for_exact_swarm_service_removal'
+reject_fixed "${lab_root}/run-e2e-trial.sh" 'label=com.docker.swarm.service.name=${shuffle_worker_service}'
 require_fixed "${swarm_service_labeler}" 'API_VERSION = "1.40"'
 require_fixed "${swarm_service_labeler}" 'docker", "context", "inspect", context'
 require_fixed "${swarm_service_labeler}" 'host.startswith("unix:///")'
@@ -355,8 +368,10 @@ require_fixed "${lab_root}/run-e2e-trial.sh" 'docker_context="${AEGISOPS_LAB_DOC
 require_fixed "${lab_root}/run-e2e-trial.sh" 'colima_profile="${AEGISOPS_LAB_COLIMA_PROFILE}"'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'final_artifacts=' 
 require_fixed "${lab_root}/run-e2e-trial.sh" 'publication_manifest_published=false'
-require_fixed "${lab_root}/run-e2e-trial.sh" 'publication_manifest_moved=false'
-require_fixed "${lab_root}/run-e2e-trial.sh" 'mv "${final_artifacts}/evidence.json" "${final_evidence}"'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'publication_manifest_staged=false'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'publication_manifest_candidate='
+require_fixed "${lab_root}/run-e2e-trial.sh" 'mv "${evidence_output}" "${publication_manifest_candidate}"'
+require_fixed "${lab_root}/run-e2e-trial.sh" 'ln "${publication_manifest_candidate}" "${final_evidence}"'
 require_fixed \
   "${lab_root}/run-e2e-trial.sh" \
   '--published'
@@ -364,6 +379,94 @@ require_fixed "${lab_root}/run-e2e-trial.sh" '"${final_report}"'
 require_fixed "${lab_root}/run-e2e-trial.sh" '"${final_artifacts}"'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'no passing manifest was published'
 require_fixed "${lab_root}/run-e2e-trial.sh" '"${LAB_DIR}/cleanup.sh"'
+python3 - "${lab_root}/run-e2e-trial.sh" <<'PY'
+from pathlib import Path
+import sys
+
+runner = Path(sys.argv[1]).read_text(encoding="utf-8")
+
+exit_start = runner.index("cleanup_on_exit()")
+exit_end = runner.index("trap cleanup_on_exit EXIT", exit_start)
+exit_cleanup = runner[exit_start:exit_end]
+exit_order = (
+    exit_cleanup.index("capture_reviewed_shuffle_cleanup_candidates"),
+    exit_cleanup.index('"${LAB_DIR}/cleanup.sh"'),
+    exit_cleanup.index("remove_reviewed_shuffle_action_service"),
+    exit_cleanup.index("remove_reviewed_shuffle_worker_service"),
+)
+if tuple(sorted(exit_order)) != exit_order:
+    raise SystemExit("exit cleanup must stop Orborus before exact-ID removal")
+
+restart_down = runner.index(
+    'run_reviewed_lab_command "${LAB_DIR}/down.sh"'
+)
+restart_up = runner.index(
+    'restart_up_output="$(run_reviewed_lab_startup', restart_down
+)
+restart_block = runner[restart_down:restart_up]
+try:
+    restart_remove_action = restart_down + restart_block.index(
+        "run_reviewed_lab_command remove_reviewed_shuffle_action_service"
+    )
+    restart_remove_worker = restart_down + restart_block.index(
+        "run_reviewed_lab_command remove_reviewed_shuffle_worker_service"
+    )
+    restart_reclaim_worker = runner.index(
+        "capture_reviewed_shuffle_worker_image >/dev/null",
+        restart_up,
+    )
+    restart_reclaim_action = runner.index(
+        "run_reviewed_lab_command ensure_reviewed_shuffle_action_service",
+        restart_reclaim_worker,
+    )
+except ValueError as exc:
+    raise SystemExit(
+        "restart must stop, remove exact IDs, start, and re-claim in order"
+    ) from exc
+restart_order = (
+    restart_down,
+    restart_remove_action,
+    restart_remove_worker,
+    restart_up,
+    restart_reclaim_worker,
+    restart_reclaim_action,
+)
+if tuple(sorted(restart_order)) != restart_order:
+    raise SystemExit(
+        "restart must stop, remove exact IDs, start, and re-claim in order"
+    )
+
+final_compose_cleanup = runner.rindex(
+    'run_reviewed_lab_command "${LAB_DIR}/cleanup.sh"'
+)
+final_action_cleanup = runner.rindex(
+    "run_reviewed_lab_command remove_reviewed_shuffle_action_service"
+)
+final_worker_cleanup = runner.rindex(
+    "run_reviewed_lab_command remove_reviewed_shuffle_worker_service"
+)
+if not final_compose_cleanup < final_action_cleanup < final_worker_cleanup:
+    raise SystemExit("final cleanup must stop Orborus before exact-ID removal")
+
+manifest_candidate_move = runner.index(
+    'mv "${evidence_output}" "${publication_manifest_candidate}"'
+)
+published_validation = runner.index("--published", manifest_candidate_move)
+manifest_commit = runner.index(
+    'ln "${publication_manifest_candidate}" "${final_evidence}"',
+    manifest_candidate_move,
+)
+manifest_published = runner.index(
+    "publication_manifest_published=true", manifest_commit
+)
+if not (
+    manifest_candidate_move
+    < published_validation
+    < manifest_commit
+    < manifest_published
+):
+    raise SystemExit("manifest must be validated before its atomic publication")
+PY
 require_fixed "${lab_root}/run-e2e-trial.sh" 'assert_repository_snapshot'
 require_fixed "${lab_root}/run-e2e-trial.sh" 'status --porcelain=v1 --untracked-files=all'
 require_fixed "${lab_root}/RUNBOOK.md" 'all worker task'

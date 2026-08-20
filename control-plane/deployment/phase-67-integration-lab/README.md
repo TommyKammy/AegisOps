@@ -200,12 +200,17 @@ the snapshot. The inventory includes the configured dynamic Shuffle worker
 image and the action tag's observed repository digest and runtime image ID
 because neither dynamic image is guaranteed to appear in the pre-dispatch
 Compose container enumeration. Before startup, the runner proves that no
-`shuffle-tools_1-2-0` service exists, then creates the reviewed Shuffle Tools
-Swarm service directly from the immutable digest rather than leaving Orborus to
-resolve a mutable tag. It binds the returned service ID to the current trial
-with ownership labels and removes only that ID after revalidating its labels and
-image. It verifies the service task's
-actual image ID before and after approved execution. After approval, the runner
+`shuffle-tools_1-2-0` service exists, then waits for the Shuffle 2.2.1 worker to
+auto-create it. The runner derives the actual `shuffle_swarm_executions` overlay
+ID from the worker service, validates the exact callback, dynamically allocated
+`app-port`, and running task image ID, and observes an unchanged service ID,
+version, and non-label specification twice. It then claims ownership labels by
+round-tripping the complete service specification and revalidates the runtime
+image ID. Cleanup records the exact worker and action IDs and specifications,
+stops Compose and Orborus, then removes only those unchanged IDs after rejecting
+disappearance or replacement. The restart check removes both stopped services,
+re-proves their absence, and separately claims the newly auto-created worker and
+action services before continuing. After approval, the runner
 also rechecks that action identity and the complete repository snapshot
 immediately before dispatch.
 Startup, initial health,
@@ -237,13 +242,12 @@ The Wazuh intake harness is retained as a prerequisite subtrial whose trigger,
 admission, replay, and boundary-probe timestamps remain verbatim in
 `wazuh-output.txt`. Ordered steps 12 and 13 use only the later Shuffle receipt
 replay and receipt negative probes, so earlier Wazuh operations are not
-relabeled as later journey events. Publication prepares permissions and moves
-the report and raw artifact directory first; the passing manifest is moved last
-and partial publication is rolled back when that final commit cannot complete.
-The final manifest path is validated again after the move, and the separately
-published report plus the complete artifact file set are rehashed against that
-manifest. Success therefore refers to the exact published bytes rather than an
-earlier staging-path read.
+relabeled as later journey events. Publication stages the manifest under a
+hidden candidate path, then moves the report and raw artifact directory. The
+candidate manifest, published report, and complete published artifact set are
+validated and rehashed before an atomic no-clobber link exposes the passing
+manifest at its canonical path as the last commit point. Failure before that
+commit leaves no discoverable passing manifest.
 
 Use `status.sh [scope] [--write-evidence]`, `logs.sh [service ...]`, and the bounded tail controlled by `AEGISOPS_LAB_LOG_TAIL` for inspection. Log tails must be integers from 1 through 10000. See [RUNBOOK.md](RUNBOOK.md) for startup, evidence, troubleshooting, and teardown details.
 
