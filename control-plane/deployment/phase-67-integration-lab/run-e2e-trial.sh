@@ -566,6 +566,11 @@ remove_reviewed_shuffle_action_service() {
       echo "BLOCKED: a replacement Shuffle action service appeared during cleanup" >&2
       return 1
     fi
+    shuffle_action_owned=false
+    shuffle_action_service_id=""
+    shuffle_action_service_image=""
+    shuffle_action_service_port=""
+    shuffle_action_network_id=""
     shuffle_action_cleanup_candidate_id=""
     shuffle_action_cleanup_candidate_spec=""
     return
@@ -586,9 +591,10 @@ remove_reviewed_shuffle_action_service() {
       echo "BLOCKED: refusing to remove a replaced Shuffle action service" >&2
       return 1
     }
-  docker_lab service rm "${shuffle_action_cleanup_candidate_id}" >/dev/null
+  docker_lab service rm "${shuffle_action_cleanup_candidate_id}" >/dev/null \
+    || return 1
   wait_for_exact_swarm_service_removal \
-    "${shuffle_action_cleanup_candidate_id}"
+    "${shuffle_action_cleanup_candidate_id}" || return 1
   if named_metadata="$(
     docker_lab service inspect "${shuffle_action_service}" 2>/dev/null
   )"; then
@@ -1088,6 +1094,8 @@ remove_reviewed_shuffle_worker_service() {
       echo "BLOCKED: a replacement Shuffle worker service appeared during cleanup" >&2
       return 1
     fi
+    shuffle_worker_owned=false
+    shuffle_worker_service_id=""
     shuffle_worker_cleanup_candidate_id=""
     shuffle_worker_cleanup_candidate_spec=""
     return
@@ -1110,9 +1118,10 @@ remove_reviewed_shuffle_worker_service() {
         return 1
       }
   fi
-  docker_lab service rm "${shuffle_worker_cleanup_candidate_id}" >/dev/null
+  docker_lab service rm "${shuffle_worker_cleanup_candidate_id}" >/dev/null \
+    || return 1
   wait_for_exact_swarm_service_removal \
-    "${shuffle_worker_cleanup_candidate_id}"
+    "${shuffle_worker_cleanup_candidate_id}" || return 1
   if named_metadata="$(
     docker_lab service inspect "${shuffle_worker_service}" 2>/dev/null
   )"; then
@@ -1413,6 +1422,16 @@ cleanup_on_exit() {
   fi
   if [[ "${rc}" -ne 0 ]]; then
     if [[ "${publication_manifest_published}" != true ]]; then
+      if [[ -e "${final_evidence}" || -L "${final_evidence}" ]]; then
+        if [[ -f "${publication_manifest_candidate}" ]] \
+          && [[ "${final_evidence}" -ef "${publication_manifest_candidate}" ]]; then
+          rm -f "${final_evidence}" >/dev/null 2>&1 \
+            || cleanup_failed=true
+        else
+          echo "BLOCKED: refusing to remove an unverified publication manifest" >&2
+          cleanup_failed=true
+        fi
+      fi
       if [[ "${publication_artifacts_published}" == true ]] \
         && [[ -d "${final_artifacts}" ]] \
         && [[ ! -e "${staging_dir}" ]]; then

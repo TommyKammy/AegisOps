@@ -4210,6 +4210,12 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
             'wait_for_exact_swarm_service_removal',
             remove_action,
         )
+        self.assertIn(
+            '"${shuffle_action_cleanup_candidate_id}" || return 1',
+            remove_action,
+        )
+        self.assertIn("shuffle_action_owned=false", remove_action)
+        self.assertIn('shuffle_action_service_id=""', remove_action)
         capture_worker_start = runner.index(
             "capture_reviewed_shuffle_worker_cleanup_candidate()"
         )
@@ -4252,6 +4258,18 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn(
             "refusing to remove an unverified worker candidate",
             remove_worker,
+        )
+        self.assertIn(
+            '"${shuffle_worker_cleanup_candidate_id}" || return 1',
+            remove_worker,
+        )
+        self.assertGreaterEqual(
+            remove_worker.count("shuffle_worker_owned=false"),
+            2,
+        )
+        self.assertGreaterEqual(
+            remove_worker.count('shuffle_worker_service_id=""'),
+            2,
         )
         self.assertIn(
             'label=com.docker.swarm.service.id=${service_id}',
@@ -4319,6 +4337,18 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertIn('publication_manifest_published=false', runner)
         self.assertIn('publication_manifest_staged=false', runner)
         self.assertIn('publication_manifest_candidate=', runner)
+        self.assertIn(
+            '"${final_evidence}" -ef "${publication_manifest_candidate}"',
+            exit_cleanup,
+        )
+        self.assertIn(
+            'rm -f "${final_evidence}"',
+            exit_cleanup,
+        )
+        self.assertIn(
+            "refusing to remove an unverified publication manifest",
+            exit_cleanup,
+        )
         self.assertIn('no passing manifest was published', runner)
         self.assertIn('startup_status_output=', runner)
         self.assertIn('initial_status_output=', runner)
@@ -4545,6 +4575,150 @@ class Phase674RealServiceE2ETests(unittest.TestCase):
         self.assertLess(revalidation, dispatch)
         compose = (LAB_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
         self.assertIn("./e2e:/opt/aegisops/phase67-e2e:ro", compose)
+
+    def test_cleanup_helpers_preserve_failure_and_restart_state(self) -> None:
+        runner = (LAB_ROOT / "run-e2e-trial.sh").read_text(encoding="utf-8")
+        action_start = runner.index("remove_reviewed_shuffle_action_service()")
+        action_end = runner.index(
+            "configured_shuffle_worker_immutable_ref()",
+            action_start,
+        )
+        action_function = runner[action_start:action_end]
+        action_harness = f"""
+set -uo pipefail
+{action_function}
+shuffle_action_service=shuffle-tools_1-2-0
+shuffle_action_cleanup_candidate_id=action12345678
+shuffle_action_cleanup_candidate_spec='{{"Name":"shuffle-tools_1-2-0"}}'
+shuffle_action_owned=true
+shuffle_action_service_id=action12345678
+shuffle_action_service_image=reviewed-image
+shuffle_action_service_port=33333
+shuffle_action_network_id=network12345678
+docker_lab() {{
+  if [[ "$1" == service && "$2" == inspect \
+    && "$3" == action12345678 ]]; then
+    printf '%s\n' \
+      '[{{"ID":"action12345678","Spec":{{"Name":"shuffle-tools_1-2-0"}}}}]'
+    return
+  fi
+  if [[ "$1" == service && "$2" == rm ]]; then
+    return
+  fi
+  return 1
+}}
+wait_for_exact_swarm_service_removal() {{ return 1; }}
+if remove_reviewed_shuffle_action_service; then
+  exit 90
+fi
+"""
+        action_result = subprocess.run(
+            ["bash", "-c", action_harness],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(action_result.returncode, 0, action_result.stderr)
+
+        worker_start = runner.index("remove_reviewed_shuffle_worker_service()")
+        worker_end = runner.index(
+            '[[ -f "${evaluation}" ]]',
+            worker_start,
+        )
+        worker_function = runner[worker_start:worker_end]
+        worker_harness = f"""
+set -uo pipefail
+{worker_function}
+shuffle_worker_service=shuffle-workers
+shuffle_worker_cleanup_candidate_id=worker12345678
+shuffle_worker_cleanup_candidate_spec='{{"Name":"shuffle-workers"}}'
+shuffle_worker_owned=true
+shuffle_worker_service_id=worker12345678
+docker_lab() {{ return 1; }}
+wait_for_exact_swarm_service_removal() {{ return 0; }}
+remove_reviewed_shuffle_worker_service
+printf 'owned=%s id=%s candidate=%s\n' \
+  "${{shuffle_worker_owned}}" \
+  "${{shuffle_worker_service_id}}" \
+  "${{shuffle_worker_cleanup_candidate_id}}"
+"""
+        worker_result = subprocess.run(
+            ["bash", "-c", worker_harness],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(worker_result.returncode, 0, worker_result.stderr)
+        self.assertIn("owned=false id= candidate=", worker_result.stdout)
+
+    def test_exit_cleanup_removes_interrupted_manifest_commit(self) -> None:
+        runner = (LAB_ROOT / "run-e2e-trial.sh").read_text(encoding="utf-8")
+        cleanup_start = runner.index("cleanup_on_exit()")
+        cleanup_end = runner.index("trap cleanup_on_exit EXIT", cleanup_start)
+        cleanup_function = runner[cleanup_start:cleanup_end]
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            staging = root / "staging"
+            final_artifacts = root / "final-artifacts"
+            final_artifacts.mkdir()
+            final_report = root / "final-report.json"
+            final_report.write_text("{}\n", encoding="utf-8")
+            candidate = root / ".manifest-candidate"
+            candidate.write_text("{}\n", encoding="utf-8")
+            final_evidence = root / "final-evidence.json"
+            os.link(candidate, final_evidence)
+            compose_render = root / "compose-render.yml"
+            compose_render.write_text("services: {}\n", encoding="utf-8")
+            evidence_output = staging / "evidence.json"
+            report_output = staging / "report.json"
+            harness = f"""
+set -uo pipefail
+{cleanup_function}
+compose_render_output="${{COMPOSE_RENDER}}"
+cleaned=true
+publication_manifest_published=false
+publication_manifest_staged=true
+publication_report_published=true
+publication_artifacts_published=true
+final_evidence="${{FINAL_EVIDENCE}}"
+publication_manifest_candidate="${{CANDIDATE}}"
+final_artifacts="${{FINAL_ARTIFACTS}}"
+staging_dir="${{STAGING}}"
+final_report="${{FINAL_REPORT}}"
+report_output="${{REPORT_OUTPUT}}"
+evidence_output="${{EVIDENCE_OUTPUT}}"
+false
+cleanup_on_exit
+"""
+            result = subprocess.run(
+                ["bash", "-c", harness],
+                cwd=REPO_ROOT,
+                env={
+                    **os.environ,
+                    "COMPOSE_RENDER": str(compose_render),
+                    "FINAL_EVIDENCE": str(final_evidence),
+                    "CANDIDATE": str(candidate),
+                    "FINAL_ARTIFACTS": str(final_artifacts),
+                    "STAGING": str(staging),
+                    "FINAL_REPORT": str(final_report),
+                    "REPORT_OUTPUT": str(report_output),
+                    "EVIDENCE_OUTPUT": str(evidence_output),
+                },
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertFalse(final_evidence.exists())
+            self.assertFalse(candidate.exists())
+            self.assertTrue(evidence_output.is_file())
+            self.assertTrue(report_output.is_file())
 
 
     def test_worker_claim_retries_only_a_newer_stable_unowned_version(
